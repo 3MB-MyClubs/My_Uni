@@ -1,0 +1,1334 @@
+import 'package:flutter/material.dart';
+import '../services/app_colors.dart';
+import '../services/mock_data.dart';
+import '../services/auth_service.dart';
+import '../services/user_state.dart';
+import '../models/comment.dart';
+import '../models/like.dart';
+import '../models/share.dart';
+import '../models/news_post.dart';
+import '../models/event.dart';
+import 'messages_screen.dart';
+import 'user_profile_screen.dart';
+
+// ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
+
+class _FeedItem {
+  final String id;
+  final bool isEvent;        // true = Event, false = NewsPost
+  final dynamic data;        // NewsPost | Event
+  final double score;
+
+  const _FeedItem({
+    required this.id,
+    required this.isEvent,
+    required this.data,
+    required this.score,
+  });
+}
+
+// ─── Feed Screen ──────────────────────────────────────────────────────────────
+
+class FeedScreen extends StatefulWidget {
+  const FeedScreen({super.key});
+
+  @override
+  State<FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+
+  List<_FeedItem> _buildRankedFeed() {
+    final items = <_FeedItem>[];
+
+    for (final post in newsPosts) {
+      items.add(_FeedItem(
+        id: post.id,
+        isEvent: false,
+        data: post,
+        score: postScore(post.id),
+      ));
+    }
+    for (final event in events) {
+      items.add(_FeedItem(
+        id: event.id,
+        isEvent: true,
+        data: event,
+        score: eventScore(event.id),
+      ));
+    }
+
+    // Sort descending by engagement score
+    items.sort((a, b) => b.score.compareTo(a.score));
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final feed = _buildRankedFeed();
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: CustomScrollView(
+        slivers: [
+          _buildAppBar(),
+          _buildStoriesRow(),
+          _buildRankingExplainer(),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => _buildFeedCard(feed[i], i),
+              childCount: feed.length,
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+      ),
+    );
+  }
+
+  SliverAppBar _buildAppBar() {
+    return SliverAppBar(
+      backgroundColor: AppColors.card,
+      foregroundColor: AppColors.text,
+      surfaceTintColor: Colors.transparent,
+      floating: true,
+      snap: true,
+      title: RichText(
+        text: const TextSpan(
+          children: [
+            TextSpan(
+              text: 'Uni',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.primaryRed, letterSpacing: -0.5),
+            ),
+            TextSpan(
+              text: 'Hub',
+              style: TextStyle(fontWeight: FontWeight.w300, fontSize: 24, color: AppColors.text, letterSpacing: -0.5),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.send_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MessagesScreen()),
+          ),
+          tooltip: 'Direct Messages',
+        ),
+      ],
+    );
+  }
+
+  SliverToBoxAdapter _buildStoriesRow() {
+    return SliverToBoxAdapter(
+      child: Container(
+        color: AppColors.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 106,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                itemCount: clubs.length,
+                itemBuilder: (context, i) => _StoryBubble(clubIndex: i),
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+        ),
+      ),
+    );
+  }
+
+  SliverToBoxAdapter _buildRankingExplainer() {
+    return const SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(14, 10, 14, 4),
+        child: Row(
+          children: [
+            Icon(Icons.trending_up, size: 15, color: AppColors.primaryRed),
+            SizedBox(width: 5),
+            Text(
+              'Ranked by likes · comments · shares',
+              style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeedCard(_FeedItem item, int rank) {
+    if (item.isEvent) {
+      return _EventCard(
+        event: item.data as Event,
+        score: item.score,
+        rank: rank,
+        onUpdate: () => setState(() {}),
+      );
+    }
+    return _PostCard(
+      post: item.data as NewsPost,
+      score: item.score,
+      rank: rank,
+      onUpdate: () => setState(() {}),
+    );
+  }
+}
+
+// ─── Story Bubble ─────────────────────────────────────────────────────────────
+
+class _StoryBubble extends StatelessWidget {
+  final int clubIndex;
+
+  static const List<Color> _colors = [
+    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  const _StoryBubble({required this.clubIndex});
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs[clubIndex];
+    final color = _colors[clubIndex % _colors.length];
+    final isFollowed = userState.isFollowing(club.id);
+    final stories = clubStories.where((s) => s.clubId == club.id).toList();
+    final hasStory = stories.isNotEmpty;
+
+    return GestureDetector(
+      onTap: hasStory
+          ? () => _openStoryViewer(context, club, stories, color)
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 10),
+        child: SizedBox(
+          width: 68,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: hasStory
+                      ? const LinearGradient(
+                          colors: [AppColors.primaryRed, AppColors.accentGold],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : isFollowed
+                          ? const LinearGradient(
+                              colors: [AppColors.secondaryText, AppColors.secondaryText],
+                            )
+                          : null,
+                  color: (!hasStory && !isFollowed) ? AppColors.lightGray : null,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.card),
+                  child: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: color.withValues(alpha: 0.18),
+                    child: Text(club.name[0], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                club.name.split(' ').first,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: hasStory ? AppColors.text : AppColors.secondaryText,
+                  fontWeight: hasStory ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openStoryViewer(BuildContext context, dynamic club, List<ClubStory> stories, Color color) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black87,
+      pageBuilder: (_, _, _) => _StoryViewer(club: club, stories: stories, color: color),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+      transitionDuration: const Duration(milliseconds: 200),
+    ));
+  }
+}
+
+// ─── Story Viewer ─────────────────────────────────────────────────────────────
+
+class _StoryViewer extends StatefulWidget {
+  final dynamic club;
+  final List<ClubStory> stories;
+  final Color color;
+
+  const _StoryViewer({required this.club, required this.stories, required this.color});
+
+  @override
+  State<_StoryViewer> createState() => _StoryViewerState();
+}
+
+class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderStateMixin {
+  int _index = 0;
+  late AnimationController _progressController;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) _nextStory();
+      });
+    _progressController.forward();
+  }
+
+  void _nextStory() {
+    if (_index < widget.stories.length - 1) {
+      setState(() => _index++);
+      _progressController.forward(from: 0);
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _prevStory() {
+    if (_index > 0) {
+      setState(() => _index--);
+      _progressController.forward(from: 0);
+    } else {
+      _progressController.forward(from: 0);
+    }
+  }
+
+  String _timeAgoStory(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final story = widget.stories[_index];
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            width: size.width,
+            height: size.height * 0.88,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                colors: [
+                  widget.color,
+                  widget.color.withValues(alpha: 0.75),
+                  Colors.black,
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Progress bars
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  child: Row(
+                    children: List.generate(widget.stories.length, (i) {
+                      return Expanded(
+                        child: Container(
+                          height: 2.5,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.lightGray,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: i < _index
+                              ? Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                )
+                              : i == _index
+                                  ? AnimatedBuilder(
+                                      animation: _progressController,
+                                      builder: (_, _) => FractionallySizedBox(
+                                        alignment: Alignment.centerLeft,
+                                        widthFactor: _progressController.value,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : const SizedBox(),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+
+                // Header: club name + close
+                Positioned(
+                  top: 28,
+                  left: 16,
+                  right: 16,
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        child: Text(widget.club.name[0],
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(widget.club.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            Text(_timeAgoStory(story.postedAt),
+                                style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: const Icon(Icons.close, color: Colors.white, size: 26),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Story content
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(story.emoji, style: const TextStyle(fontSize: 64)),
+                        const SizedBox(height: 24),
+                        Text(
+                          story.text,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            height: 1.55,
+                            shadows: [Shadow(blurRadius: 6, color: Colors.black38)],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Tap left / right navigation
+                Row(
+                  children: [
+                    Expanded(child: GestureDetector(onTap: _prevStory)),
+                    Expanded(child: GestureDetector(onTap: _nextStory)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+const List<Color> _clubColors = [
+  Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+  Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+];
+
+Color _colorForClub(String clubId) {
+  final idx = clubs.indexWhere((c) => c.id == clubId);
+  return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+}
+
+String _timeAgo(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  return '${diff.inDays}d ago';
+}
+
+// Returns the trending badge widget if score is high enough
+Widget? _trendingBadge(double score) {
+  if (score < 6) return null;
+  final label = score >= 12 ? '🔥 Hot' : '📈 Trending';
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: score >= 12 ? const Color(0xFFFF6B35).withValues(alpha: 0.12) : AppColors.lightRed,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: score >= 12 ? const Color(0xFFFF6B35) : AppColors.primaryRed,
+      ),
+    ),
+  );
+}
+
+void _openShareSheet(BuildContext context, String targetId, VoidCallback onShared) {
+  final currentUser = authService.currentUser;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _ShareSheet(targetId: targetId, userId: currentUser?.id ?? 'guest', onShared: onShared),
+  );
+}
+
+/// True for club-admin users and the super admin.
+bool _isClubAdmin() =>
+    authService.currentUser?.role == 'admin' || authService.currentAdmin != null;
+
+// ─── Post Card ────────────────────────────────────────────────────────────────
+
+class _PostCard extends StatefulWidget {
+  final NewsPost post;
+  final double score;
+  final int rank;
+  final VoidCallback onUpdate;
+
+  const _PostCard({required this.post, required this.score, required this.rank, required this.onUpdate});
+
+  @override
+  State<_PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixin {
+  late AnimationController _heartController;
+  bool _showHeart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _heartController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
+      ..addStatusListener((s) {
+        if (s == AnimationStatus.completed) {
+          setState(() => _showHeart = false);
+          _heartController.reset();
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _heartController.dispose();
+    super.dispose();
+  }
+
+  void _doubleTapLike() {
+    if (!userState.isLiked(widget.post.id)) {
+      userState.toggleLike(widget.post.id);
+      likes.add(Like(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: widget.post.id, userId: authService.currentUser?.id ?? 'guest'));
+    }
+    setState(() => _showHeart = true);
+    _heartController.forward();
+    widget.onUpdate();
+  }
+
+  void _toggleLike() {
+    final postId = widget.post.id;
+    final userId = authService.currentUser?.id ?? 'guest';
+    if (userState.isLiked(postId)) {
+      userState.toggleLike(postId);
+      likes.removeWhere((l) => l.postId == postId && l.userId == userId);
+    } else {
+      userState.toggleLike(postId);
+      likes.add(Like(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: postId, userId: userId));
+    }
+    setState(() {});
+    widget.onUpdate();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
+    final clubColor = _colorForClub(club.id);
+    final likeCount = postLikeCount(widget.post.id);
+    final shareCount = postShareCount(widget.post.id);
+    final uniqueCommenters = comments.where((c) => c.postId == widget.post.id).map((c) => c.userId).toSet().length;
+    final postComments = comments.where((c) => c.postId == widget.post.id).toList();
+    final isLiked = userState.isLiked(widget.post.id);
+    final isSaved = userState.isSaved(widget.post.id);
+    final isFollowed = userState.isFollowing(club.id);
+    final badge = _trendingBadge(widget.score);
+
+    return Container(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
+            child: Row(
+              children: [
+                Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(color: clubColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                  child: Center(child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16))),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(club.name,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          const SizedBox(width: 6),
+                          if (badge case final b?) b,
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      Builder(builder: (ctx) {
+                        final author = users.firstWhere(
+                          (u) => u.id == widget.post.authorId,
+                          orElse: () => users.first,
+                        );
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => Navigator.push(
+                            ctx,
+                            MaterialPageRoute(builder: (_) => UserProfileScreen(user: author)),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 2, bottom: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  author.name,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.primaryRed,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _timeAgo(widget.post.createdAt),
+                                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => userState.toggleFollow(club.id)),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isFollowed ? Colors.transparent : AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isFollowed ? AppColors.secondaryText.withValues(alpha: 0.4) : AppColors.primaryRed),
+                    ),
+                    child: Text(isFollowed ? 'Following' : 'Follow',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isFollowed ? AppColors.secondaryText : Colors.white)),
+                  ),
+                ),
+                IconButton(icon: const Icon(Icons.more_horiz, color: AppColors.secondaryText), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+              ],
+            ),
+          ),
+
+          // ── Gradient image banner ──
+          GestureDetector(
+            onDoubleTap: _doubleTapLike,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [clubColor.withValues(alpha: 0.7), clubColor.withValues(alpha: 0.25)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(club.name[0], style: TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.2))),
+                  ),
+                ),
+                Positioned(
+                  bottom: 12, left: 14, right: 14,
+                  child: Text(widget.post.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4, color: Colors.black54)])),
+                ),
+                if (_showHeart)
+                  ScaleTransition(
+                    scale: Tween(begin: 0.5, end: 1.4).animate(CurvedAnimation(parent: _heartController, curve: Curves.elasticOut)),
+                    child: const Icon(Icons.favorite, color: Colors.white, size: 80),
+                  ),
+              ],
+            ),
+          ),
+
+          // ── Action row ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            child: Row(
+              children: [
+                _ActionBtn(icon: isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.pink : AppColors.text, onTap: _toggleLike),
+                _ActionBtn(icon: Icons.chat_bubble_outline, color: AppColors.text, onTap: () => _openComments(context)),
+                _ActionBtn(
+                  icon: Icons.send_outlined,
+                  color: AppColors.text,
+                  onTap: () => _openShareSheet(context, widget.post.id, () { setState(() {}); widget.onUpdate(); }),
+                ),
+                const Spacer(),
+                _ActionBtn(
+                  icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                  color: isSaved ? AppColors.primaryRed : AppColors.text,
+                  onTap: () => setState(() => userState.toggleSave(widget.post.id)),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Engagement stats (club admin only) ──
+          if (_isClubAdmin()) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: _EngagementBar(
+                likes: likeCount,
+                commenters: uniqueCommenters,
+                shares: shareCount,
+                score: widget.score,
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
+
+          // ── Caption ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: RichText(
+              text: TextSpan(children: [
+                TextSpan(text: '${club.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
+                TextSpan(text: widget.post.content, style: const TextStyle(color: AppColors.text, fontSize: 13)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 4),
+
+          // ── Comment preview ──
+          if (postComments.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: GestureDetector(
+                onTap: () => _openComments(context),
+                child: Text(
+                  _isClubAdmin()
+                      ? 'View all ${postComments.length} comment${postComments.length == 1 ? '' : 's'}'
+                      : 'View comments',
+                  style: const TextStyle(color: AppColors.secondaryText, fontSize: 12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Builder(builder: (_) {
+                final last = postComments.last;
+                final commenter = users.firstWhere((u) => u.id == last.userId, orElse: () => users.first);
+                return RichText(
+                  text: TextSpan(children: [
+                    TextSpan(text: '${commenter.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 12)),
+                    TextSpan(text: last.content, style: const TextStyle(color: AppColors.text, fontSize: 12)),
+                  ]),
+                );
+              }),
+            ),
+          ],
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+
+  void _openComments(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CommentsSheet(postId: widget.post.id),
+    ).then((_) => setState(() {}));
+  }
+}
+
+// ─── Event Card (in feed) ─────────────────────────────────────────────────────
+
+class _EventCard extends StatefulWidget {
+  final Event event;
+  final double score;
+  final int rank;
+  final VoidCallback onUpdate;
+
+  const _EventCard({required this.event, required this.score, required this.rank, required this.onUpdate});
+
+  @override
+  State<_EventCard> createState() => _EventCardState();
+}
+
+class _EventCardState extends State<_EventCard> {
+  bool _attending = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere((c) => c.id == widget.event.clubId);
+    final clubColor = _colorForClub(club.id);
+    final dt = widget.event.dateTime;
+    final shareCount = postShareCount(widget.event.id);
+    final uniqueAttendees = widget.event.attendeeUserIds.toSet().length;
+    final isFollowed = userState.isFollowing(club.id);
+    final badge = _trendingBadge(widget.score);
+
+    final daysAway = dt.difference(DateTime.now()).inDays;
+    final daysLabel = daysAway == 0 ? 'Today' : daysAway == 1 ? 'Tomorrow' : 'In $daysAway days';
+
+    return Container(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
+            child: Row(
+              children: [
+                Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(color: clubColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                  child: Center(child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16))),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(club.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text)),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(color: AppColors.accentGold.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
+                            child: const Text('Event', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFB8860B))),
+                          ),
+                          if (badge != null) ...[const SizedBox(width: 4), badge],
+                        ],
+                      ),
+                      Text(daysLabel, style: const TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => userState.toggleFollow(club.id)),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isFollowed ? Colors.transparent : AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isFollowed ? AppColors.secondaryText.withValues(alpha: 0.4) : AppColors.primaryRed),
+                    ),
+                    child: Text(isFollowed ? 'Following' : 'Follow',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isFollowed ? AppColors.secondaryText : Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Event banner ──
+          Container(
+            width: double.infinity,
+            height: 160,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [clubColor.withValues(alpha: 0.8), clubColor.withValues(alpha: 0.3)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Big date in background
+                Positioned(
+                  right: 16, top: 12,
+                  child: Text(
+                    '${dt.day}',
+                    style: TextStyle(fontSize: 80, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      // Date chip
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(widget.event.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4, color: Colors.black45)])),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Action row ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            child: Row(
+              children: [
+                // RSVP button
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _attending = !_attending),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _attending ? AppColors.primaryRed : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.primaryRed),
+                      ),
+                      child: Text(
+                        _attending ? '✓ Going' : 'RSVP',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _attending ? Colors.white : AppColors.primaryRed),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _ActionBtn(
+                  icon: Icons.send_outlined,
+                  color: AppColors.text,
+                  onTap: () => _openShareSheet(context, widget.event.id, () { setState(() {}); widget.onUpdate(); }),
+                ),
+                const Spacer(),
+                _ActionBtn(
+                  icon: userState.isSaved(widget.event.id) ? Icons.bookmark : Icons.bookmark_border,
+                  color: userState.isSaved(widget.event.id) ? AppColors.primaryRed : AppColors.text,
+                  onTap: () => setState(() => userState.toggleSave(widget.event.id)),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Engagement stats (club admin only) ──
+          if (_isClubAdmin()) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: _EngagementBar(
+                likes: uniqueAttendees,
+                likesLabel: 'attending',
+                commenters: 0,
+                shares: shareCount,
+                score: widget.score,
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+
+          // ── Description ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: RichText(
+              text: TextSpan(children: [
+                TextSpan(text: '${club.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
+                TextSpan(text: widget.event.description, style: const TextStyle(color: AppColors.text, fontSize: 13)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+
+  String _monthAbbr(int m) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+
+  String _fmt12(DateTime dt) {
+    final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final m = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$h:$m $ampm';
+  }
+}
+
+// ─── Engagement Bar ───────────────────────────────────────────────────────────
+
+class _EngagementBar extends StatelessWidget {
+  final int likes;
+  final String likesLabel;
+  final int commenters;
+  final int shares;
+  final double score;
+
+  const _EngagementBar({
+    required this.likes,
+    required this.commenters,
+    required this.shares,
+    required this.score,
+    this.likesLabel = 'likes',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (likes > 0) ...[
+          const Icon(Icons.favorite, size: 13, color: Colors.pink),
+          const SizedBox(width: 3),
+          Text('$likes $likesLabel', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
+        ],
+        if (commenters > 0) ...[
+          const SizedBox(width: 10),
+          const Icon(Icons.chat_bubble, size: 13, color: Color(0xFF1565C0)),
+          const SizedBox(width: 3),
+          Text('$commenters ${commenters == 1 ? 'person' : 'people'} commented', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+        ],
+        if (shares > 0) ...[
+          const SizedBox(width: 10),
+          const Icon(Icons.send, size: 13, color: Color(0xFF2E7D32)),
+          const SizedBox(width: 3),
+          Text('$shares share${shares == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+        ],
+      ],
+    );
+  }
+}
+
+// ─── Action Button ────────────────────────────────────────────────────────────
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionBtn({required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icon, color: color, size: 26),
+      onPressed: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+    );
+  }
+}
+
+// ─── Share Bottom Sheet ───────────────────────────────────────────────────────
+
+class _ShareSheet extends StatefulWidget {
+  final String targetId;
+  final String userId;
+  final VoidCallback onShared;
+
+  const _ShareSheet({required this.targetId, required this.userId, required this.onShared});
+
+  @override
+  State<_ShareSheet> createState() => _ShareSheetState();
+}
+
+class _ShareSheetState extends State<_ShareSheet> {
+  bool _shared = false;
+
+  void _recordShare() {
+    // Only one share per session per user per target
+    final alreadyShared = shares.any((s) => s.targetId == widget.targetId && s.userId == widget.userId);
+    if (!alreadyShared) {
+      shares.add(Share(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        targetId: widget.targetId,
+        userId: widget.userId,
+        createdAt: DateTime.now(),
+      ));
+      widget.onShared();
+    }
+    setState(() => _shared = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = postShareCount(widget.targetId);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 16),
+          const Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text(
+            '$total ${total == 1 ? 'person has' : 'people have'} shared this',
+            style: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+          // Share destinations row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _ShareDest(icon: Icons.link, label: 'Copy link', onTap: _recordShare),
+              _ShareDest(icon: Icons.message_outlined, label: 'Message', onTap: _recordShare),
+              _ShareDest(icon: Icons.email_outlined, label: 'Email', onTap: _recordShare),
+              _ShareDest(icon: Icons.more_horiz, label: 'More', onTap: _recordShare),
+            ],
+          ),
+          if (_shared) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              width: double.infinity,
+              decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(10)),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, color: AppColors.primaryRed, size: 16),
+                  SizedBox(width: 6),
+                  Text('Shared! This post\'s reach just went up.', style: TextStyle(color: AppColors.primaryRed, fontSize: 13, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ShareDest extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ShareDest({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 54, height: 54,
+            decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(16)),
+            child: Icon(icon, color: AppColors.text, size: 24),
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Comments Bottom Sheet ────────────────────────────────────────────────────
+
+class _CommentsSheet extends StatefulWidget {
+  final String postId;
+  const _CommentsSheet({required this.postId});
+
+  @override
+  State<_CommentsSheet> createState() => _CommentsSheetState();
+}
+
+class _CommentsSheetState extends State<_CommentsSheet> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _post() {
+    final user = authService.currentUser;
+    if (user == null) return;
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    comments.add(Comment(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: widget.postId, userId: user.id, content: text, createdAt: DateTime.now()));
+    _controller.clear();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final postComments = comments.where((c) => c.postId == widget.postId).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: Column(
+          children: [
+            Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 4, decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2))),
+            Text(
+              _isClubAdmin() ? 'Comments (${postComments.length})' : 'Comments',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const Divider(),
+            Expanded(
+              child: postComments.isEmpty
+                  ? const Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: AppColors.secondaryText)))
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: postComments.length,
+                      itemBuilder: (context, i) {
+                        final c = postComments[i];
+                        final commenter = users.firstWhere((u) => u.id == c.userId, orElse: () => users.first);
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(radius: 16, backgroundColor: AppColors.lightRed, child: Text(commenter.name[0], style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13))),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  RichText(text: TextSpan(children: [
+                                    TextSpan(text: '${commenter.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
+                                    TextSpan(text: c.content, style: const TextStyle(color: AppColors.text, fontSize: 13)),
+                                  ])),
+                                  const SizedBox(height: 2),
+                                  Text(_timeAgo(c.createdAt), style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                                ]),
+                              ),
+                              // Admin-only delete button
+                              if (_isClubAdmin())
+                                GestureDetector(
+                                  onTap: () {
+                                    comments.removeWhere((x) => x.id == c.id);
+                                    setState(() {});
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 8, top: 2),
+                                    child: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(left: 12, right: 12, bottom: MediaQuery.of(context).viewInsets.bottom + 12, top: 8),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppColors.lightRed,
+                    child: Text((authService.currentUser?.name[0] ?? 'U').toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      decoration: InputDecoration(
+                        hintText: 'Add a comment...',
+                        hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                        filled: true, fillColor: AppColors.lightGray,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      ),
+                      onSubmitted: (_) => _post(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(onTap: _post, child: const Text('Post', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 14))),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
