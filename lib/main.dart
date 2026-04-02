@@ -11,7 +11,7 @@ import 'services/message_service.dart';
 import 'services/notification_service.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
   await messageService.initialize();
   await notificationService.initialize();
   runApp(const MyApp());
