@@ -5,6 +5,7 @@ class User {
   final String password;
   final String role; // 'admin' or 'student'
   final List<String> subscribedClubIds;
+  final List<String> followingUserIds;
 
   User({
     required this.id,
@@ -13,5 +14,6 @@ class User {
     required this.password,
     required this.role,
     required this.subscribedClubIds,
+    this.followingUserIds = const [],
   });
 }

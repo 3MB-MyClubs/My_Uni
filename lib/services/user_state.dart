@@ -7,6 +7,9 @@ class UserState {
   final Set<String> followedUserIds = {'u1', 'u4'};
   int unreadNotifications = 3;
 
+  // Profile banner image paths keyed by user/admin id.
+  final Map<String, String> bannerPaths = {};
+
   bool isLiked(String postId) => likedPostIds.contains(postId);
 
   void toggleLike(String postId) {
@@ -23,9 +26,9 @@ class UserState {
   String? get activeClubId =>
       followedClubIds.isEmpty ? null : followedClubIds.first;
 
-  /// Unfollow current club and follow [clubId]. Does nothing if already following [clubId].
-  void joinClub(String clubId) {
-    followedClubIds.clear();
+  /// Join [clubId]. If [exclusive] is true, leaves all other clubs first (board-member rule).
+  void joinClub(String clubId, {bool exclusive = false}) {
+    if (exclusive) followedClubIds.clear();
     followedClubIds.add(clubId);
   }
 
@@ -37,8 +40,6 @@ class UserState {
     if (followedClubIds.contains(clubId)) {
       followedClubIds.remove(clubId);
     } else {
-      // Max 1 club — replace existing
-      followedClubIds.clear();
       followedClubIds.add(clubId);
     }
   }

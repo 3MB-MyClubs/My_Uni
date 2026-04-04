@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
+import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import 'club_profile_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final User user;
@@ -20,16 +23,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
   ];
 
-  Color _colorForClub(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+  Color _clubColor(Club club) {
+    final idx = clubs.indexOf(club);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-  }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
   }
 
   bool get _isOwnProfile {
@@ -37,56 +33,163 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return widget.user.id == myId;
   }
 
-  List _subscribedClubs() {
-    return widget.user.subscribedClubIds
-        .map((id) => clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first))
-        .where((c) => widget.user.subscribedClubIds.contains(c.id))
-        .toList();
+  List<User> get _following => widget.user.followingUserIds
+      .map((id) => users.firstWhere((u) => u.id == id, orElse: () => users.first))
+      .where((u) => widget.user.followingUserIds.contains(u.id))
+      .toList();
+
+  List<User> get _followers =>
+      users.where((u) => u.followingUserIds.contains(widget.user.id)).toList();
+
+  // People that both the logged-in user and this profile user follow.
+  List<User> get _mutuals {
+    final myFollowing = userState.followedUserIds; // Set<String>
+    final theirFollowing = Set<String>.from(widget.user.followingUserIds);
+    final sharedIds = myFollowing.intersection(theirFollowing);
+    return users.where((u) => sharedIds.contains(u.id)).toList();
+  }
+
+  List<Club> get _subscribedClubs => widget.user.subscribedClubIds
+      .map((id) => clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first))
+      .where((c) => widget.user.subscribedClubIds.contains(c.id))
+      .toList();
+
+  void _openClub(Club club) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubProfileScreen(club: club, color: _clubColor(club)),
+      ),
+    );
+  }
+
+  void _openUserProfile(User u) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: u)),
+    );
+  }
+
+  void _showPeopleSheet(String title, List<User> people) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.35,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Handle + title
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36, height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              if (people.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text('No one here yet.',
+                      style: TextStyle(color: AppColors.secondaryText)),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: people.length,
+                    separatorBuilder: (_, i) => const Divider(height: 1, indent: 72),
+                    itemBuilder: (ctx, i) {
+                      final u = people[i];
+                      return ListTile(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _openUserProfile(u);
+                        },
+                        leading: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: AppColors.lightRed,
+                          child: Text(
+                            u.name[0].toUpperCase(),
+                            style: const TextStyle(
+                                color: AppColors.primaryRed,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16),
+                          ),
+                        ),
+                        title: Text(u.name,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text)),
+                        subtitle: Text(u.email,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.secondaryText)),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: AppColors.secondaryText),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final userPosts = newsPosts
-        .where((p) => p.authorId == widget.user.id)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    final subClubs = _subscribedClubs();
+    final subClubs = _subscribedClubs;
+    final following = _following;
+    final followers = _followers;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          // ── App bar ──
           SliverAppBar(
             backgroundColor: AppColors.card,
             surfaceTintColor: Colors.transparent,
             foregroundColor: AppColors.text,
             pinned: true,
-            title: Text(
-              widget.user.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
+            title: Text(widget.user.name,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ),
 
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Profile header ──
-                _buildHeader(userPosts.length, subClubs.length),
-
+                _buildHeader(followers, following),
                 const Divider(height: 1),
-
-                // ── Subscribed clubs ──
-                if (subClubs.isNotEmpty) ...[
-                  _buildClubsSection(subClubs),
-                  const Divider(height: 1),
-                ],
-
-                // ── Posts section ──
-                _buildPostsSection(userPosts),
-
+                if (subClubs.isNotEmpty) _buildClubsSection(subClubs),
                 const SizedBox(height: 80),
               ],
             ),
@@ -96,141 +199,235 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildHeader(int postCount, int clubCount) {
+  Widget _buildHeader(List<User> followers, List<User> following) {
     final user = widget.user;
     final isFollowingUser = userState.isFollowingUser(user.id);
+    final bannerPath = userState.bannerPaths[user.id];
+    final mutuals = _mutuals;
 
     return Container(
       color: AppColors.card,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              // Avatar
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [AppColors.primaryRed, AppColors.accentGold],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.card,
-                  ),
-                  child: Container(
+          // ── Banner (read-only) ───────────────────────────────────────────
+          SizedBox(
+            height: 120,
+            width: double.infinity,
+            child: bannerPath != null
+                ? Image.file(File(bannerPath), fit: BoxFit.cover)
+                : Container(
                     decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.lightRed,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1565C0), Color(0xFF6A1B9A)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
-                    child: Center(
-                      child: Text(
-                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryRed,
+                  ),
+          ),
+
+          // ── Avatar + stats ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [AppColors.primaryRed, AppColors.accentGold],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                            shape: BoxShape.circle, color: AppColors.card),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                              shape: BoxShape.circle, color: AppColors.lightRed),
+                          child: Center(
+                            child: Text(
+                              user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primaryRed),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          GestureDetector(
+                            onTap: () => _showPeopleSheet('Followers', followers),
+                            child: _StatCell(
+                                value: '${followers.length}', label: 'Followers'),
+                          ),
+                          GestureDetector(
+                            onTap: () => _showPeopleSheet('Following', following),
+                            child: _StatCell(
+                                value: '${following.length}', label: 'Following'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(user.name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.text)),
+                const SizedBox(height: 2),
+                Text(user.email,
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.secondaryText)),
+
+                // ── Mutuals row ────────────────────────────────────────────
+                if (mutuals.isNotEmpty && !_isOwnProfile) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _showPeopleSheet('Mutual Friends', mutuals),
+                    child: Row(
+                      children: [
+                        // Stacked avatars (up to 3)
+                        SizedBox(
+                          width: (mutuals.length.clamp(1, 3) * 18 + 10).toDouble(),
+                          height: 22,
+                          child: Stack(
+                            children: [
+                              for (int i = mutuals.length.clamp(1, 3) - 1; i >= 0; i--)
+                                Positioned(
+                                  left: (i * 18).toDouble(),
+                                  child: Container(
+                                    width: 22,
+                                    height: 22,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.lightRed,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: AppColors.card, width: 1.5),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        mutuals[i].name[0].toUpperCase(),
+                                        style: const TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primaryRed),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            mutuals.length == 1
+                                ? '${mutuals[0].name.split(' ').first} is a mutual'
+                                : '${mutuals[0].name.split(' ').first} and ${mutuals.length - 1} other${mutuals.length > 2 ? 's' : ''} are mutuals',
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.secondaryText),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right,
+                            size: 16, color: AppColors.secondaryText),
+                      ],
+                    ),
+                  ),
+                ],
+
+                if (user.role == 'admin') ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.lightRed,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('Club Admin',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primaryRed,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+
+                // Follow button
+                if (!_isOwnProfile) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: GestureDetector(
+                      onTap: () =>
+                          setState(() => userState.toggleFollowUser(user.id)),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isFollowingUser
+                              ? Colors.transparent
+                              : AppColors.primaryRed,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isFollowingUser
+                                ? AppColors.secondaryText.withValues(alpha: 0.5)
+                                : AppColors.primaryRed,
+                          ),
+                        ),
+                        child: Text(
+                          isFollowingUser ? 'Following' : 'Follow',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: isFollowingUser
+                                ? AppColors.secondaryText
+                                : Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 20),
-              // Stats
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _StatCell(value: '$postCount', label: 'Posts'),
-                    _StatCell(value: '$clubCount', label: 'Clubs'),
-                  ],
-                ),
-              ),
-            ],
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          Text(user.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text)),
-          const SizedBox(height: 2),
-          Text(user.email,
-              style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-          if (user.role == 'admin') ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Club Admin',
-                style: TextStyle(fontSize: 12, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-
-          // Follow button — only shown when viewing another user's profile
-          if (!_isOwnProfile) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: GestureDetector(
-                onTap: () => setState(() => userState.toggleFollowUser(user.id)),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isFollowingUser ? Colors.transparent : AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isFollowingUser
-                          ? AppColors.secondaryText.withValues(alpha: 0.5)
-                          : AppColors.primaryRed,
-                    ),
-                  ),
-                  child: Text(
-                    isFollowingUser ? 'Following' : 'Follow',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: isFollowingUser ? AppColors.secondaryText : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildClubsSection(List subClubs) {
-    const List<Color> colors = [
-      Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-    ];
-
+  Widget _buildClubsSection(List<Club> subClubs) {
     return Container(
       color: AppColors.card,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Subscribed Clubs',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
+            style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -241,165 +438,46 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               separatorBuilder: (ctx, i) => const SizedBox(width: 16),
               itemBuilder: (context, i) {
                 final club = subClubs[i];
-                final idx = clubs.indexOf(club);
-                final color = colors[(idx < 0 ? i : idx) % colors.length];
-                return Column(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: color.withValues(alpha: 0.3)),
-                      ),
-                      child: Center(
-                        child: Text(
-                          club.name[0],
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+                final color = _clubColor(club);
+                return GestureDetector(
+                  onTap: () => _openClub(club),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: color.withValues(alpha: 0.3)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            club.name[0],
+                            style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: color),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: 60,
-                      child: Text(
-                        club.name.split(' ').first,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11, color: AppColors.text),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: 60,
+                        child: Text(
+                          club.name.split(' ').first,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: AppColors.text),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               },
             ),
           ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostsSection(List userPosts) {
-    return Container(
-      color: AppColors.card,
-      margin: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'Posts',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
-            ),
-          ),
-          if (userPosts.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text(
-                'No posts yet.',
-                style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-              ),
-            )
-          else
-            ...userPosts.map((post) {
-              final club = clubs.firstWhere((c) => c.id == post.clubId);
-              final clubColor = _colorForClub(club.id);
-              final likeCount = postLikeCount(post.id);
-              final commentCount = comments.where((c) => c.postId == post.id).length;
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Club icon
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: clubColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              club.name[0],
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: clubColor,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Club name + time
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      club.name,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.primaryRed,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    _timeAgo(post.createdAt),
-                                    style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              // Post content preview
-                              Text(
-                                post.content,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.secondaryText,
-                                  height: 1.4,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              // Engagement
-                              Row(
-                                children: [
-                                  const Icon(Icons.favorite, size: 13, color: Colors.pink),
-                                  const SizedBox(width: 3),
-                                  Text('$likeCount',
-                                      style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                                  const SizedBox(width: 12),
-                                  const Icon(Icons.chat_bubble_outline,
-                                      size: 13, color: AppColors.secondaryText),
-                                  const SizedBox(width: 3),
-                                  Text('$commentCount',
-                                      style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1, indent: 72),
-                ],
-              );
-            }),
         ],
       ),
     );
@@ -416,9 +494,13 @@ class _StatCell extends StatelessWidget {
     return Column(
       children: [
         Text(value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+        Text(label,
+            style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
       ],
     );
   }

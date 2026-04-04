@@ -10,6 +10,7 @@ import '../models/like.dart';
 import '../models/share.dart';
 import '../models/news_post.dart';
 import '../models/event.dart';
+import '../models/user.dart';
 import 'messages_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -72,6 +73,37 @@ class _FeedScreenState extends State<FeedScreen> {
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
+  // Users the logged-in person doesn't follow yet, sorted by shared club overlap.
+  List<User> _suggestedUsers() {
+    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final myFollowing = userState.followedUserIds;
+    final myClubs = userState.followedClubIds;
+
+    return users
+        .where((u) =>
+            u.id != myId &&
+            !myFollowing.contains(u.id))
+        .toList()
+      ..sort((a, b) {
+          final aOverlap = a.subscribedClubIds.where(myClubs.contains).length;
+          final bOverlap = b.subscribedClubIds.where(myClubs.contains).length;
+          return bOverlap.compareTo(aOverlap);
+        });
+  }
+
+  // Builds a flat list alternating posts and people cards (1 card per 10 posts).
+  List<dynamic> _buildMixedFeed(List<_FeedItem> posts) {
+    final result = <dynamic>[];
+    final suggestions = _suggestedUsers();
+    for (int i = 0; i < posts.length; i++) {
+      result.add(posts[i]);
+      if ((i + 1) % 10 == 0 && suggestions.isNotEmpty) {
+        result.add(suggestions); // marker: insert people card here
+      }
+    }
+    return result;
+  }
+
   Future<void> _onRefresh() async {
     await Future.delayed(const Duration(milliseconds: 600));
     setState(() {});
@@ -79,7 +111,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final feed = _buildFeed();
+    final mixed = _buildMixedFeed(_buildFeed());
     final live = _liveEvents;
     final upcoming = _upcomingEvents;
     return Scaffold(
@@ -95,8 +127,17 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildEventsStrip(live, upcoming),
             SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, i) => _buildFeedCard(feed[i], i),
-                childCount: feed.length,
+                (context, i) {
+                  final item = mixed[i];
+                  if (item is List<User>) {
+                    return _PeopleSuggestionCard(
+                      suggestions: item,
+                      onFollowed: () => setState(() {}),
+                    );
+                  }
+                  return _buildFeedCard(item as _FeedItem, i);
+                },
+                childCount: mixed.length,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -526,6 +567,169 @@ class _EventChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── People You Might Know ────────────────────────────────────────────────────
+
+class _PeopleSuggestionCard extends StatefulWidget {
+  final List<User> suggestions;
+  final VoidCallback onFollowed;
+  const _PeopleSuggestionCard({required this.suggestions, required this.onFollowed});
+
+  @override
+  State<_PeopleSuggestionCard> createState() => _PeopleSuggestionCardState();
+}
+
+class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
+  static const List<Color> _avatarColors = [
+    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    // Show at most 8 suggestions in the card
+    final shown = widget.suggestions.take(8).toList();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      color: AppColors.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                const Icon(Icons.people_outline, size: 18, color: AppColors.primaryRed),
+                const SizedBox(width: 6),
+                const Text(
+                  'People You Might Know',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 148,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              itemCount: shown.length,
+              separatorBuilder: (_, i) => const SizedBox(width: 10),
+              itemBuilder: (ctx, i) {
+                final u = shown[i];
+                final color = _avatarColors[i % _avatarColors.length];
+                final isFollowing = userState.isFollowingUser(u.id);
+
+                return Container(
+                  width: 110,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: u),
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 26,
+                          backgroundColor: color.withValues(alpha: 0.15),
+                          child: Text(
+                            u.name[0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: u),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Column(
+                            children: [
+                              Text(
+                                u.name.split(' ').first,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                              Builder(builder: (ctx) {
+                                final mutualCount = userState.followedUserIds
+                                    .intersection(Set<String>.from(u.followingUserIds))
+                                    .length;
+                                if (mutualCount == 0) return const SizedBox.shrink();
+                                return Text(
+                                  '$mutualCount mutual',
+                                  style: const TextStyle(
+                                      fontSize: 10, color: AppColors.secondaryText),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() => userState.toggleFollowUser(u.id));
+                          widget.onFollowed();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isFollowing ? Colors.transparent : AppColors.primaryRed,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isFollowing
+                                  ? AppColors.secondaryText.withValues(alpha: 0.4)
+                                  : AppColors.primaryRed,
+                            ),
+                          ),
+                          child: Text(
+                            isFollowing ? 'Following' : 'Follow',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isFollowing ? AppColors.secondaryText : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+        ],
       ),
     );
   }

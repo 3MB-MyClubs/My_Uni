@@ -13,21 +13,21 @@ import '../models/message.dart';
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 final users = [
-  User(id: 'u1',  name: 'Alice Yılmaz',   email: 'alice@uni.edu',        password: 'alice123',  role: 'admin',   subscribedClubIds: ['c4', 'c13', 'c35']),
-  User(id: 'u2',  name: 'Bob Demir',      email: 'bob@uni.edu',          password: 'bob123',    role: 'student', subscribedClubIds: ['c4', 'c28', 'c15', 'c36']),
-  User(id: 'u3',  name: 'Ceren Arslan',   email: 'ceren@uni.edu',        password: 'ceren123',  role: 'student', subscribedClubIds: ['c27', 'c28', 'c29']),
-  User(id: 'u4',  name: 'Deniz Kaya',     email: 'deniz@uni.edu',        password: 'deniz123',  role: 'student', subscribedClubIds: ['c13', 'c15', 'c34']),
-  User(id: 'u5',  name: 'Hakan Tuncay',   email: 'htuncay23@ku.edu.tr',  password: '',          role: 'student', subscribedClubIds: ['c4', 'c22']),
-  User(id: 'u6',  name: 'Elif Şahin',     email: 'esahin@ku.edu.tr',     password: 'elif123',   role: 'student', subscribedClubIds: ['c1', 'c3', 'c9', 'c10', 'c34']),
-  User(id: 'u7',  name: 'Murat Özdemir',  email: 'mozdemir@ku.edu.tr',   password: 'murat123',  role: 'student', subscribedClubIds: ['c2', 'c3', 'c25', 'c37', 'c40']),
-  User(id: 'u8',  name: 'Selin Yıldız',   email: 'syildiz@ku.edu.tr',    password: 'selin123',  role: 'student', subscribedClubIds: ['c6', 'c12', 'c29', 'c39', 'c41']),
-  User(id: 'u9',  name: 'Ahmet Korkmaz',  email: 'akorkmaz@ku.edu.tr',   password: 'ahmet123',  role: 'student', subscribedClubIds: ['c7', 'c8', 'c15', 'c18', 'c32']),
-  User(id: 'u10', name: 'Zeynep Aktaş',   email: 'zaktas@ku.edu.tr',     password: 'zeynep123', role: 'student', subscribedClubIds: ['c3', 'c10', 'c14', 'c17', 'c33']),
-  User(id: 'u11', name: 'Kemal Arslan',   email: 'karslan@ku.edu.tr',    password: 'kemal123',  role: 'student', subscribedClubIds: ['c5', 'c11', 'c22', 'c23', 'c36']),
-  User(id: 'u12', name: 'Ayşe Çelik',     email: 'acelik@ku.edu.tr',     password: 'ayse123',   role: 'student', subscribedClubIds: ['c16', 'c19', 'c20', 'c21', 'c30', 'c38']),
-  User(id: 'u13', name: 'Emre Doğan',     email: 'edogan@ku.edu.tr',     password: 'emre123',   role: 'student', subscribedClubIds: ['c22', 'c24', 'c26', 'c28', 'c33']),
-  User(id: 'u14', name: 'Leyla Kaplan',   email: 'lkaplan@ku.edu.tr',    password: 'leyla123',  role: 'student', subscribedClubIds: ['c6', 'c8', 'c27', 'c31', 'c41']),
-  User(id: 'u15', name: 'Serkan Yılmaz',  email: 'syilmaz@ku.edu.tr',    password: 'serkan123', role: 'student', subscribedClubIds: ['c4', 'c7', 'c11', 'c21', 'c26']),
+  User(id: 'u1',  name: 'Alice Yılmaz',   email: 'alice@uni.edu',        password: 'alice123',  role: 'admin',   subscribedClubIds: ['c4', 'c13', 'c35'],                    followingUserIds: ['u2', 'u4', 'u5']),
+  User(id: 'u2',  name: 'Bob Demir',      email: 'bob@uni.edu',          password: 'bob123',    role: 'student', subscribedClubIds: ['c4', 'c28', 'c15', 'c36'],              followingUserIds: ['u1', 'u4']),
+  User(id: 'u3',  name: 'Ceren Arslan',   email: 'ceren@uni.edu',        password: 'ceren123',  role: 'student', subscribedClubIds: ['c27', 'c28', 'c29'],                    followingUserIds: ['u1', 'u2', 'u7']),
+  User(id: 'u4',  name: 'Deniz Kaya',     email: 'deniz@uni.edu',        password: 'deniz123',  role: 'student', subscribedClubIds: ['c13', 'c15', 'c34'],                    followingUserIds: ['u1', 'u3', 'u8']),
+  User(id: 'u5',  name: 'Hakan Tuncay',   email: 'htuncay23@ku.edu.tr',  password: '',          role: 'student', subscribedClubIds: ['c4', 'c22'],                            followingUserIds: ['u1', 'u2', 'u3', 'u4']),
+  User(id: 'u6',  name: 'Elif Şahin',     email: 'esahin@ku.edu.tr',     password: 'elif123',   role: 'student', subscribedClubIds: ['c1', 'c3', 'c9', 'c10', 'c34'],         followingUserIds: ['u10', 'u12']),
+  User(id: 'u7',  name: 'Murat Özdemir',  email: 'mozdemir@ku.edu.tr',   password: 'murat123',  role: 'student', subscribedClubIds: ['c2', 'c3', 'c25', 'c37', 'c40'],        followingUserIds: ['u3', 'u9', 'u13']),
+  User(id: 'u8',  name: 'Selin Yıldız',   email: 'syildiz@ku.edu.tr',    password: 'selin123',  role: 'student', subscribedClubIds: ['c6', 'c12', 'c29', 'c39', 'c41'],       followingUserIds: ['u4', 'u6', 'u14']),
+  User(id: 'u9',  name: 'Ahmet Korkmaz',  email: 'akorkmaz@ku.edu.tr',   password: 'ahmet123',  role: 'student', subscribedClubIds: ['c7', 'c8', 'c15', 'c18', 'c32'],        followingUserIds: ['u7', 'u15']),
+  User(id: 'u10', name: 'Zeynep Aktaş',   email: 'zaktas@ku.edu.tr',     password: 'zeynep123', role: 'student', subscribedClubIds: ['c3', 'c10', 'c14', 'c17', 'c33'],       followingUserIds: ['u6', 'u11']),
+  User(id: 'u11', name: 'Kemal Arslan',   email: 'karslan@ku.edu.tr',    password: 'kemal123',  role: 'student', subscribedClubIds: ['c5', 'c11', 'c22', 'c23', 'c36'],       followingUserIds: ['u5', 'u9', 'u15']),
+  User(id: 'u12', name: 'Ayşe Çelik',     email: 'acelik@ku.edu.tr',     password: 'ayse123',   role: 'student', subscribedClubIds: ['c16', 'c19', 'c20', 'c21', 'c30', 'c38'], followingUserIds: ['u6', 'u8', 'u13']),
+  User(id: 'u13', name: 'Emre Doğan',     email: 'edogan@ku.edu.tr',     password: 'emre123',   role: 'student', subscribedClubIds: ['c22', 'c24', 'c26', 'c28', 'c33'],      followingUserIds: ['u7', 'u12', 'u14']),
+  User(id: 'u14', name: 'Leyla Kaplan',   email: 'lkaplan@ku.edu.tr',    password: 'leyla123',  role: 'student', subscribedClubIds: ['c6', 'c8', 'c27', 'c31', 'c41'],        followingUserIds: ['u8', 'u13']),
+  User(id: 'u15', name: 'Serkan Yılmaz',  email: 'syilmaz@ku.edu.tr',    password: 'serkan123', role: 'student', subscribedClubIds: ['c4', 'c7', 'c11', 'c21', 'c26'],        followingUserIds: ['u9', 'u11']),
 ];
 
 // ─── Clubs ────────────────────────────────────────────────────────────────────

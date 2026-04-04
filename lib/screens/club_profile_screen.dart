@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/club_follow_helper.dart';
@@ -69,6 +70,22 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return clubs.where((c) => ids.contains(c.id)).toList();
   }
 
+  /// True when the currently logged-in admin is the admin of THIS club.
+  bool get _isThisClubAdmin {
+    final admin = authService.currentAdmin;
+    if (admin == null) return false;
+    return widget.club.adminUserIds.contains(admin.id);
+  }
+
+  void _openBoardManagement() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BoardManagementSheet(club: widget.club),
+    ).then((_) => setState(() {}));
+  }
+
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
@@ -97,6 +114,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             backgroundColor: AppColors.card,
             surfaceTintColor: Colors.transparent,
             foregroundColor: AppColors.text,
+            actions: [
+              if (_isThisClubAdmin)
+                IconButton(
+                  icon: const Icon(Icons.manage_accounts_outlined),
+                  tooltip: 'Manage Board',
+                  onPressed: _openBoardManagement,
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
@@ -711,6 +736,244 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_StickyTabBarDelegate old) => false;
+}
+
+// ─── Board Management Sheet ───────────────────────────────────────────────────
+
+class _BoardManagementSheet extends StatefulWidget {
+  final Club club;
+  const _BoardManagementSheet({required this.club});
+
+  @override
+  State<_BoardManagementSheet> createState() => _BoardManagementSheetState();
+}
+
+class _BoardManagementSheetState extends State<_BoardManagementSheet> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  List get _matchedUsers {
+    if (_query.trim().isEmpty) return [];
+    final q = _query.trim().toLowerCase();
+    return users
+        .where((u) =>
+            u.name.toLowerCase().contains(q) &&
+            !widget.club.boardMemberIds.contains(u.id))
+        .toList();
+  }
+
+  List get _currentBoardMembers => users
+      .where((u) => widget.club.boardMemberIds.contains(u.id))
+      .toList();
+
+  void _addMember(String userId) {
+    setState(() {
+      if (!widget.club.boardMemberIds.contains(userId)) {
+        widget.club.boardMemberIds.add(userId);
+      }
+      _searchController.clear();
+      _query = '';
+    });
+  }
+
+  void _removeMember(String userId) {
+    setState(() => widget.club.boardMemberIds.remove(userId));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final boardMembers = _currentBoardMembers;
+    final matches = _matchedUsers;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle + title
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.manage_accounts_outlined,
+                          color: AppColors.primaryRed, size: 22),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Manage Board Members',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Board members are restricted to this club only.',
+                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                  ),
+                  const SizedBox(height: 14),
+                  // Search field
+                  TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _query = v),
+                    style: const TextStyle(fontSize: 14, color: AppColors.text),
+                    decoration: InputDecoration(
+                      hintText: 'Search users by name...',
+                      hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 14),
+                      prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText, size: 20),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  // Search results
+                  if (matches.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text('Add to Board',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.secondaryText,
+                              letterSpacing: 0.4)),
+                    ),
+                    ...matches.map((u) => ListTile(
+                          leading: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: AppColors.lightRed,
+                            child: Text(
+                              u.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                  color: AppColors.primaryRed,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          title: Text(u.name,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text)),
+                          subtitle: Text(u.email,
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppColors.secondaryText)),
+                          trailing: TextButton(
+                            onPressed: () => _addMember(u.id),
+                            style: TextButton.styleFrom(
+                              backgroundColor: AppColors.lightRed,
+                              foregroundColor: AppColors.primaryRed,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('Add',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        )),
+                    const Divider(height: 16),
+                  ],
+
+                  // Current board members
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Text(
+                      boardMembers.isEmpty
+                          ? 'No board members yet'
+                          : 'Current Board Members (${boardMembers.length})',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.secondaryText,
+                          letterSpacing: 0.4),
+                    ),
+                  ),
+                  if (boardMembers.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: Text(
+                        'Search for a user above to add them to the board.',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.secondaryText),
+                      ),
+                    )
+                  else
+                    ...boardMembers.map((u) => ListTile(
+                          leading: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.12),
+                            child: Text(
+                              u.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                  color: Color(0xFF1565C0),
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          title: Text(u.name,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text)),
+                          subtitle: Text(u.email,
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppColors.secondaryText)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.remove_circle_outline,
+                                color: AppColors.secondaryText, size: 22),
+                            tooltip: 'Remove from board',
+                            onPressed: () => _removeMember(u.id),
+                          ),
+                        )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Stat cell ────────────────────────────────────────────────────────────────

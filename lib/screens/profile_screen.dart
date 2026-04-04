@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
@@ -24,6 +26,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ];
 
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
+
+  Future<void> _pickBanner(String userId, ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked != null && mounted) {
+      setState(() => userState.bannerPaths[userId] = picked.path);
+    }
+  }
+
+  void _showBannerPicker(BuildContext context, String userId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Change Banner',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+              ),
+              title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              subtitle: const Text('Use your camera right now', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickBanner(userId, ImageSource.camera);
+              },
+            ),
+            const Divider(height: 1, indent: 16),
+            ListTile(
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+              ),
+              title: const Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              subtitle: const Text('Pick from your photo library', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickBanner(userId, ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,83 +173,137 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int postCount,
     int eventCount,
   ) {
+    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final bannerPath = userState.bannerPaths[myId];
+
     return Container(
       color: AppColors.card,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // ── Banner ──────────────────────────────────────────────────────────
+          Stack(
             children: [
-              // Avatar with gradient ring
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [AppColors.primaryRed, AppColors.accentGold],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.card,
-                  ),
-                  padding: const EdgeInsets.all(2),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.lightRed,
-                    ),
-                    child: Center(
-                      child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryRed,
+              GestureDetector(
+                onTap: () => _showBannerPicker(context, myId),
+                child: SizedBox(
+                  height: 130,
+                  width: double.infinity,
+                  child: bannerPath != null
+                      ? Image.file(File(bannerPath), fit: BoxFit.cover)
+                      : Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.primaryRed, Color(0xFF6A1B9A)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
                 ),
               ),
-              const SizedBox(width: 20),
-              // Stats row
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _StatCell(value: '$postCount', label: 'Posts'),
-                    _StatCell(value: '$clubCount', label: 'Clubs'),
-                    _StatCell(value: '$eventCount', label: 'Events'),
-                  ],
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: GestureDetector(
+                  onTap: () => _showBannerPicker(context, myId),
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text)),
-          const SizedBox(height: 2),
-          Text(email, style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-          if (isAdmin) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Super Admin',
-                style: TextStyle(fontSize: 12, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
-              ),
+
+          // ── Avatar + stats ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [AppColors.primaryRed, AppColors.accentGold],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.card,
+                        ),
+                        padding: const EdgeInsets.all(2),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.lightRed,
+                          ),
+                          child: Center(
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _StatCell(value: '$postCount', label: 'Posts'),
+                          _StatCell(value: '$clubCount', label: 'Clubs'),
+                          _StatCell(value: '$eventCount', label: 'Events'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text)),
+                const SizedBox(height: 2),
+                Text(email,
+                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                if (isAdmin) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.lightRed,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Super Admin',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
