@@ -3,7 +3,9 @@ class Event {
   final String clubId;
   final String title;
   final String description;
-  final DateTime dateTime;
+  final DateTime dateTime;   // start time
+  final DateTime endTime;    // end time
+  final String location;
   final List<String> attendeeUserIds;
 
   Event({
@@ -12,6 +14,8 @@ class Event {
     required this.title,
     required this.description,
     required this.dateTime,
+    required this.endTime,
+    required this.location,
     required this.attendeeUserIds,
   });
 }

@@ -5,6 +5,7 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import '../services/club_follow_helper.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
@@ -67,11 +68,11 @@ class _ExploreScreenState extends State<ExploreScreen>
   }
 
   List<User> get _filteredPeople {
+    if (_peopleQuery.isEmpty) return [];
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     return users.where((u) {
       if (u.id == myId) return false;
-      if (_peopleQuery.isEmpty) return true;
       return u.name.toLowerCase().contains(_peopleQuery.toLowerCase()) ||
           u.email.toLowerCase().contains(_peopleQuery.toLowerCase());
     }).toList();
@@ -292,10 +293,10 @@ class _ExploreScreenState extends State<ExploreScreen>
         ),
         Expanded(
           child: people.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
-                    'No people found',
-                    style: TextStyle(color: AppColors.secondaryText),
+                    _peopleQuery.isEmpty ? 'Type a name to search people' : 'No people found',
+                    style: const TextStyle(color: AppColors.secondaryText),
                   ),
                 )
               : ListView.separated(
@@ -416,7 +417,7 @@ class _ClubCardState extends State<_ClubCard> {
               width: double.infinity,
               child: GestureDetector(
                 onTap: () =>
-                    setState(() => userState.toggleFollow(widget.club.id)),
+                    handleFollowTap(context, widget.club.id, () => setState(() {})),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(vertical: 7),

@@ -7,6 +7,7 @@ import '../services/user_state.dart';
 import '../models/like.dart';
 import '../models/comment.dart';
 import 'user_profile_screen.dart';
+import 'create_post_screen.dart' show buildPostBanner;
 
 class PostDetailScreen extends StatefulWidget {
   final NewsPost post;
@@ -153,43 +154,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ),
 
                   // ── Banner image ──
-                  Stack(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        height: 220,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              widget.clubColor.withValues(alpha: 0.9),
-                              widget.clubColor.withValues(alpha: 0.35),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            widget.post.title[0],
-                            style: TextStyle(
-                              fontSize: 100,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white.withValues(alpha: 0.1),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 16, left: 16, right: 16,
-                        child: Text(widget.post.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
-                            )),
-                      ),
-                    ],
+                  buildPostBanner(
+                    imagePath: widget.post.imagePath,
+                    fallbackColor: widget.clubColor,
+                    fallbackLetter: clubs.firstWhere(
+                      (c) => c.id == widget.post.clubId,
+                      orElse: () => clubs.first,
+                    ).name[0],
+                    height: 220,
                   ),
 
                   // ── Like + comment counts ──

@@ -74,16 +74,19 @@ final clubs = [
   Club(id: 'c39', name: 'Tiyatro Kulübü',                            description: 'Full theatrical productions, acting workshops, improvisation sessions and annual performances on the KU stage.',                 adminUserIds: []),
   Club(id: 'c40', name: 'Türk Araştırmaları Topluluğu',              description: 'Research and discussion on Turkish history, culture, foreign policy and contemporary issues through seminars and publications.',  adminUserIds: []),
   Club(id: 'c41', name: 'Türk Halk Müziği Kulübü (THM)',             description: 'Preserving Turkish folk music with saz sessions, folk song rehearsals and performances at campus and community events.',         adminUserIds: []),
+  Club(id: 'c42', name: 'HAKANS_CLUB',                               description: 'Hakan\'s personal club.',                                                                                                           adminUserIds: ['cadmin1']),
 ];
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 final events = [
-  Event(id: 'ev1', clubId: 'c4',  title: 'Hack-KU 2025',             description: 'Our annual 48-hour hackathon is back! Form teams of up to 4, pick a challenge track and build something amazing. Prizes, mentors and free food all weekend. All skill levels welcome!', dateTime: DateTime.now().add(const Duration(days: 5)),  attendeeUserIds: ['u2', 'u4']),
-  Event(id: 'ev2', clubId: 'c13', title: 'Bahar Fotoğraf Sergisi',   description: 'Submit up to three prints for our spring gallery. Landscape, portrait, street — all genres accepted. Selected works will be displayed in the SOS atrium for two weeks.', dateTime: DateTime.now().add(const Duration(days: 8)),  attendeeUserIds: ['u1', 'u4']),
-  Event(id: 'ev3', clubId: 'c5',  title: 'Uludağ Kış Tırmanışı',    description: 'A two-day winter ascent of Uludağ with certified guides. Equipment rental available. Limited to 12 participants — sign up fast. Physical fitness test required at briefing.', dateTime: DateTime.now().add(const Duration(days: 14)), attendeeUserIds: ['u1', 'u2', 'u3']),
-  Event(id: 'ev4', clubId: 'c27', title: 'Üniversitelerarası Münazara', description: 'Koç University hosts this year\'s inter-university debate championship. Motion: "This house believes AI will make democratic elections obsolete." Come watch or compete!', dateTime: DateTime.now().add(const Duration(days: 10)), attendeeUserIds: ['u3']),
-  Event(id: 'ev5', clubId: 'c28', title: 'Open Mic Night',           description: 'Sign up to perform or come and enjoy live music by fellow students. Guitar, piano, vocals, beat-box — everything welcome. Doors open at 8 PM in SOS B Atelier.', dateTime: DateTime.now().add(const Duration(days: 3)),  attendeeUserIds: ['u2', 'u4']),
+  Event(id: 'ev0a', clubId: 'c28', title: 'Jazz Jam Session',              description: 'Drop-in jazz jam happening right now in SOS B Atelier. All instruments welcome. Come play or just listen!',                                                                                                                                             location: 'SOS B Atelier',            dateTime: DateTime.now().subtract(const Duration(minutes: 30)), endTime: DateTime.now().add(const Duration(hours: 2)),             attendeeUserIds: ['u1', 'u3', 'u5']),
+  Event(id: 'ev0b', clubId: 'c39', title: 'Doğaçlama Tiyatro Gecesi',     description: 'Improv theatre night in full swing — walk in anytime, no ticket needed.',                                                                                                                                                                                         location: 'SOS B206',                 dateTime: DateTime.now().subtract(const Duration(hours: 1)),    endTime: DateTime.now().add(const Duration(hours: 1, minutes: 30)), attendeeUserIds: ['u2', 'u4']),
+  Event(id: 'ev1',  clubId: 'c4',  title: 'Hack-KU 2025',                 description: 'Our annual 48-hour hackathon is back! Form teams of up to 4, pick a challenge track and build something amazing. Prizes, mentors and free food all weekend. All skill levels welcome!',                                                                          location: 'ENG Building, Main Hall',  dateTime: DateTime.now().add(const Duration(days: 5)),           endTime: DateTime.now().add(const Duration(days: 7)),              attendeeUserIds: ['u2', 'u4']),
+  Event(id: 'ev2',  clubId: 'c13', title: 'Bahar Fotoğraf Sergisi',       description: 'Submit up to three prints for our spring gallery. Landscape, portrait, street — all genres accepted. Selected works will be displayed in the SOS atrium for two weeks.',                                                                                          location: 'SOS Atrium Gallery',       dateTime: DateTime.now().add(const Duration(days: 8)),           endTime: DateTime.now().add(const Duration(days: 8, hours: 4)),    attendeeUserIds: ['u1', 'u4']),
+  Event(id: 'ev3',  clubId: 'c5',  title: 'Uludağ Kış Tırmanışı',        description: 'A two-day winter ascent of Uludağ with certified guides. Equipment rental available. Limited to 12 participants — sign up fast.',                                                                                                                                location: 'Uludağ, Bursa (departure from KU main gate)', dateTime: DateTime.now().add(const Duration(days: 14)), endTime: DateTime.now().add(const Duration(days: 16)), attendeeUserIds: ['u1', 'u2', 'u3']),
+  Event(id: 'ev4',  clubId: 'c27', title: 'Üniversitelerarası Münazara',  description: 'Koç University hosts this year\'s inter-university debate championship. Motion: "This house believes AI will make democratic elections obsolete." Come watch or compete!',                                                                                         location: 'SOS B140 Amphitheatre',    dateTime: DateTime.now().add(const Duration(days: 10)),          endTime: DateTime.now().add(const Duration(days: 10, hours: 3)),   attendeeUserIds: ['u3']),
+  Event(id: 'ev5',  clubId: 'c28', title: 'Open Mic Night',               description: 'Sign up to perform or come and enjoy live music by fellow students. Guitar, piano, vocals, beat-box — everything welcome. Doors open at 8 PM.',                                                                                                                   location: 'SOS B Atelier',            dateTime: DateTime.now().add(const Duration(days: 3)),           endTime: DateTime.now().add(const Duration(days: 3, hours: 3)),    attendeeUserIds: ['u2', 'u4']),
 ];
 
 // ─── News Posts ───────────────────────────────────────────────────────────────
@@ -133,6 +136,120 @@ final newsPosts = [
   NewsPost(id: 'n39', clubId: 'c39', authorId: 'u1', title: 'Doğaçlama Tiyatro Geceleri Başlıyor',       content: 'Tiyatro Kulübü olarak her Perşembe akşamı açık doğaçlama geceleri düzenliyoruz! Tiyatro deneyimi şart değil — sadece sahneye çıkma cesareti yeterli. İzleyici olarak da gelebilirsiniz, giriş ücretsiz. SOS B206, 19:30\'da başlıyor.',                                                   createdAt: DateTime.now().subtract(const Duration(days: 6, hours: 2))),
   NewsPost(id: 'n40', clubId: 'c40', authorId: 'u4', title: 'Türk Dış Politikası Tartışma Serisi',       content: 'Türk Araştırmaları Topluluğu olarak "Değişen Dünyada Türk Dış Politikası" başlıklı tartışma serimizi başlatıyoruz. Orta Doğu, Kafkasya ve AB ilişkileri üzerine uzman konuşmacılarla dört haftalık bir program. İlk oturum Pazartesi 17:00.',                                          createdAt: DateTime.now().subtract(const Duration(days: 10, hours: 1))),
   NewsPost(id: 'n41', clubId: 'c41', authorId: 'u2', title: 'Saz Atölyesi — Tüm Seviyeler Davetli',      content: 'Türk Halk Müziği Kulübü olarak bu dönem saz atölyelerini genişletiyoruz. Başlangıç, orta ve ileri seviye gruplar Salı-Perşembe akşamları toplanıyor. Saz temin edilebilir. Türk halk müziğini öğrenmek isteyen herkes aramıza katılabilir!',                                            createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 5))),
+
+  // ── Posts with images (templates) ───────────────────────────────────────────
+  NewsPost(id: 'ni1',  clubId: 'c4',  authorId: 'u1', content: 'Hack-KU 2025 registration is now open! 48 hours of coding, mentors, food, and prizes. Tag a friend you\'re teaming up with 💻🔥', createdAt: DateTime.now().subtract(const Duration(hours: 3)), imagePath: 'tpl:0'),
+  NewsPost(id: 'ni2',  clubId: 'c13', authorId: 'u4', content: 'Golden hour on campus — caught this moment between SOS and the library. Spring is officially here 🌅📷', createdAt: DateTime.now().subtract(const Duration(hours: 7)), imagePath: 'tpl:1'),
+  NewsPost(id: 'ni3',  clubId: 'c6',  authorId: 'u2', content: 'Bahar Şenliği prova kareleri! Sahneye 2 hafta kaldı — enerjimiz zirvedeyken bir göz atın 🕺💃', createdAt: DateTime.now().subtract(const Duration(hours: 11)), imagePath: 'tpl:2'),
+  NewsPost(id: 'ni4',  clubId: 'c27', authorId: 'u3', content: 'Regional champions 🏆 The moment the final verdict was announced — we still can\'t believe it. Ankara, here we come!', createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 2)), imagePath: 'tpl:3'),
+  NewsPost(id: 'ni5',  clubId: 'c28', authorId: 'u3', content: 'Open Mic sound check done ✅ The vibe in SOS B Atelier tonight is going to be unreal. Doors open at 8 PM — free entry 🎵', createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 5)), imagePath: 'tpl:4'),
+  NewsPost(id: 'ni6',  clubId: 'c15', authorId: 'u2', content: 'KU Demo Day 2025 pitch prep workshop recap 🚀 Founders in the room gave us chills. Applications still open — link in bio.', createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 9)), imagePath: 'tpl:5'),
+  NewsPost(id: 'ni7',  clubId: 'c35', authorId: 'u1', content: '"Uzak" — Nuri Bilge Ceylan retrospective night at the KU screening room. The silence was deafening in the best possible way 🎬', createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 1)), imagePath: 'tpl:6'),
+  NewsPost(id: 'ni8',  clubId: 'c31', authorId: 'u1', content: 'Bahar Konseri son prova! Brahms\'ın dörtlüsü bu akustik salonla buluşunca gerçekten büyülü bir şey oluyor 🎻', createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 6)), imagePath: 'tpl:7'),
+  NewsPost(id: 'ni9',  clubId: 'c22', authorId: 'u4', content: 'Kadıköy çocuk parkı restorasyon projemiz tamamlandı! 35 gönüllü, 2 hafta, sıfır bütçe — saf keyif 💚', createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 14)), imagePath: 'tpl:0'),
+  NewsPost(id: 'ni10', clubId: 'c5',  authorId: 'u2', content: 'Uludağ summit view at sunrise after a 6-hour ascent ⛰️ Worth every step. Who\'s joining the next climb?', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 2)), imagePath: 'tpl:1'),
+  NewsPost(id: 'ni11', clubId: 'c23', authorId: 'u2', content: 'KU Kartalları şampiyon! 🦅 Final maçının son saniyelerini kim hatırlar? Inanılmazdı. Kupamız evde!', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 8)), imagePath: 'tpl:2'),
+  NewsPost(id: 'ni12', clubId: 'c34', authorId: 'u3', content: '"Şehir ve Ruh" sergimizin açılış gecesi — 18 sanatçı, 40+ eser, 200+ ziyaretçi. Teşekkürler KU! 🎨', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 15)), imagePath: 'tpl:3'),
+  NewsPost(id: 'ni13', clubId: 'c20', authorId: 'u3', content: 'Women in Tech Summit 2025 — Google, Microsoft, Koç Holding\'den kadın liderler aynı sahnede 🌟 Kayıt bağlantısı bio\'da!', createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 3)), imagePath: 'tpl:4'),
+  NewsPost(id: 'ni14', clubId: 'c39', authorId: 'u1', content: 'Thursday Improv Night highlights 🎭 No script, no plan — just pure chaos and laughter. Join us every Thursday at 19:30!', createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 10)), imagePath: 'tpl:5'),
+  NewsPost(id: 'ni15', clubId: 'c9',  authorId: 'u3', content: 'Bahar dönemi ebru atölyesi bitti — işte öğrencilerimizin eserleri 🌊 Her biri tamamen benzersiz. Kayıt başladı!', createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 1)), imagePath: 'tpl:6'),
+  NewsPost(id: 'ni16', clubId: 'c33', authorId: 'u2', content: 'KU Radyo bu hafta canlı — Spotify\'da dinle, kampüste hisset 📻 Müzik, haberler, sürpriz konuklar. Yayın devam!', createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 7)), imagePath: 'tpl:7'),
+  NewsPost(id: 'ni17', clubId: 'c26', authorId: 'u4', content: 'Robolig 2025 robot tasarım süreci başladı 🤖 Alüminyum, motor, kod — her şey bir arada. Takımımıza katıl!', createdAt: DateTime.now().subtract(const Duration(days: 6, hours: 2)), imagePath: 'tpl:0'),
+  NewsPost(id: 'ni18', clubId: 'c12', authorId: 'u4', content: 'Folklör Kulübü yıl sonu gösterisi kostüm provası 👘 Zeybek, horon, halay — 15 Mayıs\'ta KU Amfisi\'nde görüşürüz!', createdAt: DateTime.now().subtract(const Duration(days: 6, hours: 9)), imagePath: 'tpl:1'),
+  NewsPost(id: 'ni19', clubId: 'c24', authorId: 'u3', content: 'Onur Haftası fotoğraf sergisi açıldı 🌈 "Görünür ol" — bu haftanın teması bu. Herkes davetli, SOS Galerisi.', createdAt: DateTime.now().subtract(const Duration(days: 7, hours: 4)), imagePath: 'tpl:2'),
+  NewsPost(id: 'ni20', clubId: 'c37', authorId: 'u2', content: 'Osmanlı arşivleri workshopundan bir kare 📜 500 yıllık belgeler ellerimizde — tarih böyle öğrenilir.', createdAt: DateTime.now().subtract(const Duration(days: 7, hours: 11)), imagePath: 'tpl:3'),
+
+  // ── Collaboration posts ──────────────────────────────────────────────────────
+
+  // KUACM (c4) × EkoPolitik (c8): joint AI & Democracy panel
+  NewsPost(
+    id: 'nc1', clubId: 'c4', authorId: 'u1',
+    title: 'AI & Democracy — Joint Panel with @EkoPolitik',
+    content: 'We\'re teaming up with @ekopolitik for a cross-disciplinary panel: "Will AI Make Democracy Obsolete?" — bringing together computer scientists, economists and political theorists for a night of sharp debate. Tuesday 18:00, SOS B140. Free entry, limited seats. Register via the link in our bio!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 10)),
+    taggedClubIds: ['c8'],
+  ),
+
+  // EkoPolitik (c8) × KUACM (c4): same event from their side
+  NewsPost(
+    id: 'nc2', clubId: 'c8', authorId: 'u4',
+    title: 'Yapay Zeka Paneli — @Bilgisayar Kulübü ile Birlikte',
+    content: 'EkoPolitik ve @bilgisayar kulübü (KUACM) olarak ortak bir etkinlikle karşınızdayız. "Yapay Zeka Seçimleri Nasıl Etkiler?" panelinde farklı disiplinlerden dört konuşmacı bir araya geliyor. Bu tür işbirlikleri kampüs akademik kültürünü zenginleştiriyor — birlikte daha güçlüyüz!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 8)),
+    taggedClubIds: ['c4'],
+  ),
+
+  // KUDans (c6) × Müzikal Kulübü (c29): Spring Festival performance
+  NewsPost(
+    id: 'nc3', clubId: 'c6', authorId: 'u2',
+    title: 'Bahar Şenliği: @Müzikal Kulübü ile Ortak Sahne!',
+    content: 'Bu yılki Bahar Şenliği\'nde @müzikal kulübü ile birlikte sahne alıyoruz! Dans ve müzikal tiyatronun birleşeceği bu 20 dakikalık ortak performans için prova takvimimiz netleşti. Salsa, hip-hop ve canlı vokal performanslarını bir arada sunan bu gösteri kesinlikle kaçırılmamalı. 15 Mayıs, KU Amfitiyatrosu.',
+    createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 4)),
+    taggedClubIds: ['c29'],
+  ),
+
+  // Müzikal (c29) × KUDans (c6) × Orkestra (c31): triple collab
+  NewsPost(
+    id: 'nc4', clubId: 'c29', authorId: 'u3',
+    title: 'Üçlü İşbirliği: @KUDans × @Orkestra × Müzikal',
+    content: 'Bahar Şenliği için büyük sürpriz! @kudans ve @orkestra kulübü ile birlikte üç kulübün bir araya geldiği dev bir sahne performansı hazırlıyoruz. Canlı orkestra eşliğinde dans ve müzikal sahneler — kampüs tarihinde ilk kez! Prova süreci zorlu ama sonuç inanılmaz olacak. Biletler yakında!',
+    createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 1)),
+    taggedClubIds: ['c6', 'c31'],
+  ),
+
+  // Orkestra (c31) × Türk Halk Müziği (c41): fusion concert
+  NewsPost(
+    id: 'nc5', clubId: 'c31', authorId: 'u1',
+    title: 'Fusion Konseri: Klasik × Halk Müziği with @Türk',
+    content: 'Orkestra Kulübü olarak @türk halk müziği kulübü ile birlikte tamamen yeni bir şey deniyoruz: Batı klasik müziği ile Türk halk ezgilerini birleştiren bir fusion konseri! Brahms\'ın dörtlüsü ile Karadeniz türkülerinin yan yana çalındığını hayal edin. 8 Haziran, SOS Konser Salonu. Giriş ücretsiz.',
+    createdAt: DateTime.now().subtract(const Duration(days: 4)),
+    taggedClubIds: ['c41'],
+  ),
+
+  // Sinema (c35) × Fotoğraf Kulübü (c13): visual arts week
+  NewsPost(
+    id: 'nc6', clubId: 'c35', authorId: 'u4',
+    title: 'Görsel Sanatlar Haftası — @KUFoto ile Birlikte',
+    content: 'Sinema Kulübü olarak @kufoto (Fotoğraf Kulübü) ile ortak bir Görsel Sanatlar Haftası düzenliyoruz! Program: fotoğraf sergisi açılışı, kısa film gösterimi, sinemacı-fotoğrafçı söyleşisi ve ortak bir fotoğraf-film atölyesi. 3-7 Haziran, SOS Galerisi. Tüm etkinlikler ücretsiz ve herkese açık.',
+    createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 7)),
+    taggedClubIds: ['c13'],
+  ),
+
+  // KU Gönüllüleri (c22) × Hemşirelik (c16): health outreach
+  NewsPost(
+    id: 'nc7', clubId: 'c22', authorId: 'u2',
+    title: 'Sağlıklı Kampüs Kampanyası — @Hemşirelik ile',
+    content: '@hemşirelik kulübü ile birlikte bu hafta boyunca "Sağlıklı Kampüs" kampanyası yürütüyoruz! Gönüllü öğrencilerimiz, hemşirelik öğrencilerinin sağlık taraması yaparken lojistik desteği üstleniyor. Sabah 09:00\'da SOS giriş holünde başlıyor — kanda şeker ve tansiyon ölçtürmeyi unutmayın!',
+    createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 3)),
+    taggedClubIds: ['c16'],
+  ),
+
+  // Girişimcilik (c15) × KUACM (c4) × KUSWE (c20): startup hackathon
+  NewsPost(
+    id: 'nc8', clubId: 'c15', authorId: 'u3',
+    title: 'Tech Startup Hackathon — @Bilgisayar × @Kadın',
+    content: 'Girişimcilik Kulübü olarak @bilgisayar kulübü (KUACM) ve @kadın mühendisler kulübü (KUSWE) ile ortak bir Tech Startup Hackathon düzenliyoruz. 24 saatlik etkinlikte takımlar gerçek bir sosyal soruna teknolojik çözüm geliştirecek. Ödül: KU Demo Day\'de sunum hakkı + 50.000 TL. Başvurular açık!',
+    createdAt: DateTime.now().subtract(const Duration(days: 6, hours: 6)),
+    taggedClubIds: ['c4', 'c20'],
+  ),
+
+  // Resim (c34) × Ebru (c9): traditional Turkish arts exhibition
+  NewsPost(
+    id: 'nc9', clubId: 'c34', authorId: 'u1',
+    title: 'Geleneksel Türk Sanatları Sergisi — @Ebru ile',
+    content: 'Resim Kulübü olarak @ebru kulübü ile birlikte "Geleneksel ve Çağdaş" başlıklı ortak bir sergi açıyoruz! Bir yanda kâğıt mermerleme ustalarının eserleri, diğer yanda yağlıboya ve suluboya tablolar... İki farklı dünya, tek sergide. 20 Mayıs açılış, SOS Galerisi. Saat 18:00\'de müzik eşliğinde vernisaj.',
+    createdAt: DateTime.now().subtract(const Duration(days: 8, hours: 2)),
+    taggedClubIds: ['c9'],
+  ),
+
+  // Münazara (c27) × Ekonomi (c7) × Hukuk (c17): policy debate night
+  NewsPost(
+    id: 'nc10', clubId: 'c27', authorId: 'u3',
+    title: 'Politika Münazara Gecesi — @Ekonomi & @Hukuk',
+    content: 'Bu dönemin en heyecanlı etkinliği geliyor! @ekonomi kulübü ve @hukuk kulübü ile birlikte "Minimum Ücret Kanunu: Gerekli mi, Zararlı mı?" konulu üçlü münazara gecesi düzenliyoruz. Ekonomistler, hukukçular ve münazaracılar aynı sahnede. Oxford formatında 90 dakikalık tartışma. Cuma 19:00, Amphitheater.',
+    createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 14)),
+    taggedClubIds: ['c7', 'c17'],
+  ),
 ];
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -146,8 +263,23 @@ final comments = [
   Comment(id: 'cm6',  postId: 'n5', userId: 'u1', content: 'Absolutely deserved. You all crushed it!',                   createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 20))),
   Comment(id: 'cm7',  postId: 'n5', userId: 'u2', content: 'Congrats! Nationals here we come 🔥',                        createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 18))),
   Comment(id: 'cm8',  postId: 'n5', userId: 'u4', content: 'That final round was incredible!',                           createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 10))),
-  Comment(id: 'cm9',  postId: 'n4', userId: 'u3', content: 'Signed up already, can\'t wait!',                            createdAt: DateTime.now().subtract(const Duration(days: 1))),
-  Comment(id: 'cm10', postId: 'n4', userId: 'u4', content: 'Performing this time 🎸',                                    createdAt: DateTime.now().subtract(const Duration(hours: 20))),
+  Comment(id: 'cm9',  postId: 'n4',  userId: 'u3', content: 'Signed up already, can\'t wait!',                                  createdAt: DateTime.now().subtract(const Duration(days: 1))),
+  Comment(id: 'cm10', postId: 'n4',  userId: 'u4', content: 'Performing this time 🎸',                                          createdAt: DateTime.now().subtract(const Duration(hours: 20))),
+  // Collab post comments
+  Comment(id: 'cm11', postId: 'nc1', userId: 'u3', content: 'This is exactly the kind of cross-faculty event we need!',         createdAt: DateTime.now().subtract(const Duration(hours: 9))),
+  Comment(id: 'cm12', postId: 'nc1', userId: 'u5', content: 'Registered already — see you there!',                              createdAt: DateTime.now().subtract(const Duration(hours: 7))),
+  Comment(id: 'cm13', postId: 'nc2', userId: 'u2', content: 'KUACM ve EkoPolitik bir arada — harika!',                          createdAt: DateTime.now().subtract(const Duration(hours: 6))),
+  Comment(id: 'cm14', postId: 'nc3', userId: 'u1', content: 'Salsa + musical theatre? This is going to be incredible 🔥',       createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 2))),
+  Comment(id: 'cm15', postId: 'nc3', userId: 'u4', content: 'KUDans never disappoints, and together with Müzikal? 👏',          createdAt: DateTime.now().subtract(const Duration(hours: 22))),
+  Comment(id: 'cm16', postId: 'nc4', userId: 'u2', content: 'Three clubs on one stage — this is a first for KU!',               createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 18))),
+  Comment(id: 'cm17', postId: 'nc5', userId: 'u3', content: 'Klasik müzik ile halk müziğinin birleşimi gerçekten çok heyecan verici!', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 20))),
+  Comment(id: 'cm18', postId: 'nc6', userId: 'u5', content: 'Sinema + fotoğraf = mükemmel combo. Kesinlikle geleceğim.',        createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 4))),
+  Comment(id: 'cm19', postId: 'nc7', userId: 'u1', content: 'Nursing students + volunteers = a great team for the community!',  createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 22))),
+  Comment(id: 'cm20', postId: 'nc8', userId: 'u4', content: 'Three clubs, one hackathon — this is what university is about 🚀', createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 20))),
+  Comment(id: 'cm21', postId: 'nc8', userId: 'u2', content: 'Already forming a team for this. Who wants in?',                  createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 15))),
+  Comment(id: 'cm22', postId: 'nc9', userId: 'u3', content: 'Ebru ve resim yan yana — çok güzel bir sergi olacak!',             createdAt: DateTime.now().subtract(const Duration(days: 7, hours: 20))),
+  Comment(id: 'cm23', postId: 'nc10', userId: 'u1', content: 'Three clubs debating together — the Oxford format is perfect for this.', createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 10))),
+  Comment(id: 'cm24', postId: 'nc10', userId: 'u5', content: 'Münazara + Ekonomi + Hukuk — this panel will be fire 🔥',         createdAt: DateTime.now().subtract(const Duration(hours: 22))),
 ];
 
 // ─── Likes ────────────────────────────────────────────────────────────────────
@@ -163,8 +295,36 @@ final likes = [
   Like(id: 'l8',  postId: 'n5', userId: 'u2'),
   Like(id: 'l9',  postId: 'n5', userId: 'u4'),
   Like(id: 'l10', postId: 'n5', userId: 'u3'),
-  Like(id: 'l11', postId: 'n4', userId: 'u1'),
-  Like(id: 'l12', postId: 'n4', userId: 'u3'),
+  Like(id: 'l11', postId: 'n4',  userId: 'u1'),
+  Like(id: 'l12', postId: 'n4',  userId: 'u3'),
+  // Collab post likes
+  Like(id: 'l13', postId: 'nc1', userId: 'u2'),
+  Like(id: 'l14', postId: 'nc1', userId: 'u3'),
+  Like(id: 'l15', postId: 'nc1', userId: 'u4'),
+  Like(id: 'l16', postId: 'nc1', userId: 'u5'),
+  Like(id: 'l17', postId: 'nc2', userId: 'u1'),
+  Like(id: 'l18', postId: 'nc2', userId: 'u3'),
+  Like(id: 'l19', postId: 'nc3', userId: 'u1'),
+  Like(id: 'l20', postId: 'nc3', userId: 'u4'),
+  Like(id: 'l21', postId: 'nc3', userId: 'u5'),
+  Like(id: 'l22', postId: 'nc4', userId: 'u2'),
+  Like(id: 'l23', postId: 'nc4', userId: 'u3'),
+  Like(id: 'l24', postId: 'nc4', userId: 'u4'),
+  Like(id: 'l25', postId: 'nc5', userId: 'u1'),
+  Like(id: 'l26', postId: 'nc5', userId: 'u2'),
+  Like(id: 'l27', postId: 'nc6', userId: 'u3'),
+  Like(id: 'l28', postId: 'nc6', userId: 'u5'),
+  Like(id: 'l29', postId: 'nc7', userId: 'u1'),
+  Like(id: 'l30', postId: 'nc7', userId: 'u4'),
+  Like(id: 'l31', postId: 'nc8', userId: 'u2'),
+  Like(id: 'l32', postId: 'nc8', userId: 'u3'),
+  Like(id: 'l33', postId: 'nc8', userId: 'u5'),
+  Like(id: 'l34', postId: 'nc9', userId: 'u1'),
+  Like(id: 'l35', postId: 'nc9', userId: 'u4'),
+  Like(id: 'l36', postId: 'nc10', userId: 'u2'),
+  Like(id: 'l37', postId: 'nc10', userId: 'u3'),
+  Like(id: 'l38', postId: 'nc10', userId: 'u4'),
+  Like(id: 'l39', postId: 'nc10', userId: 'u5'),
 ];
 
 // ─── Shares ───────────────────────────────────────────────────────────────────
@@ -272,11 +432,21 @@ final subscriptions = [
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 final notifications = [
-  AppNotification(id: 'nt1', userId: 'u2', message: 'Bob Demir liked your post in KUACM',               createdAt: DateTime.now().subtract(const Duration(minutes: 15))),
-  AppNotification(id: 'nt2', userId: 'u2', message: 'Hack-KU 2025 is in 5 days — don\'t forget!',       createdAt: DateTime.now().subtract(const Duration(hours: 2))),
-  AppNotification(id: 'nt3', userId: 'u2', message: 'KUFoto posted a new update',                        createdAt: DateTime.now().subtract(const Duration(hours: 6))),
-  AppNotification(id: 'nt4', userId: 'u2', message: 'Ceren Arslan commented on Münazara\'s post',        createdAt: DateTime.now().subtract(const Duration(days: 1))),
-  AppNotification(id: 'nt5', userId: 'u2', message: 'KÜMK: Open Mic Night sign-ups are open!',           createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 3))),
+  AppNotification(id: 'nt1',  userId: 'u2', message: 'Alice Yılmaz liked your post in KUACM',                        createdAt: DateTime.now().subtract(const Duration(minutes: 8))),
+  AppNotification(id: 'nt2',  userId: 'u2', message: 'Hack-KU 2025 is in 5 days — don\'t forget to register!',      createdAt: DateTime.now().subtract(const Duration(minutes: 42))),
+  AppNotification(id: 'nt3',  userId: 'u2', message: 'Ceren Arslan commented: "This is exactly what we need! 🔥"',   createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 15))),
+  AppNotification(id: 'nt4',  userId: 'u2', message: 'KUFoto posted a new photo update',                             createdAt: DateTime.now().subtract(const Duration(hours: 3))),
+  AppNotification(id: 'nt5',  userId: 'u2', message: 'Deniz Kaya liked your comment in KUDans',                      createdAt: DateTime.now().subtract(const Duration(hours: 5))),
+  AppNotification(id: 'nt6',  userId: 'u2', message: 'Open Mic Night starts in 2 hours — SOS B Atelier 🎵',          createdAt: DateTime.now().subtract(const Duration(hours: 6))),
+  AppNotification(id: 'nt7',  userId: 'u2', message: 'Girişimcilik Kulübü posted: "KU Demo Day applications open!"', createdAt: DateTime.now().subtract(const Duration(hours: 9))),
+  AppNotification(id: 'nt8',  userId: 'u2', message: 'Hakan Tuncay started following you',                            createdAt: DateTime.now().subtract(const Duration(hours: 11))),
+  AppNotification(id: 'nt9',  userId: 'u2', message: 'KÜMK: Open Mic Night sign-ups are closing soon!',              createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 1))),
+  AppNotification(id: 'nt10', userId: 'u2', message: 'Ceren Arslan commented on Münazara\'s championship post',      createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 4))),
+  AppNotification(id: 'nt11', userId: 'u2', message: 'KU Basketbol Takımı just won the championship! 🏆',            createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 7))),
+  AppNotification(id: 'nt12', userId: 'u2', message: 'Uludağ Kış Tırmanışı has 3 spots left — register now!',       createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 2))),
+  AppNotification(id: 'nt13', userId: 'u2', message: 'Alice Yılmaz and 4 others liked your photo post',              createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 8))),
+  AppNotification(id: 'nt14', userId: 'u2', message: 'Sinema Kulübü: Nuri Bilge Ceylan retrospective starts tonight', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 1))),
+  AppNotification(id: 'nt15', userId: 'u2', message: 'Deniz Kaya started following you',                              createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 3))),
 ];
 
 // ─── Direct Messages ─────────────────────────────────────────────────────────
@@ -360,6 +530,13 @@ final appAdmin = AppAdmin(
   email: 'youradmin@uni.edu',
   password: 'admin123',
 );
+
+// ─── Club Admins ──────────────────────────────────────────────────────────────
+
+final clubAdmins = [
+  AppAdmin(id: 'cadmin1', name: 'HAKANS_CLUB', email: 'hclub@ku.edu.tr', password: '123456789'),
+];
+// Note: club adminUserIds must include the AppAdmin id (e.g. 'cadmin1') for post creation to work
 
 // ─── Scoring Helpers ──────────────────────────────────────────────────────────
 

@@ -19,10 +19,26 @@ class UserState {
 
   bool isFollowing(String clubId) => followedClubIds.contains(clubId);
 
+  /// Returns the clubId of the club currently followed, or null.
+  String? get activeClubId =>
+      followedClubIds.isEmpty ? null : followedClubIds.first;
+
+  /// Unfollow current club and follow [clubId]. Does nothing if already following [clubId].
+  void joinClub(String clubId) {
+    followedClubIds.clear();
+    followedClubIds.add(clubId);
+  }
+
+  void leaveClub(String clubId) {
+    followedClubIds.remove(clubId);
+  }
+
   void toggleFollow(String clubId) {
     if (followedClubIds.contains(clubId)) {
       followedClubIds.remove(clubId);
     } else {
+      // Max 1 club — replace existing
+      followedClubIds.clear();
       followedClubIds.add(clubId);
     }
   }

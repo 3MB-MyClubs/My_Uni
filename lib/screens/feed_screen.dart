@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
+import '../services/club_follow_helper.dart';
 import '../models/comment.dart';
 import '../models/like.dart';
 import '../models/share.dart';
@@ -10,6 +12,7 @@ import '../models/news_post.dart';
 import '../models/event.dart';
 import 'messages_screen.dart';
 import 'user_profile_screen.dart';
+import 'create_post_screen.dart' show buildPostBanner;
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -18,12 +21,14 @@ class _FeedItem {
   final bool isEvent;        // true = Event, false = NewsPost
   final dynamic data;        // NewsPost | Event
   final double score;
+  final DateTime postedAt;
 
   const _FeedItem({
     required this.id,
     required this.isEvent,
     required this.data,
     required this.score,
+    required this.postedAt,
   });
 }
 
@@ -38,49 +43,65 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
 
-  List<_FeedItem> _buildRankedFeed() {
-    final items = <_FeedItem>[];
-
-    for (final post in newsPosts) {
-      items.add(_FeedItem(
-        id: post.id,
-        isEvent: false,
-        data: post,
-        score: postScore(post.id),
-      ));
-    }
-    for (final event in events) {
-      items.add(_FeedItem(
-        id: event.id,
-        isEvent: true,
-        data: event,
-        score: eventScore(event.id),
-      ));
-    }
-
-    // Sort descending by engagement score
-    items.sort((a, b) => b.score.compareTo(a.score));
+  List<_FeedItem> _buildFeed() {
+    final items = newsPosts.map((post) => _FeedItem(
+      id: post.id,
+      isEvent: false,
+      data: post,
+      score: postScore(post.id),
+      postedAt: post.createdAt,
+    )).toList();
+    items.sort((a, b) => b.postedAt.compareTo(a.postedAt));
     return items;
+  }
+
+  // Events that have started and not yet ended
+  List<dynamic> get _liveEvents {
+    final now = DateTime.now();
+    return events
+        .where((e) => !e.dateTime.isAfter(now) && e.endTime.isAfter(now))
+        .toList();
+  }
+
+  // Events that haven't started yet
+  List<dynamic> get _upcomingEvents {
+    final now = DateTime.now();
+    return events
+        .where((e) => e.dateTime.isAfter(now))
+        .toList()
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+  }
+
+  Future<void> _onRefresh() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final feed = _buildRankedFeed();
+    final feed = _buildFeed();
+    final live = _liveEvents;
+    final upcoming = _upcomingEvents;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(),
-          _buildStoriesRow(),
-          _buildRankingExplainer(),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, i) => _buildFeedCard(feed[i], i),
-              childCount: feed.length,
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        color: AppColors.primaryRed,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            _buildAppBar(),
+            _buildStoriesRow(),
+            _buildEventsStrip(live, upcoming),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, i) => _buildFeedCard(feed[i], i),
+                childCount: feed.length,
+              ),
             ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        ],
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ],
+        ),
       ),
     );
   }
@@ -119,6 +140,64 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  SliverToBoxAdapter _buildEventsStrip(List<dynamic> live, List<dynamic> upcoming) {
+    if (live.isEmpty && upcoming.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Happening Now ──
+          if (live.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8, height: 8,
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text('Happening Now', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 110,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: live.length,
+                itemBuilder: (ctx, i) => _EventChip(event: live[i], isLive: true),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+
+          // ── Upcoming ──
+          if (upcoming.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+              child: const Text('Upcoming Events', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+            ),
+            SizedBox(
+              height: 110,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: upcoming.length,
+                itemBuilder: (ctx, i) => _EventChip(event: upcoming[i], isLive: false),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+
+          const Divider(height: 1),
+        ],
+      ),
+    );
+  }
+
   SliverToBoxAdapter _buildStoriesRow() {
     return SliverToBoxAdapter(
       child: Container(
@@ -142,23 +221,6 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  SliverToBoxAdapter _buildRankingExplainer() {
-    return const SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(14, 10, 14, 4),
-        child: Row(
-          children: [
-            Icon(Icons.trending_up, size: 15, color: AppColors.primaryRed),
-            SizedBox(width: 5),
-            Text(
-              'Ranked by likes · comments · shares',
-              style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildFeedCard(_FeedItem item, int rank) {
     if (item.isEvent) {
@@ -174,6 +236,297 @@ class _FeedScreenState extends State<FeedScreen> {
       score: item.score,
       rank: rank,
       onUpdate: () => setState(() {}),
+    );
+  }
+}
+
+// ─── Story Bubble ─────────────────────────────────────────────────────────────
+
+// ─── Event Chip ───────────────────────────────────────────────────────────────
+
+class _EventChip extends StatelessWidget {
+  final dynamic event;
+  final bool isLive;
+
+  static const List<Color> _colors = [
+    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  const _EventChip({required this.event, required this.isLive});
+
+  void _showEventDetail(BuildContext context, dynamic ev, bool live, Color color) {
+    final club = clubs.firstWhere((c) => c.id == ev.clubId, orElse: () => clubs.first);
+    final DateTime start = ev.dateTime;
+    final DateTime end = ev.endTime;
+    final String location = ev.location as String;
+    final int attendees = (ev.attendeeUserIds as List).length;
+
+    String fmtDateTime(DateTime dt) {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+      final m = dt.minute.toString().padLeft(2, '0');
+      final period = dt.hour < 12 ? 'AM' : 'PM';
+      return '${months[dt.month - 1]} ${dt.day}  ·  $h:$m $period';
+    }
+
+    String statusLine() {
+      final now = DateTime.now();
+      if (live) {
+        final remaining = end.difference(now);
+        if (remaining.inMinutes < 60) return 'Ends in ${remaining.inMinutes} min';
+        return 'Ends in ${remaining.inHours}h ${remaining.inMinutes % 60}m';
+      } else {
+        final until = start.difference(now);
+        if (until.inDays > 0) return 'Starts in ${until.inDays}d ${until.inHours % 24}h';
+        if (until.inHours > 0) return 'Starts in ${until.inHours}h ${until.inMinutes % 60}m';
+        return 'Starts in ${until.inMinutes} min';
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Club name + LIVE badge
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(club.name.split(' ').first,
+                      style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 8),
+                if (live)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)),
+                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Title
+            Text(ev.title as String,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
+            const SizedBox(height: 16),
+            // Location
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
+                const SizedBox(width: 6),
+                Expanded(child: Text(location, style: const TextStyle(fontSize: 14, color: AppColors.text))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Start time
+            Row(
+              children: [
+                const Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
+                const SizedBox(width: 6),
+                Text('Starts  ${fmtDateTime(start)}',
+                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // End time
+            Row(
+              children: [
+                const Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
+                const SizedBox(width: 6),
+                Text('Ends  ${fmtDateTime(end)}',
+                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            // Status countdown / remaining
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: live ? Colors.red.withValues(alpha: 0.1) : AppColors.lightRed,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(live ? Icons.timer_outlined : Icons.hourglass_top_rounded,
+                      size: 15, color: live ? Colors.red : AppColors.primaryRed),
+                  const SizedBox(width: 6),
+                  Text(statusLine(),
+                      style: TextStyle(fontSize: 13, color: live ? Colors.red : AppColors.primaryRed,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Attendee count
+            Row(
+              children: [
+                const Icon(Icons.people_outline, size: 16, color: AppColors.secondaryText),
+                const SizedBox(width: 6),
+                Text('$attendees attending',
+                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Action buttons row
+            Row(
+              children: [
+                // Add to Calendar
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryRed,
+                      side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                    label: const Text('Calendar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    onPressed: () {
+                      final calEvent = cal.Event(
+                        title: ev.title as String,
+                        description: ev.description as String,
+                        location: location,
+                        startDate: start,
+                        endDate: end,
+                        allDay: false,
+                      );
+                      cal.Add2Calendar.addEvent2Cal(calEvent);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // RSVP
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryRed,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('RSVP', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere((c) => c.id == event.clubId, orElse: () => clubs.first);
+    final idx = clubs.indexOf(club);
+    final color = _colors[idx % _colors.length];
+    final dt = event.dateTime as DateTime;
+
+    String timeLabel;
+    if (isLive) {
+      final minAgo = DateTime.now().difference(dt).inMinutes;
+      timeLabel = 'Started ${minAgo}m ago';
+    } else {
+      final daysAway = dt.difference(DateTime.now()).inDays;
+      timeLabel = daysAway == 0 ? 'Today' : daysAway == 1 ? 'Tomorrow' : 'In $daysAway days';
+    }
+
+    return GestureDetector(
+      onTap: () => _showEventDetail(context, event, isLive, color),
+      child: Container(
+        width: 150,
+        margin: const EdgeInsets.only(right: 10, bottom: 4),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isLive ? Colors.red.withValues(alpha: 0.6) : color.withValues(alpha: 0.3),
+            width: isLive ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Colour bar + live badge
+            Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      club.name.split(' ').first,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isLive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    )
+                  else
+                    Icon(Icons.event, size: 14, color: color),
+                ],
+              ),
+            ),
+            // Event title + time
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+              child: Text(
+                event.title as String,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text, height: 1.3),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                timeLabel,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isLive ? Colors.red : AppColors.primaryRed,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -670,7 +1023,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => setState(() => userState.toggleFollow(club.id)),
+                  onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
@@ -688,29 +1041,17 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             ),
           ),
 
-          // ── Gradient image banner ──
+          // ── Image banner ──
           GestureDetector(
             onDoubleTap: _doubleTapLike,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                Container(
-                  width: double.infinity,
+                buildPostBanner(
+                  imagePath: widget.post.imagePath,
+                  fallbackColor: clubColor,
+                  fallbackLetter: club.name[0],
                   height: 200,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [clubColor.withValues(alpha: 0.7), clubColor.withValues(alpha: 0.25)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(club.name[0], style: TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.2))),
-                  ),
-                ),
-                Positioned(
-                  bottom: 12, left: 14, right: 14,
-                  child: Text(widget.post.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4, color: Colors.black54)])),
                 ),
                 if (_showHeart)
                   ScaleTransition(
@@ -867,7 +1208,9 @@ class _EventCardState extends State<_EventCard> {
                     children: [
                       Row(
                         children: [
-                          Text(club.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text)),
+                          Flexible(
+                            child: Text(club.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text), overflow: TextOverflow.ellipsis),
+                          ),
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -882,7 +1225,7 @@ class _EventCardState extends State<_EventCard> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => setState(() => userState.toggleFollow(club.id)),
+                  onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),

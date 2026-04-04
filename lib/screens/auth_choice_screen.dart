@@ -5,7 +5,8 @@ import 'club_admin_auth_screen.dart';
 class AuthChoiceScreen extends StatelessWidget {
   final VoidCallback onLogin;
   final VoidCallback onSignUp;
-  const AuthChoiceScreen({super.key, required this.onLogin, required this.onSignUp});
+  final VoidCallback onAdminLogin;
+  const AuthChoiceScreen({super.key, required this.onLogin, required this.onSignUp, required this.onAdminLogin});
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +164,10 @@ class AuthChoiceScreen extends StatelessWidget {
                     child: TextButton(
                       onPressed: () => Navigator.of(context).push(
                         _fadeSlideRoute(ClubAdminAuthScreen(
-                          onAdminLogin: () => Navigator.of(context).pop(),
+                          onAdminLogin: () {
+                            Navigator.of(context).pop();
+                            onAdminLogin();
+                          },
                         )),
                       ),
                       child: const Text(

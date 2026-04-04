@@ -16,6 +16,14 @@ class AuthService {
       _currentAdmin = appAdmin;
       return true;
     }
+    final clubAdmin = clubAdmins.firstWhere(
+      (a) => a.email == email && (password == null || a.password == password),
+      orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
+    );
+    if (clubAdmin.id.isNotEmpty) {
+      _currentAdmin = clubAdmin;
+      return true;
+    }
     final user = users.firstWhere(
       (u) => u.email == email && (password == null || u.password == password),
       orElse: () => User(id: '', name: '', email: '', password: '', role: '', subscribedClubIds: []),

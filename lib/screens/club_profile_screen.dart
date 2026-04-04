@@ -3,8 +3,10 @@ import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import '../services/club_follow_helper.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
+import 'create_post_screen.dart' show buildPostBanner;
 
 class ClubProfileScreen extends StatefulWidget {
   final Club club;
@@ -44,27 +46,27 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       .toList()
     ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
-  // Members: all users who have subscribed to this club
-  List get _members => users
-      .where((u) => u.subscribedClubIds.contains(widget.club.id))
-      .toList();
+  // Posts that tag this club via @ClubName
+  List get _taggedPosts => newsPosts
+      .where((p) =>
+          p.clubId != widget.club.id &&
+          p.taggedClubIds.contains(widget.club.id))
+      .toList()
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-  // Collaborations: other clubs that share at least one member with this club
-  List<Club> get _collaboratingClubs {
-    final memberIds = users
-        .where((u) => u.subscribedClubIds.contains(widget.club.id))
-        .map((u) => u.id)
-        .toSet();
-
-    final sharedClubIds = <String>{};
-    for (final u in users) {
-      if (memberIds.contains(u.id)) {
-        for (final cid in u.subscribedClubIds) {
-          if (cid != widget.club.id) sharedClubIds.add(cid);
-        }
+  // Events co-hosted: events from other clubs that explicitly tag this club
+  // (taggedClubIds on events not modelled, so we use posts for now)
+  // Partner clubs = clubs whose posts tag this club OR this club's posts tag them
+  List<Club> get _partnerClubs {
+    final ids = <String>{};
+    for (final p in newsPosts) {
+      if (p.clubId == widget.club.id) {
+        ids.addAll(p.taggedClubIds);
+      } else if (p.taggedClubIds.contains(widget.club.id)) {
+        ids.add(p.clubId);
       }
     }
-    return clubs.where((c) => sharedClubIds.contains(c.id)).toList();
+    return clubs.where((c) => ids.contains(c.id)).toList();
   }
 
   String _timeAgo(DateTime dt) {
@@ -167,7 +169,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                       const Spacer(),
                       // Follow button
                       GestureDetector(
-                        onTap: () => setState(() => userState.toggleFollow(widget.club.id)),
+                        onTap: () => handleFollowTap(context, widget.club.id, () => setState(() {})),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -228,8 +230,11 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             _PostsTab(posts: _clubPosts, timeAgo: _timeAgo, clubColor: widget.color),
             _EventsTab(events: _clubEvents, monthAbbr: _monthAbbr),
             _CollaborationsTab(
-              collaboratingClubs: _collaboratingClubs,
-              members: _members,
+              taggedPosts: _taggedPosts,
+              partnerClubs: _partnerClubs,
+              thisClub: widget.club,
+              clubColor: widget.color,
+              timeAgo: _timeAgo,
             ),
           ],
         ),
@@ -327,49 +332,12 @@ class _PostsTab extends StatelessWidget {
                 ),
               ),
 
-              // ── Gradient image banner ──
-              Stack(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          clubColor.withValues(alpha: 0.85),
-                          clubColor.withValues(alpha: 0.3),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        (post.title as String)[0], // decorative letter
-                        style: TextStyle(
-                          fontSize: 80,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white.withValues(alpha: 0.12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Post title overlaid on banner
-                  Positioned(
-                    bottom: 12,
-                    left: 14,
-                    right: 14,
-                    child: Text(
-                      post.title as String,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        shadows: [Shadow(blurRadius: 6, color: Colors.black54)],
-                      ),
-                    ),
-                  ),
-                ],
+              // ── Image banner ──
+              buildPostBanner(
+                imagePath: post.imagePath as String?,
+                fallbackColor: clubColor,
+                fallbackLetter: clubColor.toString()[0],
+                height: 180,
               ),
 
               // ── Engagement row ──
@@ -529,11 +497,19 @@ class _EventsTab extends StatelessWidget {
 // ─── Collaborations Tab ───────────────────────────────────────────────────────
 
 class _CollaborationsTab extends StatelessWidget {
-  final List<Club> collaboratingClubs;
-  final List members;
+  final List taggedPosts;
+  final List<Club> partnerClubs;
+  final Club thisClub;
+  final Color clubColor;
+  final String Function(DateTime) timeAgo;
 
-  const _CollaborationsTab(
-      {required this.collaboratingClubs, required this.members});
+  const _CollaborationsTab({
+    required this.taggedPosts,
+    required this.partnerClubs,
+    required this.thisClub,
+    required this.clubColor,
+    required this.timeAgo,
+  });
 
   static const List<Color> _colors = [
     Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
@@ -542,139 +518,176 @@ class _CollaborationsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isEmpty = taggedPosts.isEmpty && partnerClubs.isEmpty;
+
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 80),
       children: [
-        // ── Shared members section ──
-        if (members.isNotEmpty) ...[
+        if (isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(
+              child: Text(
+                'No collaborations yet.\nPosts that tag this club with @ will appear here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.secondaryText, height: 1.6),
+              ),
+            ),
+          ),
+
+        // ── Partner clubs banner row ──
+        if (partnerClubs.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text('Members',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.text)),
+            child: Text('Partner Clubs',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
           ),
-          ...members.map((user) {
-            final idx = users.indexOf(user);
-            final color = _colors[idx % _colors.length];
-            return ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: GestureDetector(
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => UserProfileScreen(user: user))),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color.withValues(alpha: 0.15),
-                    border: Border.all(color: color.withValues(alpha: 0.3)),
+          SizedBox(
+            height: 90,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: partnerClubs.length,
+              itemBuilder: (ctx, i) {
+                final club = partnerClubs[i];
+                final color = _colors[clubs.indexOf(club) % _colors.length];
+                return GestureDetector(
+                  onTap: () => Navigator.push(ctx,
+                      MaterialPageRoute(builder: (_) => ClubProfileScreen(club: club, color: color))),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 52, height: 52,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: color.withValues(alpha: 0.3)),
+                          ),
+                          child: Center(
+                            child: Text(club.name[0],
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: 64,
+                          child: Text(club.name.split(' ').first,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Center(
-                    child: Text(user.name[0].toUpperCase(),
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                            fontSize: 16)),
-                  ),
-                ),
-              ),
-              title: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => UserProfileScreen(user: user))),
-                child: Text(user.name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14)),
-              ),
-              subtitle: Text(user.email,
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.secondaryText)),
-            );
-          }),
+                );
+              },
+            ),
+          ),
           const Divider(height: 24),
         ],
 
-        // ── Clubs with shared members ──
-        if (collaboratingClubs.isNotEmpty) ...[
+        // ── Tagged posts ──
+        if (taggedPosts.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('Also Active In',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.text)),
+            child: Text('Posts featuring this club',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
           ),
-          ...collaboratingClubs.map((club) {
-            final idx = clubs.indexOf(club);
-            final color = _colors[idx % _colors.length];
-            // Count shared members
-            final sharedCount = members
-                .where((u) => u.subscribedClubIds.contains(club.id))
-                .length;
-            return ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: GestureDetector(
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            ClubProfileScreen(club: club, color: color))),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(club.name[0],
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                            fontSize: 18)),
-                  ),
+          ...taggedPosts.map((post) {
+            final authorClub = clubs.firstWhere((c) => c.id == post.clubId, orElse: () => clubs.first);
+            final color = _colors[clubs.indexOf(authorClub) % _colors.length];
+            final commentCount = comments.where((c) => c.postId == post.id).length;
+            final likeCount = postLikeCount(post.id as String);
+
+            return GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => PostDetailScreen(post: post, clubColor: color))),
+              child: Container(
+                color: AppColors.card,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text(authorClub.name[0],
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(authorClub.name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.text),
+                                    overflow: TextOverflow.ellipsis),
+                                Text(timeAgo(post.createdAt as DateTime),
+                                    style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                              ],
+                            ),
+                          ),
+                          // Collab badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: clubColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.handshake_outlined, size: 12, color: clubColor),
+                                const SizedBox(width: 4),
+                                Text('Collab', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: clubColor)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Banner
+                    buildPostBanner(
+                      imagePath: post.imagePath as String?,
+                      fallbackColor: color,
+                      fallbackLetter: authorClub.name[0],
+                      height: 140,
+                    ),
+                    // Stats
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.favorite, size: 14, color: Colors.pink),
+                          const SizedBox(width: 4),
+                          Text('$likeCount', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.chat_bubble_outline, size: 14, color: AppColors.secondaryText),
+                          const SizedBox(width: 4),
+                          Text('$commentCount', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              title: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            ClubProfileScreen(club: club, color: color))),
-                child: Text(club.name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: AppColors.text),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ),
-              subtitle: Text(
-                '$sharedCount shared member${sharedCount == 1 ? '' : 's'}',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.secondaryText),
-              ),
-              trailing: const Icon(Icons.chevron_right,
-                  color: AppColors.secondaryText, size: 20),
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          ClubProfileScreen(club: club, color: color))),
             );
           }),
         ],
-
-        if (collaboratingClubs.isEmpty && members.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(
-              child: Text('No collaboration data yet.',
-                  style: TextStyle(color: AppColors.secondaryText)),
-            ),
-          ),
       ],
     );
   }

@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(flutter analyze:*)",
-      "Bash(/Users/hakantuncay/flutter/bin/flutter analyze:*)"
+      "Bash(/Users/hakantuncay/flutter/bin/flutter analyze:*)",
+      "Bash(flutter pub:*)",
+      "Bash(export PATH=\"$PATH:$HOME/flutter/bin:/usr/local/flutter/bin\")",
+      "Read(//Users/hakantuncay/**)",
+      "Bash(/Users/hakantuncay/flutter/bin/flutter pub:*)"
     ]
   }
 }

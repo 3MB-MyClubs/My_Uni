@@ -6,6 +6,7 @@ import 'screens/signup_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
 import 'services/auth_service.dart';
+import 'services/mock_data.dart';
 import 'services/app_colors.dart';
 import 'services/message_service.dart';
 import 'services/notification_service.dart';
@@ -64,7 +65,8 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     Widget homeWidget;
     if (_loggedIn || authService.currentUser != null || authService.currentAdmin != null) {
-      final isAdmin = authService.currentAdmin != null;
+      final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
+      final isAdmin = isSuperAdmin;
       // Set current user ID for notifications
       final currentUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
       if (currentUserId != null) {
@@ -103,6 +105,7 @@ class _MyAppState extends State<MyApp> {
         child: AuthChoiceScreen(
           onLogin: () => setState(() => _showLogin = true),
           onSignUp: () => setState(() => _showSignUp = true),
+          onAdminLogin: _onLogin,
         ),
         transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
       );

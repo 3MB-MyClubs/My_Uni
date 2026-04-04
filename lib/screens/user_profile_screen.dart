@@ -37,6 +37,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return widget.user.id == myId;
   }
 
+  List _subscribedClubs() {
+    return widget.user.subscribedClubIds
+        .map((id) => clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first))
+        .where((c) => widget.user.subscribedClubIds.contains(c.id))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final userPosts = newsPosts
@@ -44,6 +51,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+    final subClubs = _subscribedClubs();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -66,9 +74,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Profile header ──
-                _buildHeader(userPosts.length),
+                _buildHeader(userPosts.length, subClubs.length),
 
                 const Divider(height: 1),
+
+                // ── Subscribed clubs ──
+                if (subClubs.isNotEmpty) ...[
+                  _buildClubsSection(subClubs),
+                  const Divider(height: 1),
+                ],
 
                 // ── Posts section ──
                 _buildPostsSection(userPosts),
@@ -82,7 +96,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildHeader(int postCount) {
+  Widget _buildHeader(int postCount, int clubCount) {
     final user = widget.user;
     final isFollowingUser = userState.isFollowingUser(user.id);
 
@@ -138,10 +152,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _StatCell(value: '$postCount', label: 'Posts'),
-                    _StatCell(
-                      value: '${clubs.where((c) => c.adminUserIds.contains(user.id)).length}',
-                      label: 'Clubs',
-                    ),
+                    _StatCell(value: '$clubCount', label: 'Clubs'),
                   ],
                 ),
               ),
@@ -200,6 +211,72 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClubsSection(List subClubs) {
+    const List<Color> colors = [
+      Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    ];
+
+    return Container(
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Subscribed Clubs',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 90,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: subClubs.length,
+              separatorBuilder: (ctx, i) => const SizedBox(width: 16),
+              itemBuilder: (context, i) {
+                final club = subClubs[i];
+                final idx = clubs.indexOf(club);
+                final color = colors[(idx < 0 ? i : idx) % colors.length];
+                return Column(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: color.withValues(alpha: 0.3)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          club.name[0],
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 60,
+                      child: Text(
+                        club.name.split(' ').first,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.text),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -286,16 +363,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ],
                               ),
                               const SizedBox(height: 3),
-                              // Post title
-                              Text(
-                                post.title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: AppColors.text,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
                               // Post content preview
                               Text(
                                 post.content,

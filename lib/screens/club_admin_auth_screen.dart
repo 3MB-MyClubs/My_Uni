@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
+import '../services/auth_service.dart';
 
 class ClubAdminAuthScreen extends StatefulWidget {
   final VoidCallback onAdminLogin;
@@ -25,9 +26,12 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
       setState(() => _error = 'All fields are required');
       return;
     }
-    if (clubName == appAdmin.name &&
-        clubEmail == appAdmin.email &&
-        password == appAdmin.password) {
+    final allAdmins = [appAdmin, ...clubAdmins];
+    final matched = allAdmins.any(
+      (a) => a.name == clubName && a.email == clubEmail && a.password == password,
+    );
+    if (matched) {
+      authService.login(clubEmail, password);
       widget.onAdminLogin();
     } else {
       setState(() => _error = 'Invalid club admin credentials');

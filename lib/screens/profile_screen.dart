@@ -299,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-                    title: Text(post.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    title: Text(post.content, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: AppColors.text)),
                     subtitle: Text(club.name, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
