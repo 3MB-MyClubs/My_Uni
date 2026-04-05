@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/club_follow_helper.dart';
+import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -253,7 +254,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
           controller: _tabController,
           children: [
             _PostsTab(posts: _clubPosts, timeAgo: _timeAgo, clubColor: widget.color),
-            _EventsTab(events: _clubEvents, monthAbbr: _monthAbbr),
+            _EventsTab(events: _clubEvents, monthAbbr: _monthAbbr, clubColor: widget.color),
             _CollaborationsTab(
               taggedPosts: _taggedPosts,
               partnerClubs: _partnerClubs,
@@ -417,8 +418,9 @@ class _PostsTab extends StatelessWidget {
 class _EventsTab extends StatelessWidget {
   final List events;
   final String Function(int) monthAbbr;
+  final Color clubColor;
 
-  const _EventsTab({required this.events, required this.monthAbbr});
+  const _EventsTab({required this.events, required this.monthAbbr, required this.clubColor});
 
   @override
   Widget build(BuildContext context) {
@@ -443,7 +445,14 @@ class _EventsTab extends StatelessWidget {
                     ? 'Tomorrow'
                     : 'In ${diff.inDays} days';
 
-        return Container(
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EventDetailScreen(event: event as dynamic, color: clubColor),
+            ),
+          ),
+          child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.card,
@@ -513,6 +522,7 @@ class _EventsTab extends StatelessWidget {
               ),
             ],
           ),
+        ),
         );
       },
     );

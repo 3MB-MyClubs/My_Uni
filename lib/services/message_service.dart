@@ -1,8 +1,10 @@
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/message.dart';
+import '../models/notification.dart';
 import 'mock_data.dart';
 import 'notification_service.dart';
+import 'user_state.dart';
 
 class MessageService {
   static const String _boxName = 'messages';
@@ -43,18 +45,31 @@ class MessageService {
     }
   }
 
-  /// Save a single message and show notification if it's from someone else
+  /// Save a single message and show notification if it's from someone else.
   Future<void> saveMessage(Message message) async {
     await _messagesBox.put(message.id, message);
 
-    // Show notification if message is from someone else
+    // Show notification if message is received (not sent by current user).
     if (_currentUserId != null && message.senderId != _currentUserId) {
       final senderName = _getUserName(message.senderId);
+
+      // OS-level push notification (works in background).
       await notificationService.showMessageNotification(
         senderName: senderName,
         messageContent: message.content,
         senderId: message.senderId,
       );
+
+      // In-app notification entry so it appears in the Alerts tab.
+      final notif = AppNotification(
+        id: 'msg_notif_${message.id}',
+        userId: _currentUserId!,
+        message: '$senderName sent you a message: "${message.content}"',
+        createdAt: message.sentAt,
+        targetType: 'message',
+        targetId: message.senderId,
+      );
+      userState.addMessageNotification(notif);
     }
   }
 

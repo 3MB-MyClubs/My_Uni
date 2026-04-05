@@ -10,11 +10,13 @@ import 'services/mock_data.dart';
 import 'services/app_colors.dart';
 import 'services/message_service.dart';
 import 'services/notification_service.dart';
+import 'services/user_prefs_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
   await messageService.initialize();
   await notificationService.initialize();
+  await userPrefsService.initialize();
   runApp(const MyApp());
 }
 
@@ -25,10 +27,35 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _showLogin = false;
   bool _showSignUp = false;
   bool _loggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _savePrefs();
+    }
+  }
+
+  void _savePrefs() {
+    final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
+    if (uid != null) userPrefsService.save(uid);
+  }
 
   void _onLogin() {
     setState(() {
@@ -36,10 +63,10 @@ class _MyAppState extends State<MyApp> {
       _showLogin = false;
       _showSignUp = false;
     });
-    // Set current user ID for notifications
     final currentUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
       messageService.setCurrentUserId(currentUserId);
+      userPrefsService.load(currentUserId);
     }
   }
 
@@ -67,14 +94,16 @@ class _MyAppState extends State<MyApp> {
     if (_loggedIn || authService.currentUser != null || authService.currentAdmin != null) {
       final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
       final isAdmin = isSuperAdmin;
-      // Set current user ID for notifications
       final currentUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
       if (currentUserId != null) {
         messageService.setCurrentUserId(currentUserId);
+        // Load persisted prefs for this session (no-op if already loaded).
+        userPrefsService.load(currentUserId);
       }
       homeWidget = MainNavScreen(
         isAdmin: isAdmin,
         onLogout: () {
+          _savePrefs(); // persist before clearing session
           setState(() {
             _loggedIn = false;
             _showLogin = true;

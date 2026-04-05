@@ -432,21 +432,21 @@ final subscriptions = [
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 final notifications = [
-  AppNotification(id: 'nt1',  userId: 'u2', message: 'Alice Yılmaz liked your post in KUACM',                        createdAt: DateTime.now().subtract(const Duration(minutes: 8))),
-  AppNotification(id: 'nt2',  userId: 'u2', message: 'Hack-KU 2025 is in 5 days — don\'t forget to register!',      createdAt: DateTime.now().subtract(const Duration(minutes: 42))),
-  AppNotification(id: 'nt3',  userId: 'u2', message: 'Ceren Arslan commented: "This is exactly what we need! 🔥"',   createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 15))),
-  AppNotification(id: 'nt4',  userId: 'u2', message: 'KUFoto posted a new photo update',                             createdAt: DateTime.now().subtract(const Duration(hours: 3))),
-  AppNotification(id: 'nt5',  userId: 'u2', message: 'Deniz Kaya liked your comment in KUDans',                      createdAt: DateTime.now().subtract(const Duration(hours: 5))),
-  AppNotification(id: 'nt6',  userId: 'u2', message: 'Open Mic Night starts in 2 hours — SOS B Atelier 🎵',          createdAt: DateTime.now().subtract(const Duration(hours: 6))),
-  AppNotification(id: 'nt7',  userId: 'u2', message: 'Girişimcilik Kulübü posted: "KU Demo Day applications open!"', createdAt: DateTime.now().subtract(const Duration(hours: 9))),
-  AppNotification(id: 'nt8',  userId: 'u2', message: 'Hakan Tuncay started following you',                            createdAt: DateTime.now().subtract(const Duration(hours: 11))),
-  AppNotification(id: 'nt9',  userId: 'u2', message: 'KÜMK: Open Mic Night sign-ups are closing soon!',              createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 1))),
-  AppNotification(id: 'nt10', userId: 'u2', message: 'Ceren Arslan commented on Münazara\'s championship post',      createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 4))),
-  AppNotification(id: 'nt11', userId: 'u2', message: 'KU Basketbol Takımı just won the championship! 🏆',            createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 7))),
-  AppNotification(id: 'nt12', userId: 'u2', message: 'Uludağ Kış Tırmanışı has 3 spots left — register now!',       createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 2))),
-  AppNotification(id: 'nt13', userId: 'u2', message: 'Alice Yılmaz and 4 others liked your photo post',              createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 8))),
-  AppNotification(id: 'nt14', userId: 'u2', message: 'Sinema Kulübü: Nuri Bilge Ceylan retrospective starts tonight', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 1))),
-  AppNotification(id: 'nt15', userId: 'u2', message: 'Deniz Kaya started following you',                              createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 3))),
+  AppNotification(id: 'nt1',  userId: 'u2', message: 'Alice Yılmaz liked your post in KUACM',                        createdAt: DateTime.now().subtract(const Duration(minutes: 8)),                        targetType: 'post',  targetId: 'n1'),
+  AppNotification(id: 'nt2',  userId: 'u2', message: 'Hack-KU 2025 is in 5 days — don\'t forget to register!',      createdAt: DateTime.now().subtract(const Duration(minutes: 42)),                      targetType: 'event', targetId: 'ev1'),
+  AppNotification(id: 'nt3',  userId: 'u2', message: 'Ceren Arslan commented: "This is exactly what we need! 🔥"',   createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 15)),             targetType: 'post',  targetId: 'n1'),
+  AppNotification(id: 'nt4',  userId: 'u2', message: 'KUFoto posted a new photo update',                             createdAt: DateTime.now().subtract(const Duration(hours: 3)),                         targetType: 'club',  targetId: 'c13'),
+  AppNotification(id: 'nt5',  userId: 'u2', message: 'Deniz Kaya liked your comment in KUDans',                      createdAt: DateTime.now().subtract(const Duration(hours: 5)),                         targetType: 'club',  targetId: 'c6'),
+  AppNotification(id: 'nt6',  userId: 'u2', message: 'Open Mic Night starts in 2 hours — SOS B Atelier 🎵',          createdAt: DateTime.now().subtract(const Duration(hours: 6)),                         targetType: 'event', targetId: 'ev5'),
+  AppNotification(id: 'nt7',  userId: 'u2', message: 'Girişimcilik Kulübü posted: "KU Demo Day applications open!"', createdAt: DateTime.now().subtract(const Duration(hours: 9)),                         targetType: 'club',  targetId: 'c15'),
+  AppNotification(id: 'nt8',  userId: 'u2', message: 'Hakan Tuncay started following you',                            createdAt: DateTime.now().subtract(const Duration(hours: 11)),                        targetType: 'user',  targetId: 'u5'),
+  AppNotification(id: 'nt9',  userId: 'u2', message: 'KÜMK: Open Mic Night sign-ups are closing soon!',              createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 1)),                targetType: 'club',  targetId: 'c28'),
+  AppNotification(id: 'nt10', userId: 'u2', message: 'Ceren Arslan commented on Münazara\'s championship post',      createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 4)),                targetType: 'club',  targetId: 'c27'),
+  AppNotification(id: 'nt11', userId: 'u2', message: 'KU Basketbol Takımı just won the championship! 🏆',            createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 7)),                targetType: 'post',  targetId: 'n25'),
+  AppNotification(id: 'nt12', userId: 'u2', message: 'Uludağ Kış Tırmanışı has 3 spots left — register now!',       createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 2)),                targetType: 'club',  targetId: 'c5'),
+  AppNotification(id: 'nt13', userId: 'u2', message: 'Alice Yılmaz and 4 others liked your photo post',              createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 8)),                targetType: 'post',  targetId: 'ni1'),
+  AppNotification(id: 'nt14', userId: 'u2', message: 'Sinema Kulübü: Nuri Bilge Ceylan retrospective starts tonight', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 1)),               targetType: 'post',  targetId: 'n35'),
+  AppNotification(id: 'nt15', userId: 'u2', message: 'Deniz Kaya started following you',                              createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 3)),                targetType: 'user',  targetId: 'u4'),
 ];
 
 // ─── Direct Messages ─────────────────────────────────────────────────────────

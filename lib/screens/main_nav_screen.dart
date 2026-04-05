@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import 'chat_screen.dart';
 import 'feed_screen.dart';
 import 'explore_screen.dart';
 import 'notifications_screen.dart';
@@ -22,6 +24,65 @@ class MainNavScreen extends StatefulWidget {
 
 class _MainNavScreenState extends State<MainNavScreen> {
   int _selectedIndex = 0;
+  OverlayEntry? _bannerEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    userState.incomingMessageNotifier.addListener(_onIncomingMessage);
+  }
+
+  @override
+  void dispose() {
+    userState.incomingMessageNotifier.removeListener(_onIncomingMessage);
+    _bannerEntry?.remove();
+    super.dispose();
+  }
+
+  void _onIncomingMessage() {
+    final notif = userState.incomingMessageNotifier.value;
+    if (notif == null) {
+      _bannerEntry?.remove();
+      _bannerEntry = null;
+      return;
+    }
+    _showInAppBanner(notif);
+  }
+
+  void _showInAppBanner(AppNotification notif) {
+    _bannerEntry?.remove();
+    _bannerEntry = OverlayEntry(
+      builder: (_) => _InAppMessageBanner(
+        notification: notif,
+        onTap: () {
+          _bannerEntry?.remove();
+          _bannerEntry = null;
+          if (notif.targetId != null) {
+            final user = users.firstWhere(
+              (u) => u.id == notif.targetId,
+              orElse: () => users.first,
+            );
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                otherUserId: user.id,
+                otherUserName: user.name,
+              ),
+            ));
+          }
+        },
+        onDismiss: () {
+          _bannerEntry?.remove();
+          _bannerEntry = null;
+        },
+      ),
+    );
+    Overlay.of(context).insert(_bannerEntry!);
+    // Auto-dismiss after 4 seconds.
+    Future.delayed(const Duration(seconds: 4), () {
+      _bannerEntry?.remove();
+      _bannerEntry = null;
+    });
+  }
 
   void _onNotificationsOpened() {
     setState(() => userState.unreadNotifications = 0);
@@ -237,6 +298,139 @@ class _NavItem extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── In-App Message Banner ────────────────────────────────────────────────────
+
+class _InAppMessageBanner extends StatefulWidget {
+  final AppNotification notification;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+
+  const _InAppMessageBanner({
+    required this.notification,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_InAppMessageBanner> createState() => _InAppMessageBannerState();
+}
+
+class _InAppMessageBannerState extends State<_InAppMessageBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final senderName = widget.notification.message.contains(' sent you')
+        ? widget.notification.message.split(' sent you').first
+        : 'New message';
+    final content = widget.notification.message.contains(': "')
+        ? widget.notification.message.split(': "').last.replaceAll('"', '')
+        : widget.notification.message;
+
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 8,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slide,
+        child: Material(
+          color: Colors.transparent,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primaryRed.withValues(alpha: 0.4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.lightRed,
+                    ),
+                    child: Center(
+                      child: Text(
+                        senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryRed,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          senderName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          content,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: widget.onDismiss,
+                    child: const Icon(Icons.close, size: 16, color: AppColors.secondaryText),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

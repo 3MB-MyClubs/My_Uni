@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import 'settings_screen.dart';
 
@@ -27,15 +29,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
 
-  Future<void> _pickBanner(String userId, ImageSource source) async {
+  Future<void> _pickProfilePhoto(String userId, ImageSource source) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: source, imageQuality: 85);
-    if (picked != null && mounted) {
-      setState(() => userState.bannerPaths[userId] = picked.path);
+    if (picked == null || !mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        IOSUiSettings(
+          title: 'Crop Photo',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+        ),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Photo',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+        ),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Use this photo?',
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(File(cropped.path), fit: BoxFit.cover),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Use Photo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => userState.profilePhotoPaths[userId] = cropped.path);
+      userPrefsService.save(userId);
     }
   }
 
-  void _showBannerPicker(BuildContext context, String userId) {
+  void _showProfilePhotoOptions(BuildContext context, String userId) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -58,7 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Change Banner',
+            const Text('Change Profile Photo',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
             const SizedBox(height: 16),
             ListTile(
@@ -71,7 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: const Text('Use your camera right now', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
               onTap: () {
                 Navigator.pop(context);
-                _pickBanner(userId, ImageSource.camera);
+                _pickProfilePhoto(userId, ImageSource.camera);
               },
             ),
             const Divider(height: 1, indent: 16),
@@ -85,7 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: const Text('Pick from your photo library', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
               onTap: () {
                 Navigator.pop(context);
-                _pickBanner(userId, ImageSource.gallery);
+                _pickProfilePhoto(userId, ImageSource.gallery);
               },
             ),
           ],
@@ -174,94 +228,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int eventCount,
   ) {
     final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final bannerPath = userState.bannerPaths[myId];
 
     return Container(
       color: AppColors.card,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Banner ──────────────────────────────────────────────────────────
-          Stack(
-            children: [
-              GestureDetector(
-                onTap: () => _showBannerPicker(context, myId),
-                child: SizedBox(
-                  height: 130,
-                  width: double.infinity,
-                  child: bannerPath != null
-                      ? Image.file(File(bannerPath), fit: BoxFit.cover)
-                      : Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppColors.primaryRed, Color(0xFF6A1B9A)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-              Positioned(
-                right: 10,
-                bottom: 10,
-                child: GestureDetector(
-                  onTap: () => _showBannerPicker(context, myId),
-                  child: Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
           // ── Avatar + stats ───────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [AppColors.primaryRed, AppColors.accentGold],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.card,
-                        ),
-                        padding: const EdgeInsets.all(2),
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.lightRed,
-                          ),
-                          child: Center(
-                            child: Text(
-                              name.isNotEmpty ? name[0].toUpperCase() : '?',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryRed,
+                    GestureDetector(
+                      onTap: () => _showProfilePhotoOptions(context, myId),
+                      child: Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [AppColors.primaryRed, AppColors.accentGold],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
                             ),
+                            child: Container(
+                              width: 76,
+                              height: 76,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.card,
+                              ),
+                              padding: const EdgeInsets.all(2),
+                              child: () {
+                                final photoPath = userState.profilePhotoPaths[myId];
+                                if (photoPath != null) {
+                                  return ClipOval(
+                                    child: Image.file(
+                                      File(photoPath),
+                                      fit: BoxFit.cover,
+                                      width: 76,
+                                      height: 76,
+                                    ),
+                                  );
+                                }
+                                return Container(
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.lightRed,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                      style: const TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primaryRed,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }(),
+                            ),
                           ),
-                        ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryRed,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.card, width: 2),
+                              ),
+                              child: const Icon(Icons.add, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 20),

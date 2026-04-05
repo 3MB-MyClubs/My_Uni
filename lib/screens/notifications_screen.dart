@@ -3,6 +3,11 @@ import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import 'chat_screen.dart';
+import 'club_profile_screen.dart';
+import 'event_detail_screen.dart';
+import 'post_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -14,7 +19,10 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final Set<String> _read = {};
 
-  int get _unreadCount => notifications.where((n) => !_read.contains(n.id)).length;
+  int get _unreadCount {
+    final all = [...notifications, ...userState.dynamicNotifications];
+    return all.where((n) => !_read.contains(n.id)).length;
+  }
 
   void _markAllRead() => setState(() {
         _read.addAll(notifications.map((n) => n.id));
@@ -39,9 +47,55 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
   }
 
+  static const List<Color> _clubColors = [
+    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  Color _colorForClub(String clubId) {
+    final idx = clubs.indexWhere((c) => c.id == clubId);
+    return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+  }
+
+  void _navigate(BuildContext context, AppNotification n) {
+    final type = n.targetType;
+    final id = n.targetId;
+    if (type == null || id == null) return;
+
+    switch (type) {
+      case 'post':
+        final post = newsPosts.firstWhere((p) => p.id == id, orElse: () => newsPosts.first);
+        final color = _colorForClub(post.clubId);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => PostDetailScreen(post: post, clubColor: color),
+        ));
+      case 'club':
+        final club = clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => ClubProfileScreen(club: club, color: _colorForClub(id)),
+        ));
+      case 'event':
+        final event = events.firstWhere((e) => e.id == id, orElse: () => events.first);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => EventDetailScreen(event: event, color: _colorForClub(event.clubId)),
+        ));
+      case 'user':
+        final user = users.firstWhere((u) => u.id == id, orElse: () => users.first);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => UserProfileScreen(user: user),
+        ));
+      case 'message':
+        final sender = users.firstWhere((u) => u.id == id, orElse: () => users.first);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => ChatScreen(otherUserId: sender.id, otherUserName: sender.name),
+        ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sorted = [...notifications]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final all = [...notifications, ...userState.dynamicNotifications];
+    final sorted = all..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final today = sorted.where((n) => _isToday(n.createdAt)).toList();
     final yesterday = sorted.where((n) => _isYesterday(n.createdAt)).toList();
     final earlier = sorted.where((n) => !_isToday(n.createdAt) && !_isYesterday(n.createdAt)).toList();
@@ -51,7 +105,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: CustomScrollView(
         slivers: [
           _buildHeader(),
-          if (notifications.isEmpty)
+          if (all.isEmpty)
             const SliverFillRemaining(child: _EmptyState())
           else ...[
             if (today.isNotEmpty) ...[
@@ -145,10 +199,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             notification: n,
             timeLabel: _timeAgo(n.createdAt),
             isRead: isRead,
-            onTap: () => setState(() {
-              _read.add(n.id);
-              if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-            }),
+            onTap: () {
+              setState(() {
+                _read.add(n.id);
+                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+              });
+              _navigate(context, n);
+            },
           );
         },
         childCount: items.length,
@@ -338,6 +395,10 @@ class _NotificationCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (notification.targetType != null) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.secondaryText),
+              ],
             ],
           ),
         ),

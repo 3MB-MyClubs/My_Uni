@@ -74,6 +74,48 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     });
+
+    _simulateReply();
+  }
+
+  static const _autoReplies = [
+    'Got it! 👍',
+    'Sounds good!',
+    'Thanks for the message!',
+    'Sure, let\'s do it! 🎉',
+    'I\'ll get back to you shortly.',
+    'That\'s great to hear!',
+  ];
+
+  Future<void> _simulateReply() async {
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+
+    final reply = _autoReplies[
+        DateTime.now().millisecondsSinceEpoch % _autoReplies.length];
+    final msg = Message(
+      id: 'sim_${DateTime.now().millisecondsSinceEpoch}',
+      senderId: widget.otherUserId,
+      receiverId: _myId,
+      content: reply,
+      sentAt: DateTime.now(),
+    );
+
+    await messageService.saveMessage(msg);
+    if (!mounted) return;
+    setState(() {
+      _conversation.add(msg);
+      _conversation.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override

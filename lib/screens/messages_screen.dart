@@ -81,6 +81,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
     }
   }
 
+  bool _isMutual(String otherId) {
+    final meFollowsThem = userState.isFollowingUser(otherId);
+    final theyFollowMe = users
+        .firstWhere((u) => u.id == otherId, orElse: () => users.first)
+        .followingUserIds
+        .contains(_myId);
+    return meFollowsThem && theyFollowMe;
+  }
+
   void _openChat(String userId, String userName) {
     Navigator.push(
       context,
@@ -89,6 +98,65 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ChatScreen(otherUserId: userId, otherUserName: userName),
       ),
     ).then((_) => setState(() {}));
+  }
+
+  Future<void> _tryOpenChat(String userId, String userName) async {
+    if (userState.isProfilePrivate(userId) && !userState.isFollowingUser(userId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userState.hasPendingRequest(userId)
+                ? 'Wait for $userName to accept your follow request first.'
+                : 'Request to follow $userName before sending a message.',
+          ),
+          backgroundColor: AppColors.card,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_isMutual(userId) || userState.hasAcceptedMessageRequest(_myId, userId)) {
+      _openChat(userId, userName);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Send message request?',
+          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          '$userName doesn\'t follow you back yet. Your message will be sent as a request — they\'ll need to accept it before you can chat freely.',
+          style: const TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Send Request'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      userState.acceptMessageRequest(_myId, userId);
+      _openChat(userId, userName);
+    }
   }
 
   @override
@@ -182,7 +250,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         itemBuilder: (context, i) =>
                             _UserResultTile(
                               user: results[i],
-                              onTap: () => _openChat(
+                              onTap: () => _tryOpenChat(
                                   results[i].id, results[i].name),
                             ),
                       )
@@ -229,7 +297,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               : 0;
 
                           return InkWell(
-                            onTap: () => _openChat(otherId, name),
+                            onTap: () => _tryOpenChat(otherId, name),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 10),
