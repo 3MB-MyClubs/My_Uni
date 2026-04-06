@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
+import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -45,6 +48,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _isYesterday(DateTime dt) {
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
     return dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+  }
+
+  bool _isThisWeek(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dtDay = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(dtDay).inDays;
+    return diff >= 2 && diff <= 6;
+  }
+
+  bool _isThisMonth(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dtDay = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(dtDay).inDays;
+    return diff >= 7 && dt.year == now.year && dt.month == now.month;
   }
 
   static const List<Color> _clubColors = [
@@ -96,9 +115,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     final all = [...notifications, ...userState.dynamicNotifications];
     final sorted = all..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final today = sorted.where((n) => _isToday(n.createdAt)).toList();
+    final today     = sorted.where((n) => _isToday(n.createdAt)).toList();
     final yesterday = sorted.where((n) => _isYesterday(n.createdAt)).toList();
-    final earlier = sorted.where((n) => !_isToday(n.createdAt) && !_isYesterday(n.createdAt)).toList();
+    final thisWeek  = sorted.where((n) => _isThisWeek(n.createdAt)).toList();
+    final thisMonth = sorted.where((n) => _isThisMonth(n.createdAt)).toList();
+    final thisYear  = sorted.where((n) {
+      final now = DateTime.now();
+      final today0 = DateTime(now.year, now.month, now.day);
+      final dtDay = DateTime(n.createdAt.year, n.createdAt.month, n.createdAt.day);
+      final diff = today0.difference(dtDay).inDays;
+      return diff >= 0 && n.createdAt.year == now.year &&
+          !_isToday(n.createdAt) && !_isYesterday(n.createdAt) &&
+          !_isThisWeek(n.createdAt) && !_isThisMonth(n.createdAt);
+    }).toList();
+    final older = sorted.where((n) => n.createdAt.year < DateTime.now().year).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -116,9 +146,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               _SectionHeader(title: 'Yesterday'),
               _buildGroup(yesterday),
             ],
-            if (earlier.isNotEmpty) ...[
-              _SectionHeader(title: 'Earlier'),
-              _buildGroup(earlier),
+            if (thisWeek.isNotEmpty) ...[
+              _SectionHeader(title: 'This Week'),
+              _buildGroup(thisWeek),
+            ],
+            if (thisMonth.isNotEmpty) ...[
+              _SectionHeader(title: 'This Month'),
+              _buildGroup(thisMonth),
+            ],
+            if (thisYear.isNotEmpty) ...[
+              _SectionHeader(title: 'This Year'),
+              _buildGroup(thisYear),
+            ],
+            if (older.isNotEmpty) ...[
+              _SectionHeader(title: 'Older'),
+              _buildGroup(older),
             ],
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
@@ -195,6 +237,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         (context, i) {
           final n = items[i];
           final isRead = _read.contains(n.id);
+
+          if (n.targetType == 'follow_request') {
+            return _FollowRequestCard(
+              notification: n,
+              timeLabel: _timeAgo(n.createdAt),
+              isRead: isRead,
+              onAccept: () => setState(() {
+                _read.add(n.id);
+                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+                final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+                userState.acceptFollowRequest(n.fromId!, myId);
+                userPrefsService.save(myId);
+              }),
+              onDecline: () => setState(() {
+                _read.add(n.id);
+                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+                userState.declineFollowRequest(n.fromId!);
+                final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+                userPrefsService.save(myId);
+              }),
+            );
+          }
+
           return _NotificationCard(
             notification: n,
             timeLabel: _timeAgo(n.createdAt),
@@ -274,6 +339,10 @@ class _NotificationCard extends StatelessWidget {
   });
 
   _NotifStyle get _style {
+    if (notification.targetType == 'message') {
+      return _NotifStyle(Icons.message_rounded, const Color(0xFF00838F),
+          const Color(0xFFE0F7FA), 'Message');
+    }
     final msg = notification.message.toLowerCase();
     if (msg.contains('liked')) {
       return _NotifStyle(Icons.favorite_rounded, const Color(0xFFE91E63),
@@ -395,12 +464,198 @@ class _NotificationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (notification.targetType != null) ...[
+              if (notification.targetType != null &&
+                  notification.targetType != 'follow_request') ...[
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.secondaryText),
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Follow Request Card ──────────────────────────────────────────────────────
+
+class _FollowRequestCard extends StatelessWidget {
+  final AppNotification notification;
+  final String timeLabel;
+  final bool isRead;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+
+  const _FollowRequestCard({
+    required this.notification,
+    required this.timeLabel,
+    required this.isRead,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fromId = notification.fromId ?? '';
+    final sender = users.firstWhere((u) => u.id == fromId, orElse: () => users.first);
+    final alreadyHandled = !userState.incomingFollowRequests.containsKey(fromId);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isRead
+              ? AppColors.divider
+              : const Color(0xFF6A1B9A).withValues(alpha: 0.35),
+          width: isRead ? 0.5 : 1.5,
+        ),
+        boxShadow: isRead
+            ? []
+            : [
+                BoxShadow(
+                  color: const Color(0xFF6A1B9A).withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                UserAvatar(
+                  userId: sender.id,
+                  name: sender.name,
+                  size: 46,
+                  fontSize: 20,
+                  backgroundColor: const Color(0xFFF3E5F5),
+                  textColor: const Color(0xFF6A1B9A),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E5F5),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Follow Request',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF6A1B9A),
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(timeLabel,
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppColors.secondaryText)),
+                          if (!isRead) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF6A1B9A),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        notification.message,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.text,
+                          fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (!alreadyHandled) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: onAccept,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryRed,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Accept',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: onDecline,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.secondaryText.withValues(alpha: 0.4)),
+                        ),
+                        child: const Text(
+                          'Decline',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                alreadyHandled && userState.isFollowingUser(fromId)
+                    ? 'You accepted this request.'
+                    : 'You declined this request.',
+                style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
+            ],
+          ],
         ),
       ),
     );

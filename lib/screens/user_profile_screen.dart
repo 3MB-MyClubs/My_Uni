@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 
@@ -66,6 +67,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   String get _myId => authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+  String get _myName => authService.currentUser?.name ?? authService.currentAdmin?.name ?? 'Someone';
 
   void _persist() => userPrefsService.save(_myId);
 
@@ -135,6 +137,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     if (confirmed == true && mounted) {
       userState.acceptMessageRequest(_myId, otherId);
+      _persist();
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
       ));
@@ -151,6 +154,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     // ── Already following → unfollow ─────────────────────────────────────────
     if (isFollowing && !isPending) {
       setState(() => userState.toggleFollowUser(user.id));
+      _persist();
       return;
     }
 
@@ -160,6 +164,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         userState.pendingFollowRequests.remove(user.id);
         userState.followedUserIds.remove(user.id);
       });
+      _persist();
       return;
     }
 
@@ -195,13 +200,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       );
       if (confirmed == true && mounted) {
-        setState(() => userState.pendingFollowRequests.add(user.id));
-        // Simulate acceptance after 6 seconds for demo.
-        Future.delayed(const Duration(seconds: 6), () {
-          if (mounted && userState.hasPendingRequest(user.id)) {
-            setState(() => userState.acceptFollowRequest(_myId, user.id));
-          }
-        });
+        setState(() =>
+            userState.sendFollowRequest(_myId, user.id, _myName));
+        _persist();
       }
       return;
     }
@@ -242,12 +243,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           userState.followedUserIds.add(user.id);
           userState.shownFollowNotice.add(user.id);
         });
+        _persist();
       }
       return;
     }
 
     // ── Default: just follow ──────────────────────────────────────────────────
     setState(() => userState.followedUserIds.add(user.id));
+    _persist();
   }
 
   void _openUserProfile(User u) {
@@ -319,16 +322,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           Navigator.pop(ctx);
                           _openUserProfile(u);
                         },
-                        leading: CircleAvatar(
-                          radius: 22,
-                          backgroundColor: AppColors.lightRed,
-                          child: Text(
-                            u.name[0].toUpperCase(),
-                            style: const TextStyle(
-                                color: AppColors.primaryRed,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16),
-                          ),
+                        leading: UserAvatar(
+                          userId: u.id,
+                          name: u.name,
+                          size: 44,
+                          fontSize: 16,
                         ),
                         title: Text(u.name,
                             style: const TextStyle(
@@ -443,18 +441,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         padding: const EdgeInsets.all(2),
                         decoration: const BoxDecoration(
                             shape: BoxShape.circle, color: AppColors.card),
-                        child: Container(
-                          decoration: const BoxDecoration(
-                              shape: BoxShape.circle, color: AppColors.lightRed),
-                          child: Center(
-                            child: Text(
-                              user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                              style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryRed),
-                            ),
-                          ),
+                        child: UserAvatar(
+                          userId: user.id,
+                          name: user.name,
+                          size: 72,
+                          fontSize: 32,
                         ),
                       ),
                     ),
@@ -506,22 +497,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 Positioned(
                                   left: (i * 18).toDouble(),
                                   child: Container(
-                                    width: 22,
-                                    height: 22,
                                     decoration: BoxDecoration(
-                                      color: AppColors.lightRed,
                                       shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: AppColors.card, width: 1.5),
+                                      border: Border.all(color: AppColors.card, width: 1.5),
                                     ),
-                                    child: Center(
-                                      child: Text(
-                                        mutuals[i].name[0].toUpperCase(),
-                                        style: const TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.primaryRed),
-                                      ),
+                                    child: UserAvatar(
+                                      userId: mutuals[i].id,
+                                      name: mutuals[i].name,
+                                      size: 22,
+                                      fontSize: 9,
                                     ),
                                   ),
                                 ),

@@ -35,26 +35,63 @@ class UserState {
   /// so we don't show it again on subsequent follows.
   final Set<String> shownFollowNotice = {};
 
+  /// Incoming follow requests waiting for MY decision.
+  /// Key = fromId (who sent me the request), Value = notification id.
+  final Map<String, String> incomingFollowRequests = {};
+
   bool hasPendingRequest(String userId) =>
       pendingFollowRequests.contains(userId);
 
-  /// Accept a follow request (called when the other side accepts).
-  /// Moves the user from pending → actually followed + grants message access.
+  /// Called when user [fromId] sends a follow request to [toId].
+  /// Adds a follow_request notification to the target's alerts.
+  void sendFollowRequest(String fromId, String toId, String fromName) {
+    pendingFollowRequests.add(toId);
+    final notifId =
+        'follow_req_${fromId}_${DateTime.now().millisecondsSinceEpoch}';
+    incomingFollowRequests[fromId] = notifId;
+    final notif = AppNotification(
+      id: notifId,
+      userId: toId,
+      message: '$fromName wants to follow you.',
+      createdAt: DateTime.now(),
+      targetType: 'follow_request',
+      targetId: fromId,
+      fromId: fromId,
+    );
+    addFollowRequestNotification(notif);
+  }
+
+  /// Accept an incoming follow request from [fromId].
   void acceptFollowRequest(String fromId, String toId) {
     pendingFollowRequests.remove(toId);
+    incomingFollowRequests.remove(fromId);
     followedUserIds.add(toId);
-    // Grant message access automatically once follow is accepted.
     acceptedMessageRequests.add('$fromId:$toId');
-    // Notify listeners.
+    // Notify the requester that their request was accepted.
     final notif = AppNotification(
-      id: 'follow_accepted_${toId}_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'follow_accepted_${fromId}_${DateTime.now().millisecondsSinceEpoch}',
       userId: fromId,
       message: 'Your follow request was accepted.',
       createdAt: DateTime.now(),
-      targetType: 'user',
+      targetType: 'follow_accepted',
       targetId: toId,
     );
     addMessageNotification(notif);
+  }
+
+  /// Decline an incoming follow request from [fromId].
+  void declineFollowRequest(String fromId) {
+    pendingFollowRequests.remove(fromId);
+    incomingFollowRequests.remove(fromId);
+  }
+
+  // ── Notification helpers ──────────────────────────────────────────────────────
+
+  /// Adds a follow-request notification WITHOUT firing the in-app banner
+  /// (it already shows as a card in the alerts tab).
+  void addFollowRequestNotification(AppNotification n) {
+    dynamicNotifications.insert(0, n);
+    unreadNotifications++;
   }
 
   // ── Message requests ──────────────────────────────────────────────────────────

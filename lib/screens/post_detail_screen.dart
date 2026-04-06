@@ -6,6 +6,7 @@ import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../models/like.dart';
 import '../models/comment.dart';
+import '../widgets/user_avatar.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 
@@ -111,20 +112,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           onTap: () => Navigator.push(context,
                               MaterialPageRoute(
                                   builder: (_) => UserProfileScreen(user: author))),
-                          child: Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: widget.clubColor.withValues(alpha: 0.18),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(author.name[0].toUpperCase(),
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: widget.clubColor,
-                                      fontSize: 18)),
-                            ),
+                          child: UserAvatar(
+                            userId: author.id,
+                            name: author.name,
+                            size: 42,
+                            fontSize: 18,
+                            backgroundColor: widget.clubColor.withValues(alpha: 0.18),
+                            textColor: widget.clubColor,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -233,20 +227,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: AppColors.lightRed,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(commenter.name[0].toUpperCase(),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primaryRed,
-                                        fontSize: 14)),
-                              ),
+                            UserAvatar(
+                              userId: commenter.id,
+                              name: commenter.name,
+                              size: 34,
+                              fontSize: 14,
                             ),
                             const SizedBox(width: 10),
                             Expanded(

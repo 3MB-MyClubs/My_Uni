@@ -5,7 +5,9 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
+import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -155,6 +157,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
     if (confirmed == true && mounted) {
       userState.acceptMessageRequest(_myId, userId);
+      userPrefsService.save(_myId);
       _openChat(userId, userName);
     }
   }
@@ -304,25 +307,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               child: Row(
                                 children: [
                                   // Avatar
-                                  Container(
-                                    width: 56,
-                                    height: 56,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppColors.lightRed,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        name.isNotEmpty
-                                            ? name[0].toUpperCase()
-                                            : '?',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.primaryRed,
-                                          fontSize: 20,
-                                        ),
-                                      ),
-                                    ),
+                                  UserAvatar(
+                                    userId: otherId,
+                                    name: name,
+                                    size: 56,
+                                    fontSize: 20,
                                   ),
                                   const SizedBox(width: 12),
                                   // Name + message preview
@@ -485,22 +474,11 @@ class _UserResultTile extends StatelessWidget {
     return ListTile(
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: Container(
-        width: 48,
-        height: 48,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.lightRed,
-        ),
-        child: Center(
-          child: Text(
-            user.name[0].toUpperCase(),
-            style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: AppColors.primaryRed,
-                fontSize: 18),
-          ),
-        ),
+      leading: UserAvatar(
+        userId: user.id,
+        name: user.name,
+        size: 48,
+        fontSize: 18,
       ),
       title: Row(
         children: [

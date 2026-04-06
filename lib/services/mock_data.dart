@@ -447,6 +447,18 @@ final notifications = [
   AppNotification(id: 'nt13', userId: 'u2', message: 'Alice Yılmaz and 4 others liked your photo post',              createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 8)),                targetType: 'post',  targetId: 'ni1'),
   AppNotification(id: 'nt14', userId: 'u2', message: 'Sinema Kulübü: Nuri Bilge Ceylan retrospective starts tonight', createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 1)),               targetType: 'post',  targetId: 'n35'),
   AppNotification(id: 'nt15', userId: 'u2', message: 'Deniz Kaya started following you',                              createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 3)),                targetType: 'user',  targetId: 'u4'),
+
+  // ── Notifications for Hakan Tuncay (u5) ────────────────────────────────────
+  AppNotification(id: 'nt20', userId: 'u5', message: 'Alice Yılmaz sent you a message',                               createdAt: DateTime.now().subtract(const Duration(minutes: 20)),               targetType: 'message', targetId: 'u1'),
+  AppNotification(id: 'nt21', userId: 'u5', message: 'Bob Demir sent you a message',                                  createdAt: DateTime.now().subtract(const Duration(hours: 3)),                  targetType: 'message', targetId: 'u2'),
+  AppNotification(id: 'nt22', userId: 'u5', message: 'Ceren Arslan sent you a message',                               createdAt: DateTime.now().subtract(const Duration(hours: 6)),                  targetType: 'message', targetId: 'u3'),
+  AppNotification(id: 'nt23', userId: 'u5', message: 'Deniz Kaya sent you a message',                                 createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 2)),         targetType: 'message', targetId: 'u4'),
+  AppNotification(id: 'nt24', userId: 'u5', message: 'Selin Yıldız sent you a message',                               createdAt: DateTime.now().subtract(const Duration(days: 3)),                   targetType: 'message', targetId: 'u8'),
+  AppNotification(id: 'nt25', userId: 'u5', message: 'Kemal Arslan sent you a message',                               createdAt: DateTime.now().subtract(const Duration(days: 5)),                   targetType: 'message', targetId: 'u11'),
+  AppNotification(id: 'nt26', userId: 'u5', message: 'Alice Yılmaz liked your post in KUACM',                         createdAt: DateTime.now().subtract(const Duration(hours: 1)),                  targetType: 'post',    targetId: 'n1'),
+  AppNotification(id: 'nt27', userId: 'u5', message: 'KUACM: Hack-KU 2025 is in 5 days — register now!',             createdAt: DateTime.now().subtract(const Duration(hours: 4)),                  targetType: 'event',   targetId: 'ev1'),
+  AppNotification(id: 'nt28', userId: 'u5', message: 'Bob Demir started following you',                               createdAt: DateTime.now().subtract(const Duration(days: 2)),                   targetType: 'user',    targetId: 'u2'),
+  AppNotification(id: 'nt29', userId: 'u5', message: 'KU Gönüllüleri: Saturday volunteering project — join us! ❤️',   createdAt: DateTime.now().subtract(const Duration(days: 4)),                   targetType: 'club',    targetId: 'c22'),
 ];
 
 // ─── Direct Messages ─────────────────────────────────────────────────────────
@@ -459,6 +471,17 @@ final messages = <Message>[
   Message(id: 'msg5', senderId: 'u2', receiverId: 'u4', content: 'Yes! I\'m performing this time 🎸',                    sentAt: DateTime.now().subtract(const Duration(hours: 23))),
   Message(id: 'msg6', senderId: 'u3', receiverId: 'u4', content: 'Congrats on winning the regional debate!',              sentAt: DateTime.now().subtract(const Duration(days: 2))),
   Message(id: 'msg7', senderId: 'u4', receiverId: 'u3', content: 'Thank you! It was intense but so worth it 🏆',          sentAt: DateTime.now().subtract(const Duration(days: 1, hours: 23))),
+
+  // ── Messages to Hakan Tuncay (u5) ──────────────────────────────────────────
+  Message(id: 'msg10', senderId: 'u1', receiverId: 'u5', content: 'Hey Hakan! Are you signing up for Hack-KU? We need a strong team this year 💪',        sentAt: DateTime.now().subtract(const Duration(minutes: 20))),
+  Message(id: 'msg11', senderId: 'u1', receiverId: 'u5', content: 'Also, Flutter workshop is this Friday — you should definitely come!',                   sentAt: DateTime.now().subtract(const Duration(minutes: 18))),
+  Message(id: 'msg12', senderId: 'u2', receiverId: 'u5', content: 'Hakan, I saw you joined KU Gönüllüleri — the playground project this Saturday is going to be amazing!', sentAt: DateTime.now().subtract(const Duration(hours: 3))),
+  Message(id: 'msg13', senderId: 'u2', receiverId: 'u5', content: 'Meet at the main gate at 09:30, don\'t be late 😄',                                    sentAt: DateTime.now().subtract(const Duration(hours: 2, minutes: 55))),
+  Message(id: 'msg14', senderId: 'u3', receiverId: 'u5', content: 'Hi! Ceren here from the Münazara Kulübü. We\'re looking for new members — interested?', sentAt: DateTime.now().subtract(const Duration(hours: 6))),
+  Message(id: 'msg15', senderId: 'u4', receiverId: 'u5', content: 'Hakan bro, the KUFoto golden hour walk is this Saturday. You\'re coming right? 📷',    sentAt: DateTime.now().subtract(const Duration(days: 1, hours: 2))),
+  Message(id: 'msg16', senderId: 'u4', receiverId: 'u5', content: 'Bring your phone at least — the campus looks unreal at sunset',                         sentAt: DateTime.now().subtract(const Duration(days: 1, hours: 1, minutes: 58))),
+  Message(id: 'msg17', senderId: 'u8', receiverId: 'u5', content: 'Hey! Selin from the Dans Kulübü — we heard you\'re interested in the Spring Showcase. Auditions are Wed & Thu 19:00!', sentAt: DateTime.now().subtract(const Duration(days: 3))),
+  Message(id: 'msg18', senderId: 'u11', receiverId: 'u5', content: 'Kemal here. Did you catch the Fenerbahçe match last night? 🔥 We\'re screening the next one at the club room', sentAt: DateTime.now().subtract(const Duration(days: 5))),
 ];
 
 // ─── Club Stories ─────────────────────────────────────────────────────────────

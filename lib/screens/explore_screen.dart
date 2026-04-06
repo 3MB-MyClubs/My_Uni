@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/club_follow_helper.dart';
+import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
@@ -485,21 +486,13 @@ class _PeopleCard extends StatelessWidget {
       ),
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _color.withValues(alpha: 0.15),
-          border: Border.all(color: _color.withValues(alpha: 0.3)),
-        ),
-        child: Center(
-          child: Text(
-            user.name[0].toUpperCase(),
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: _color),
-          ),
-        ),
+      leading: UserAvatar(
+        userId: user.id,
+        name: user.name,
+        size: 48,
+        fontSize: 18,
+        backgroundColor: _color.withValues(alpha: 0.15),
+        textColor: _color,
       ),
       title: Row(
         children: [

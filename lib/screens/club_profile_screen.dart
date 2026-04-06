@@ -9,6 +9,7 @@ import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
+import '../widgets/user_avatar.dart';
 
 class ClubProfileScreen extends StatefulWidget {
   final Club club;
@@ -314,22 +315,13 @@ class _PostsTab extends StatelessWidget {
                     GestureDetector(
                       onTap: () => Navigator.push(context,
                           MaterialPageRoute(builder: (_) => UserProfileScreen(user: author))),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: clubColor.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            author.name[0].toUpperCase(),
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: clubColor,
-                                fontSize: 16),
-                          ),
-                        ),
+                      child: UserAvatar(
+                        userId: author.id,
+                        name: author.name,
+                        size: 38,
+                        fontSize: 16,
+                        backgroundColor: clubColor.withValues(alpha: 0.15),
+                        textColor: clubColor,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -891,15 +883,13 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                               letterSpacing: 0.4)),
                     ),
                     ...matches.map((u) => ListTile(
-                          leading: CircleAvatar(
-                            radius: 20,
+                          leading: UserAvatar(
+                            userId: u.id,
+                            name: u.name,
+                            size: 40,
+                            fontSize: 16,
                             backgroundColor: AppColors.lightRed,
-                            child: Text(
-                              u.name[0].toUpperCase(),
-                              style: const TextStyle(
-                                  color: AppColors.primaryRed,
-                                  fontWeight: FontWeight.bold),
-                            ),
+                            textColor: AppColors.primaryRed,
                           ),
                           title: Text(u.name,
                               style: const TextStyle(
@@ -951,15 +941,13 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                     )
                   else
                     ...boardMembers.map((u) => ListTile(
-                          leading: CircleAvatar(
-                            radius: 20,
+                          leading: UserAvatar(
+                            userId: u.id,
+                            name: u.name,
+                            size: 40,
+                            fontSize: 16,
                             backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.12),
-                            child: Text(
-                              u.name[0].toUpperCase(),
-                              style: const TextStyle(
-                                  color: Color(0xFF1565C0),
-                                  fontWeight: FontWeight.bold),
-                            ),
+                            textColor: const Color(0xFF1565C0),
                           ),
                           title: Text(u.name,
                               style: const TextStyle(

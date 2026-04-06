@@ -14,6 +14,7 @@ import '../models/user.dart';
 import 'messages_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
+import '../widgets/user_avatar.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -642,17 +643,13 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                             builder: (_) => UserProfileScreen(user: u),
                           ),
                         ),
-                        child: CircleAvatar(
-                          radius: 26,
+                        child: UserAvatar(
+                          userId: u.id,
+                          name: u.name,
+                          size: 52,
+                          fontSize: 22,
                           backgroundColor: color.withValues(alpha: 0.15),
-                          child: Text(
-                            u.name[0].toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: color,
-                            ),
-                          ),
+                          textColor: color,
                         ),
                       ),
                       const SizedBox(height: 6),
