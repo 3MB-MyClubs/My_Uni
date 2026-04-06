@@ -68,6 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
               onTap: () {
                 authService.logout();
+                Navigator.of(context).popUntil((route) => route.isFirst);
                 widget.onLogout();
               },
             ),

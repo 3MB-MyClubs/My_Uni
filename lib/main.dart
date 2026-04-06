@@ -106,7 +106,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           _savePrefs(); // persist before clearing session
           setState(() {
             _loggedIn = false;
-            _showLogin = true;
+            _showLogin = false;
+            _showSignUp = false;
           });
         },
       );

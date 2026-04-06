@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -12,6 +14,7 @@ import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_post_screen.dart';
 import 'create_event_screen.dart';
+import 'create_story_screen.dart';
 
 class MainNavScreen extends StatefulWidget {
   final bool isAdmin;
@@ -147,6 +150,22 @@ class _MainNavScreenState extends State<MainNavScreen> {
                     },
                   ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CreateOption(
+                    icon: Icons.auto_stories_rounded,
+                    label: 'Story',
+                    subtitle: 'Post a club story',
+                    color: const Color(0xFF2E7D32),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.of(context).push(MaterialPageRoute(
+                        fullscreenDialog: true,
+                        builder: (_) => CreateStoryScreen(onPosted: () => setState(() {})),
+                      ));
+                    },
+                  ),
+                ),
               ],
             ),
           ],
@@ -170,6 +189,15 @@ class _MainNavScreenState extends State<MainNavScreen> {
         index: _selectedIndex,
         children: screens,
       ),
+      floatingActionButton: _isClubAdmin
+          ? FloatingActionButton(
+              onPressed: () => _openCreateChooser(context),
+              backgroundColor: AppColors.primaryRed,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: _buildBottomNav(context),
     );
   }
@@ -188,41 +216,18 @@ class _MainNavScreenState extends State<MainNavScreen> {
             children: [
               _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', selected: _selectedIndex == 0, onTap: () => setState(() => _selectedIndex = 0)),
               _NavItem(icon: Icons.search, activeIcon: Icons.search, label: 'Search', selected: _selectedIndex == 1, onTap: () => setState(() => _selectedIndex = 1)),
-              if (_isClubAdmin)
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _openCreateChooser(context),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text('Post', style: TextStyle(fontSize: 10, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                _NavItem(
-                  icon: Icons.notifications_none,
-                  activeIcon: Icons.notifications,
-                  label: 'Alerts',
-                  selected: _selectedIndex == 2,
-                  badge: userState.unreadNotifications,
-                  onTap: () {
-                    setState(() => _selectedIndex = 2);
-                    _onNotificationsOpened();
-                  },
-                ),
+              if (_isClubAdmin) const Expanded(child: SizedBox()), // space for centred FAB
+              _NavItem(
+                icon: Icons.notifications_none,
+                activeIcon: Icons.notifications,
+                label: 'Alerts',
+                selected: _selectedIndex == 2,
+                badge: userState.unreadNotifications,
+                onTap: () {
+                  setState(() => _selectedIndex = 2);
+                  _onNotificationsOpened();
+                },
+              ),
               _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile', selected: _selectedIndex == 3, onTap: () => setState(() => _selectedIndex = 3)),
               if (widget.isAdmin)
                 _NavItem(icon: Icons.admin_panel_settings_outlined, activeIcon: Icons.admin_panel_settings, label: 'Admin', selected: _selectedIndex == 4, onTap: () => setState(() => _selectedIndex = 4)),
@@ -431,6 +436,270 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Create Story Sheet ───────────────────────────────────────────────────────
+
+class _CreateStorySheet extends StatefulWidget {
+  final VoidCallback onPosted;
+  const _CreateStorySheet({required this.onPosted});
+
+  @override
+  State<_CreateStorySheet> createState() => _CreateStorySheetState();
+}
+
+class _CreateStorySheetState extends State<_CreateStorySheet> {
+  final _textController = TextEditingController();
+  String _selectedEmoji = '📢';
+  String? _imagePath;
+  bool _posting = false;
+
+  static const _emojis = [
+    '📢', '🎉', '🔥', '📅', '🏆', '🎓', '💡', '🤝',
+    '🎶', '🎨', '⚽', '🧪', '📸', '🌟', '🚀', '❤️',
+  ];
+
+  String? get _clubId {
+    final admin = authService.currentAdmin;
+    if (admin == null) return null;
+    try {
+      return clubs.firstWhere((c) => c.adminUserIds.contains(admin.id)).id;
+    } catch (_) {
+      return clubs.isNotEmpty ? clubs.first.id : null;
+    }
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    if (picked != null && mounted) setState(() => _imagePath = picked.path);
+  }
+
+  void _showPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
+              title: const Text('Take a photo', style: TextStyle(color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.camera); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
+              title: const Text('Choose from library', style: TextStyle(color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.gallery); },
+            ),
+            if (_imagePath != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Remove photo', style: TextStyle(color: Colors.red)),
+                onTap: () { Navigator.pop(context); setState(() => _imagePath = null); },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _post() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    final cid = _clubId;
+    if (cid == null) return;
+
+    setState(() => _posting = true);
+
+    final story = ClubStory(
+      id: 'st_${DateTime.now().millisecondsSinceEpoch}',
+      clubId: cid,
+      emoji: _selectedEmoji,
+      text: text,
+      postedAt: DateTime.now(),
+      imagePath: _imagePath,
+    );
+    clubStories.insert(0, story);
+
+    widget.onPosted();
+    Navigator.pop(context);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.auto_stories_rounded, color: Color(0xFF2E7D32), size: 22),
+                const SizedBox(width: 8),
+                const Text('Post a Story', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Stories appear at the top of the feed for all followers.',
+              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 16),
+
+            // Photo picker
+            GestureDetector(
+              onTap: _showPhotoOptions,
+              child: _imagePath != null
+                  ? Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.file(File(_imagePath!), height: 140, width: double.infinity, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          top: 8, right: 8,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _imagePath = null),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Container(
+                      height: 90,
+                      decoration: BoxDecoration(
+                        color: AppColors.lightGray,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3), width: 1.5),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF2E7D32), size: 26),
+                          SizedBox(width: 8),
+                          Text('Add a photo (optional)', style: TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+
+            // Emoji picker
+            const Text('Emoji', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryText, letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _emojis.length,
+                separatorBuilder: (_, sep) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final e = _emojis[i];
+                  final selected = e == _selectedEmoji;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedEmoji = e),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFF2E7D32).withValues(alpha: 0.15) : AppColors.lightGray,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected ? const Color(0xFF2E7D32) : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(child: Text(e, style: const TextStyle(fontSize: 22))),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Text input
+            const Text('Story text', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondaryText, letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _textController,
+              maxLines: 3,
+              maxLength: 280,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Share an update, announcement, or highlight…',
+                hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                filled: true,
+                fillColor: AppColors.lightGray,
+                contentPadding: const EdgeInsets.all(14),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 1.5),
+                ),
+                counterStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 11),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _textController.text.trim().isEmpty
+                      ? AppColors.secondaryText.withValues(alpha: 0.3)
+                      : const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                onPressed: _textController.text.trim().isEmpty || _posting ? null : _post,
+                icon: _posting
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.send_rounded, size: 18),
+                label: Text(_posting ? 'Posting…' : 'Post Story',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+            ),
+          ],
         ),
       ),
     );

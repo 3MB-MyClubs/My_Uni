@@ -492,6 +492,10 @@ class ClubStory {
   final String emoji;
   final String text;
   final DateTime postedAt;
+  final String? imagePath;
+  final double textOffsetX; // fractional 0-1 (default 0.5 = center)
+  final double textOffsetY; // fractional 0-1 (default 0.5 = center)
+  final int textColorValue; // Color.value int
 
   const ClubStory({
     required this.id,
@@ -499,6 +503,10 @@ class ClubStory {
     required this.emoji,
     required this.text,
     required this.postedAt,
+    this.imagePath,
+    this.textOffsetX = 0.5,
+    this.textOffsetY = 0.5,
+    this.textColorValue = 0xFFFFFFFF,
   });
 }
 

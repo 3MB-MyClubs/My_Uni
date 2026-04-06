@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import '../services/app_colors.dart';
@@ -44,6 +45,7 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  final Set<String> _viewedClubIds = {};
 
   List<_FeedItem> _buildFeed() {
     final items = newsPosts.map((post) => _FeedItem(
@@ -125,6 +127,7 @@ class _FeedScreenState extends State<FeedScreen> {
           slivers: [
             _buildAppBar(),
             _buildStoriesRow(),
+            _buildWelcomeCard(live, upcoming),
             _buildEventsStrip(live, upcoming),
             SliverList(
               delegate: SliverChildBuilderDelegate(
@@ -148,6 +151,18 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  String get _greeting {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  String get _firstName {
+    final name = authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
+    return name.split(' ').first;
+  }
+
   SliverAppBar _buildAppBar() {
     return SliverAppBar(
       backgroundColor: AppColors.card,
@@ -155,19 +170,35 @@ class _FeedScreenState extends State<FeedScreen> {
       surfaceTintColor: Colors.transparent,
       floating: true,
       snap: true,
-      title: RichText(
-        text: const TextSpan(
+      expandedHeight: 72,
+      collapsedHeight: 56,
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.fromLTRB(16, 0, 56, 10),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextSpan(
-              text: 'Uni',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.primaryRed, letterSpacing: -0.5),
+            Text(
+              '$_greeting, $_firstName 👋',
+              style: const TextStyle(fontSize: 13, color: AppColors.secondaryText, fontWeight: FontWeight.normal),
             ),
-            TextSpan(
-              text: 'Hub',
-              style: TextStyle(fontWeight: FontWeight.w300, fontSize: 24, color: AppColors.text, letterSpacing: -0.5),
+            RichText(
+              text: const TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Uni',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.primaryRed, letterSpacing: -0.5),
+                  ),
+                  TextSpan(
+                    text: 'Hub',
+                    style: TextStyle(fontWeight: FontWeight.w300, fontSize: 20, color: AppColors.text, letterSpacing: -0.5),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
+        background: Container(color: AppColors.card),
       ),
       actions: [
         IconButton(
@@ -179,6 +210,90 @@ class _FeedScreenState extends State<FeedScreen> {
           tooltip: 'Direct Messages',
         ),
       ],
+    );
+  }
+
+  SliverToBoxAdapter _buildWelcomeCard(List<dynamic> live, List<dynamic> upcoming) {
+    final followedClubCount = userState.followedClubIds.length;
+    final nextEvent = upcoming.isNotEmpty ? upcoming.first : null;
+
+    String subtitle;
+    if (live.isNotEmpty) {
+      subtitle = '${live.length} event${live.length > 1 ? 's' : ''} happening right now on campus.';
+    } else if (nextEvent != null) {
+      final daysAway = (nextEvent.dateTime as DateTime).difference(DateTime.now()).inDays;
+      final label = daysAway == 0 ? 'today' : daysAway == 1 ? 'tomorrow' : 'in $daysAway days';
+      subtitle = 'Next up: ${nextEvent.title} — $label.';
+    } else {
+      subtitle = 'You follow $followedClubCount club${followedClubCount == 1 ? '' : 's'}. Stay tuned for updates!';
+    }
+
+    return SliverToBoxAdapter(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primaryRed, Color(0xFFB71C1C)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryRed.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$_greeting, $_firstName!',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                live.isNotEmpty
+                    ? Icons.radio_button_on
+                    : nextEvent != null
+                        ? Icons.event_rounded
+                        : Icons.school_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -201,6 +316,15 @@ class _FeedScreenState extends State<FeedScreen> {
                   ),
                   const SizedBox(width: 6),
                   const Text('Happening Now', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('${live.length} live', style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600)),
+                  ),
                 ],
               ),
             ),
@@ -220,7 +344,15 @@ class _FeedScreenState extends State<FeedScreen> {
           if (upcoming.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-              child: const Text('Upcoming Events', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_rounded, size: 16, color: AppColors.primaryRed),
+                  const SizedBox(width: 6),
+                  const Text('Upcoming Events', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+                  const Spacer(),
+                  Text('${upcoming.length} events', style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                ],
+              ),
             ),
             SizedBox(
               height: 110,
@@ -240,7 +372,45 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  // Returns clubs that have at least one story posted within the last 24 hours,
+  // sorted: unseen (newest story first) → seen / oldest.
+  List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> _activeStoryClubs() {
+    const colors = [
+      Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    ];
+    final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+
+    final result = <({dynamic club, List<ClubStory> stories, bool seen, Color color})>[];
+    for (int i = 0; i < clubs.length; i++) {
+      final club = clubs[i];
+      final recent = clubStories
+          .where((s) => s.clubId == club.id && s.postedAt.isAfter(cutoff))
+          .toList()
+        ..sort((a, b) => b.postedAt.compareTo(a.postedAt)); // newest first
+      if (recent.isEmpty) continue;
+      result.add((
+        club: club,
+        stories: recent,
+        seen: _viewedClubIds.contains(club.id),
+        color: colors[i % colors.length],
+      ));
+    }
+
+    // Sort: unseen first (by newest story desc), then seen (by newest story asc = oldest)
+    result.sort((a, b) {
+      if (a.seen != b.seen) return a.seen ? 1 : -1; // unseen before seen
+      if (!a.seen) return b.stories.first.postedAt.compareTo(a.stories.first.postedAt); // unseen: newest leftmost
+      return a.stories.first.postedAt.compareTo(b.stories.first.postedAt); // seen: oldest leftmost
+    });
+
+    return result;
+  }
+
   SliverToBoxAdapter _buildStoriesRow() {
+    final active = _activeStoryClubs();
+    if (active.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
     return SliverToBoxAdapter(
       child: Container(
         color: AppColors.card,
@@ -252,8 +422,18 @@ class _FeedScreenState extends State<FeedScreen> {
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                itemCount: clubs.length,
-                itemBuilder: (context, i) => _StoryBubble(clubIndex: i),
+                itemCount: active.length,
+                itemBuilder: (context, i) {
+                  final entry = active[i];
+                  return _StoryBubble(
+                    club: entry.club,
+                    stories: entry.stories,
+                    seen: entry.seen,
+                    color: entry.color,
+                    onViewed: () => setState(() => _viewedClubIds.add(entry.club.id)),
+                    onDeleted: () => setState(() {}),
+                  );
+                },
               ),
             ),
             const Divider(height: 1),
@@ -735,27 +915,29 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
 // ─── Story Bubble ─────────────────────────────────────────────────────────────
 
 class _StoryBubble extends StatelessWidget {
-  final int clubIndex;
+  final dynamic club;
+  final List<ClubStory> stories;
+  final bool seen;
+  final Color color;
+  final VoidCallback onViewed;
+  final VoidCallback onDeleted;
 
-  static const List<Color> _colors = [
-    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-  ];
-
-  const _StoryBubble({required this.clubIndex});
+  const _StoryBubble({
+    required this.club,
+    required this.stories,
+    required this.seen,
+    required this.color,
+    required this.onViewed,
+    required this.onDeleted,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs[clubIndex];
-    final color = _colors[clubIndex % _colors.length];
-    final isFollowed = userState.isFollowing(club.id);
-    final stories = clubStories.where((s) => s.clubId == club.id).toList();
-    final hasStory = stories.isNotEmpty;
-
     return GestureDetector(
-      onTap: hasStory
-          ? () => _openStoryViewer(context, club, stories, color)
-          : null,
+      onTap: () {
+        onViewed();
+        _openStoryViewer(context, club, stories, color);
+      },
       child: Padding(
         padding: const EdgeInsets.only(right: 10),
         child: SizedBox(
@@ -768,18 +950,15 @@ class _StoryBubble extends StatelessWidget {
                 padding: const EdgeInsets.all(2.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: hasStory
+                  gradient: seen
                       ? const LinearGradient(
+                          colors: [AppColors.secondaryText, AppColors.secondaryText],
+                        )
+                      : const LinearGradient(
                           colors: [AppColors.primaryRed, AppColors.accentGold],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                        )
-                      : isFollowed
-                          ? const LinearGradient(
-                              colors: [AppColors.secondaryText, AppColors.secondaryText],
-                            )
-                          : null,
-                  color: (!hasStory && !isFollowed) ? AppColors.lightGray : null,
+                        ),
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(2),
@@ -799,8 +978,8 @@ class _StoryBubble extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
-                  color: hasStory ? AppColors.text : AppColors.secondaryText,
-                  fontWeight: hasStory ? FontWeight.w600 : FontWeight.normal,
+                  color: seen ? AppColors.secondaryText : AppColors.text,
+                  fontWeight: seen ? FontWeight.normal : FontWeight.w600,
                 ),
               ),
             ],
@@ -814,8 +993,13 @@ class _StoryBubble extends StatelessWidget {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.black87,
-      pageBuilder: (_, _, _) => _StoryViewer(club: club, stories: stories, color: color),
-      transitionsBuilder: (_, animation, _, child) =>
+      pageBuilder: (_, a1, a2) => _StoryViewer(
+        club: club,
+        stories: stories,
+        color: color,
+        onDeleted: onDeleted,
+      ),
+      transitionsBuilder: (_, animation, a2, child) =>
           FadeTransition(opacity: animation, child: child),
       transitionDuration: const Duration(milliseconds: 200),
     ));
@@ -828,20 +1012,29 @@ class _StoryViewer extends StatefulWidget {
   final dynamic club;
   final List<ClubStory> stories;
   final Color color;
+  final VoidCallback? onDeleted;
 
-  const _StoryViewer({required this.club, required this.stories, required this.color});
+  const _StoryViewer({required this.club, required this.stories, required this.color, this.onDeleted});
 
   @override
   State<_StoryViewer> createState() => _StoryViewerState();
 }
 
 class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderStateMixin {
+  late List<ClubStory> _stories;
   int _index = 0;
   late AnimationController _progressController;
+
+  bool get _isAdmin {
+    final admin = authService.currentAdmin;
+    if (admin == null) return false;
+    return (widget.club.adminUserIds as List).contains(admin.id);
+  }
 
   @override
   void initState() {
     super.initState();
+    _stories = List.of(widget.stories);
     _progressController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 5),
@@ -852,7 +1045,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
   }
 
   void _nextStory() {
-    if (_index < widget.stories.length - 1) {
+    if (_index < _stories.length - 1) {
       setState(() => _index++);
       _progressController.forward(from: 0);
     } else {
@@ -867,6 +1060,52 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
     } else {
       _progressController.forward(from: 0);
     }
+  }
+
+  void _deleteCurrentStory() {
+    _progressController.stop();
+    final nav = Navigator.of(context);
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete story?',
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        content: const Text('This story will be permanently removed.',
+            style: TextStyle(color: AppColors.secondaryText)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed != true) {
+        _progressController.forward();
+        return;
+      }
+      final storyId = _stories[_index].id;
+      clubStories.removeWhere((s) => s.id == storyId);
+      setState(() => _stories.removeAt(_index));
+      widget.onDeleted?.call();
+      if (_stories.isEmpty) {
+        nav.pop();
+      } else {
+        if (_index >= _stories.length) _index = _stories.length - 1;
+        _progressController.forward(from: 0);
+      }
+    });
   }
 
   String _timeAgoStory(DateTime dt) {
@@ -884,141 +1123,172 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
 
   @override
   Widget build(BuildContext context) {
-    final story = widget.stories[_index];
+    final story = _stories[_index];
     final size = MediaQuery.of(context).size;
+    final hasPhoto = story.imagePath != null;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Center(
-          child: Container(
-            width: size.width,
-            height: size.height * 0.88,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                colors: [
-                  widget.color,
-                  widget.color.withValues(alpha: 0.75),
-                  Colors.black,
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-            child: Stack(
-              children: [
-                // Progress bars
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  right: 12,
-                  child: Row(
-                    children: List.generate(widget.stories.length, (i) {
-                      return Expanded(
-                        child: Container(
-                          height: 2.5,
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.lightGray,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          child: i < _index
-                              ? Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                )
-                              : i == _index
-                                  ? AnimatedBuilder(
-                                      animation: _progressController,
-                                      builder: (_, _) => FractionallySizedBox(
-                                        alignment: Alignment.centerLeft,
-                                        widthFactor: _progressController.value,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(2),
-                                          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: SizedBox(
+              width: size.width,
+              height: size.height * 0.88,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Background: photo or gradient
+                  if (hasPhoto)
+                    Image.file(File(story.imagePath!), fit: BoxFit.cover)
+                  else
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [widget.color, widget.color.withValues(alpha: 0.75), Colors.black],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  // Dark overlay for readability when photo is shown
+                  if (hasPhoto)
+                    Container(color: Colors.black.withValues(alpha: 0.35)),
+
+                  // Progress bars
+                  Positioned(
+                    top: 12, left: 12, right: 12,
+                    child: Row(
+                      children: List.generate(_stories.length, (i) {
+                        return Expanded(
+                          child: Container(
+                            height: 2.5,
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                            child: i < _index
+                                ? Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2)))
+                                : i == _index
+                                    ? AnimatedBuilder(
+                                        animation: _progressController,
+                                        builder: (_, child) => FractionallySizedBox(
+                                          alignment: Alignment.centerLeft,
+                                          widthFactor: _progressController.value,
+                                          child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2))),
                                         ),
-                                      ),
-                                    )
-                                  : const SizedBox(),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-
-                // Header: club name + close
-                Positioned(
-                  top: 28,
-                  left: 16,
-                  right: 16,
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        child: Text(widget.club.name[0],
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(widget.club.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                            Text(_timeAgoStory(story.postedAt),
-                                style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: const Icon(Icons.close, color: Colors.white, size: 26),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Story content
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(story.emoji, style: const TextStyle(fontSize: 64)),
-                        const SizedBox(height: 24),
-                        Text(
-                          story.text,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            height: 1.55,
-                            shadows: [Shadow(blurRadius: 6, color: Colors.black38)],
+                                      )
+                                    : const SizedBox(),
                           ),
+                        );
+                      }),
+                    ),
+                  ),
+
+                  // Header: club name + delete (admin) + close
+                  Positioned(
+                    top: 28, left: 16, right: 16,
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          child: Text(widget.club.name[0],
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(widget.club.name,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(_timeAgoStory(story.postedAt),
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        if (_isAdmin)
+                          GestureDetector(
+                            onTap: _deleteCurrentStory,
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.25),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+                            ),
+                          ),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: const Icon(Icons.close, color: Colors.white, size: 26),
                         ),
                       ],
                     ),
                   ),
-                ),
 
-                // Tap left / right navigation
-                Row(
-                  children: [
-                    Expanded(child: GestureDetector(onTap: _prevStory)),
-                    Expanded(child: GestureDetector(onTap: _nextStory)),
-                  ],
-                ),
-              ],
+                  // Emoji (always bottom-left area)
+                  Positioned(
+                    left: 28, bottom: 80,
+                    child: Text(story.emoji, style: const TextStyle(fontSize: 52)),
+                  ),
+
+                  // Overlay text at saved position + color
+                  if (story.text.isNotEmpty)
+                    LayoutBuilder(
+                      builder: (ctx, constraints) {
+                        const maxW = 300.0;
+                        final sw = constraints.maxWidth;
+                        final sh = constraints.maxHeight;
+                        final left = (story.textOffsetX * sw - maxW / 2)
+                            .clamp(0.0, sw - maxW);
+                        final top = (story.textOffsetY * sh - 22)
+                            .clamp(40.0, sh - 80);
+                        return Stack(
+                          children: [
+                            Positioned(
+                              left: left, top: top,
+                              child: Container(
+                                constraints: const BoxConstraints(maxWidth: maxW),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  story.text,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Color(story.textColorValue),
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    shadows: const [
+                                      Shadow(blurRadius: 6, color: Colors.black87),
+                                      Shadow(blurRadius: 14, color: Colors.black54),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  // Tap left / right navigation
+                  Row(
+                    children: [
+                      Expanded(child: GestureDetector(onTap: _prevStory, behavior: HitTestBehavior.translucent)),
+                      Expanded(child: GestureDetector(onTap: _nextStory, behavior: HitTestBehavior.translucent)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
