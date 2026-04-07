@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/notification.dart';
+import 'content_store.dart';
 
 // Simple in-memory singleton to track per-user UI state across tab switches.
 class UserState {
@@ -92,6 +93,7 @@ class UserState {
   void addFollowRequestNotification(AppNotification n) {
     dynamicNotifications.insert(0, n);
     unreadNotifications++;
+    contentStore.saveDynamicNotifications(dynamicNotifications);
   }
 
   // ── Message requests ──────────────────────────────────────────────────────────
@@ -117,6 +119,7 @@ class UserState {
   void addMessageNotification(AppNotification n) {
     dynamicNotifications.insert(0, n);
     unreadNotifications++;
+    contentStore.saveDynamicNotifications(dynamicNotifications);
     incomingMessageNotifier.value = n;
     Future.delayed(const Duration(seconds: 4),
         () => incomingMessageNotifier.value = null);

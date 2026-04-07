@@ -24,4 +24,26 @@ class NewsPost {
     this.taggedClubIds = const [],
     this.imagePath,
   });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'clubId': clubId,
+        'authorId': authorId,
+        'content': content,
+        'createdAt': createdAt.toIso8601String(),
+        'title': title,
+        'taggedClubIds': taggedClubIds,
+        'imagePath': imagePath,
+      };
+
+  factory NewsPost.fromMap(Map<String, dynamic> m) => NewsPost(
+        id: m['id'] as String,
+        clubId: m['clubId'] as String,
+        authorId: m['authorId'] as String,
+        content: m['content'] as String,
+        createdAt: DateTime.parse(m['createdAt'] as String),
+        title: m['title'] as String? ?? '',
+        taggedClubIds: List<String>.from(m['taggedClubIds'] as List? ?? []),
+        imagePath: m['imagePath'] as String?,
+      );
 }

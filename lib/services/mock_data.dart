@@ -13,8 +13,8 @@ import '../models/message.dart';
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 final users = [
-  User(id: 'u1',  name: 'Alice Yılmaz',   email: 'alice@uni.edu',        password: 'alice123',  role: 'admin',   subscribedClubIds: ['c4', 'c13', 'c35'],                    followingUserIds: ['u2', 'u4', 'u5']),
-  User(id: 'u2',  name: 'Bob Demir',      email: 'bob@uni.edu',          password: 'bob123',    role: 'student', subscribedClubIds: ['c4', 'c28', 'c15', 'c36'],              followingUserIds: ['u1', 'u4']),
+  User(id: 'u1',  name: 'Alice Yılmaz',   email: 'alice@uni.edu',        password: 'alice123',  role: 'student', subscribedClubIds: ['c4', 'c13', 'c35'],                    followingUserIds: ['u2', 'u4', 'u5']),
+  User(id: 'u2',  name: 'Can Serbester',  email: 'can@uni.edu',          password: 'can123',    role: 'student', subscribedClubIds: ['c4', 'c28', 'c15', 'c36'],              followingUserIds: ['u1', 'u4']),
   User(id: 'u3',  name: 'Ceren Arslan',   email: 'ceren@uni.edu',        password: 'ceren123',  role: 'student', subscribedClubIds: ['c27', 'c28', 'c29'],                    followingUserIds: ['u1', 'u2', 'u7']),
   User(id: 'u4',  name: 'Deniz Kaya',     email: 'deniz@uni.edu',        password: 'deniz123',  role: 'student', subscribedClubIds: ['c13', 'c15', 'c34'],                    followingUserIds: ['u1', 'u3', 'u8']),
   User(id: 'u5',  name: 'Hakan Tuncay',   email: 'htuncay23@ku.edu.tr',  password: '',          role: 'student', subscribedClubIds: ['c4', 'c22'],                            followingUserIds: ['u1', 'u2', 'u3', 'u4']),
@@ -34,7 +34,7 @@ final users = [
 
 final clubs = [
   Club(id: 'c1',  name: 'Arkeoloji ve Sanat Tarihi Kulübü (KUARHA)', description: 'Exploring Koç University\'s rich history through archaeology, art history exhibitions and site visits across Turkey.',          adminUserIds: []),
-  Club(id: 'c2',  name: 'Atatürkçü Düşünce Kulübü (KUADK)',         description: 'Promoting Atatürk\'s principles and the ideals of the Turkish Republic through talks, panels and cultural events.',            adminUserIds: []),
+  Club(id: 'c2',  name: 'Atatürkçü Düşünce Kulübü (KUADK)',          description: 'Promoting Atatürk\'s principles and the ideals of the Turkish Republic through talks, panels and cultural events.',            adminUserIds: []),
   Club(id: 'c3',  name: 'Beşeri Bilimler Kulübü (KUBBE)',            description: 'Bringing together students passionate about literature, philosophy, history and the humanities for seminars and reading groups.',  adminUserIds: []),
   Club(id: 'c4',  name: 'Bilgisayar Kulübü (KUACM)',                 description: 'Hackathons, coding workshops, tech talks and open-source projects. Open to all skill levels — from beginner to pro.',            adminUserIds: ['u1']),
   Club(id: 'c5',  name: 'Dağcılık Kulübü (KUDAK)',                   description: 'Weekend hikes, technical climbing courses and multi-day expeditions to mountains across Turkey and beyond.',                      adminUserIds: []),
@@ -46,7 +46,7 @@ final clubs = [
   Club(id: 'c11', name: 'Fenerbahçeliler Topluluğu',                 description: 'The official Fenerbahçe supporter community at Koç — match screenings, fan events and friendly debates.',                       adminUserIds: []),
   Club(id: 'c12', name: 'Folklör Kulübü',                            description: 'Keeping Turkish folk dance traditions alive through regular rehearsals, costumes and performances at campus events.',             adminUserIds: []),
   Club(id: 'c13', name: 'Fotoğraf Kulübü (KUFoto)',                  description: 'Campus photo walks, darkroom sessions, editing workshops and an annual exhibition showcasing student photography.',              adminUserIds: ['u4']),
-  Club(id: 'c14', name: 'FRP Kulübü (KUFRP)',                        description: 'Tabletop RPG sessions, world-building, character creation and story-driven campaigns every week.',                               adminUserIds: []),
+  Club(id: 'c14', name: 'Endüstri Mühendisliği Kulübü (IES)',        description: 'Tabletop RPG sessions, world-building, character creation and story-driven campaigns every week.',                               adminUserIds: []),
   Club(id: 'c15', name: 'Girişimcilik Kulübü',                       description: 'Entrepreneurship workshops, startup pitch events, mentorship programs and connections with the Koç innovation ecosystem.',       adminUserIds: []),
   Club(id: 'c16', name: 'Hemşirelik Kulübü',                         description: 'Supporting nursing students with study groups, clinical preparation resources and community health awareness campaigns.',          adminUserIds: []),
   Club(id: 'c17', name: 'Hukuk Kulübü',                              description: 'Moot court competitions, legal seminars, guest lawyer talks and support for students interested in law careers.',                adminUserIds: []),
@@ -76,6 +76,7 @@ final clubs = [
   Club(id: 'c41', name: 'Türk Halk Müziği Kulübü (THM)',             description: 'Preserving Turkish folk music with saz sessions, folk song rehearsals and performances at campus and community events.',         adminUserIds: []),
   Club(id: 'c42', name: 'HAKANS_CLUB',                               description: 'Hakan\'s personal club.',                                                                                                           adminUserIds: ['cadmin1']),
 ];
+
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
@@ -489,7 +490,7 @@ final messages = <Message>[
 class ClubStory {
   final String id;
   final String clubId;
-  final String emoji;
+  final String? emoji;
   final String text;
   final DateTime postedAt;
   final String? imagePath;
@@ -508,6 +509,30 @@ class ClubStory {
     this.textOffsetY = 0.5,
     this.textColorValue = 0xFFFFFFFF,
   });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'clubId': clubId,
+        'emoji': emoji,
+        'text': text,
+        'postedAt': postedAt.toIso8601String(),
+        'imagePath': imagePath,
+        'textOffsetX': textOffsetX,
+        'textOffsetY': textOffsetY,
+        'textColorValue': textColorValue,
+      };
+
+  factory ClubStory.fromMap(Map<String, dynamic> m) => ClubStory(
+        id: m['id'] as String,
+        clubId: m['clubId'] as String,
+        emoji: m['emoji'] as String?,
+        text: m['text'] as String,
+        postedAt: DateTime.parse(m['postedAt'] as String),
+        imagePath: m['imagePath'] as String?,
+        textOffsetX: (m['textOffsetX'] as num?)?.toDouble() ?? 0.5,
+        textOffsetY: (m['textOffsetY'] as num?)?.toDouble() ?? 0.5,
+        textColorValue: m['textColorValue'] as int? ?? 0xFFFFFFFF,
+      );
 }
 
 final clubStories = <ClubStory>[

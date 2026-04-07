@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../models/like.dart';
@@ -53,6 +54,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         userId: userId,
       ));
     }
+    contentStore.saveLikes();
     setState(() {});
   }
 
@@ -67,6 +69,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       content: text,
       createdAt: DateTime.now(),
     ));
+    contentStore.saveComments();
     _commentController.clear();
     FocusScope.of(context).unfocus();
     setState(() {});

@@ -4,6 +4,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 
 class CreateStoryScreen extends StatefulWidget {
@@ -22,7 +23,6 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
   double _textFracX = 0.5;
   double _textFracY = 0.45;
   int _colorIndex = 0;
-  String _selectedEmoji = '📢';
 
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
@@ -35,11 +35,6 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
     Color(0xFF66D9E8),
     Color(0xFF82E05A),
     Color(0xFFFF9ECD),
-  ];
-
-  static const _emojis = [
-    '📢', '🎉', '🔥', '📅', '🏆', '🎓', '💡', '🤝',
-    '🎶', '🎨', '⚽', '🧪', '📸', '🌟', '🚀', '❤️',
   ];
 
   Color get _currentColor => _textColors[_colorIndex % _textColors.length];
@@ -106,7 +101,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
       ClubStory(
         id: 'st_${DateTime.now().millisecondsSinceEpoch}',
         clubId: cid,
-        emoji: _selectedEmoji,
+        emoji: null,
         text: text,
         postedAt: DateTime.now(),
         imagePath: _imagePath,
@@ -115,6 +110,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
         textColorValue: _currentColor.toARGB32(),
       ),
     );
+    contentStore.saveClubStories();
     widget.onPosted();
     Navigator.pop(context);
   }
@@ -153,15 +149,24 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
         children: [
           // ── Background ────────────────────────────────────────────────────
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: _isEditingText
-                  ? null
-                  : (d) => _activateTextAt(d.localPosition, size),
-              child: hasPhoto
-                  ? Image.file(File(_imagePath!), fit: BoxFit.cover,
-                      width: double.infinity, height: double.infinity)
-                  : Container(
+            child: hasPhoto
+                ? InteractiveViewer(
+                    boundaryMargin: const EdgeInsets.all(double.infinity),
+                    minScale: 0.5,
+                    maxScale: 5.0,
+                    child: Image.file(
+                      File(_imagePath!),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+                  )
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: _isEditingText
+                        ? null
+                        : (d) => _activateTextAt(d.localPosition, size),
+                    child: Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
@@ -170,7 +175,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                         ),
                       ),
                     ),
-            ),
+                  ),
           ),
 
           // ── Dim overlay when editing text ─────────────────────────────────
@@ -396,45 +401,6 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                         ),
                         const SizedBox(height: 14),
                       ],
-                      // Emoji strip
-                      const Text('Emoji',
-                          style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.4)),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 48,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _emojis.length,
-                          separatorBuilder: (_, s) => const SizedBox(width: 8),
-                          itemBuilder: (_, i) {
-                            final e = _emojis[i];
-                            final selected = e == _selectedEmoji;
-                            return GestureDetector(
-                              onTap: () => setState(() => _selectedEmoji = e),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 48, height: 48,
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? Colors.white.withValues(alpha: 0.3)
-                                      : Colors.white.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(13),
-                                  border: Border.all(
-                                      color: selected ? Colors.white : Colors.white24,
-                                      width: 1.5),
-                                ),
-                                child: Center(
-                                    child: Text(e,
-                                        style: const TextStyle(fontSize: 24))),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
                     ],
                   ),
                 ),

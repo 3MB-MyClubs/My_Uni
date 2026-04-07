@@ -11,12 +11,23 @@ import 'services/app_colors.dart';
 import 'services/message_service.dart';
 import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
+import 'services/content_store.dart';
+import 'services/user_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
   await messageService.initialize();
   await notificationService.initialize();
   await userPrefsService.initialize();
+  await contentStore.initialize();
+  contentStore.applyToLists();
+  // Restore any dynamic notifications that were generated at runtime.
+  final dynNotifs = contentStore.loadDynamicNotifications();
+  if (dynNotifs != null) {
+    userState.dynamicNotifications
+      ..clear()
+      ..addAll(dynNotifs);
+  }
   runApp(const MyApp());
 }
 

@@ -12,4 +12,20 @@ class Comment {
     required this.content,
     required this.createdAt,
   });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'postId': postId,
+        'userId': userId,
+        'content': content,
+        'createdAt': createdAt.toIso8601String(),
+      };
+
+  factory Comment.fromMap(Map<String, dynamic> m) => Comment(
+        id: m['id'] as String,
+        postId: m['postId'] as String,
+        userId: m['userId'] as String,
+        content: m['content'] as String,
+        createdAt: DateTime.parse(m['createdAt'] as String),
+      );
 }

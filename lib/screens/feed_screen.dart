@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import '../services/app_colors.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
@@ -1097,6 +1098,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
       }
       final storyId = _stories[_index].id;
       clubStories.removeWhere((s) => s.id == storyId);
+      contentStore.saveClubStories();
       setState(() => _stories.removeAt(_index));
       widget.onDeleted?.call();
       if (_stories.isEmpty) {
@@ -1232,11 +1234,12 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                     ),
                   ),
 
-                  // Emoji (always bottom-left area)
-                  Positioned(
-                    left: 28, bottom: 80,
-                    child: Text(story.emoji, style: const TextStyle(fontSize: 52)),
-                  ),
+                  // Emoji (bottom-left, only if set)
+                  if (story.emoji != null)
+                    Positioned(
+                      left: 28, bottom: 80,
+                      child: Text(story.emoji!, style: const TextStyle(fontSize: 52)),
+                    ),
 
                   // Overlay text at saved position + color
                   if (story.text.isNotEmpty)
@@ -1390,6 +1393,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     if (!userState.isLiked(widget.post.id)) {
       userState.toggleLike(widget.post.id);
       likes.add(Like(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: widget.post.id, userId: authService.currentUser?.id ?? 'guest'));
+      contentStore.saveLikes();
     }
     setState(() => _showHeart = true);
     _heartController.forward();
@@ -1406,6 +1410,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
       userState.toggleLike(postId);
       likes.add(Like(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: postId, userId: userId));
     }
+    contentStore.saveLikes();
     setState(() {});
     widget.onUpdate();
   }
@@ -1641,7 +1646,30 @@ class _EventCard extends StatefulWidget {
 }
 
 class _EventCardState extends State<_EventCard> {
-  bool _attending = false;
+  late bool _attending;
+
+  @override
+  void initState() {
+    super.initState();
+    final userId = authService.currentUser?.id ?? '';
+    _attending = widget.event.attendeeUserIds.contains(userId);
+  }
+
+  void _toggleRsvp() {
+    final userId = authService.currentUser?.id ?? '';
+    if (userId.isEmpty) return;
+    setState(() {
+      if (_attending) {
+        widget.event.attendeeUserIds.remove(userId);
+        _attending = false;
+      } else {
+        widget.event.attendeeUserIds.add(userId);
+        _attending = true;
+      }
+    });
+    contentStore.saveEvents();
+    widget.onUpdate();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1770,7 +1798,7 @@ class _EventCardState extends State<_EventCard> {
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
                   child: GestureDetector(
-                    onTap: () => setState(() => _attending = !_attending),
+                    onTap: _toggleRsvp,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1932,6 +1960,7 @@ class _ShareSheetState extends State<_ShareSheet> {
         userId: widget.userId,
         createdAt: DateTime.now(),
       ));
+      contentStore.saveShares();
       widget.onShared();
     }
     setState(() => _shared = true);
@@ -2046,6 +2075,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     comments.add(Comment(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: widget.postId, userId: user.id, content: text, createdAt: DateTime.now()));
+    contentStore.saveComments();
     _controller.clear();
     setState(() {});
   }
@@ -2099,6 +2129,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                 GestureDetector(
                                   onTap: () {
                                     comments.removeWhere((x) => x.id == c.id);
+                                    contentStore.saveComments();
                                     setState(() {});
                                   },
                                   child: Padding(

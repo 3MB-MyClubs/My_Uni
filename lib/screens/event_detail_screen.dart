@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
+import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 
-class EventDetailScreen extends StatelessWidget {
+class EventDetailScreen extends StatefulWidget {
   final Event event;
   final Color color;
 
   const EventDetailScreen({super.key, required this.event, required this.color});
 
+  @override
+  State<EventDetailScreen> createState() => _EventDetailScreenState();
+}
+
+class _EventDetailScreenState extends State<EventDetailScreen> {
   static const List<String> _months = [
     '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -17,6 +24,30 @@ class EventDetailScreen extends StatelessWidget {
   static const List<String> _weekdays = [
     '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
   ];
+
+  late bool _attending;
+
+  @override
+  void initState() {
+    super.initState();
+    final userId = authService.currentUser?.id ?? '';
+    _attending = widget.event.attendeeUserIds.contains(userId);
+  }
+
+  void _toggleRsvp() {
+    final userId = authService.currentUser?.id ?? '';
+    if (userId.isEmpty) return;
+    setState(() {
+      if (_attending) {
+        widget.event.attendeeUserIds.remove(userId);
+        _attending = false;
+      } else {
+        widget.event.attendeeUserIds.add(userId);
+        _attending = true;
+      }
+    });
+    contentStore.saveEvents();
+  }
 
   String _pad(int n) => n.toString().padLeft(2, '0');
 
@@ -36,6 +67,8 @@ class EventDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final event = widget.event;
+    final color = widget.color;
     final club = clubs.firstWhere((c) => c.id == event.clubId, orElse: () => clubs.first);
     final diff = event.dateTime.difference(DateTime.now());
     final isPast = diff.isNegative;
@@ -224,7 +257,7 @@ class EventDetailScreen extends StatelessWidget {
           child: SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: isPast ? null : () {},
+              onPressed: isPast ? null : _toggleRsvp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isPast ? AppColors.surfaceAlt : color,
                 foregroundColor: Colors.white,
@@ -234,7 +267,11 @@ class EventDetailScreen extends StatelessWidget {
                 elevation: 0,
               ),
               child: Text(
-                isPast ? 'This event has passed' : 'Register for this event',
+                isPast
+                    ? 'This event has passed'
+                    : _attending
+                        ? '✓ You\'re going'
+                        : 'Register for this event',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),

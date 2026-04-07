@@ -4,6 +4,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../models/news_post.dart';
 
@@ -42,12 +43,20 @@ Widget buildPostBanner({
   required String fallbackLetter,
   double height = 200,
 }) {
-  // Gallery photo
+  // Gallery photo — interactive (pan / pinch-to-zoom)
   if (imagePath != null && !imagePath.startsWith('tpl:')) {
     return SizedBox(
       width: double.infinity,
       height: height,
-      child: Image.file(File(imagePath), fit: BoxFit.cover),
+      child: ClipRect(
+        child: InteractiveViewer(
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          minScale: 0.5,
+          maxScale: 5.0,
+          child: Image.file(File(imagePath), fit: BoxFit.cover,
+              width: double.infinity, height: height),
+        ),
+      ),
     );
   }
 
@@ -134,15 +143,65 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     return tagged;
   }
 
-  Future<void> _pickFromGallery() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
+  Future<void> _pickPhoto(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
+    if (picked == null || !mounted) return;
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      uiSettings: [
+        IOSUiSettings(
+          title: 'Crop Photo',
+          resetAspectRatioEnabled: true,
+          rotateButtonsHidden: false,
+        ),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Photo',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: false,
+          showCropGrid: true,
+        ),
+      ],
     );
-    if (picked != null) {
-      setState(() => _imagePath = picked.path);
-    }
+    if (cropped != null && mounted) setState(() => _imagePath = cropped.path);
+  }
+
+  void _showPhotoPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 36, height: 4,
+              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
+              title: const Text('Take a photo', style: TextStyle(color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.camera); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
+              title: const Text('Choose from library', style: TextStyle(color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.gallery); },
+            ),
+            if (_imagePath != null && !_imagePath!.startsWith('tpl:'))
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Remove photo', style: TextStyle(color: Colors.red)),
+                onTap: () { Navigator.pop(context); setState(() => _imagePath = null); },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _post() {
@@ -160,6 +219,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       imagePath: _imagePath,
     );
     newsPosts.insert(0, post);
+    contentStore.saveNewsPosts();
     widget.onPosted?.call();
     Navigator.of(context).pop();
   }
@@ -257,7 +317,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                         imagePath: _imagePath != null && !_imagePath!.startsWith('tpl:')
                             ? _imagePath
                             : null,
-                        onPick: _pickFromGallery,
+                        onPick: _showPhotoPicker,
                         onClear: () => setState(() => _imagePath = null),
                       ),
                     ],

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import 'chat_screen.dart';
@@ -532,7 +533,7 @@ class _CreateStorySheetState extends State<_CreateStorySheet> {
       imagePath: _imagePath,
     );
     clubStories.insert(0, story);
-
+    contentStore.saveClubStories();
     widget.onPosted();
     Navigator.pop(context);
   }
