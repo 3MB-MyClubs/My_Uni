@@ -260,6 +260,61 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             );
           }
 
+          if (n.targetType == 'board_member_request') {
+            return _BoardMemberRequestCard(
+              notification: n,
+              timeLabel: _timeAgo(n.createdAt),
+              isRead: isRead,
+              onApprove: () => setState(() {
+                _read.add(n.id);
+                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+                final requesterId = n.fromId!;
+                final clubId = n.targetId!;
+                // Add to boardMemberIds
+                final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
+                if (!club.boardMemberIds.contains(requesterId)) {
+                  club.boardMemberIds.add(requesterId);
+                }
+                // Also follow the club as a subscriber
+                userState.pendingBoardRequests.remove('$requesterId:$clubId');
+                // Notify the requester
+                final clubName = club.name;
+                userState.addMessageNotification(AppNotification(
+                  id: 'board_approved_${requesterId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}',
+                  userId: requesterId,
+                  message: 'Your board member request for $clubName was approved!',
+                  createdAt: DateTime.now(),
+                  targetType: 'club',
+                  targetId: clubId,
+                ));
+                userPrefsService.save(authService.currentAdmin?.id ?? '');
+              }),
+              onDecline: () => setState(() {
+                _read.add(n.id);
+                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+                final requesterId = n.fromId!;
+                final clubId = n.targetId!;
+                userState.pendingBoardRequests.remove('$requesterId:$clubId');
+                // Start the 2-month cooldown
+                userState.recordBoardDecline(requesterId, clubId);
+                // Notify the requester
+                final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
+                final reapplyDate = userState.boardCooldownEnds(requesterId, clubId)!;
+                final dateStr = '${reapplyDate.day}/${reapplyDate.month}/${reapplyDate.year}';
+                userState.addMessageNotification(AppNotification(
+                  id: 'board_declined_${requesterId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}',
+                  userId: requesterId,
+                  message: 'Your board member request for ${club.name} was not approved. You may reapply on $dateStr.',
+                  createdAt: DateTime.now(),
+                  targetType: 'club',
+                  targetId: clubId,
+                ));
+                userPrefsService.save(authService.currentAdmin?.id ?? '');
+                userPrefsService.save(requesterId);
+              }),
+            );
+          }
+
           return _NotificationCard(
             notification: n,
             timeLabel: _timeAgo(n.createdAt),
@@ -652,6 +707,192 @@ class _FollowRequestCard extends StatelessWidget {
                 alreadyHandled && userState.isFollowingUser(fromId)
                     ? 'You accepted this request.'
                     : 'You declined this request.',
+                style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Board Member Request Card ────────────────────────────────────────────────
+
+class _BoardMemberRequestCard extends StatelessWidget {
+  final AppNotification notification;
+  final String timeLabel;
+  final bool isRead;
+  final VoidCallback onApprove;
+  final VoidCallback onDecline;
+
+  const _BoardMemberRequestCard({
+    required this.notification,
+    required this.timeLabel,
+    required this.isRead,
+    required this.onApprove,
+    required this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fromId = notification.fromId ?? '';
+    final clubId = notification.targetId ?? '';
+    final requester = users.firstWhere((u) => u.id == fromId, orElse: () => users.first);
+    final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
+    final alreadyHandled = !userState.hasPendingBoardRequest(fromId, clubId);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isRead
+              ? AppColors.divider
+              : const Color(0xFF1565C0).withValues(alpha: 0.35),
+          width: isRead ? 0.5 : 1.5,
+        ),
+        boxShadow: isRead
+            ? []
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                UserAvatar(
+                  userId: requester.id,
+                  name: requester.name,
+                  size: 46,
+                  fontSize: 20,
+                  backgroundColor: const Color(0xFFE3F2FD),
+                  textColor: const Color(0xFF1565C0),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE3F2FD),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Board Request',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF1565C0),
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(timeLabel,
+                              style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          if (!isRead) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 7, height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF1565C0),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        notification.message,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.text,
+                          fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Club: ${club.name}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (!alreadyHandled) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: onApprove,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1565C0),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Approve',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: onDecline,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.secondaryText.withValues(alpha: 0.4)),
+                        ),
+                        child: const Text(
+                          'Decline',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: AppColors.secondaryText),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                club.boardMemberIds.contains(fromId)
+                    ? 'Approved — ${requester.name} is now a board member.'
+                    : 'This request was declined.',
                 style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
             ],

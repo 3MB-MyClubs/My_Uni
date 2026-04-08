@@ -6,7 +6,8 @@
       "Bash(flutter pub:*)",
       "Bash(export PATH=\"$PATH:$HOME/flutter/bin:/usr/local/flutter/bin\")",
       "Read(//Users/hakantuncay/**)",
-      "Bash(/Users/hakantuncay/flutter/bin/flutter pub:*)"
+      "Bash(/Users/hakantuncay/flutter/bin/flutter pub:*)",
+      "Bash(export PATH=\"$PATH:/Users/hakantuncay/development/flutter/bin\")"
     ]
   }
 }

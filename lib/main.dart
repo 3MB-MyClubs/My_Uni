@@ -13,6 +13,7 @@ import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
+import 'services/view_tracker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
@@ -20,6 +21,7 @@ void main() async {
   await notificationService.initialize();
   await userPrefsService.initialize();
   await contentStore.initialize();
+  await viewTracker.initialize();
   contentStore.applyToLists();
   // Restore any dynamic notifications that were generated at runtime.
   final dynNotifs = contentStore.loadDynamicNotifications();

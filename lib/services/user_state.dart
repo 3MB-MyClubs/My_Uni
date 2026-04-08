@@ -96,6 +96,42 @@ class UserState {
     contentStore.saveDynamicNotifications(dynamicNotifications);
   }
 
+  // ── Board member requests ─────────────────────────────────────────────────────
+
+  /// Pending board-member requests sent by this user, stored as "userId:clubId".
+  /// Removed when the request is approved or declined.
+  final Set<String> pendingBoardRequests = {};
+
+  bool hasPendingBoardRequest(String userId, String clubId) =>
+      pendingBoardRequests.contains('$userId:$clubId');
+
+  void sendBoardRequest(String userId, String clubId) =>
+      pendingBoardRequests.add('$userId:$clubId');
+
+  void removeBoardRequest(String userId, String clubId) =>
+      pendingBoardRequests.remove('$userId:$clubId');
+
+  // ── Board member cooldown ─────────────────────────────────────────────────────
+
+  /// Records when a board-member request was declined, keyed "userId:clubId".
+  /// Persisted so the cooldown survives app restarts.
+  final Map<String, DateTime> boardDeclinedAt = {};
+
+  void recordBoardDecline(String userId, String clubId) =>
+      boardDeclinedAt['$userId:$clubId'] = DateTime.now();
+
+  bool isBoardCooldownActive(String userId, String clubId) {
+    final dt = boardDeclinedAt['$userId:$clubId'];
+    if (dt == null) return false;
+    return DateTime.now().difference(dt).inDays < 60;
+  }
+
+  DateTime? boardCooldownEnds(String userId, String clubId) {
+    final dt = boardDeclinedAt['$userId:$clubId'];
+    if (dt == null) return null;
+    return dt.add(const Duration(days: 60));
+  }
+
   // ── Message requests ──────────────────────────────────────────────────────────
 
   /// Accepted message request pairs stored as "myId:theirId".

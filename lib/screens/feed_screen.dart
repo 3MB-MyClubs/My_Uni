@@ -6,6 +6,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
+import '../services/view_tracker.dart';
 import '../services/club_follow_helper.dart';
 import '../models/comment.dart';
 import '../models/like.dart';
@@ -398,11 +399,11 @@ class _FeedScreenState extends State<FeedScreen> {
       ));
     }
 
-    // Sort: unseen first (by newest story desc), then seen (by newest story asc = oldest)
+    // Sort: unseen first (newest → oldest), then seen (newest → oldest).
+    // Unseen always precede seen regardless of recency.
     result.sort((a, b) {
       if (a.seen != b.seen) return a.seen ? 1 : -1; // unseen before seen
-      if (!a.seen) return b.stories.first.postedAt.compareTo(a.stories.first.postedAt); // unseen: newest leftmost
-      return a.stories.first.postedAt.compareTo(b.stories.first.postedAt); // seen: oldest leftmost
+      return b.stories.first.postedAt.compareTo(a.stories.first.postedAt); // newest leftmost in both groups
     });
 
     return result;
@@ -1043,12 +1044,21 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
         if (status == AnimationStatus.completed) _nextStory();
       });
     _progressController.forward();
+    _recordCurrentView();
+  }
+
+  void _recordCurrentView() {
+    final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    if (_index < _stories.length) {
+      viewTracker.recordView(_stories[_index].id, userId);
+    }
   }
 
   void _nextStory() {
     if (_index < _stories.length - 1) {
       setState(() => _index++);
       _progressController.forward(from: 0);
+      _recordCurrentView();
     } else {
       Navigator.of(context).pop();
     }
@@ -1058,6 +1068,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
     if (_index > 0) {
       setState(() => _index--);
       _progressController.forward(from: 0);
+      _recordCurrentView();
     } else {
       _progressController.forward(from: 0);
     }
@@ -1108,6 +1119,15 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
         _progressController.forward(from: 0);
       }
     });
+  }
+
+  Future<void> _showViewersSheet(BuildContext context, String contentId, String title) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ViewersSheet(contentId: contentId, title: title),
+    );
   }
 
   String _timeAgoStory(DateTime dt) {
@@ -1283,6 +1303,41 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                       },
                     ),
 
+                  // Viewers bar (admin only — bottom of story)
+                  if (_isAdmin)
+                    Positioned(
+                      bottom: 0, left: 0, right: 0,
+                      child: GestureDetector(
+                        onTap: () {
+                          _progressController.stop();
+                          _showViewersSheet(context, _stories[_index].id, _stories[_index].text.isNotEmpty ? _stories[_index].text : 'Story')
+                              .then((_) => _progressController.forward());
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.remove_red_eye_outlined, color: Colors.white70, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${viewTracker.viewCount(_stories[_index].id)} viewer${viewTracker.viewCount(_stories[_index].id) == 1 ? '' : 's'}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.chevron_right, color: Colors.white54, size: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
                   // Tap left / right navigation
                   Row(
                     children: [
@@ -1294,6 +1349,100 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Viewers Sheet ────────────────────────────────────────────────────────────
+
+class _ViewersSheet extends StatelessWidget {
+  final String contentId;
+  final String title;
+
+  const _ViewersSheet({required this.contentId, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final viewerList = viewTracker.viewers(contentId);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      builder: (_, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 6),
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.remove_red_eye_outlined, color: AppColors.primaryRed, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${viewerList.length} viewer${viewerList.length == 1 ? '' : 's'}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.close, color: AppColors.secondaryText, size: 22),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // List
+            Expanded(
+              child: viewerList.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.visibility_off_outlined, color: AppColors.secondaryText, size: 40),
+                          SizedBox(height: 12),
+                          Text('No views yet', style: TextStyle(color: AppColors.secondaryText, fontSize: 14)),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: viewerList.length,
+                      separatorBuilder: (_, s) => const Divider(height: 1, indent: 60),
+                      itemBuilder: (_, i) {
+                        final user = viewerList[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: AppColors.primaryRed.withValues(alpha: 0.12),
+                            child: Text(
+                              user.name.isNotEmpty ? user.name[0] : '?',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed),
+                            ),
+                          ),
+                          title: Text(user.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.text)),
+                          subtitle: Text(user.email, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -1349,9 +1498,14 @@ void _openShareSheet(BuildContext context, String targetId, VoidCallback onShare
   );
 }
 
-/// True for club-admin users and the super admin.
-bool _isClubAdmin() =>
-    authService.currentUser?.role == 'admin' || authService.currentAdmin != null;
+/// True only when the current session belongs to an admin of [clubId].
+/// Ensures analytics and moderation controls are never shown for other clubs.
+bool _isAdminOfClub(String clubId) {
+  final admin = authService.currentAdmin;
+  if (admin == null) return false;
+  final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
+  return (club.adminUserIds as List).contains(admin.id);
+}
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
@@ -1381,6 +1535,9 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
           _heartController.reset();
         }
       });
+    // Record this user as having seen the post
+    final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    viewTracker.recordView(widget.post.id, userId);
   }
 
   @override
@@ -1426,6 +1583,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
     final isFollowed = userState.isFollowing(club.id);
+    final userId = authService.currentUser?.id ?? '';
+    final isPendingBoard = userState.hasPendingBoardRequest(userId, club.id);
     final badge = _trendingBadge(widget.score);
 
     return Container(
@@ -1457,7 +1616,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                                 overflow: TextOverflow.ellipsis),
                           ),
                           const SizedBox(width: 6),
-                          if (badge case final b?) b,
+                          // ignore: use_null_aware_elements
+                          if (badge != null) badge,
                         ],
                       ),
                       const SizedBox(height: 1),
@@ -1498,19 +1658,48 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: isFollowed ? Colors.transparent : AppColors.primaryRed,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isFollowed ? AppColors.secondaryText.withValues(alpha: 0.4) : AppColors.primaryRed),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isFollowed ? Colors.transparent : AppColors.primaryRed,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isFollowed
+                                ? AppColors.secondaryText.withValues(alpha: 0.4)
+                                : AppColors.primaryRed,
+                          ),
+                        ),
+                        child: Text(
+                          isFollowed ? 'Following' : 'Follow',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isFollowed ? AppColors.secondaryText : Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Text(isFollowed ? 'Following' : 'Follow',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isFollowed ? AppColors.secondaryText : Colors.white)),
-                  ),
+                    if (isPendingBoard) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.schedule_rounded, size: 10, color: Color(0xFF1565C0)),
+                          SizedBox(width: 3),
+                          Text(
+                            'Board request pending',
+                            style: TextStyle(fontSize: 9, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
                 IconButton(icon: const Icon(Icons.more_horiz, color: AppColors.secondaryText), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
               ],
@@ -1560,8 +1749,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             ),
           ),
 
-          // ── Engagement stats (club admin only) ──
-          if (_isClubAdmin()) ...[
+          // ── Engagement stats (own-club admin only) ──
+          if (_isAdminOfClub(widget.post.clubId)) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: _EngagementBar(
@@ -1569,6 +1758,13 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                 commenters: uniqueCommenters,
                 shares: shareCount,
                 score: widget.score,
+                views: viewTracker.viewCount(widget.post.id),
+                onViewTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => _ViewersSheet(contentId: widget.post.id, title: 'Post Viewers'),
+                ),
               ),
             ),
             const SizedBox(height: 4),
@@ -1593,7 +1789,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
               child: GestureDetector(
                 onTap: () => _openComments(context),
                 child: Text(
-                  _isClubAdmin()
+                  _isAdminOfClub(widget.post.clubId)
                       ? 'View all ${postComments.length} comment${postComments.length == 1 ? '' : 's'}'
                       : 'View comments',
                   style: const TextStyle(color: AppColors.secondaryText, fontSize: 12),
@@ -1626,7 +1822,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CommentsSheet(postId: widget.post.id),
+      builder: (_) => _CommentsSheet(postId: widget.post.id, clubId: widget.post.clubId),
     ).then((_) => setState(() {}));
   }
 }
@@ -1651,8 +1847,10 @@ class _EventCardState extends State<_EventCard> {
   @override
   void initState() {
     super.initState();
-    final userId = authService.currentUser?.id ?? '';
+    final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     _attending = widget.event.attendeeUserIds.contains(userId);
+    // Record this user as having seen the event
+    viewTracker.recordView(widget.event.id, userId);
   }
 
   void _toggleRsvp() {
@@ -1679,6 +1877,8 @@ class _EventCardState extends State<_EventCard> {
     final shareCount = postShareCount(widget.event.id);
     final uniqueAttendees = widget.event.attendeeUserIds.toSet().length;
     final isFollowed = userState.isFollowing(club.id);
+    final userId = authService.currentUser?.id ?? '';
+    final isPendingBoard = userState.hasPendingBoardRequest(userId, club.id);
     final badge = _trendingBadge(widget.score);
 
     final daysAway = dt.difference(DateTime.now()).inDays;
@@ -1723,19 +1923,48 @@ class _EventCardState extends State<_EventCard> {
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: isFollowed ? Colors.transparent : AppColors.primaryRed,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isFollowed ? AppColors.secondaryText.withValues(alpha: 0.4) : AppColors.primaryRed),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isFollowed ? Colors.transparent : AppColors.primaryRed,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isFollowed
+                                ? AppColors.secondaryText.withValues(alpha: 0.4)
+                                : AppColors.primaryRed,
+                          ),
+                        ),
+                        child: Text(
+                          isFollowed ? 'Following' : 'Follow',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isFollowed ? AppColors.secondaryText : Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
-                    child: Text(isFollowed ? 'Following' : 'Follow',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isFollowed ? AppColors.secondaryText : Colors.white)),
-                  ),
+                    if (isPendingBoard) ...[
+                      const SizedBox(height: 3),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.schedule_rounded, size: 10, color: Color(0xFF1565C0)),
+                          SizedBox(width: 3),
+                          Text(
+                            'Board request pending',
+                            style: TextStyle(fontSize: 9, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -1830,8 +2059,8 @@ class _EventCardState extends State<_EventCard> {
             ),
           ),
 
-          // ── Engagement stats (club admin only) ──
-          if (_isClubAdmin()) ...[
+          // ── Engagement stats (own-club admin only) ──
+          if (_isAdminOfClub(widget.event.clubId)) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: _EngagementBar(
@@ -1840,6 +2069,13 @@ class _EventCardState extends State<_EventCard> {
                 commenters: 0,
                 shares: shareCount,
                 score: widget.score,
+                views: viewTracker.viewCount(widget.event.id),
+                onViewTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => _ViewersSheet(contentId: widget.event.id, title: 'Event Viewers'),
+                ),
               ),
             ),
           ],
@@ -1878,7 +2114,9 @@ class _EngagementBar extends StatelessWidget {
   final String likesLabel;
   final int commenters;
   final int shares;
+  final int views;
   final double score;
+  final VoidCallback? onViewTap;
 
   const _EngagementBar({
     required this.likes,
@@ -1886,13 +2124,31 @@ class _EngagementBar extends StatelessWidget {
     required this.shares,
     required this.score,
     this.likesLabel = 'likes',
+    this.views = 0,
+    this.onViewTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        if (views > 0) ...[
+          GestureDetector(
+            onTap: onViewTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.remove_red_eye_outlined, size: 13, color: AppColors.secondaryText),
+                const SizedBox(width: 3),
+                Text('$views view${views == 1 ? '' : 's'}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText,
+                        decoration: TextDecoration.underline)),
+              ],
+            ),
+          ),
+        ],
         if (likes > 0) ...[
+          if (views > 0) const SizedBox(width: 10),
           const Icon(Icons.favorite, size: 13, color: Colors.pink),
           const SizedBox(width: 3),
           Text('$likes $likesLabel', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
@@ -2054,7 +2310,8 @@ class _ShareDest extends StatelessWidget {
 
 class _CommentsSheet extends StatefulWidget {
   final String postId;
-  const _CommentsSheet({required this.postId});
+  final String clubId;
+  const _CommentsSheet({required this.postId, required this.clubId});
 
   @override
   State<_CommentsSheet> createState() => _CommentsSheetState();
@@ -2094,7 +2351,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
           children: [
             Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 4, decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2))),
             Text(
-              _isClubAdmin() ? 'Comments (${postComments.length})' : 'Comments',
+              _isAdminOfClub(widget.clubId) ? 'Comments (${postComments.length})' : 'Comments',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             const Divider(),
@@ -2124,8 +2381,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                   Text(_timeAgo(c.createdAt), style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                                 ]),
                               ),
-                              // Admin-only delete button
-                              if (_isClubAdmin())
+                              // Admin-only delete button (own club only)
+                              if (_isAdminOfClub(widget.clubId))
                                 GestureDetector(
                                   onTap: () {
                                     comments.removeWhere((x) => x.id == c.id);

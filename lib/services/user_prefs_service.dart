@@ -31,6 +31,9 @@ class UserPrefsService {
       'pendingFollowRequests_$userId': s.pendingFollowRequests.toList(),
       'shownFollowNotice_$userId': s.shownFollowNotice.toList(),
       'acceptedMessageRequests_$userId': s.acceptedMessageRequests.toList(),
+      'pendingBoardRequests_$userId': s.pendingBoardRequests.toList(),
+      'boardDeclinedAt_$userId': s.boardDeclinedAt.map(
+          (k, v) => MapEntry(k, v.toIso8601String())),
       // privateUserIds is global (shared across sessions, not per-user).
       'privateUserIds': s.privateUserIds.toList(),
     });
@@ -65,6 +68,17 @@ class UserPrefsService {
 
     _restoreSet(s.acceptedMessageRequests,
         _box.get('acceptedMessageRequests_$userId'));
+
+    _restoreSet(s.pendingBoardRequests,
+        _box.get('pendingBoardRequests_$userId'));
+
+    final storedDeclined = _box.get('boardDeclinedAt_$userId');
+    if (storedDeclined != null) {
+      s.boardDeclinedAt.clear();
+      (storedDeclined as Map).forEach((k, v) {
+        s.boardDeclinedAt[k as String] = DateTime.parse(v as String);
+      });
+    }
 
     final storedPrivate = _box.get('privateUserIds');
     if (storedPrivate != null) {

@@ -103,6 +103,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   @override
   Widget build(BuildContext context) {
     final isFollowing = userState.isFollowing(widget.club.id);
+    final userId = authService.currentUser?.id ?? '';
+    final isPendingBoard = userState.hasPendingBoardRequest(userId, widget.club.id);
     final memberCount = clubMemberCount(widget.club.id);
 
     return Scaffold(
@@ -195,29 +197,48 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                       _StatCell(value: '${_clubEvents.length}', label: 'Events'),
                       const Spacer(),
                       // Follow button
-                      GestureDetector(
-                        onTap: () => handleFollowTap(context, widget.club.id, () => setState(() {})),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isFollowing ? Colors.transparent : AppColors.primaryRed,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isFollowing
-                                  ? AppColors.secondaryText.withValues(alpha: 0.5)
-                                  : AppColors.primaryRed,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          GestureDetector(
+                            onTap: () => handleFollowTap(context, widget.club.id, () => setState(() {})),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isFollowing ? Colors.transparent : AppColors.primaryRed,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isFollowing
+                                      ? AppColors.secondaryText.withValues(alpha: 0.5)
+                                      : AppColors.primaryRed,
+                                ),
+                              ),
+                              child: Text(
+                                isFollowing ? 'Following' : 'Follow',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: isFollowing ? AppColors.secondaryText : Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                          child: Text(
-                            isFollowing ? 'Following' : 'Follow',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: isFollowing ? AppColors.secondaryText : Colors.white,
+                          if (isPendingBoard) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.schedule_rounded, size: 11, color: Color(0xFF1565C0)),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Board request pending',
+                                  style: TextStyle(fontSize: 10, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
