@@ -111,27 +111,6 @@ class UserState {
   void removeBoardRequest(String userId, String clubId) =>
       pendingBoardRequests.remove('$userId:$clubId');
 
-  // ── Board member cooldown ─────────────────────────────────────────────────────
-
-  /// Records when a board-member request was declined, keyed "userId:clubId".
-  /// Persisted so the cooldown survives app restarts.
-  final Map<String, DateTime> boardDeclinedAt = {};
-
-  void recordBoardDecline(String userId, String clubId) =>
-      boardDeclinedAt['$userId:$clubId'] = DateTime.now();
-
-  bool isBoardCooldownActive(String userId, String clubId) {
-    final dt = boardDeclinedAt['$userId:$clubId'];
-    if (dt == null) return false;
-    return DateTime.now().difference(dt).inDays < 60;
-  }
-
-  DateTime? boardCooldownEnds(String userId, String clubId) {
-    final dt = boardDeclinedAt['$userId:$clubId'];
-    if (dt == null) return null;
-    return dt.add(const Duration(days: 60));
-  }
-
   // ── Message requests ──────────────────────────────────────────────────────────
 
   /// Accepted message request pairs stored as "myId:theirId".

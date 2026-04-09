@@ -32,8 +32,6 @@ class UserPrefsService {
       'shownFollowNotice_$userId': s.shownFollowNotice.toList(),
       'acceptedMessageRequests_$userId': s.acceptedMessageRequests.toList(),
       'pendingBoardRequests_$userId': s.pendingBoardRequests.toList(),
-      'boardDeclinedAt_$userId': s.boardDeclinedAt.map(
-          (k, v) => MapEntry(k, v.toIso8601String())),
       // privateUserIds is global (shared across sessions, not per-user).
       'privateUserIds': s.privateUserIds.toList(),
     });
@@ -72,14 +70,6 @@ class UserPrefsService {
     _restoreSet(s.pendingBoardRequests,
         _box.get('pendingBoardRequests_$userId'));
 
-    final storedDeclined = _box.get('boardDeclinedAt_$userId');
-    if (storedDeclined != null) {
-      s.boardDeclinedAt.clear();
-      (storedDeclined as Map).forEach((k, v) {
-        s.boardDeclinedAt[k as String] = DateTime.parse(v as String);
-      });
-    }
-
     final storedPrivate = _box.get('privateUserIds');
     if (storedPrivate != null) {
       s.privateUserIds
@@ -88,6 +78,19 @@ class UserPrefsService {
       // Always keep the demo default.
       s.privateUserIds.add('u3');
     }
+  }
+
+  /// Removes a specific board request entry from the stored prefs of [userId]
+  /// without overwriting other fields (used when declining a request while
+  /// logged in as a different user).
+  Future<void> removeBoardRequest(String userId, String clubId) async {
+    if (!_initialized) return;
+    final key = 'pendingBoardRequests_$userId';
+    final raw = _box.get(key);
+    final existing =
+        raw != null ? List<String>.from(raw as List) : <String>[];
+    existing.remove('$userId:$clubId');
+    await _box.put(key, existing);
   }
 
   void _restoreSet(Set<String> target, dynamic raw,

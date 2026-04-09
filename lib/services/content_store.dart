@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import '../models/board_member_request.dart';
 import '../models/comment.dart';
 import '../models/event.dart';
 import '../models/like.dart';
@@ -80,6 +81,63 @@ class ContentStore {
     return (raw as List)
         .map((m) => AppNotification.fromMap(Map<String, dynamic>.from(m as Map)))
         .toList();
+  }
+
+  // ── Board member requests ────────────────────────────────────────────────────
+
+  Future<void> saveBoardMemberRequests() async => _box.put(
+      'boardRequests',
+      boardMemberRequests.map((r) => r.toMap()).toList());
+
+  void loadBoardMemberRequests() {
+    final raw = _box.get('boardRequests');
+    if (raw == null) return;
+    boardMemberRequests
+      ..clear()
+      ..addAll((raw as List).map(
+          (m) => BoardMemberRequest.fromMap(Map<String, dynamic>.from(m as Map))));
+  }
+
+  // ── Club board member IDs ────────────────────────────────────────────────────
+  // Only the mutable boardMemberIds list is persisted; static club data stays
+  // in mock_data.dart as the source of truth for names/descriptions etc.
+
+  Future<void> saveBoardMemberIds() async {
+    final map = <String, List<String>>{};
+    for (final club in clubs) {
+      map[club.id] = List<String>.from(club.boardMemberIds);
+    }
+    await _box.put('boardMemberIds', map);
+  }
+
+  void loadBoardMemberIds() {
+    final raw = _box.get('boardMemberIds');
+    if (raw == null) return;
+    final map = Map<String, dynamic>.from(raw as Map);
+    for (final club in clubs) {
+      final stored = map[club.id];
+      if (stored != null) {
+        club.boardMemberIds
+          ..clear()
+          ..addAll(List<String>.from(stored as List));
+      }
+    }
+  }
+
+  // ── Save everything at once ───────────────────────────────────────────────────
+
+  Future<void> saveAll(List<AppNotification> dynamicNotifs) async {
+    await Future.wait([
+      saveNewsPosts(),
+      saveEvents(),
+      saveClubStories(),
+      saveComments(),
+      saveLikes(),
+      saveShares(),
+      saveDynamicNotifications(dynamicNotifs),
+      saveBoardMemberRequests(),
+      saveBoardMemberIds(),
+    ]);
   }
 }
 

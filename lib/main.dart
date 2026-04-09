@@ -23,6 +23,8 @@ void main() async {
   await contentStore.initialize();
   await viewTracker.initialize();
   contentStore.applyToLists();
+  contentStore.loadBoardMemberRequests();
+  contentStore.loadBoardMemberIds();
   // Restore any dynamic notifications that were generated at runtime.
   final dynNotifs = contentStore.loadDynamicNotifications();
   if (dynNotifs != null) {
@@ -68,6 +70,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void _savePrefs() {
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (uid != null) userPrefsService.save(uid);
+    contentStore.saveAll(userState.dynamicNotifications);
   }
 
   void _onLogin() {

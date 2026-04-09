@@ -9,6 +9,7 @@ import '../models/subscription.dart';
 import '../models/notification.dart';
 import '../models/app_admin.dart';
 import '../models/message.dart';
+import '../models/board_member_request.dart';
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,12 @@ final clubs = [
   Club(id: 'c42', name: 'HAKANS_CLUB',                               description: 'Hakan\'s personal club.',                                                                                                           adminUserIds: ['cadmin1']),
 ];
 
+
+// ─── Board Member Requests ────────────────────────────────────────────────────
+
+/// All board-member applications, past and present.
+/// Persisted via ContentStore; starts empty (no seed requests needed).
+final boardMemberRequests = <BoardMemberRequest>[];
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 

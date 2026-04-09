@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -23,7 +24,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   final Set<String> _read = {};
 
   int get _unreadCount {
-    final all = [...notifications, ...userState.dynamicNotifications];
+    final currentId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final all = [...notifications, ...userState.dynamicNotifications]
+        .where((n) => n.userId == currentId);
     return all.where((n) => !_read.contains(n.id)).length;
   }
 
@@ -113,7 +116,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final all = [...notifications, ...userState.dynamicNotifications];
+    // Only show notifications addressed to the currently logged-in user/admin.
+    final currentId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final all = [...notifications, ...userState.dynamicNotifications]
+        .where((n) => n.userId == currentId)
+        .toList();
     final sorted = all..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final today     = sorted.where((n) => _isToday(n.createdAt)).toList();
     final yesterday = sorted.where((n) => _isYesterday(n.createdAt)).toList();
@@ -270,19 +277,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 if (userState.unreadNotifications > 0) userState.unreadNotifications--;
                 final requesterId = n.fromId!;
                 final clubId = n.targetId!;
-                // Add to boardMemberIds
                 final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
+
+                // Guard: requester must not already be a board member elsewhere.
+                final alreadyIn = clubs
+                    .where((c) => c.id != clubId && c.boardMemberIds.contains(requesterId))
+                    .map((c) => c.name)
+                    .firstOrNull;
+                if (alreadyIn != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(
+                        '${club.name}: this user is already a board member of $alreadyIn.'),
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                  return;
+                }
+
+                // Grant board membership.
                 if (!club.boardMemberIds.contains(requesterId)) {
                   club.boardMemberIds.add(requesterId);
                 }
-                // Also follow the club as a subscriber
                 userState.pendingBoardRequests.remove('$requesterId:$clubId');
-                // Notify the requester
-                final clubName = club.name;
+
+                // Update the stored request record.
+                for (final r in boardMemberRequests) {
+                  if (r.userId == requesterId && r.clubId == clubId && r.status == 'pending') {
+                    r.status = 'approved';
+                  }
+                }
+                contentStore.saveBoardMemberRequests();
+                contentStore.saveBoardMemberIds();
+
                 userState.addMessageNotification(AppNotification(
                   id: 'board_approved_${requesterId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}',
                   userId: requesterId,
-                  message: 'Your board member request for $clubName was approved!',
+                  message: 'Your board member request for ${club.name} was approved!',
                   createdAt: DateTime.now(),
                   targetType: 'club',
                   targetId: clubId,
@@ -294,23 +323,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 if (userState.unreadNotifications > 0) userState.unreadNotifications--;
                 final requesterId = n.fromId!;
                 final clubId = n.targetId!;
+                // Remove from session state (if requester is currently logged in).
                 userState.pendingBoardRequests.remove('$requesterId:$clubId');
-                // Start the 2-month cooldown
-                userState.recordBoardDecline(requesterId, clubId);
-                // Notify the requester
+
+                // Update the stored request record.
+                for (final r in boardMemberRequests) {
+                  if (r.userId == requesterId && r.clubId == clubId && r.status == 'pending') {
+                    r.status = 'declined';
+                  }
+                }
+                contentStore.saveBoardMemberRequests();
+                // Clear the requester's persisted pending entry so they can reapply.
+                userPrefsService.removeBoardRequest(requesterId, clubId);
+
                 final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-                final reapplyDate = userState.boardCooldownEnds(requesterId, clubId)!;
-                final dateStr = '${reapplyDate.day}/${reapplyDate.month}/${reapplyDate.year}';
                 userState.addMessageNotification(AppNotification(
                   id: 'board_declined_${requesterId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}',
                   userId: requesterId,
-                  message: 'Your board member request for ${club.name} was not approved. You may reapply on $dateStr.',
+                  message: 'Your board member request for ${club.name} was declined. You may reapply at any time.',
                   createdAt: DateTime.now(),
                   targetType: 'club',
                   targetId: clubId,
                 ));
                 userPrefsService.save(authService.currentAdmin?.id ?? '');
-                userPrefsService.save(requesterId);
               }),
             );
           }
@@ -740,7 +775,20 @@ class _BoardMemberRequestCard extends StatelessWidget {
     final clubId = notification.targetId ?? '';
     final requester = users.firstWhere((u) => u.id == fromId, orElse: () => users.first);
     final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-    final alreadyHandled = !userState.hasPendingBoardRequest(fromId, clubId);
+    // Derive handled state from the persisted BoardMemberRequest records —
+    // never from userState, which is per-session and not visible across logins.
+    final alreadyHandled = !boardMemberRequests.any(
+        (r) => r.userId == fromId && r.clubId == clubId && r.status == 'pending');
+
+    // Authorised = the currently logged-in admin OR regular user is listed as an
+    // admin or board member of this specific club.
+    final currentAdminId = authService.currentAdmin?.id ?? '';
+    final currentUserId  = authService.currentUser?.id  ?? '';
+    final isAuthorized =
+        club.adminUserIds.contains(currentAdminId) ||
+        club.boardMemberIds.contains(currentAdminId) ||
+        club.adminUserIds.contains(currentUserId)  ||
+        club.boardMemberIds.contains(currentUserId);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -840,7 +888,7 @@ class _BoardMemberRequestCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (!alreadyHandled) ...[
+            if (!alreadyHandled && isAuthorized) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -886,6 +934,12 @@ class _BoardMemberRequestCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ] else if (!alreadyHandled && !isAuthorized) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Only this club\'s admins can approve or decline requests.',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
             ] else ...[
               const SizedBox(height: 8),

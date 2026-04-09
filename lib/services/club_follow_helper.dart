@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import '../models/board_member_request.dart';
 import '../models/notification.dart';
 import 'app_colors.dart';
 import 'auth_service.dart';
+import 'content_store.dart';
 import 'mock_data.dart';
 import 'user_state.dart';
 import 'user_prefs_service.dart';
 
-/// Returns true when the currently logged-in person is a board member.
-bool get _isBoardMember {
-  final admin = authService.currentAdmin;
-  if (admin != null && admin.id != appAdmin.id) return true;
-  final userId = authService.currentUser?.id;
-  if (userId == null) return false;
-  return clubs.any((c) => c.boardMemberIds.contains(userId));
+/// Returns the clubId where [userId] is already a board member, or null.
+String? _existingBoardClub(String userId) {
+  try {
+    return clubs.firstWhere((c) => c.boardMemberIds.contains(userId)).id;
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Entry point: handles a follow/unfollow tap on a club.
@@ -55,54 +57,7 @@ Future<void> _joinAsIndividual(
   String clubId,
   VoidCallback onChanged,
 ) async {
-  // Board members are limited to one club — ask to switch.
-  if (_isBoardMember) {
-    final currentId = userState.activeClubId;
-    if (currentId != null && currentId != clubId) {
-      final currentName =
-          clubs.firstWhere((c) => c.id == currentId, orElse: () => clubs.first).name;
-      final newName =
-          clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first).name;
-
-      if (!context.mounted) return;
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Switch Club?',
-              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-          content: Text(
-            'As a board member you can only be active in one club.\n\nLeave $currentName and join $newName?',
-            style: const TextStyle(color: AppColors.secondaryText, height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Switch'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-      userState.joinClub(clubId, exclusive: true);
-      onChanged();
-      return;
-    }
-    userState.joinClub(clubId, exclusive: true);
-    onChanged();
-    return;
-  }
-
-  // Regular student — join freely.
+  // Individual follow is always unrestricted — no exclusive constraint.
   userState.joinClub(clubId);
   onChanged();
 }
@@ -117,8 +72,10 @@ Future<void> _requestBoardMembership(
   final userId = authService.currentUser?.id ?? '';
   if (userId.isEmpty) return;
 
-  // Already pending?
-  if (userState.hasPendingBoardRequest(userId, clubId)) {
+  // Already pending? — check the persistent list, not session state.
+  final alreadyPending = boardMemberRequests.any(
+      (r) => r.userId == userId && r.clubId == clubId && r.status == 'pending');
+  if (alreadyPending) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -130,14 +87,12 @@ Future<void> _requestBoardMembership(
     return;
   }
 
-  // Cooldown active?
-  if (userState.isBoardCooldownActive(userId, clubId)) {
-    final endsAt = userState.boardCooldownEnds(userId, clubId)!;
-    final dateStr = '${endsAt.day}/${endsAt.month}/${endsAt.year}';
+  // Admins cannot apply for board membership — they already have elevated access.
+  if (authService.currentAdmin != null) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('You can reapply for board membership on $dateStr.'),
+        const SnackBar(
+          content: Text('Club admins cannot apply for board membership.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -145,51 +100,81 @@ Future<void> _requestBoardMembership(
     return;
   }
 
-  final userName = authService.currentUser?.name ?? 'Someone';
+  // Already a board member of another club?
+  final existingClubId = _existingBoardClub(userId);
+  if (existingClubId != null && existingClubId != clubId) {
+    final existingName =
+        clubs.firstWhere((c) => c.id == existingClubId, orElse: () => clubs.first).name;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You are already a board member of $existingName. '
+              'You can only hold board status in one club at a time.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return;
+  }
+
+  final user = authService.currentUser;
+  final userName = user?.name ?? 'Someone';
+  final userEmail = user?.email ?? '';
   final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
 
-  // Find the club admin(s) — send a notification to the first admin found.
-  final adminId = club.adminUserIds.isNotEmpty ? club.adminUserIds.first : null;
-  if (adminId == null) {
-    // No admin registered — fall back to immediate follow as individual.
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${club.name} has no admin yet. Joined as individual follower.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-    userState.joinClub(clubId);
-    onChanged();
-    return;
-  }
+  final now = DateTime.now();
+  final ts = now.millisecondsSinceEpoch;
 
-  // Record the pending request.
+  // Persist a full BoardMemberRequest record — always pending until manually reviewed.
+  final request = BoardMemberRequest(
+    id: 'bmr_${userId}_${clubId}_$ts',
+    userId: userId,
+    userName: userName,
+    userEmail: userEmail,
+    clubId: clubId,
+    requestedAt: now,
+    status: 'pending',
+  );
+  boardMemberRequests.add(request);
+  contentStore.saveBoardMemberRequests();
+
+  // Record the pending request in user state.
   userState.sendBoardRequest(userId, clubId);
 
-  // Create a notification for the club admin.
-  final notifId = 'board_req_${userId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}';
-  final notif = AppNotification(
-    id: notifId,
-    userId: adminId,           // shown in the admin's alerts
-    message: '$userName wants to join ${club.name} as a board member.',
-    createdAt: DateTime.now(),
-    targetType: 'board_member_request',
-    targetId: clubId,          // which club
-    fromId: userId,            // who requested
-  );
-  userState.addFollowRequestNotification(notif);
+  // Notify every club admin and existing board member.
+  // If no one is registered yet, the request stays pending until an admin is assigned.
+  final recipientIds = {
+    ...club.adminUserIds,
+    ...club.boardMemberIds,
+  }..remove(userId); // don't notify the requester themselves
 
-  final myId = authService.currentUser?.id ?? '';
+  for (final recipientId in recipientIds) {
+    final notif = AppNotification(
+      id: 'board_req_${userId}_${clubId}_${recipientId}_$ts',
+      userId: recipientId,
+      message: '$userName wants to join ${club.name} as a board member.',
+      createdAt: now,
+      targetType: 'board_member_request',
+      targetId: clubId,
+      fromId: userId,
+    );
+    userState.addFollowRequestNotification(notif);
+  }
+
+  final myId = user?.id ?? '';
   if (myId.isNotEmpty) userPrefsService.save(myId);
 
-  onChanged(); // update button to "Pending"
+  onChanged();
 
   if (context.mounted) {
+    final hasAdmin = club.adminUserIds.isNotEmpty;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Board member request sent to ${club.name}.'),
+        content: Text(
+          hasAdmin
+              ? 'Board member request sent to ${club.name}.'
+              : 'Your request for ${club.name} is pending — it will be reviewed once an admin is assigned.',
+        ),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFF2E7D32),
       ),
@@ -208,12 +193,8 @@ class _FollowChoiceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-    final userId = authService.currentUser?.id ?? '';
-    final cooldownActive = userId.isNotEmpty && userState.isBoardCooldownActive(userId, clubId);
-    final cooldownEnds = cooldownActive ? userState.boardCooldownEnds(userId, clubId) : null;
-    final cooldownStr = cooldownEnds != null
-        ? '${cooldownEnds.day}/${cooldownEnds.month}/${cooldownEnds.year}'
-        : '';
+    // Admins cannot apply for board membership.
+    final isAdmin = authService.currentAdmin != null;
 
     return Container(
       decoration: const BoxDecoration(
@@ -261,29 +242,21 @@ class _FollowChoiceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Board member card — grayed out if cooldown is active
+          // Board member card — hidden for admins, always available for normal users
           _ChoiceCard(
             icon: Icons.shield_outlined,
-            iconColor: cooldownActive
-                ? AppColors.secondaryText
-                : const Color(0xFF1565C0),
-            bgColor: cooldownActive
-                ? AppColors.divider
-                : const Color(0xFFE3F2FD),
+            iconColor: isAdmin ? AppColors.secondaryText : const Color(0xFF1565C0),
+            bgColor: isAdmin ? AppColors.divider : const Color(0xFFE3F2FD),
             title: 'Board Member',
-            subtitle: cooldownActive
-                ? 'You can reapply for board membership on $cooldownStr.'
+            subtitle: isAdmin
+                ? 'Club admins already have elevated access and cannot apply for board membership.'
                 : 'Request elevated access to help manage the club. '
                     'Requires approval from the club admin.',
-            badge: cooldownActive ? 'Cooldown active' : 'Requires approval',
-            badgeColor: cooldownActive
-                ? AppColors.secondaryText
-                : const Color(0xFF1565C0),
-            badgeBgColor: cooldownActive
-                ? AppColors.divider
-                : const Color(0xFFE3F2FD),
-            disabled: cooldownActive,
-            onTap: cooldownActive
+            badge: isAdmin ? 'Not available' : 'Requires approval',
+            badgeColor: isAdmin ? AppColors.secondaryText : const Color(0xFF1565C0),
+            badgeBgColor: isAdmin ? AppColors.divider : const Color(0xFFE3F2FD),
+            disabled: isAdmin,
+            onTap: isAdmin
                 ? () {}
                 : () => Navigator.pop(context, _FollowChoice.boardMember),
           ),

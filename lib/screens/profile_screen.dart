@@ -2,12 +2,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/user_avatar.dart';
+import 'club_profile_screen.dart';
 import 'settings_screen.dart';
+import 'user_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onLogout;
@@ -358,70 +362,214 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMyClubsSection(List myClubs) {
-    return Container(
-      color: AppColors.card,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'My Clubs',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
-          ),
-          const SizedBox(height: 12),
-          myClubs.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    'You haven\'t followed any clubs yet. Explore and follow clubs to see them here.',
-                    style: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
-                  ),
-                )
-              : SizedBox(
-                  height: 90,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: myClubs.length,
-                    separatorBuilder: (context, i) => const SizedBox(width: 16),
-                    itemBuilder: (context, i) {
-                      final club = myClubs[i];
-                      final color = _clubColor(i);
-                      return Column(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: color.withValues(alpha: 0.3)),
+    // Find the club this admin manages (if any) to show board members inline.
+    final adminId = authService.currentAdmin?.id ?? '';
+    final Club? managedClub = adminId.isNotEmpty
+        ? clubs.cast<Club?>().firstWhere(
+            (c) => c!.adminUserIds.contains(adminId),
+            orElse: () => null)
+        : null;
+    final boardMembers = managedClub != null
+        ? users.where((u) => managedClub.boardMemberIds.contains(u.id)).toList()
+        : <dynamic>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── My Clubs ──
+        Container(
+          color: AppColors.card,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'My Clubs',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
+              ),
+              const SizedBox(height: 12),
+              myClubs.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        "You haven't followed any clubs yet. Explore and follow clubs to see them here.",
+                        style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                      ),
+                    )
+                  : SizedBox(
+                      height: 90,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: myClubs.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 16),
+                        itemBuilder: (ctx, i) {
+                          final club = myClubs[i];
+                          final color = _clubColor(i);
+                          return GestureDetector(
+                            onTap: () => Navigator.push(
+                              ctx,
+                              MaterialPageRoute(
+                                builder: (_) => ClubProfileScreen(club: club, color: color),
+                              ),
+                            ).then((_) => setState(() {})),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: color.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      club.name[0],
+                                      style: TextStyle(
+                                          fontSize: 22, fontWeight: FontWeight.bold, color: color),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                SizedBox(
+                                  width: 60,
+                                  child: Text(
+                                    club.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11, color: AppColors.text),
+                                  ),
+                                ),
+                              ],
                             ),
-                            child: Center(
-                              child: Text(
-                                club.name[0],
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+                          );
+                        },
+                      ),
+                    ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+
+        // ── Board Members (visible when this user manages a club) ──
+        if (managedClub != null) ...[
+          const Divider(height: 1),
+          Container(
+            color: AppColors.card,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row — taps into the club's Board tab
+                GestureDetector(
+                  onTap: () {
+                    final idx = clubs.indexOf(managedClub);
+                    final color = _clubColor(idx < 0 ? 0 : idx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ClubProfileScreen(club: managedClub, color: color),
+                      ),
+                    ).then((_) => setState(() {}));
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(Icons.shield_outlined,
+                          size: 18, color: Color(0xFF1565C0)),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Board Members',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE3F2FD),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${managedClub.boardMemberIds.length}',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1565C0)),
+                        ),
+                      ),
+                      const Spacer(),
+                      const Icon(Icons.chevron_right_rounded,
+                          size: 18, color: AppColors.secondaryText),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (boardMembers.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'No board members yet. Approved requests will appear here.',
+                      style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                    ),
+                  )
+                else
+                  ...boardMembers.map((u) => Column(
+                        children: [
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => UserProfileScreen(user: u)),
+                            ),
+                            leading: UserAvatar(
+                              userId: u.id,
+                              name: u.name,
+                              size: 44,
+                              fontSize: 18,
+                              backgroundColor:
+                                  const Color(0xFF1565C0).withValues(alpha: 0.12),
+                              textColor: const Color(0xFF1565C0),
+                            ),
+                            title: Text(u.name,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.text)),
+                            subtitle: Text(u.email,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.secondaryText)),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE3F2FD),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Board',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1565C0)),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          SizedBox(
-                            width: 60,
-                            child: Text(
-                              club.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, color: AppColors.text),
-                            ),
-                          ),
+                          const Divider(height: 1, indent: 60),
                         ],
-                      );
-                    },
-                  ),
-                ),
-          const SizedBox(height: 12),
+                      )),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 

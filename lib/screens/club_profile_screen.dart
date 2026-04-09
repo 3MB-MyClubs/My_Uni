@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/club_follow_helper.dart';
+import '../services/content_store.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
@@ -28,7 +29,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -104,7 +105,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   Widget build(BuildContext context) {
     final isFollowing = userState.isFollowing(widget.club.id);
     final userId = authService.currentUser?.id ?? '';
-    final isPendingBoard = userState.hasPendingBoardRequest(userId, widget.club.id);
+    // Derive state from the persistent list — stays correct across sessions.
+    final isPendingBoard = userId.isNotEmpty &&
+        boardMemberRequests.any((r) =>
+            r.userId == userId &&
+            r.clubId == widget.club.id &&
+            r.status == 'pending');
+    final isBoardMember =
+        userId.isNotEmpty && widget.club.boardMemberIds.contains(userId);
     final memberCount = clubMemberCount(widget.club.id);
 
     return Scaffold(
@@ -201,7 +209,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           GestureDetector(
-                            onTap: () => handleFollowTap(context, widget.club.id, () => setState(() {})),
+                            onTap: () => isBoardMember
+                                ? setState(() => userState.toggleFollow(widget.club.id))
+                                : handleFollowTap(context, widget.club.id, () => setState(() {})),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -249,6 +259,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     style: const TextStyle(
                         fontSize: 13, color: AppColors.secondaryText, height: 1.5),
                   ),
+
                 ],
               ),
             ),
@@ -266,7 +277,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 tabs: const [
                   Tab(text: 'Posts'),
                   Tab(text: 'Events'),
-                  Tab(text: 'Collaborations'),
+                  Tab(text: 'Collabs'),
+                  Tab(text: 'Board'),
                 ],
               ),
             ),
@@ -284,6 +296,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               clubColor: widget.color,
               timeAgo: _timeAgo,
             ),
+            _BoardTab(club: widget.club),
           ],
         ),
       ),
@@ -797,10 +810,12 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
       _searchController.clear();
       _query = '';
     });
+    contentStore.saveBoardMemberIds();
   }
 
   void _removeMember(String userId) {
     setState(() => widget.club.boardMemberIds.remove(userId));
+    contentStore.saveBoardMemberIds();
   }
 
   @override
@@ -991,6 +1006,133 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── Board Tab ────────────────────────────────────────────────────────────────
+
+class _BoardTab extends StatelessWidget {
+  final Club club;
+  const _BoardTab({required this.club});
+
+  @override
+  Widget build(BuildContext context) {
+    final members = users.where((u) => club.boardMemberIds.contains(u.id)).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header banner
+        Container(
+          width: double.infinity,
+          color: AppColors.card,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                'Board Members',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${members.length}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1565C0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: members.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shield_outlined,
+                          size: 48, color: AppColors.secondaryText),
+                      SizedBox(height: 12),
+                      Text(
+                        'No board members yet.',
+                        style: TextStyle(
+                            fontSize: 15, color: AppColors.secondaryText),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Approved requests will appear here.',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.secondaryText),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.only(top: 4, bottom: 80),
+                  itemCount: members.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(height: 1, indent: 72),
+                  itemBuilder: (ctx, i) {
+                    final u = members[i];
+                    return ListTile(
+                      onTap: () => Navigator.push(
+                        ctx,
+                        MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: u)),
+                      ),
+                      leading: UserAvatar(
+                        userId: u.id,
+                        name: u.name,
+                        size: 44,
+                        fontSize: 18,
+                        backgroundColor:
+                            const Color(0xFF1565C0).withValues(alpha: 0.12),
+                        textColor: const Color(0xFF1565C0),
+                      ),
+                      title: Text(u.name,
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text)),
+                      subtitle: Text(u.email,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.secondaryText)),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE3F2FD),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Board',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1565C0)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
