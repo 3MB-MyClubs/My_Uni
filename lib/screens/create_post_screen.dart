@@ -43,6 +43,42 @@ Widget buildPostBanner({
   required String fallbackLetter,
   double height = 200,
 }) {
+  // Network image (Picsum / any https URL)
+  if (imagePath != null && imagePath.startsWith('https://')) {
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: ClipRRect(
+        child: Image.network(
+          imagePath,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: height,
+          loadingBuilder: (_, child, progress) => progress == null
+              ? child
+              : Container(
+                  width: double.infinity,
+                  height: height,
+                  color: fallbackColor.withValues(alpha: 0.12),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white54),
+                  ),
+                ),
+          errorBuilder: (ctx, e, _) => Container(
+            width: double.infinity,
+            height: height,
+            color: fallbackColor.withValues(alpha: 0.18),
+            child: Center(
+              child: Icon(Icons.broken_image_outlined,
+                  color: fallbackColor.withValues(alpha: 0.4), size: 40),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Gallery photo — interactive (pan / pinch-to-zoom)
   if (imagePath != null && !imagePath.startsWith('tpl:')) {
     return SizedBox(

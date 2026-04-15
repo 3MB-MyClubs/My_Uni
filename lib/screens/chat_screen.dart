@@ -1,8 +1,23 @@
 import 'package:flutter/material.dart';
 import '../models/message.dart';
+import '../models/news_post.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
+import '../services/mock_data.dart';
+import 'create_post_screen.dart' show buildPostBanner;
+import 'post_detail_screen.dart';
+
+// Club color palette — same as feed_screen / notifications_screen
+const List<Color> _chatClubColors = [
+  Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+  Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+];
+
+Color _colorForClubId(String clubId) {
+  final idx = clubs.indexWhere((c) => c.id == clubId);
+  return _chatClubColors[(idx < 0 ? 0 : idx) % _chatClubColors.length];
+}
 
 class ChatScreen extends StatefulWidget {
   final String otherUserId;
@@ -38,7 +53,6 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _loading = true);
     _conversation =
         messageService.getConversation(_myId, widget.otherUserId);
-    // Mark messages from the other user as read
     await messageService.markAsRead(_myId, widget.otherUserId);
     setState(() => _loading = false);
   }
@@ -55,7 +69,6 @@ class _ChatScreenState extends State<ChatScreen> {
       sentAt: DateTime.now(),
     );
 
-    // Save to persistent storage and mark conversation as read
     messageService.saveMessage(msg);
     messageService.markAsRead(_myId, widget.otherUserId);
 
@@ -184,6 +197,15 @@ class _ChatScreenState extends State<ChatScreen> {
                         itemBuilder: (context, i) {
                           final msg = _conversation[i];
                           final isMe = msg.senderId == _myId;
+                          if (msg.content.startsWith('kupost:')) {
+                            final postId =
+                                msg.content.substring('kupost:'.length);
+                            return _SharedPostBubble(
+                              postId: postId,
+                              isMe: isMe,
+                              sentAt: msg.sentAt,
+                            );
+                          }
                           return _MessageBubble(message: msg, isMe: isMe);
                         },
                       ),
@@ -194,6 +216,226 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
+// ─── Shared-post bubble ───────────────────────────────────────────────────────
+
+class _SharedPostBubble extends StatelessWidget {
+  final String postId;
+  final bool isMe;
+  final DateTime sentAt;
+
+  const _SharedPostBubble({
+    required this.postId,
+    required this.isMe,
+    required this.sentAt,
+  });
+
+  String _timeLabel(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${dt.day}/${dt.month}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Look up post
+    NewsPost? post;
+    try {
+      post = newsPosts.firstWhere((p) => p.id == postId);
+    } catch (_) {}
+
+    if (post == null) {
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Text('Post no longer available',
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+        ),
+      );
+    }
+
+    String clubName = 'Unknown Club';
+    try {
+      clubName = clubs.firstWhere((c) => c.id == post!.clubId).name;
+    } catch (_) {}
+
+    final color = _colorForClubId(post.clubId);
+    final caption = post.content.length > 90
+        ? '${post.content.substring(0, 90)}…'
+        : post.content;
+    final hasImage = post.imagePath != null;
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.76,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: color.withValues(alpha: 0.25),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  PostDetailScreen(post: post!, clubColor: color),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Club header ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            clubName.isNotEmpty
+                                ? clubName[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          clubName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Icon(Icons.open_in_new_rounded,
+                          size: 14, color: AppColors.secondaryText),
+                    ],
+                  ),
+                ),
+
+                // ── Image or gradient banner ──
+                if (hasImage)
+                  buildPostBanner(
+                    imagePath: post.imagePath,
+                    fallbackColor: color,
+                    fallbackLetter: clubName.isNotEmpty
+                        ? clubName[0].toUpperCase()
+                        : '?',
+                    height: 160,
+                  )
+                else
+                  Container(
+                    height: 70,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          color,
+                          color.withValues(alpha: 0.55),
+                        ],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        clubName.isNotEmpty ? clubName[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // ── Caption ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Text(
+                    caption,
+                    style: const TextStyle(
+                        fontSize: 12.5, color: AppColors.text, height: 1.4),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+
+                // ── Footer: timestamp + "View post" ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _timeLabel(sentAt),
+                        style: const TextStyle(
+                            fontSize: 10, color: AppColors.secondaryText),
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            'View post',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Icon(Icons.arrow_forward_ios_rounded,
+                              size: 10, color: color),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Regular text bubble ──────────────────────────────────────────────────────
 
 class _MessageBubble extends StatelessWidget {
   final Message message;
@@ -266,6 +508,8 @@ class _MessageBubble extends StatelessWidget {
     return '${dt.day}/${dt.month}';
   }
 }
+
+// ─── Input bar ────────────────────────────────────────────────────────────────
 
 class _InputBar extends StatelessWidget {
   final TextEditingController controller;

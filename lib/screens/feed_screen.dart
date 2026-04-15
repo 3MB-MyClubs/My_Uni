@@ -6,14 +6,18 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
+import '../services/user_prefs_service.dart';
 import '../services/view_tracker.dart';
-import '../services/club_follow_helper.dart';
+import '../widgets/club_follow_button.dart';
+import '../widgets/user_follow_button.dart';
 import '../models/comment.dart';
 import '../models/like.dart';
 import '../models/share.dart';
+import '../models/message.dart';
 import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
+import '../services/message_service.dart';
 import 'messages_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -49,14 +53,24 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   final Set<String> _viewedClubIds = {};
 
+  // true = show only followed clubs, false = show all clubs
+  bool _followedOnly = true;
+
+  Set<String> get _followedIds => userState.followedClubIds;
+
+  bool _clubVisible(String clubId) =>
+      !_followedOnly || _followedIds.contains(clubId);
+
   List<_FeedItem> _buildFeed() {
-    final items = newsPosts.map((post) => _FeedItem(
-      id: post.id,
-      isEvent: false,
-      data: post,
-      score: postScore(post.id),
-      postedAt: post.createdAt,
-    )).toList();
+    final items = newsPosts
+        .where((post) => _clubVisible(post.clubId))
+        .map((post) => _FeedItem(
+          id: post.id,
+          isEvent: false,
+          data: post,
+          score: postScore(post.id),
+          postedAt: post.createdAt,
+        )).toList();
     items.sort((a, b) => b.postedAt.compareTo(a.postedAt));
     return items;
   }
@@ -65,7 +79,10 @@ class _FeedScreenState extends State<FeedScreen> {
   List<dynamic> get _liveEvents {
     final now = DateTime.now();
     return events
-        .where((e) => !e.dateTime.isAfter(now) && e.endTime.isAfter(now))
+        .where((e) =>
+            _clubVisible(e.clubId) &&
+            !e.dateTime.isAfter(now) &&
+            e.endTime.isAfter(now))
         .toList();
   }
 
@@ -73,7 +90,9 @@ class _FeedScreenState extends State<FeedScreen> {
   List<dynamic> get _upcomingEvents {
     final now = DateTime.now();
     return events
-        .where((e) => e.dateTime.isAfter(now))
+        .where((e) =>
+            _clubVisible(e.clubId) &&
+            e.dateTime.isAfter(now))
         .toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
@@ -128,25 +147,81 @@ class _FeedScreenState extends State<FeedScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             _buildAppBar(),
+            _buildToggleBar(),
             _buildStoriesRow(),
             _buildWelcomeCard(live, upcoming),
             _buildEventsStrip(live, upcoming),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, i) {
-                  final item = mixed[i];
-                  if (item is List<User>) {
-                    return _PeopleSuggestionCard(
-                      suggestions: item,
-                      onFollowed: () => setState(() {}),
-                    );
-                  }
-                  return _buildFeedCard(item as _FeedItem, i);
-                },
-                childCount: mixed.length,
+            if (mixed.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.explore_outlined, size: 64,
+                            color: AppColors.secondaryText.withValues(alpha: 0.35)),
+                        const SizedBox(height: 18),
+                        const Text('Nothing here yet',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                        const SizedBox(height: 8),
+                        const Text('Follow clubs to see their posts\nand events in your feed',
+                            style: TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.4),
+                            textAlign: TextAlign.center),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: () => setState(() => _followedOnly = false),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryRed,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.explore_rounded, size: 18),
+                          label: const Text('Explore All Clubs',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                  child: Row(
+                    children: [
+                      const Text('Latest',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
+                      const Spacer(),
+                      Text(
+                        _followedOnly ? 'From followed clubs' : 'All clubs',
+                        style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) {
+                    final item = mixed[i];
+                    if (item is List<User>) {
+                      return _PeopleSuggestionCard(
+                        suggestions: item,
+                        onFollowed: () => setState(() {}),
+                      );
+                    }
+                    return _buildFeedCard(item as _FeedItem, i);
+                  },
+                  childCount: mixed.length,
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            ],
           ],
         ),
       ),
@@ -215,88 +290,173 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  SliverToBoxAdapter _buildWelcomeCard(List<dynamic> live, List<dynamic> upcoming) {
-    final followedClubCount = userState.followedClubIds.length;
-    final nextEvent = upcoming.isNotEmpty ? upcoming.first : null;
-
-    String subtitle;
-    if (live.isNotEmpty) {
-      subtitle = '${live.length} event${live.length > 1 ? 's' : ''} happening right now on campus.';
-    } else if (nextEvent != null) {
-      final daysAway = (nextEvent.dateTime as DateTime).difference(DateTime.now()).inDays;
-      final label = daysAway == 0 ? 'today' : daysAway == 1 ? 'tomorrow' : 'in $daysAway days';
-      subtitle = 'Next up: ${nextEvent.title} — $label.';
-    } else {
-      subtitle = 'You follow $followedClubCount club${followedClubCount == 1 ? '' : 's'}. Stay tuned for updates!';
-    }
+  SliverToBoxAdapter _buildToggleBar() {
+    final followedCount = userState.followedClubIds.length;
+    final label = _followedOnly
+        ? 'Followed  ($followedCount)'
+        : 'All Clubs';
+    final icon = _followedOnly
+        ? Icons.favorite_rounded
+        : Icons.explore_rounded;
 
     return SliverToBoxAdapter(
       child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primaryRed, Color(0xFFB71C1C)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryRed.withValues(alpha: 0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+        color: AppColors.card,
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
         child: Row(
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$_greeting, $_firstName!',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+            GestureDetector(
+              onTapUp: (details) async {
+                // Anchor the menu to the tapped position.
+                final RenderBox overlay = Overlay.of(context)
+                    .context
+                    .findRenderObject()! as RenderBox;
+                final RelativeRect position = RelativeRect.fromRect(
+                  details.globalPosition & const Size(1, 1),
+                  Offset.zero & overlay.size,
+                );
+
+                final result = await showMenu<bool>(
+                  context: context,
+                  position: position,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  color: AppColors.card,
+                  items: [
+                    PopupMenuItem<bool>(
+                      value: true,
+                      padding: EdgeInsets.zero,
+                      child: _FilterOption(
+                        icon: Icons.favorite_rounded,
+                        label: 'Followed',
+                        sublabel: '$followedCount clubs',
+                        selected: _followedOnly,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 13,
-                      height: 1.4,
+                    PopupMenuItem<bool>(
+                      value: false,
+                      padding: EdgeInsets.zero,
+                      child: _FilterOption(
+                        icon: Icons.explore_rounded,
+                        label: 'All Clubs',
+                        sublabel: '${clubs.length} clubs',
+                        selected: !_followedOnly,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                live.isNotEmpty
-                    ? Icons.radio_button_on
-                    : nextEvent != null
-                        ? Icons.event_rounded
-                        : Icons.school_rounded,
-                color: Colors.white,
-                size: 26,
+                  ],
+                );
+
+                if (result != null && result != _followedOnly) {
+                  setState(() => _followedOnly = result);
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryRed.withValues(alpha: 0.28),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 14, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.keyboard_arrow_down_rounded,
+                        size: 16, color: Colors.white70),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  SliverToBoxAdapter _buildWelcomeCard(List<dynamic> live, List<dynamic> upcoming) {
+    if (live.isNotEmpty) {
+      return SliverToBoxAdapter(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8, height: 8,
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${live.length} event${live.length > 1 ? 's' : ''} happening right now on campus',
+                  style: const TextStyle(fontSize: 13, color: Colors.red, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.red, size: 16),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (upcoming.isNotEmpty) {
+      final nextEvent = upcoming.first;
+      final daysAway = (nextEvent.dateTime as DateTime).difference(DateTime.now()).inDays;
+      final label = daysAway == 0 ? 'Today' : daysAway == 1 ? 'Tomorrow' : 'In $daysAway days';
+      return SliverToBoxAdapter(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.lightRed,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.event_rounded, size: 18, color: AppColors.primaryRed),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Next Up · $label',
+                        style: const TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
+                    Text(nextEvent.title as String,
+                        style: const TextStyle(fontSize: 13, color: AppColors.text, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const SliverToBoxAdapter(child: SizedBox(height: 6));
   }
 
   SliverToBoxAdapter _buildEventsStrip(List<dynamic> live, List<dynamic> upcoming) {
@@ -386,6 +546,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final result = <({dynamic club, List<ClubStory> stories, bool seen, Color color})>[];
     for (int i = 0; i < clubs.length; i++) {
       final club = clubs[i];
+      if (!_clubVisible(club.id)) continue;
       final recent = clubStories
           .where((s) => s.clubId == club.id && s.postedAt.isAfter(cutoff))
           .toList()
@@ -465,6 +626,69 @@ class _FeedScreenState extends State<FeedScreen> {
 }
 
 // ─── Story Bubble ─────────────────────────────────────────────────────────────
+
+// ─── Event Chip ───────────────────────────────────────────────────────────────
+
+// ─── Feed Filter Option (used inside showMenu) ───────────────────────────────
+
+class _FilterOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final bool selected;
+
+  const _FilterOption({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.selected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: selected ? AppColors.primaryRed.withValues(alpha: 0.07) : Colors.transparent,
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.primaryRed.withValues(alpha: 0.12)
+                  : AppColors.background,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon,
+                size: 17,
+                color: selected ? AppColors.primaryRed : AppColors.secondaryText),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? AppColors.primaryRed : AppColors.text,
+                    )),
+                Text(sublabel,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.secondaryText)),
+              ],
+            ),
+          ),
+          if (selected)
+            const Icon(Icons.check_rounded,
+                size: 18, color: AppColors.primaryRed),
+        ],
+      ),
+    );
+  }
+}
 
 // ─── Event Chip ───────────────────────────────────────────────────────────────
 
@@ -806,7 +1030,6 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
               itemBuilder: (ctx, i) {
                 final u = shown[i];
                 final color = _avatarColors[i % _avatarColors.length];
-                final isFollowing = userState.isFollowingUser(u.id);
 
                 return Container(
                   width: 110,
@@ -873,32 +1096,14 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      GestureDetector(
+                      UserFollowButton(
+                        userId: u.id,
+                        size: 'small',
                         onTap: () {
-                          setState(() => userState.toggleFollowUser(u.id));
+                          userState.toggleFollowUser(u.id);
+                          userPrefsService.save(authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
                           widget.onFollowed();
                         },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: isFollowing ? Colors.transparent : AppColors.primaryRed,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isFollowing
-                                  ? AppColors.secondaryText.withValues(alpha: 0.4)
-                                  : AppColors.primaryRed,
-                            ),
-                          ),
-                          child: Text(
-                            isFollowing ? 'Following' : 'Follow',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isFollowing ? AppColors.secondaryText : Colors.white,
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -1162,7 +1367,27 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                 fit: StackFit.expand,
                 children: [
                   // Background: photo or gradient
-                  if (hasPhoto)
+                  if (hasPhoto && story.imagePath!.startsWith('https://'))
+                    Image.network(
+                      story.imagePath!,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : Container(
+                              color: widget.color.withValues(alpha: 0.18),
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
+                            ),
+                      errorBuilder: (_, err, trace) => Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [widget.color, widget.color.withValues(alpha: 0.75), Colors.black],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (hasPhoto)
                     Image.file(File(story.imagePath!), fit: BoxFit.cover)
                   else
                     Container(
@@ -1489,12 +1714,25 @@ Widget? _trendingBadge(double score) {
   );
 }
 
-void _openShareSheet(BuildContext context, String targetId, VoidCallback onShared) {
+void _openShareSheet(
+  BuildContext context,
+  String targetId,
+  VoidCallback onShared, {
+  String caption = '',
+  String clubName = '',
+}) {
   final currentUser = authService.currentUser;
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
-    builder: (_) => _ShareSheet(targetId: targetId, userId: currentUser?.id ?? 'guest', onShared: onShared),
+    isScrollControlled: true,
+    builder: (_) => _ShareSheet(
+      targetId: targetId,
+      userId: currentUser?.id ?? authService.currentAdmin?.id ?? 'guest',
+      onShared: onShared,
+      caption: caption,
+      clubName: clubName,
+    ),
   );
 }
 
@@ -1582,9 +1820,6 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     final postComments = comments.where((c) => c.postId == widget.post.id).toList();
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
-    final isFollowed = userState.isFollowing(club.id);
-    final userId = authService.currentUser?.id ?? '';
-    final isPendingBoard = userState.hasPendingBoardRequest(userId, club.id);
     final badge = _trendingBadge(widget.score);
 
     return Container(
@@ -1598,10 +1833,10 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
             child: Row(
               children: [
-                Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(color: clubColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                  child: Center(child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16))),
+                CircleAvatar(
+                  radius: 19,
+                  backgroundColor: clubColor.withValues(alpha: 0.15),
+                  child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1658,49 +1893,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    GestureDetector(
-                      onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: isFollowed ? Colors.transparent : AppColors.primaryRed,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isFollowed
-                                ? AppColors.secondaryText.withValues(alpha: 0.4)
-                                : AppColors.primaryRed,
-                          ),
-                        ),
-                        child: Text(
-                          isFollowed ? 'Following' : 'Follow',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isFollowed ? AppColors.secondaryText : Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (isPendingBoard) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.schedule_rounded, size: 10, color: Color(0xFF1565C0)),
-                          SizedBox(width: 3),
-                          Text(
-                            'Board request pending',
-                            style: TextStyle(fontSize: 9, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
+                ClubFollowButton(clubId: club.id, size: 'small'),
                 IconButton(icon: const Icon(Icons.more_horiz, color: AppColors.secondaryText), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
               ],
             ),
@@ -1737,13 +1930,22 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                 _ActionBtn(
                   icon: Icons.send_outlined,
                   color: AppColors.text,
-                  onTap: () => _openShareSheet(context, widget.post.id, () { setState(() {}); widget.onUpdate(); }),
+                  onTap: () => _openShareSheet(
+                    context,
+                    widget.post.id,
+                    () { setState(() {}); widget.onUpdate(); },
+                    caption: widget.post.content,
+                    clubName: clubs.firstWhere((c) => c.id == widget.post.clubId, orElse: () => clubs.first).name,
+                  ),
                 ),
                 const Spacer(),
                 _ActionBtn(
                   icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
                   color: isSaved ? AppColors.primaryRed : AppColors.text,
-                  onTap: () => setState(() => userState.toggleSave(widget.post.id)),
+                  onTap: () {
+                    setState(() => userState.toggleSave(widget.post.id));
+                    userPrefsService.save(authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
+                  },
                 ),
               ],
             ),
@@ -1876,9 +2078,6 @@ class _EventCardState extends State<_EventCard> {
     final dt = widget.event.dateTime;
     final shareCount = postShareCount(widget.event.id);
     final uniqueAttendees = widget.event.attendeeUserIds.toSet().length;
-    final isFollowed = userState.isFollowing(club.id);
-    final userId = authService.currentUser?.id ?? '';
-    final isPendingBoard = userState.hasPendingBoardRequest(userId, club.id);
     final badge = _trendingBadge(widget.score);
 
     final daysAway = dt.difference(DateTime.now()).inDays;
@@ -1895,10 +2094,10 @@ class _EventCardState extends State<_EventCard> {
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
             child: Row(
               children: [
-                Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(color: clubColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                  child: Center(child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16))),
+                CircleAvatar(
+                  radius: 19,
+                  backgroundColor: clubColor.withValues(alpha: 0.15),
+                  child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1923,49 +2122,7 @@ class _EventCardState extends State<_EventCard> {
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    GestureDetector(
-                      onTap: () => handleFollowTap(context, club.id, () => setState(() {})),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: isFollowed ? Colors.transparent : AppColors.primaryRed,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isFollowed
-                                ? AppColors.secondaryText.withValues(alpha: 0.4)
-                                : AppColors.primaryRed,
-                          ),
-                        ),
-                        child: Text(
-                          isFollowed ? 'Following' : 'Follow',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isFollowed ? AppColors.secondaryText : Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (isPendingBoard) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.schedule_rounded, size: 10, color: Color(0xFF1565C0)),
-                          SizedBox(width: 3),
-                          Text(
-                            'Board request pending',
-                            style: TextStyle(fontSize: 9, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
+                ClubFollowButton(clubId: club.id, size: 'small'),
               ],
             ),
           ),
@@ -2047,13 +2204,22 @@ class _EventCardState extends State<_EventCard> {
                 _ActionBtn(
                   icon: Icons.send_outlined,
                   color: AppColors.text,
-                  onTap: () => _openShareSheet(context, widget.event.id, () { setState(() {}); widget.onUpdate(); }),
+                  onTap: () => _openShareSheet(
+                    context,
+                    widget.event.id,
+                    () { setState(() {}); widget.onUpdate(); },
+                    caption: widget.event.title,
+                    clubName: clubs.firstWhere((c) => c.id == widget.event.clubId, orElse: () => clubs.first).name,
+                  ),
                 ),
                 const Spacer(),
                 _ActionBtn(
                   icon: userState.isSaved(widget.event.id) ? Icons.bookmark : Icons.bookmark_border,
                   color: userState.isSaved(widget.event.id) ? AppColors.primaryRed : AppColors.text,
-                  onTap: () => setState(() => userState.toggleSave(widget.event.id)),
+                  onTap: () {
+                    setState(() => userState.toggleSave(widget.event.id));
+                    userPrefsService.save(authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
+                  },
                 ),
               ],
             ),
@@ -2196,19 +2362,43 @@ class _ShareSheet extends StatefulWidget {
   final String targetId;
   final String userId;
   final VoidCallback onShared;
+  final String caption;
+  final String clubName;
 
-  const _ShareSheet({required this.targetId, required this.userId, required this.onShared});
+  const _ShareSheet({
+    required this.targetId,
+    required this.userId,
+    required this.onShared,
+    required this.caption,
+    required this.clubName,
+  });
 
   @override
   State<_ShareSheet> createState() => _ShareSheetState();
 }
 
 class _ShareSheetState extends State<_ShareSheet> {
-  bool _shared = false;
+  bool _storyPosted = false;
+  final Set<String> _sentToIds = {};
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  String get _myId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  List<User> get _friends => users
+      .where((u) => userState.isFollowingUser(u.id) && u.id != _myId)
+      .toList();
+
+  List<User> get _filtered {
+    if (_query.isEmpty) return _friends;
+    final q = _query.toLowerCase();
+    return _friends.where((u) => u.name.toLowerCase().contains(q)).toList();
+  }
 
   void _recordShare() {
-    // Only one share per session per user per target
-    final alreadyShared = shares.any((s) => s.targetId == widget.targetId && s.userId == widget.userId);
+    final alreadyShared = shares.any(
+        (s) => s.targetId == widget.targetId && s.userId == widget.userId);
     if (!alreadyShared) {
       shares.add(Share(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -2219,87 +2409,288 @@ class _ShareSheetState extends State<_ShareSheet> {
       contentStore.saveShares();
       widget.onShared();
     }
-    setState(() => _shared = true);
+  }
+
+  void _addToStory() {
+    _recordShare();
+    final admin = authService.currentAdmin;
+    if (admin != null) {
+      try {
+        final myClub =
+            clubs.firstWhere((c) => c.adminUserIds.contains(admin.id));
+        final preview = widget.caption.length > 120
+            ? '${widget.caption.substring(0, 120)}…'
+            : widget.caption;
+        clubStories.add(ClubStory(
+          id: 'repost_${DateTime.now().millisecondsSinceEpoch}',
+          clubId: myClub.id,
+          emoji: '🔁',
+          text: 'Reposted from ${widget.clubName}\n\n$preview',
+          postedAt: DateTime.now(),
+        ));
+      } catch (_) {
+        // no club found — success feedback still shown
+      }
+    }
+    setState(() => _storyPosted = true);
+  }
+
+  Future<void> _sendToFriend(String friendId) async {
+    _recordShare();
+    await messageService.saveMessage(Message(
+      id: 'share_${DateTime.now().millisecondsSinceEpoch}_$friendId',
+      senderId: _myId,
+      receiverId: friendId,
+      content: 'kupost:${widget.targetId}',
+      sentAt: DateTime.now(),
+    ));
+    setState(() => _sentToIds.add(friendId));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = postShareCount(widget.targetId);
+    final filtered = _filtered;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 16),
-          const Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 4),
-          Text(
-            '$total ${total == 1 ? 'person has' : 'people have'} shared this',
-            style: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-          // Share destinations row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ShareDest(icon: Icons.link, label: 'Copy link', onTap: _recordShare),
-              _ShareDest(icon: Icons.message_outlined, label: 'Message', onTap: _recordShare),
-              _ShareDest(icon: Icons.email_outlined, label: 'Email', onTap: _recordShare),
-              _ShareDest(icon: Icons.more_horiz, label: 'More', onTap: _recordShare),
-            ],
-          ),
-          if (_shared) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              width: double.infinity,
-              decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(10)),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+    return DraggableScrollableSheet(
+      initialChildSize: 0.62,
+      minChildSize: 0.4,
+      maxChildSize: 0.88,
+      snap: true,
+      builder: (_, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle + title
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Column(
                 children: [
-                  Icon(Icons.check_circle, color: AppColors.primaryRed, size: 16),
-                  SizedBox(width: 6),
-                  Text('Shared! This post\'s reach just went up.', style: TextStyle(color: AppColors.primaryRed, fontSize: 13, fontWeight: FontWeight.w500)),
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.lightGray,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Choose how you\'d like to share this',
+                    style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.lightGray),
+
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  // ── Option 1: Add to Story ────────────────────────────
+                  _ShareOptionTile(
+                    icon: Icons.auto_stories_rounded,
+                    iconColor: const Color(0xFF7B5EA7),
+                    iconBg: const Color(0xFFF0EAFA),
+                    title: 'Add to your story',
+                    subtitle: 'Repost this to your club\'s story',
+                    trailing: _storyPosted
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
+                                SizedBox(width: 4),
+                                Text('Added', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          )
+                        : const Icon(Icons.chevron_right_rounded, color: AppColors.secondaryText),
+                    onTap: _storyPosted ? null : _addToStory,
+                  ),
+
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Divider(height: 1, color: AppColors.lightGray),
+                  ),
+
+                  // ── Option 2: Send to Friend ──────────────────────────
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 6, 16, 8),
+                    child: Text(
+                      'SEND TO A FRIEND',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondaryText, letterSpacing: 0.8),
+                    ),
+                  ),
+
+                  // Search box
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _query = v),
+                        style: const TextStyle(fontSize: 14),
+                        decoration: const InputDecoration(
+                          hintText: 'Search friends',
+                          hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 14),
+                          prefixIcon: Icon(Icons.search, size: 18, color: AppColors.secondaryText),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Friends list
+                  if (filtered.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 28),
+                      child: Center(
+                        child: Text(
+                          'Follow people to send them posts',
+                          style: TextStyle(color: AppColors.secondaryText, fontSize: 14),
+                        ),
+                      ),
+                    )
+                  else
+                    ...filtered.map((u) => _FriendSendRow(
+                          user: u,
+                          sent: _sentToIds.contains(u.id),
+                          onSend: _sentToIds.contains(u.id) ? null : () => _sendToFriend(u.id),
+                        )),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ShareDest extends StatelessWidget {
+class _ShareOptionTile extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+  final Color iconColor;
+  final Color iconBg;
+  final String title;
+  final String subtitle;
+  final Widget trailing;
+  final VoidCallback? onTap;
 
-  const _ShareDest({required this.icon, required this.label, required this.onTap});
+  const _ShareOptionTile({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: Column(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(13)),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            trailing,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FriendSendRow extends StatelessWidget {
+  final User user;
+  final bool sent;
+  final VoidCallback? onSend;
+
+  const _FriendSendRow({required this.user, required this.sent, required this.onSend});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
         children: [
-          Container(
-            width: 54, height: 54,
-            decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(16)),
-            child: Icon(icon, color: AppColors.text, size: 24),
+          UserAvatar(userId: user.id, name: user.name, size: 42),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(user.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(user.email, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              ],
+            ),
           ),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+          GestureDetector(
+            onTap: onSend,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              decoration: BoxDecoration(
+                color: sent ? Colors.green.withValues(alpha: 0.1) : AppColors.primaryRed,
+                borderRadius: BorderRadius.circular(20),
+                border: sent ? Border.all(color: Colors.green.withValues(alpha: 0.35)) : null,
+              ),
+              child: sent
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_rounded, size: 13, color: Colors.green),
+                        SizedBox(width: 4),
+                        Text('Sent', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w600)),
+                      ],
+                    )
+                  : const Text('Send', style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
+            ),
+          ),
         ],
       ),
     );

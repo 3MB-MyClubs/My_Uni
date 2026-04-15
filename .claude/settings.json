@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR>=155 && NR<=168' lib/screens/chat_screen.dart)",
+      "Bash(awk 'NR>=561 && NR<=565' lib/screens/chat_screen.dart)",
+      "Bash(awk 'NR>=74 && NR<=78' lib/screens/club_admin_auth_screen.dart)",
+      "Bash(awk 'NR>=148 && NR<=152' lib/screens/club_admin_auth_screen.dart)"
+    ]
+  }
+}

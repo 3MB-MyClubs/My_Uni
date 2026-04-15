@@ -25,6 +25,7 @@ void main() async {
   contentStore.applyToLists();
   contentStore.loadBoardMemberRequests();
   contentStore.loadBoardMemberIds();
+  contentStore.loadBoardMemberTitles();
   // Restore any dynamic notifications that were generated at runtime.
   final dynNotifs = contentStore.loadDynamicNotifications();
   if (dynNotifs != null) {

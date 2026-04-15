@@ -124,6 +124,32 @@ class ContentStore {
     }
   }
 
+  // ── Club board member titles ─────────────────────────────────────────────────
+
+  Future<void> saveBoardMemberTitles() async {
+    // Hive cannot serialise nested typed maps — store as Map<String, dynamic>
+    // where each value is itself a Map<String, dynamic> (userId → title).
+    final outer = <String, dynamic>{};
+    for (final club in clubs) {
+      outer[club.id] = Map<String, dynamic>.from(club.boardMemberTitles);
+    }
+    await _box.put('boardMemberTitles', outer);
+  }
+
+  void loadBoardMemberTitles() {
+    final raw = _box.get('boardMemberTitles');
+    if (raw == null) return;
+    final outer = Map<String, dynamic>.from(raw as Map);
+    for (final club in clubs) {
+      final stored = outer[club.id];
+      if (stored == null) continue;
+      final inner = Map<String, dynamic>.from(stored as Map);
+      club.boardMemberTitles
+        ..clear()
+        ..addAll(inner.map((k, v) => MapEntry(k, v as String)));
+    }
+  }
+
   // ── Save everything at once ───────────────────────────────────────────────────
 
   Future<void> saveAll(List<AppNotification> dynamicNotifs) async {
@@ -137,6 +163,7 @@ class ContentStore {
       saveDynamicNotifications(dynamicNotifs),
       saveBoardMemberRequests(),
       saveBoardMemberIds(),
+      saveBoardMemberTitles(),
     ]);
   }
 }

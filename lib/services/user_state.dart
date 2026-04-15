@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import '../models/notification.dart';
 import 'content_store.dart';
 
-// Simple in-memory singleton to track per-user UI state across tab switches.
-class UserState {
+// Global state singleton. Extends ChangeNotifier so any ListenableBuilder
+// that wraps a follow button will rebuild instantly when state changes,
+// regardless of which screen triggered the mutation.
+class UserState extends ChangeNotifier {
   final Set<String> likedPostIds = {'n1'}; // pre-seed from mock likes
   final Set<String> followedClubIds = {'c1'}; // pre-seed from mock subscriptions
   final Set<String> savedPostIds = {};
@@ -60,6 +62,7 @@ class UserState {
       fromId: fromId,
     );
     addFollowRequestNotification(notif);
+    notifyListeners();
   }
 
   /// Accept an incoming follow request from [fromId].
@@ -78,12 +81,14 @@ class UserState {
       targetId: toId,
     );
     addMessageNotification(notif);
+    notifyListeners();
   }
 
   /// Decline an incoming follow request from [fromId].
   void declineFollowRequest(String fromId) {
     pendingFollowRequests.remove(fromId);
     incomingFollowRequests.remove(fromId);
+    notifyListeners();
   }
 
   // ── Notification helpers ──────────────────────────────────────────────────────
@@ -150,6 +155,7 @@ class UserState {
     } else {
       likedPostIds.add(postId);
     }
+    notifyListeners();
   }
 
   bool isFollowing(String clubId) => followedClubIds.contains(clubId);
@@ -160,9 +166,13 @@ class UserState {
   void joinClub(String clubId, {bool exclusive = false}) {
     if (exclusive) followedClubIds.clear();
     followedClubIds.add(clubId);
+    notifyListeners();
   }
 
-  void leaveClub(String clubId) => followedClubIds.remove(clubId);
+  void leaveClub(String clubId) {
+    followedClubIds.remove(clubId);
+    notifyListeners();
+  }
 
   void toggleFollow(String clubId) {
     if (followedClubIds.contains(clubId)) {
@@ -170,6 +180,7 @@ class UserState {
     } else {
       followedClubIds.add(clubId);
     }
+    notifyListeners();
   }
 
   bool isSaved(String postId) => savedPostIds.contains(postId);
@@ -180,6 +191,7 @@ class UserState {
     } else {
       savedPostIds.add(postId);
     }
+    notifyListeners();
   }
 
   bool isFollowingUser(String userId) => followedUserIds.contains(userId);
@@ -191,6 +203,7 @@ class UserState {
     } else {
       followedUserIds.add(userId);
     }
+    notifyListeners();
   }
 }
 

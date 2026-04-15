@@ -24,6 +24,7 @@ class UserPrefsService {
     await _box.putAll({
       'isPrivate_$userId': s.isPrivate,
       'profilePhotoPath_$userId': s.profilePhotoPaths[userId],
+      'bannerPath_$userId': s.bannerPaths[userId],
       'followedUserIds_$userId': s.followedUserIds.toList(),
       'followedClubIds_$userId': s.followedClubIds.toList(),
       'likedPostIds_$userId': s.likedPostIds.toList(),
@@ -47,6 +48,9 @@ class UserPrefsService {
 
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
+
+    final bannerPath = _box.get('bannerPath_$userId');
+    if (bannerPath != null) s.bannerPaths[userId] = bannerPath as String;
 
     _restoreSet(s.followedUserIds, _box.get('followedUserIds_$userId'),
         fallback: {'u1', 'u4'});

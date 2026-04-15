@@ -548,6 +548,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                 ],
 
+                // Board role badge — shown when user is a board member of any club.
+                Builder(builder: (_) {
+                  final boardClub = clubs.cast<Club?>().firstWhere(
+                      (c) => c!.boardMemberIds.contains(user.id),
+                      orElse: () => null);
+                  if (boardClub == null) return const SizedBox.shrink();
+                  final title = boardClub.boardMemberTitles[user.id];
+                  final hasTitle = title != null && title.isNotEmpty;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: GestureDetector(
+                      onTap: () => _openClub(boardClub),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE3F2FD),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.shield_outlined,
+                                    size: 13, color: Color(0xFF1565C0)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  hasTitle
+                                      ? '$title · ${boardClub.name}'
+                                      : 'Board Member · ${boardClub.name}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF1565C0),
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right,
+                              size: 14, color: Color(0xFF1565C0)),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+
                 // Follow + Message buttons
                 if (!_isOwnProfile) ...[
                   const SizedBox(height: 14),

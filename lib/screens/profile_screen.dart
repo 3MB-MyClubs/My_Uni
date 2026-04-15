@@ -167,38 +167,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .where((c) => userState.isFollowing(c.id))
             .toList();
 
-    final myId = user?.id ?? admin?.id ?? '';
-
-    final myAuthoredPosts = newsPosts
-        .where((p) => p.authorId == myId)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    final myPostCount = myAuthoredPosts.length;
-
     final myEventCount = events
         .where((e) => myClubs.any((c) => c.id == e.clubId))
         .length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(context, displayName),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.delayed(const Duration(milliseconds: 400));
+          if (mounted) setState(() {});
+        },
+        color: AppColors.primaryRed,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            _buildAppBar(context, displayName),
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildProfileHeader(displayName, displayEmail, isAdmin, myClubs.length, myPostCount, myEventCount),
+                _buildProfileHeader(displayName, displayEmail, isAdmin, myClubs.length, myEventCount),
                 const Divider(height: 1),
                 _buildMyClubsSection(myClubs),
-                const Divider(height: 1),
-                _buildMyPostsSection(myAuthoredPosts),
                 const SizedBox(height: 80),
               ],
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -228,7 +225,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String email,
     bool isAdmin,
     int clubCount,
-    int postCount,
     int eventCount,
   ) {
     final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -321,7 +317,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _StatCell(value: '$postCount', label: 'Posts'),
                           _StatCell(value: '$clubCount', label: 'Clubs'),
                           _StatCell(value: '$eventCount', label: 'Events'),
                         ],
@@ -353,6 +348,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ],
+
+                // Board role badge — only for regular users who are board members.
+                if (!isAdmin) Builder(builder: (_) {
+                  final userId = authService.currentUser?.id ?? '';
+                  if (userId.isEmpty) return const SizedBox.shrink();
+                  final boardClub = clubs.cast<Club?>().firstWhere(
+                      (c) => c!.boardMemberIds.contains(userId),
+                      orElse: () => null);
+                  if (boardClub == null) return const SizedBox.shrink();
+                  final title = boardClub.boardMemberTitles[userId];
+                  final hasTitle = title != null && title.isNotEmpty;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClubProfileScreen(
+                            club: boardClub,
+                            color: _clubColor(clubs.indexOf(boardClub)),
+                          ),
+                        ),
+                      ).then((_) => setState(() {})),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF1565C0), Color(0xFF1976D2)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.shield_rounded,
+                                    size: 14, color: Colors.white),
+                                const SizedBox(width: 5),
+                                Text(
+                                  hasTitle
+                                      ? title
+                                      : 'Board Member',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.2),
+                                ),
+                                const SizedBox(width: 6),
+                                const Text('·',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w400)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  boardClub.name,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right,
+                              size: 16, color: Color(0xFF1565C0)),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -573,74 +653,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMyPostsSection(List myAuthoredPosts) {
-    return Container(
-      color: AppColors.card,
-      margin: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              'My Posts',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
-            ),
-          ),
-          if (myAuthoredPosts.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text(
-                'You haven\'t posted anything yet.',
-                style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-              ),
-            )
-          else
-            ...myAuthoredPosts.map((post) {
-              final club = clubs.firstWhere((c) => c.id == post.clubId);
-              final likeCount = postLikeCount(post.id);
-              final commentCount = comments.where((c) => c.postId == post.id).length;
-              return Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.lightRed,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          club.name[0],
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 16),
-                        ),
-                      ),
-                    ),
-                    title: Text(post.content, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: AppColors.text)),
-                    subtitle: Text(club.name, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.favorite, size: 14, color: Colors.pink),
-                        const SizedBox(width: 3),
-                        Text('$likeCount', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.comment_outlined, size: 14, color: AppColors.secondaryText),
-                        const SizedBox(width: 3),
-                        Text('$commentCount', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1, indent: 72),
-                ],
-              );
-            }),
-        ],
-      ),
-    );
-  }
 }
 
 class _StatCell extends StatelessWidget {

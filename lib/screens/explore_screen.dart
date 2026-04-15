@@ -5,8 +5,10 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
-import '../services/club_follow_helper.dart';
+import '../services/user_prefs_service.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/club_follow_button.dart';
+import '../widgets/user_follow_button.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
@@ -341,7 +343,6 @@ class _ClubCardState extends State<_ClubCard> {
 
   @override
   Widget build(BuildContext context) {
-    final following = userState.isFollowing(widget.club.id);
     final members = clubMemberCount(widget.club.id);
 
     return GestureDetector(
@@ -414,36 +415,7 @@ class _ClubCardState extends State<_ClubCard> {
               ),
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: GestureDetector(
-                onTap: () =>
-                    handleFollowTap(context, widget.club.id, () => setState(() {})),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  decoration: BoxDecoration(
-                    color: following ? Colors.transparent : AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: following
-                          ? AppColors.secondaryText
-                          : AppColors.primaryRed,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      following ? 'Following' : 'Follow',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: following ? AppColors.secondaryText : Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            ClubFollowButton(clubId: widget.club.id, fullWidth: true),
           ],
         ),
       ),
@@ -476,7 +448,6 @@ class _PeopleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final following = userState.isFollowingUser(user.id);
     final isClubAdmin = user.role == 'admin';
 
     return ListTile(
@@ -529,63 +500,47 @@ class _PeopleCard extends StatelessWidget {
         style:
             const TextStyle(fontSize: 12, color: AppColors.secondaryText),
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (following)
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      otherUserId: user.id,
-                      otherUserName: user.name,
+      trailing: ListenableBuilder(
+        listenable: userState,
+        builder: (context, _) {
+          final isFollowing = userState.isFollowingUser(user.id);
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isFollowing)
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatScreen(
+                        otherUserId: user.id,
+                        otherUserName: user.name,
+                      ),
                     ),
                   ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 8),
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.lightRed,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.chat_bubble_outline,
+                        size: 16, color: AppColors.primaryRed),
+                  ),
                 ),
-                child: const Icon(Icons.chat_bubble_outline,
-                    size: 16, color: AppColors.primaryRed),
+              UserFollowButton(
+                userId: user.id,
+                onTap: () {
+                  userState.toggleFollowUser(user.id);
+                  userPrefsService.save(
+                      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
+                  onStateChanged();
+                },
               ),
-            ),
-          GestureDetector(
-            onTap: () {
-              userState.toggleFollowUser(user.id);
-              onStateChanged();
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color:
-                    following ? Colors.transparent : AppColors.primaryRed,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: following
-                      ? AppColors.secondaryText
-                      : AppColors.primaryRed,
-                ),
-              ),
-              child: Text(
-                following ? 'Following' : 'Follow',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: following ? AppColors.secondaryText : Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

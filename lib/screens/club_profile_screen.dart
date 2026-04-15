@@ -1,11 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../models/board_member_request.dart';
 import '../models/club.dart';
+import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
-import '../services/club_follow_helper.dart';
+import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
+import '../widgets/club_follow_button.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
@@ -103,16 +107,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isFollowing = userState.isFollowing(widget.club.id);
-    final userId = authService.currentUser?.id ?? '';
-    // Derive state from the persistent list — stays correct across sessions.
-    final isPendingBoard = userId.isNotEmpty &&
-        boardMemberRequests.any((r) =>
-            r.userId == userId &&
-            r.clubId == widget.club.id &&
-            r.status == 'pending');
-    final isBoardMember =
-        userId.isNotEmpty && widget.club.boardMemberIds.contains(userId);
     final memberCount = clubMemberCount(widget.club.id);
 
     return Scaffold(
@@ -205,51 +199,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                       _StatCell(value: '${_clubEvents.length}', label: 'Events'),
                       const Spacer(),
                       // Follow button
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          GestureDetector(
-                            onTap: () => isBoardMember
-                                ? setState(() => userState.toggleFollow(widget.club.id))
-                                : handleFollowTap(context, widget.club.id, () => setState(() {})),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isFollowing ? Colors.transparent : AppColors.primaryRed,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isFollowing
-                                      ? AppColors.secondaryText.withValues(alpha: 0.5)
-                                      : AppColors.primaryRed,
-                                ),
-                              ),
-                              child: Text(
-                                isFollowing ? 'Following' : 'Follow',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: isFollowing ? AppColors.secondaryText : Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (isPendingBoard) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(Icons.schedule_rounded, size: 11, color: Color(0xFF1565C0)),
-                                SizedBox(width: 3),
-                                Text(
-                                  'Board request pending',
-                                  style: TextStyle(fontSize: 10, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
+                      ClubFollowButton(clubId: widget.club.id, size: 'large'),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -287,7 +237,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            _PostsTab(posts: _clubPosts, timeAgo: _timeAgo, clubColor: widget.color),
+            _PostsTab(posts: _clubPosts, clubColor: widget.color),
             _EventsTab(events: _clubEvents, monthAbbr: _monthAbbr, clubColor: widget.color),
             _CollaborationsTab(
               taggedPosts: _taggedPosts,
@@ -308,10 +258,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
 
 class _PostsTab extends StatelessWidget {
   final List posts;
-  final String Function(DateTime) timeAgo;
   final Color clubColor;
 
-  const _PostsTab({required this.posts, required this.timeAgo, required this.clubColor});
+  const _PostsTab({required this.posts, required this.clubColor});
 
   @override
   Widget build(BuildContext context) {
@@ -320,121 +269,188 @@ class _PostsTab extends StatelessWidget {
         child: Text('No posts yet.', style: TextStyle(color: AppColors.secondaryText)),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.only(top: 8, bottom: 80),
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(1.5),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 1.5,
+        mainAxisSpacing: 1.5,
+        childAspectRatio: 1.0,
+      ),
       itemCount: posts.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final post = posts[i];
-        final author = users.firstWhere((u) => u.id == post.authorId,
-            orElse: () => users.first);
-        final likeCount = postLikeCount(post.id as String);
-        final commentCount = comments.where((c) => c.postId == post.id).length;
+      itemBuilder: (context, i) => _PostGridTile(
+        post: posts[i],
+        clubColor: clubColor,
+      ),
+    );
+  }
+}
 
-        return GestureDetector(
-          onTap: () => Navigator.push(context, MaterialPageRoute(
-            builder: (_) => PostDetailScreen(post: post, clubColor: clubColor),
-          )),
+class _PostGridTile extends StatelessWidget {
+  final dynamic post;
+  final Color clubColor;
+
+  const _PostGridTile({required this.post, required this.clubColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = post.imagePath as String?;
+    final likeCount = postLikeCount(post.id as String);
+    final commentCount = comments.where((c) => c.postId == post.id).length;
+    final clubInitial = clubs
+        .firstWhere((c) => c.id == post.clubId, orElse: () => clubs.first)
+        .name[0]
+        .toUpperCase();
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // ── Thumbnail image ──
+        _PostThumbnail(
+          imagePath: imagePath,
+          clubColor: clubColor,
+          clubInitial: clubInitial,
+        ),
+
+        // ── Ink ripple + navigation (single tap handler) ──
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PostDetailScreen(post: post, clubColor: clubColor),
+              ),
+            ),
+            splashColor: Colors.white30,
+            highlightColor: Colors.black12,
+          ),
+        ),
+
+        // ── Image badge (top-right) ──
+        if (imagePath != null)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Icon(
+              Icons.photo_library_rounded,
+              size: 14,
+              color: Colors.white.withValues(alpha: 0.9),
+              shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
+            ),
+          ),
+
+        // ── Likes / comments overlay (bottom) ──
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
           child: Container(
-          color: AppColors.card,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Author header ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                child: Row(
-                  children: [
-                    // Avatar
-                    GestureDetector(
-                      onTap: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => UserProfileScreen(user: author))),
-                      child: UserAvatar(
-                        userId: author.id,
-                        name: author.name,
-                        size: 38,
-                        fontSize: 16,
-                        backgroundColor: clubColor.withValues(alpha: 0.15),
-                        textColor: clubColor,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // Name + time
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => UserProfileScreen(user: author))),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(author.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: AppColors.primaryRed)),
-                            Text(timeAgo(post.createdAt as DateTime),
-                                style: const TextStyle(
-                                    fontSize: 11, color: AppColors.secondaryText)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
-
-              // ── Image banner ──
-              buildPostBanner(
-                imagePath: post.imagePath as String?,
-                fallbackColor: clubColor,
-                fallbackLetter: clubColor.toString()[0],
-                height: 180,
-              ),
-
-              // ── Engagement row ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.favorite, size: 16, color: Colors.pink),
-                    const SizedBox(width: 4),
-                    Text('$likeCount',
-                        style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-                    const SizedBox(width: 14),
-                    const Icon(Icons.chat_bubble_outline,
-                        size: 16, color: AppColors.secondaryText),
-                    const SizedBox(width: 4),
-                    Text('$commentCount',
-                        style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-                  ],
-                ),
-              ),
-
-              // ── Caption ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: RichText(
-                  text: TextSpan(children: [
-                    TextSpan(
-                      text: '${author.name}  ',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text,
-                          fontSize: 13),
-                    ),
-                    TextSpan(
-                      text: post.content as String,
-                      style: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
-                    ),
-                  ]),
-                ),
-              ),
-            ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.favorite, size: 11, color: Colors.white),
+                const SizedBox(width: 3),
+                Text('$likeCount',
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600,
+                        shadows: [Shadow(blurRadius: 2, color: Colors.black)])),
+                const SizedBox(width: 7),
+                const Icon(Icons.chat_bubble_rounded, size: 11, color: Colors.white),
+                const SizedBox(width: 3),
+                Text('$commentCount',
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600,
+                        shadows: [Shadow(blurRadius: 2, color: Colors.black)])),
+              ],
+            ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PostThumbnail extends StatelessWidget {
+  final String? imagePath;
+  final Color clubColor;
+  final String clubInitial;
+
+  const _PostThumbnail({
+    required this.imagePath,
+    required this.clubColor,
+    required this.clubInitial,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (imagePath != null && imagePath!.startsWith('https://')) {
+      return Image.network(
+        // Use a smaller 200×200 thumb for the grid — same seed = same image
+        imagePath!.replaceAll(RegExp(r'/\d+/\d+$'), '/200/200'),
+        fit: BoxFit.cover,
+        loadingBuilder: (_, child, progress) => progress == null
+            ? child
+            : Container(
+                color: clubColor.withValues(alpha: 0.12),
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: clubColor.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+              ),
+        errorBuilder: (ctx, e, st) => _Fallback(color: clubColor, letter: clubInitial),
+      );
+    }
+
+    if (imagePath != null && !imagePath!.startsWith('tpl:')) {
+      // Local file path
+      return Image.file(
+        File(imagePath!),
+        fit: BoxFit.cover,
+        errorBuilder: (ctx, e, st) =>
+            _Fallback(color: clubColor, letter: clubInitial),
+      );
+    }
+
+    // tpl:N or null → gradient fallback
+    return _Fallback(color: clubColor, letter: clubInitial);
+  }
+}
+
+class _Fallback extends StatelessWidget {
+  final Color color;
+  final String letter;
+
+  const _Fallback({required this.color, required this.letter});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: color.withValues(alpha: 0.18),
+      child: Center(
+        child: Text(
+          letter,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: color.withValues(alpha: 0.55),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -813,8 +829,102 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
     contentStore.saveBoardMemberIds();
   }
 
-  void _removeMember(String userId) {
-    setState(() => widget.club.boardMemberIds.remove(userId));
+  Future<void> _editTitleInSheet(dynamic u) async {
+    final current = widget.club.boardMemberTitles[u.id] ?? '';
+    final controller = TextEditingController(text: current);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text('Set title for ${u.name}',
+            style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          style: const TextStyle(color: AppColors.text),
+          decoration: const InputDecoration(
+            hintText: 'e.g. President, Secretary…',
+            hintStyle: TextStyle(color: AppColors.secondaryText),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          if (current.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Remove title', style: TextStyle(color: AppColors.primaryRed)),
+            ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.isEmpty) {
+        widget.club.boardMemberTitles.remove(u.id);
+      } else {
+        widget.club.boardMemberTitles[u.id] = result;
+      }
+    });
+    contentStore.saveBoardMemberTitles();
+  }
+
+  Future<void> _removeMember(dynamic u) async {
+    final first = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Remove Board Member',
+            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to remove ${u.name} from the board?',
+            style: const TextStyle(color: AppColors.secondaryText)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(color: AppColors.primaryRed)),
+          ),
+        ],
+      ),
+    );
+    if (first != true || !mounted) return;
+
+    final second = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Confirm Removal',
+            style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+        content: Text(
+            'This will permanently remove ${u.name} from the board of ${widget.club.name}. Continue?',
+            style: const TextStyle(color: AppColors.secondaryText)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Remove'),
+          ),
+        ],
+      ),
+    );
+    if (second != true || !mounted) return;
+
+    setState(() => widget.club.boardMemberIds.remove(u.id));
     contentStore.saveBoardMemberIds();
   }
 
@@ -990,14 +1100,43 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.text)),
-                          subtitle: Text(u.email,
-                              style: const TextStyle(
-                                  fontSize: 12, color: AppColors.secondaryText)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.remove_circle_outline,
-                                color: AppColors.secondaryText, size: 22),
-                            tooltip: 'Remove from board',
-                            onPressed: () => _removeMember(u.id),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.club.boardMemberTitles[u.id]?.isNotEmpty == true
+                                    ? widget.club.boardMemberTitles[u.id]!
+                                    : 'No title set',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: widget.club.boardMemberTitles[u.id]?.isNotEmpty == true
+                                      ? const Color(0xFF1565C0)
+                                      : AppColors.secondaryText,
+                                  fontWeight: widget.club.boardMemberTitles[u.id]?.isNotEmpty == true
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              Text(u.email,
+                                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined,
+                                    color: Color(0xFF1565C0), size: 20),
+                                tooltip: 'Set title',
+                                onPressed: () => _editTitleInSheet(u),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline,
+                                    color: AppColors.secondaryText, size: 22),
+                                tooltip: 'Remove from board',
+                                onPressed: () => _removeMember(u),
+                              ),
+                            ],
                           ),
                         )),
                 ],
@@ -1012,18 +1151,302 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
 
 // ─── Board Tab ────────────────────────────────────────────────────────────────
 
-class _BoardTab extends StatelessWidget {
+class _BoardTab extends StatefulWidget {
   final Club club;
   const _BoardTab({required this.club});
 
   @override
-  Widget build(BuildContext context) {
-    final members = users.where((u) => club.boardMemberIds.contains(u.id)).toList();
+  State<_BoardTab> createState() => _BoardTabState();
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+class _BoardTabState extends State<_BoardTab> {
+  // Only the club's own admin can approve/decline requests, add/remove members,
+  // or assign titles. Board members and external users have no write access.
+  bool get _isClubAdmin {
+    final adminId = authService.currentAdmin?.id ?? '';
+    final userId = authService.currentUser?.id ?? '';
+    return widget.club.adminUserIds.contains(adminId) ||
+        widget.club.adminUserIds.contains(userId);
+  }
+
+  Future<void> _editTitle(dynamic u) async {
+    final current = widget.club.boardMemberTitles[u.id] ?? '';
+    final controller = TextEditingController(text: current);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text('Set title for ${u.name}',
+            style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          style: const TextStyle(color: AppColors.text),
+          decoration: const InputDecoration(
+            hintText: 'e.g. President, Secretary…',
+            hintStyle: TextStyle(color: AppColors.secondaryText),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          if (current.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Remove title', style: TextStyle(color: AppColors.primaryRed)),
+            ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.isEmpty) {
+        widget.club.boardMemberTitles.remove(u.id);
+      } else {
+        widget.club.boardMemberTitles[u.id] = result;
+      }
+    });
+    contentStore.saveBoardMemberTitles();
+  }
+
+  List<BoardMemberRequest> get _pendingRequests => boardMemberRequests
+      .where((r) => r.clubId == widget.club.id && r.status == 'pending')
+      .toList();
+
+  void _approve(BoardMemberRequest req) {
+    // Guard: already board member elsewhere?
+    final alreadyIn = clubs
+        .where((c) => c.id != req.clubId && c.boardMemberIds.contains(req.userId))
+        .map((c) => c.name)
+        .firstOrNull;
+    if (alreadyIn != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${req.userName} is already a board member of $alreadyIn.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    setState(() {
+      if (!widget.club.boardMemberIds.contains(req.userId)) {
+        widget.club.boardMemberIds.add(req.userId);
+      }
+      userState.pendingBoardRequests.remove('${req.userId}:${req.clubId}');
+      req.status = 'approved';
+    });
+
+    contentStore.saveBoardMemberRequests();
+    contentStore.saveBoardMemberIds();
+    userPrefsService.removeBoardRequest(req.userId, req.clubId);
+
+    userState.addMessageNotification(AppNotification(
+      id: 'board_approved_${req.userId}_${req.clubId}_${DateTime.now().millisecondsSinceEpoch}',
+      userId: req.userId,
+      message: 'Your board member request for ${widget.club.name} was approved!',
+      createdAt: DateTime.now(),
+      targetType: 'club',
+      targetId: req.clubId,
+    ));
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${req.userName} approved as board member.'),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: const Color(0xFF2E7D32),
+    ));
+  }
+
+  void _decline(BoardMemberRequest req) {
+    setState(() {
+      userState.pendingBoardRequests.remove('${req.userId}:${req.clubId}');
+      req.status = 'declined';
+    });
+
+    contentStore.saveBoardMemberRequests();
+    userPrefsService.removeBoardRequest(req.userId, req.clubId);
+
+    userState.addMessageNotification(AppNotification(
+      id: 'board_declined_${req.userId}_${req.clubId}_${DateTime.now().millisecondsSinceEpoch}',
+      userId: req.userId,
+      message: 'Your board member request for ${widget.club.name} was declined. You may reapply at any time.',
+      createdAt: DateTime.now(),
+      targetType: 'club',
+      targetId: req.clubId,
+    ));
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${req.userName}\'s request was declined.'),
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _confirmRemove(dynamic u) async {
+    // First confirmation
+    final first = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Remove Board Member',
+            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Are you sure you want to remove ${u.name} from the board?',
+          style: const TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(color: AppColors.primaryRed)),
+          ),
+        ],
+      ),
+    );
+    if (first != true || !mounted) return;
+
+    // Second confirmation
+    final second = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text('Confirm Removal',
+            style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+        content: Text(
+          'This will permanently remove ${u.name} from the board of ${widget.club.name}. Continue?',
+          style: const TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Remove'),
+          ),
+        ],
+      ),
+    );
+    if (second != true || !mounted) return;
+
+    setState(() => widget.club.boardMemberIds.remove(u.id));
+    contentStore.saveBoardMemberIds();
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('${u.name} removed from the board.'),
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final members = users.where((u) => widget.club.boardMemberIds.contains(u.id)).toList();
+    final pending = _pendingRequests;
+    final authorized = _isClubAdmin;
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 80),
       children: [
-        // Header banner
+        // ── Pending Requests (admin/board only) ───────────────────────────────
+        if (authorized && pending.isNotEmpty) ...[
+          Container(
+            color: AppColors.card,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                const Icon(Icons.pending_actions_outlined, color: Color(0xFFF57C00), size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Pending Requests',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${pending.length}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF57C00)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...pending.map((req) {
+            final requester = users.where((u) => u.id == req.userId).firstOrNull;
+            return Container(
+              color: AppColors.card,
+              margin: const EdgeInsets.only(bottom: 1),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  UserAvatar(
+                    userId: req.userId,
+                    name: req.userName,
+                    size: 44,
+                    fontSize: 18,
+                    backgroundColor: const Color(0xFFFFF3E0),
+                    textColor: const Color(0xFFF57C00),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: requester == null
+                          ? null
+                          : () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => UserProfileScreen(user: requester))),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(req.userName,
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                          Text(req.userEmail,
+                              style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Requested ${_timeAgoFromDate(req.requestedAt)}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Decline
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: AppColors.primaryRed, size: 22),
+                    tooltip: 'Decline',
+                    onPressed: () => _decline(req),
+                  ),
+                  // Approve
+                  IconButton(
+                    icon: const Icon(Icons.check_rounded, color: Color(0xFF2E7D32), size: 22),
+                    tooltip: 'Approve',
+                    onPressed: () => _approve(req),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+        ],
+
+        // ── Board Members header ───────────────────────────────────────────────
         Container(
           width: double.infinity,
           color: AppColors.card,
@@ -1034,11 +1457,7 @@ class _BoardTab extends StatelessWidget {
               const SizedBox(width: 8),
               const Text(
                 'Board Members',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.text,
-                ),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
               ),
               const SizedBox(width: 8),
               Container(
@@ -1050,90 +1469,112 @@ class _BoardTab extends StatelessWidget {
                 child: Text(
                   '${members.length}',
                   style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1565C0),
-                  ),
+                      fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1565C0)),
                 ),
               ),
             ],
           ),
         ),
         const Divider(height: 1),
-        Expanded(
-          child: members.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+
+        // ── Board Members list ─────────────────────────────────────────────────
+        if (members.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.shield_outlined, size: 48, color: AppColors.secondaryText),
+                SizedBox(height: 12),
+                Text('No board members yet.',
+                    style: TextStyle(fontSize: 15, color: AppColors.secondaryText)),
+                SizedBox(height: 6),
+                Text('Approved requests will appear here.',
+                    style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              ],
+            ),
+          )
+        else
+          ...members.map((u) {
+            final title = widget.club.boardMemberTitles[u.id];
+            final isAdmin = _isClubAdmin;
+            return Column(
+              children: [
+                ListTile(
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => UserProfileScreen(user: u))),
+                  leading: UserAvatar(
+                    userId: u.id,
+                    name: u.name,
+                    size: 44,
+                    fontSize: 18,
+                    backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.12),
+                    textColor: const Color(0xFF1565C0),
+                  ),
+                  title: Text(u.name,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.shield_outlined,
-                          size: 48, color: AppColors.secondaryText),
-                      SizedBox(height: 12),
-                      Text(
-                        'No board members yet.',
-                        style: TextStyle(
-                            fontSize: 15, color: AppColors.secondaryText),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Approved requests will appear here.',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.secondaryText),
-                      ),
+                      if (title != null && title.isNotEmpty)
+                        Text(title,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF1565C0),
+                                fontWeight: FontWeight.w600))
+                      else
+                        const Text('Board Member',
+                            style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                      Text(u.email,
+                          style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                     ],
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.only(top: 4, bottom: 80),
-                  itemCount: members.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1, indent: 72),
-                  itemBuilder: (ctx, i) {
-                    final u = members[i];
-                    return ListTile(
-                      onTap: () => Navigator.push(
-                        ctx,
-                        MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: u)),
-                      ),
-                      leading: UserAvatar(
-                        userId: u.id,
-                        name: u.name,
-                        size: 44,
-                        fontSize: 18,
-                        backgroundColor:
-                            const Color(0xFF1565C0).withValues(alpha: 0.12),
-                        textColor: const Color(0xFF1565C0),
-                      ),
-                      title: Text(u.name,
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text)),
-                      subtitle: Text(u.email,
-                          style: const TextStyle(
-                              fontSize: 12, color: AppColors.secondaryText)),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE3F2FD),
-                          borderRadius: BorderRadius.circular(8),
+                  trailing: authorized
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isAdmin)
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined,
+                                    color: Color(0xFF1565C0), size: 20),
+                                tooltip: 'Set title',
+                                onPressed: () => _editTitle(u),
+                              ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline,
+                                  color: AppColors.secondaryText, size: 22),
+                              tooltip: 'Remove from board',
+                              onPressed: () => _confirmRemove(u),
+                            ),
+                          ],
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE3F2FD),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('Board',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1565C0))),
                         ),
-                        child: const Text(
-                          'Board',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1565C0)),
-                        ),
-                      ),
-                    );
-                  },
                 ),
-        ),
+                const Divider(height: 1, indent: 72),
+              ],
+            );
+          }),
       ],
     );
+  }
+
+  String _timeAgoFromDate(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 }
 

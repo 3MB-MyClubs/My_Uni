@@ -20,7 +20,7 @@ class AuthChoiceScreen extends StatelessWidget {
           Container(
             height: size.height * 0.48,
             width: double.infinity,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFF6A1530), AppColors.primaryRed, AppColors.darkRed],
                 begin: Alignment.topLeft,
@@ -51,7 +51,7 @@ class AuthChoiceScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
                         'KU',
                         style: TextStyle(
@@ -146,7 +146,7 @@ class AuthChoiceScreen extends StatelessWidget {
                     onPressed: onSignUp,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primaryRed,
-                      side: const BorderSide(
+                      side: BorderSide(
                           color: AppColors.primaryRed, width: 1.5),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(

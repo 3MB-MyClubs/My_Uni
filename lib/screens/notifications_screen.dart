@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -139,39 +138,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildHeader(),
-          if (all.isEmpty)
-            const SliverFillRemaining(child: _EmptyState())
-          else ...[
-            if (today.isNotEmpty) ...[
-              _SectionHeader(title: 'Today', count: today.where((n) => !_read.contains(n.id)).length),
-              _buildGroup(today),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.delayed(const Duration(milliseconds: 400));
+          if (mounted) setState(() {});
+        },
+        color: AppColors.primaryRed,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            _buildHeader(),
+            if (all.isEmpty)
+              const SliverFillRemaining(child: _EmptyState())
+            else ...[
+              if (today.isNotEmpty) ...[
+                _SectionHeader(title: 'Today', count: today.where((n) => !_read.contains(n.id)).length),
+                _buildGroup(today),
+              ],
+              if (yesterday.isNotEmpty) ...[
+                _SectionHeader(title: 'Yesterday'),
+                _buildGroup(yesterday),
+              ],
+              if (thisWeek.isNotEmpty) ...[
+                _SectionHeader(title: 'This Week'),
+                _buildGroup(thisWeek),
+              ],
+              if (thisMonth.isNotEmpty) ...[
+                _SectionHeader(title: 'This Month'),
+                _buildGroup(thisMonth),
+              ],
+              if (thisYear.isNotEmpty) ...[
+                _SectionHeader(title: 'This Year'),
+                _buildGroup(thisYear),
+              ],
+              if (older.isNotEmpty) ...[
+                _SectionHeader(title: 'Older'),
+                _buildGroup(older),
+              ],
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
-            if (yesterday.isNotEmpty) ...[
-              _SectionHeader(title: 'Yesterday'),
-              _buildGroup(yesterday),
-            ],
-            if (thisWeek.isNotEmpty) ...[
-              _SectionHeader(title: 'This Week'),
-              _buildGroup(thisWeek),
-            ],
-            if (thisMonth.isNotEmpty) ...[
-              _SectionHeader(title: 'This Month'),
-              _buildGroup(thisMonth),
-            ],
-            if (thisYear.isNotEmpty) ...[
-              _SectionHeader(title: 'This Year'),
-              _buildGroup(thisYear),
-            ],
-            if (older.isNotEmpty) ...[
-              _SectionHeader(title: 'Older'),
-              _buildGroup(older),
-            ],
-            const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -272,81 +279,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               notification: n,
               timeLabel: _timeAgo(n.createdAt),
               isRead: isRead,
-              onApprove: () => setState(() {
-                _read.add(n.id);
-                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-                final requesterId = n.fromId!;
-                final clubId = n.targetId!;
+              onTap: () {
+                setState(() {
+                  _read.add(n.id);
+                  if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+                });
+                final clubId = n.targetId ?? '';
                 final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-
-                // Guard: requester must not already be a board member elsewhere.
-                final alreadyIn = clubs
-                    .where((c) => c.id != clubId && c.boardMemberIds.contains(requesterId))
-                    .map((c) => c.name)
-                    .firstOrNull;
-                if (alreadyIn != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(
-                        '${club.name}: this user is already a board member of $alreadyIn.'),
-                    behavior: SnackBarBehavior.floating,
-                  ));
-                  return;
-                }
-
-                // Grant board membership.
-                if (!club.boardMemberIds.contains(requesterId)) {
-                  club.boardMemberIds.add(requesterId);
-                }
-                userState.pendingBoardRequests.remove('$requesterId:$clubId');
-
-                // Update the stored request record.
-                for (final r in boardMemberRequests) {
-                  if (r.userId == requesterId && r.clubId == clubId && r.status == 'pending') {
-                    r.status = 'approved';
-                  }
-                }
-                contentStore.saveBoardMemberRequests();
-                contentStore.saveBoardMemberIds();
-
-                userState.addMessageNotification(AppNotification(
-                  id: 'board_approved_${requesterId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}',
-                  userId: requesterId,
-                  message: 'Your board member request for ${club.name} was approved!',
-                  createdAt: DateTime.now(),
-                  targetType: 'club',
-                  targetId: clubId,
+                final color = const [
+                  Color(0xFFE53935), Color(0xFF8E24AA), Color(0xFF1E88E5),
+                  Color(0xFF00897B), Color(0xFFF4511E), Color(0xFF3949AB),
+                ][clubs.indexOf(club) % 6];
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ClubProfileScreen(club: club, color: color),
                 ));
-                userPrefsService.save(authService.currentAdmin?.id ?? '');
-              }),
-              onDecline: () => setState(() {
-                _read.add(n.id);
-                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-                final requesterId = n.fromId!;
-                final clubId = n.targetId!;
-                // Remove from session state (if requester is currently logged in).
-                userState.pendingBoardRequests.remove('$requesterId:$clubId');
-
-                // Update the stored request record.
-                for (final r in boardMemberRequests) {
-                  if (r.userId == requesterId && r.clubId == clubId && r.status == 'pending') {
-                    r.status = 'declined';
-                  }
-                }
-                contentStore.saveBoardMemberRequests();
-                // Clear the requester's persisted pending entry so they can reapply.
-                userPrefsService.removeBoardRequest(requesterId, clubId);
-
-                final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-                userState.addMessageNotification(AppNotification(
-                  id: 'board_declined_${requesterId}_${clubId}_${DateTime.now().millisecondsSinceEpoch}',
-                  userId: requesterId,
-                  message: 'Your board member request for ${club.name} was declined. You may reapply at any time.',
-                  createdAt: DateTime.now(),
-                  targetType: 'club',
-                  targetId: clubId,
-                ));
-                userPrefsService.save(authService.currentAdmin?.id ?? '');
-              }),
+              },
             );
           }
 
@@ -758,15 +705,13 @@ class _BoardMemberRequestCard extends StatelessWidget {
   final AppNotification notification;
   final String timeLabel;
   final bool isRead;
-  final VoidCallback onApprove;
-  final VoidCallback onDecline;
+  final VoidCallback onTap;
 
   const _BoardMemberRequestCard({
     required this.notification,
     required this.timeLabel,
     required this.isRead,
-    required this.onApprove,
-    required this.onDecline,
+    required this.onTap,
   });
 
   @override
@@ -780,17 +725,9 @@ class _BoardMemberRequestCard extends StatelessWidget {
     final alreadyHandled = !boardMemberRequests.any(
         (r) => r.userId == fromId && r.clubId == clubId && r.status == 'pending');
 
-    // Authorised = the currently logged-in admin OR regular user is listed as an
-    // admin or board member of this specific club.
-    final currentAdminId = authService.currentAdmin?.id ?? '';
-    final currentUserId  = authService.currentUser?.id  ?? '';
-    final isAuthorized =
-        club.adminUserIds.contains(currentAdminId) ||
-        club.boardMemberIds.contains(currentAdminId) ||
-        club.adminUserIds.contains(currentUserId)  ||
-        club.boardMemberIds.contains(currentUserId);
-
-    return AnimatedContainer(
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       decoration: BoxDecoration(
@@ -888,71 +825,29 @@ class _BoardMemberRequestCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (!alreadyHandled && isAuthorized) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onApprove,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1565C0),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text(
-                          'Approve',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onDecline,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: AppColors.secondaryText.withValues(alpha: 0.4)),
-                        ),
-                        child: const Text(
-                          'Decline',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                              color: AppColors.secondaryText),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (!alreadyHandled && !isAuthorized) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Only this club\'s admins can approve or decline requests.',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
-            ] else ...[
-              const SizedBox(height: 8),
+            const SizedBox(height: 8),
+            if (alreadyHandled)
               Text(
                 club.boardMemberIds.contains(fromId)
                     ? 'Approved — ${requester.name} is now a board member.'
                     : 'This request was declined.',
                 style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              )
+            else
+              Row(
+                children: [
+                  const Icon(Icons.touch_app_outlined, size: 13, color: Color(0xFF1565C0)),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Tap to review in the club\'s Board tab',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
-            ],
           ],
         ),
       ),
+    ),
     );
   }
 }
