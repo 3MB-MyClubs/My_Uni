@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // ── Koç University Dark Theme ─────────────────────────────────────────────
-  // Backgrounds  (iPhone black-mode layering)
-  static const Color background     = Color(0xFF000000); // pure black
-  static const Color card           = Color(0xFF1C1C1E); // iOS dark card
-  static const Color surfaceAlt     = Color(0xFF2C2C2E); // elevated surface
+  // Backgrounds  (burgundy-tinted dark layering)
+  static const Color background     = Color(0xFF0A0005); // deep burgundy-black
+  static const Color card           = Color(0xFF1C0A14); // dark burgundy card
+  static const Color surfaceAlt     = Color(0xFF261018); // elevated surface
 
   // Burgundy accent  (Koç University deep crimson/burgundy)
   static const Color primaryRed     = Color(0xFF8C1D40); // Koç burgundy
@@ -19,6 +19,6 @@ class AppColors {
   // Utility
   static const Color lightGray      = Color(0xFF3A3A3C); // input fill
   static const Color darkGray       = Color(0xFF1C1C1E);
-  static const Color divider        = Color(0xFF38383A);
+  static const Color divider        = Color(0xFF38202E);
   static const Color accentGold     = Color(0xFFE8C84A); // highlight
 }

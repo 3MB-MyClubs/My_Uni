@@ -13,6 +13,7 @@ import 'explore_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
+import 'campus_map_screen.dart';
 import 'create_post_screen.dart';
 import 'create_event_screen.dart';
 import 'create_story_screen.dart';
@@ -180,6 +181,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
     final screens = <Widget>[
       const FeedScreen(),
       const ExploreScreen(),
+      const CampusMapScreen(),
       NotificationsScreen(),
       ProfileScreen(onLogout: widget.onLogout),
       if (widget.isAdmin) const AdminDashboard(),
@@ -217,21 +219,22 @@ class _MainNavScreenState extends State<MainNavScreen> {
             children: [
               _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', selected: _selectedIndex == 0, onTap: () => setState(() => _selectedIndex = 0)),
               _NavItem(icon: Icons.search, activeIcon: Icons.search, label: 'Search', selected: _selectedIndex == 1, onTap: () => setState(() => _selectedIndex = 1)),
+              _NavItem(icon: Icons.map_outlined, activeIcon: Icons.map, label: 'Map', selected: _selectedIndex == 2, onTap: () => setState(() => _selectedIndex = 2)),
               if (_isClubAdmin) const Expanded(child: SizedBox()), // space for centred FAB
               _NavItem(
                 icon: Icons.notifications_none,
                 activeIcon: Icons.notifications,
                 label: 'Alerts',
-                selected: _selectedIndex == 2,
+                selected: _selectedIndex == 3,
                 badge: userState.unreadNotifications,
                 onTap: () {
-                  setState(() => _selectedIndex = 2);
+                  setState(() => _selectedIndex = 3);
                   _onNotificationsOpened();
                 },
               ),
-              _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile', selected: _selectedIndex == 3, onTap: () => setState(() => _selectedIndex = 3)),
+              _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile', selected: _selectedIndex == 4, onTap: () => setState(() => _selectedIndex = 4)),
               if (widget.isAdmin)
-                _NavItem(icon: Icons.admin_panel_settings_outlined, activeIcon: Icons.admin_panel_settings, label: 'Admin', selected: _selectedIndex == 4, onTap: () => setState(() => _selectedIndex = 4)),
+                _NavItem(icon: Icons.admin_panel_settings_outlined, activeIcon: Icons.admin_panel_settings, label: 'Admin', selected: _selectedIndex == 5, onTap: () => setState(() => _selectedIndex = 5)),
             ],
           ),
         ),

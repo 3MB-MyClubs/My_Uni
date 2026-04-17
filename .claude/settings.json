@@ -4,7 +4,9 @@
       "Bash(awk 'NR>=155 && NR<=168' lib/screens/chat_screen.dart)",
       "Bash(awk 'NR>=561 && NR<=565' lib/screens/chat_screen.dart)",
       "Bash(awk 'NR>=74 && NR<=78' lib/screens/club_admin_auth_screen.dart)",
-      "Bash(awk 'NR>=148 && NR<=152' lib/screens/club_admin_auth_screen.dart)"
+      "Bash(awk 'NR>=148 && NR<=152' lib/screens/club_admin_auth_screen.dart)",
+      "Bash(/Users/hakantuncay/flutter/bin/dart format:*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); pkg=[p for p in d['packages'] if p['name']=='flutter_map']; print\\(pkg[0] if pkg else 'not found'\\)\")"
     ]
   }
 }

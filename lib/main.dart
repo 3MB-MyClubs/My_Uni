@@ -14,6 +14,10 @@ import 'services/user_prefs_service.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
 import 'services/view_tracker.dart';
+import 'services/personalization_service.dart';
+import 'services/campus_pulse_service.dart';
+import 'services/heatmap_repository.dart';
+import 'services/location_permission_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
@@ -22,6 +26,10 @@ void main() async {
   await userPrefsService.initialize();
   await contentStore.initialize();
   await viewTracker.initialize();
+  await personalizationService.initialize();
+  await localHeatmapRepository.initialize();
+  await campusPulseService.initialize();
+  await locationPermissionService.initialize();
   contentStore.applyToLists();
   contentStore.loadBoardMemberRequests();
   contentStore.loadBoardMemberIds();
@@ -70,7 +78,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _savePrefs() {
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
-    if (uid != null) userPrefsService.save(uid);
+    if (uid != null) {
+      userPrefsService.save(uid);
+      personalizationService.save(uid);
+      campusPulseService.save(uid);
+    }
     contentStore.saveAll(userState.dynamicNotifications);
   }
 
@@ -80,10 +92,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showLogin = false;
       _showSignUp = false;
     });
-    final currentUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
+    final currentUserId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
       messageService.setCurrentUserId(currentUserId);
       userPrefsService.load(currentUserId);
+      personalizationService.load(currentUserId);
+      campusPulseService.load(currentUserId);
     }
   }
 
@@ -108,14 +123,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     Widget homeWidget;
-    if (_loggedIn || authService.currentUser != null || authService.currentAdmin != null) {
+    if (_loggedIn ||
+        authService.currentUser != null ||
+        authService.currentAdmin != null) {
       final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
       final isAdmin = isSuperAdmin;
-      final currentUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
+      final currentUserId =
+          authService.currentUser?.id ?? authService.currentAdmin?.id;
       if (currentUserId != null) {
         messageService.setCurrentUserId(currentUserId);
         // Load persisted prefs for this session (no-op if already loaded).
         userPrefsService.load(currentUserId);
+        personalizationService.load(currentUserId);
+        campusPulseService.load(currentUserId);
       }
       homeWidget = MainNavScreen(
         isAdmin: isAdmin,
@@ -133,7 +153,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         duration: const Duration(milliseconds: 400),
         child: LoginScreen(onLogin: _onLogin, onBack: handleBack),
         transitionBuilder: (child, animation) => SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(animation),
           child: child,
         ),
       );
@@ -142,7 +165,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         duration: const Duration(milliseconds: 400),
         child: SignUpScreen(onSignUp: _onSignUp, onBack: handleBack),
         transitionBuilder: (child, animation) => SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(animation),
           child: child,
         ),
       );
@@ -154,7 +180,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           onSignUp: () => setState(() => _showSignUp = true),
           onAdminLogin: _onLogin,
         ),
-        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+        transitionBuilder: (child, animation) =>
+            FadeTransition(opacity: animation, child: child),
       );
     }
     return MaterialApp(
@@ -202,7 +229,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return const TextStyle(
-                  color: AppColors.primaryRed, fontWeight: FontWeight.w600);
+                color: AppColors.primaryRed,
+                fontWeight: FontWeight.w600,
+              );
             }
             return const TextStyle(color: AppColors.secondaryText);
           }),
@@ -212,7 +241,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           bodyMedium: TextStyle(color: AppColors.text),
           bodySmall: TextStyle(color: AppColors.secondaryText),
           titleLarge: TextStyle(
-              color: AppColors.text, fontWeight: FontWeight.bold),
+            color: AppColors.text,
+            fontWeight: FontWeight.bold,
+          ),
           titleMedium: TextStyle(color: AppColors.text),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -243,14 +274,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           labelStyle: TextStyle(color: AppColors.primaryRed),
         ),
         switchTheme: SwitchThemeData(
-          thumbColor:
-              WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                  ? AppColors.primaryRed
-                  : AppColors.secondaryText),
-          trackColor:
-              WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                  ? AppColors.darkRed
-                  : AppColors.lightGray),
+          thumbColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? AppColors.primaryRed
+                : AppColors.secondaryText,
+          ),
+          trackColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? AppColors.darkRed
+                : AppColors.lightGray,
+          ),
         ),
         useMaterial3: true,
       ),

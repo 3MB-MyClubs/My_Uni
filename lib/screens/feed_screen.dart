@@ -22,6 +22,7 @@ import 'messages_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
+import 'ku_day_section.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -151,6 +152,7 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildStoriesRow(),
             _buildWelcomeCard(live, upcoming),
             _buildEventsStrip(live, upcoming),
+            const SliverToBoxAdapter(child: KuDaySection()),
             if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
