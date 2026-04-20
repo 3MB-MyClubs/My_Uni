@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import '../models/board_member_request.dart';
+import '../models/club.dart';
 import '../models/comment.dart';
 import '../models/event.dart';
 import '../models/like.dart';
@@ -148,6 +149,48 @@ class ContentStore {
         ..clear()
         ..addAll(inner.map((k, v) => MapEntry(k, v as String)));
     }
+  }
+
+  // ── Ownership-based deletion ──────────────────────────────────────────────────
+  // Allowed when requester is the creator OR the admin of the content's club.
+
+  bool _isClubAdmin(String clubId, String userId) =>
+      clubs.any((c) => c.id == clubId && c.adminUserIds.contains(userId));
+
+  bool deleteEvent(String eventId, String requestingUserId) {
+    final idx = events.indexWhere((e) => e.id == eventId);
+    if (idx == -1) return false;
+    final ev = events[idx];
+    final allowed = ev.createdByUserId == requestingUserId ||
+        _isClubAdmin(ev.clubId, requestingUserId);
+    if (!allowed) return false;
+    events.removeAt(idx);
+    saveEvents();
+    return true;
+  }
+
+  bool deletePost(String postId, String requestingUserId) {
+    final idx = newsPosts.indexWhere((p) => p.id == postId);
+    if (idx == -1) return false;
+    final post = newsPosts[idx];
+    final allowed = post.authorId == requestingUserId ||
+        _isClubAdmin(post.clubId, requestingUserId);
+    if (!allowed) return false;
+    newsPosts.removeAt(idx);
+    saveNewsPosts();
+    return true;
+  }
+
+  bool deleteStory(String storyId, String requestingUserId) {
+    final idx = clubStories.indexWhere((s) => s.id == storyId);
+    if (idx == -1) return false;
+    final story = clubStories[idx];
+    final allowed = story.createdByUserId == requestingUserId ||
+        _isClubAdmin(story.clubId, requestingUserId);
+    if (!allowed) return false;
+    clubStories.removeAt(idx);
+    saveClubStories();
+    return true;
   }
 
   // ── Save everything at once ───────────────────────────────────────────────────

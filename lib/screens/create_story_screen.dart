@@ -108,6 +108,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
         textOffsetX: _textFracX,
         textOffsetY: _textFracY,
         textColorValue: _currentColor.toARGB32(),
+        createdByUserId: authService.currentAdmin?.id,
       ),
     );
     contentStore.saveClubStories();

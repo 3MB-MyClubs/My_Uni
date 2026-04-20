@@ -5,11 +5,14 @@ import 'package:image_picker/image_picker.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
+import 'event_detail_screen.dart';
+import 'post_detail_screen.dart';
 import 'settings_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -32,6 +35,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ];
 
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
+
+  int _contentTab = 0; // 0 = Posts, 1 = Stories, 2 = Events
 
   Future<void> _pickProfilePhoto(String userId, ImageSource source) async {
     final picker = ImagePicker();
@@ -190,6 +195,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildProfileHeader(displayName, displayEmail, isAdmin, myClubs.length, myEventCount),
                 const Divider(height: 1),
                 _buildMyClubsSection(myClubs),
+                if (isAdmin)
+                  _buildMyContentSection(admin.id),
                 const SizedBox(height: 80),
               ],
             ),
@@ -653,6 +660,696 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ── My Content section (admin only) ──────────────────────────────────────────
+
+  Widget _buildMyContentSection(String adminId) {
+    final managedClub = clubs.cast<Club?>().firstWhere(
+        (c) => c!.adminUserIds.contains(adminId),
+        orElse: () => null);
+    if (managedClub == null) return const SizedBox.shrink();
+
+    final clubIdx   = clubs.indexOf(managedClub);
+    final clubColor = _clubColor(clubIdx < 0 ? 0 : clubIdx);
+
+    final myPosts = newsPosts
+        .where((p) => p.clubId == managedClub.id)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    final myStories = clubStories
+        .where((s) => s.clubId == managedClub.id)
+        .toList()
+      ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+
+    final myEvents = events
+        .where((e) => e.clubId == managedClub.id)
+        .toList()
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 1),
+        Container(
+          color: AppColors.card,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.grid_view_rounded, size: 18, color: clubColor),
+                    const SizedBox(width: 8),
+                    const Text('My Content',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: clubColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        managedClub.name,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: clubColor,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Tab chips ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: Row(
+                  children: [
+                    _ContentTabChip(
+                      label: 'Posts',
+                      count: myPosts.length,
+                      selected: _contentTab == 0,
+                      color: clubColor,
+                      onTap: () => setState(() => _contentTab = 0),
+                    ),
+                    const SizedBox(width: 8),
+                    _ContentTabChip(
+                      label: 'Stories',
+                      count: myStories.length,
+                      selected: _contentTab == 1,
+                      color: clubColor,
+                      onTap: () => setState(() => _contentTab = 1),
+                    ),
+                    const SizedBox(width: 8),
+                    _ContentTabChip(
+                      label: 'Events',
+                      count: myEvents.length,
+                      selected: _contentTab == 2,
+                      color: clubColor,
+                      onTap: () => setState(() => _contentTab = 2),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Tab content ──
+              if (_contentTab == 0) _buildPostsList(myPosts, clubColor, adminId),
+              if (_contentTab == 1) _buildStoriesList(myStories, clubColor, adminId),
+              if (_contentTab == 2) _buildEventsList(myEvents, clubColor, adminId),
+
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<bool?> _confirmDelete(String title, String message) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title,
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        content: Text(message,
+            style: const TextStyle(color: AppColors.secondaryText)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostsList(List myPosts, Color color, String adminId) {
+    if (myPosts.isEmpty) {
+      return const _EmptyHint(text: 'No posts yet.');
+    }
+    return Column(
+      children: myPosts.map((p) {
+        return Dismissible(
+          key: ValueKey(p.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: Colors.red.withValues(alpha: 0.85),
+            child: const Icon(Icons.delete_outline, color: Colors.white, size: 22),
+          ),
+          confirmDismiss: (_) => _confirmDelete('Delete post?',
+              'This post will be permanently removed.'),
+          onDismissed: (_) {
+            final ok = contentStore.deletePost(p.id, adminId);
+            if (mounted) {
+              if (ok) {
+                setState(() {});
+              } else {
+                Navigator.popUntil(context, (r) => r.isFirst);
+              }
+            }
+          },
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PostDetailScreen(post: p, clubColor: color),
+                  ),
+                ).then((_) => setState(() {})),
+                leading: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: p.imagePath != null && p.imagePath!.startsWith('http')
+                      ? Image.network(p.imagePath!, fit: BoxFit.cover,
+                          errorBuilder: (ctx2, err, stack) => Center(
+                            child: Text(
+                              clubs.firstWhere((c) => c.id == p.clubId,
+                                  orElse: () => clubs.first).name[0],
+                              style: TextStyle(fontSize: 22,
+                                  fontWeight: FontWeight.bold, color: color),
+                            ),
+                          ))
+                      : p.imagePath != null
+                          ? Image.file(File(p.imagePath!), fit: BoxFit.cover)
+                          : Center(
+                              child: Text(
+                                clubs.firstWhere((c) => c.id == p.clubId,
+                                    orElse: () => clubs.first).name[0],
+                                style: TextStyle(fontSize: 22,
+                                    fontWeight: FontWeight.bold, color: color),
+                              ),
+                            ),
+                ),
+                title: Text(
+                  p.content.length > 80 ? '${p.content.substring(0, 80)}…' : p.content,
+                  style: const TextStyle(fontSize: 13, color: AppColors.text, height: 1.4),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  _timeAgoLabel(p.createdAt),
+                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                ),
+                trailing: const Icon(Icons.swipe_left_outlined,
+                    size: 16, color: AppColors.secondaryText),
+              ),
+              const Divider(height: 1, indent: 84),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildStoriesList(List myStories, Color color, String adminId) {
+    if (myStories.isEmpty) {
+      return const _EmptyHint(text: 'No stories yet.');
+    }
+    return SizedBox(
+      height: 172,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        itemCount: myStories.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 10),
+        itemBuilder: (ctx, i) {
+          final s = myStories[i];
+          final hasPhoto = s.imagePath != null;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 90,
+              height: 160,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Background
+                  GestureDetector(
+                    onTap: () => _showStoryPreview(ctx, s),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (hasPhoto && s.imagePath!.startsWith('http'))
+                          Image.network(s.imagePath!, fit: BoxFit.cover,
+                              errorBuilder: (c2, e, st) => _storyGradientBox(color))
+                        else if (hasPhoto)
+                          Image.file(File(s.imagePath!), fit: BoxFit.cover)
+                        else
+                          _storyGradientBox(color),
+                        // Dark scrim
+                        Container(color: Colors.black.withValues(alpha: 0.25)),
+                        // Text preview
+                        if (s.text.isNotEmpty)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(6, 28, 6, 20),
+                              child: Text(
+                                s.text,
+                                textAlign: TextAlign.center,
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Color(s.textColorValue),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  shadows: const [
+                                    Shadow(blurRadius: 4, color: Colors.black87),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Date chip
+                        Positioned(
+                          bottom: 5,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Text(
+                              _timeAgoLabel(s.postedAt),
+                              style: const TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Delete button
+                  Positioned(
+                      top: 5,
+                      right: 5,
+                      child: GestureDetector(
+                        onTap: () => _confirmDelete(
+                          'Delete story?',
+                          'This story will be permanently removed.',
+                        ).then((confirmed) {
+                          if (confirmed != true || !mounted) return;
+                          final ok = contentStore.deleteStory(s.id, adminId);
+                          if (mounted) {
+                            if (ok) {
+                              setState(() {});
+                            } else {
+                              Navigator.popUntil(context, (r) => r.isFirst);
+                            }
+                          }
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.85),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.delete_outline,
+                              color: Colors.white, size: 14),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _storyGradientBox(Color color) => Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              color.withValues(alpha: 0.8),
+              color.withValues(alpha: 0.4),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      );
+
+  void _showStoryPreview(BuildContext context, dynamic story) {
+    final hasPhoto = story.imagePath != null;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => GestureDetector(
+        onTap: () => Navigator.pop(ctx),
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            height: MediaQuery.of(ctx).size.height * 0.72,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFF1a1a2e),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (hasPhoto && (story.imagePath as String).startsWith('http'))
+                  Image.network(story.imagePath as String, fit: BoxFit.cover,
+                      errorBuilder: (c2, e, st) => _storyGradientBox(AppColors.primaryRed))
+                else if (hasPhoto)
+                  Image.file(File(story.imagePath as String), fit: BoxFit.cover)
+                else
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                  ),
+                Container(color: Colors.black.withValues(alpha: 0.2)),
+                if ((story.text as String).isNotEmpty)
+                  Align(
+                    alignment: Alignment(
+                      ((story.textOffsetX as double) - 0.5) * 2,
+                      ((story.textOffsetY as double) - 0.5) * 2,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        story.text as String,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(story.textColorValue as int),
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          shadows: const [
+                            Shadow(blurRadius: 6, color: Colors.black87),
+                            Shadow(blurRadius: 12, color: Colors.black54),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                // Close hint
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  ),
+                ),
+                // Time label
+                Positioned(
+                  bottom: 16,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Text(
+                      _timeAgoLabel(story.postedAt as DateTime),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white60,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventsList(List myEvents, Color color, String adminId) {
+    if (myEvents.isEmpty) {
+      return const _EmptyHint(text: 'No events yet.');
+    }
+    return Column(
+      children: myEvents.map((e) {
+        final now      = DateTime.now();
+        final isLive   = e.dateTime.isBefore(now) && e.endTime.isAfter(now);
+        final isPast   = e.endTime.isBefore(now);
+        final diff     = e.dateTime.difference(now);
+
+        String statusLabel;
+        Color  statusColor;
+        if (isLive) {
+          statusLabel = 'Live';
+          statusColor = Colors.green;
+        } else if (isPast) {
+          statusLabel = 'Ended';
+          statusColor = AppColors.secondaryText;
+        } else if (diff.inDays == 0) {
+          statusLabel = 'Today';
+          statusColor = Colors.orange;
+        } else if (diff.inDays == 1) {
+          statusLabel = 'Tomorrow';
+          statusColor = color;
+        } else {
+          statusLabel = 'In ${diff.inDays}d';
+          statusColor = color;
+        }
+
+        return Dismissible(
+          key: ValueKey(e.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: Colors.red.withValues(alpha: 0.85),
+            child: const Icon(Icons.delete_outline, color: Colors.white, size: 22),
+          ),
+          confirmDismiss: (_) => _confirmDelete(
+            'Delete event?',
+            'This event will be permanently removed.',
+          ),
+          onDismissed: (_) {
+            final ok = contentStore.deleteEvent(e.id, adminId);
+            if (mounted) {
+              if (ok) {
+                setState(() {});
+              } else {
+                Navigator.popUntil(context, (r) => r.isFirst);
+              }
+            }
+          },
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EventDetailScreen(event: e, color: color),
+                  ),
+                ).then((_) => setState(() {})),
+                leading: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${e.dateTime.day}',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: color),
+                      ),
+                      Text(
+                        _monthAbbr(e.dateTime.month),
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: color),
+                      ),
+                    ],
+                  ),
+                ),
+                title: Text(
+                  e.title,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  e.location,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.secondaryText),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.swipe_left_outlined,
+                        size: 14, color: AppColors.secondaryText),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, indent: 84),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  String _timeAgoLabel(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.isNegative) {
+      final ahead = dt.difference(DateTime.now());
+      if (ahead.inDays > 0) return 'in ${ahead.inDays}d';
+      if (ahead.inHours > 0) return 'in ${ahead.inHours}h';
+      return 'soon';
+    }
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${m[dt.month - 1]} ${dt.day}';
+  }
+
+  String _monthAbbr(int m) =>
+      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+}
+
+class _ContentTabChip extends StatelessWidget {
+  final String   label;
+  final int      count;
+  final bool     selected;
+  final Color    color;
+  final VoidCallback onTap;
+
+  const _ContentTabChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? color : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? color : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : AppColors.secondaryText,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.25)
+                    : AppColors.divider,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white : AppColors.secondaryText,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyHint extends StatelessWidget {
+  final String text;
+  const _EmptyHint({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+        ),
+      ),
+    );
+  }
 }
 
 class _StatCell extends StatelessWidget {

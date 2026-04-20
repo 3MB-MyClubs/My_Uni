@@ -24,10 +24,54 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
 
+  String get _loggedInId =>
+      authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
+
+  bool get _isOwner => widget.post.authorId == _loggedInId;
+
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  void _confirmDelete() {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete post?',
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        content: const Text('This post will be permanently removed.',
+            style: TextStyle(color: AppColors.secondaryText)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed != true || !mounted) return;
+      final ok = contentStore.deletePost(widget.post.id, _loggedInId);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+      } else {
+        Navigator.popUntil(context, (r) => r.isFirst);
+      }
+    });
   }
 
   String _timeAgo(DateTime dt) {
@@ -97,6 +141,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
+        actions: [
+          if (_isOwner)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: _confirmDelete,
+            ),
+        ],
       ),
       body: Column(
         children: [

@@ -27,11 +27,57 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   late bool _attending;
 
+  String get _loggedInId =>
+      authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
+
+  bool get _isOwner =>
+      widget.event.createdByUserId != null &&
+      widget.event.createdByUserId == _loggedInId;
+
   @override
   void initState() {
     super.initState();
     final userId = authService.currentUser?.id ?? '';
     _attending = widget.event.attendeeUserIds.contains(userId);
+  }
+
+  void _confirmDelete() {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete event?',
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        content: const Text('This event will be permanently removed.',
+            style: TextStyle(color: AppColors.secondaryText)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed != true || !mounted) return;
+      final ok = contentStore.deleteEvent(widget.event.id, _loggedInId);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+      } else {
+        Navigator.popUntil(context, (r) => r.isFirst);
+      }
+    });
   }
 
   void _toggleRsvp() {
@@ -87,6 +133,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              if (_isOwner)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.white),
+                  onPressed: _confirmDelete,
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(

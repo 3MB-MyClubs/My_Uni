@@ -165,6 +165,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       endTime: _endDate,
       attendeeUserIds: [],
       imagePath: _imagePath,
+      createdByUserId: authService.currentAdmin?.id,
     );
 
     events.add(newEvent);

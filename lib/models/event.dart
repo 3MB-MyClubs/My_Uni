@@ -8,6 +8,8 @@ class Event {
   final String location;
   final List<String> attendeeUserIds;
   final String? imagePath;
+  // The user ID of whoever created this event. Used for ownership-based deletion.
+  final String? createdByUserId;
 
   Event({
     required this.id,
@@ -19,6 +21,7 @@ class Event {
     required this.location,
     required this.attendeeUserIds,
     this.imagePath,
+    this.createdByUserId,
   });
 
   Map<String, dynamic> toMap() => {
@@ -31,6 +34,7 @@ class Event {
         'location': location,
         'attendeeUserIds': attendeeUserIds,
         'imagePath': imagePath,
+        'createdByUserId': createdByUserId,
       };
 
   factory Event.fromMap(Map<String, dynamic> m) => Event(
@@ -43,5 +47,6 @@ class Event {
         location: m['location'] as String,
         attendeeUserIds: List<String>.from(m['attendeeUserIds'] as List? ?? []),
         imagePath: m['imagePath'] as String?,
+        createdByUserId: m['createdByUserId'] as String?,
       );
 }

@@ -29,7 +29,7 @@ const _zones = [
     id: 'sos',
     name: 'SOS Building',
     shortName: 'SOS',
-    position: LatLng(41.2047, 29.0713),
+    position: LatLng(45.2042, 29.0713),
     locationKeywords: ['SOS'],
   ),
   _Zone(
@@ -54,39 +54,12 @@ const _zones = [
     locationKeywords: ['Library', 'AKMER', 'Kütüphane'],
   ),
   _Zone(
-    id: 'sports',
-    name: 'Sports Facilities',
-    shortName: 'GYM',
-    position: LatLng(41.2012, 29.0695),
-    locationKeywords: ['Sports', 'Gym', 'Field', 'Stadium'],
-  ),
-  _Zone(
-    id: 'cafeteria',
-    name: 'Cafeteria',
-    shortName: 'CAF',
-    position: LatLng(41.2042, 29.0700),
-    locationKeywords: ['Cafeteria', 'Kafeterya', 'Dining'],
-  ),
-  _Zone(
-    id: 'gate',
-    name: 'Main Gate',
-    shortName: 'GATE',
-    position: LatLng(41.1999, 29.0719),
-    locationKeywords: ['Main Gate', 'Ana Giriş', 'main gate'],
-  ),
-  _Zone(
+
     id: 'arts',
     name: 'Arts Building',
     shortName: 'ARTS',
     position: LatLng(41.2053, 29.0718),
     locationKeywords: ['Arts', 'Atölye', 'Studio', 'Atelier'],
-  ),
-  _Zone(
-    id: 'dorms',
-    name: 'Dormitories',
-    shortName: 'DORM',
-    position: LatLng(41.2062, 29.0710),
-    locationKeywords: ['Dormitory', 'Yurt', 'KY'],
   ),
 ];
 

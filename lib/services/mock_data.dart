@@ -524,6 +524,8 @@ class ClubStory {
   final double textOffsetX; // fractional 0-1 (default 0.5 = center)
   final double textOffsetY; // fractional 0-1 (default 0.5 = center)
   final int textColorValue; // Color.value int
+  // The user/admin ID of whoever created this story. Used for ownership-based deletion.
+  final String? createdByUserId;
 
   const ClubStory({
     required this.id,
@@ -535,6 +537,7 @@ class ClubStory {
     this.textOffsetX = 0.5,
     this.textOffsetY = 0.5,
     this.textColorValue = 0xFFFFFFFF,
+    this.createdByUserId,
   });
 
   Map<String, dynamic> toMap() => {
@@ -547,6 +550,7 @@ class ClubStory {
         'textOffsetX': textOffsetX,
         'textOffsetY': textOffsetY,
         'textColorValue': textColorValue,
+        'createdByUserId': createdByUserId,
       };
 
   factory ClubStory.fromMap(Map<String, dynamic> m) => ClubStory(
@@ -559,6 +563,7 @@ class ClubStory {
         textOffsetX: (m['textOffsetX'] as num?)?.toDouble() ?? 0.5,
         textOffsetY: (m['textOffsetY'] as num?)?.toDouble() ?? 0.5,
         textColorValue: m['textColorValue'] as int? ?? 0xFFFFFFFF,
+        createdByUserId: m['createdByUserId'] as String?,
       );
 }
 

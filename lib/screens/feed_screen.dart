@@ -1234,10 +1234,13 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
   int _index = 0;
   late AnimationController _progressController;
 
-  bool get _isAdmin {
-    final admin = authService.currentAdmin;
-    if (admin == null) return false;
-    return (widget.club.adminUserIds as List).contains(admin.id);
+  String get _loggedInId =>
+      authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
+
+  bool get _isOwner {
+    if (_index >= _stories.length) return false;
+    final creatorId = _stories[_index].createdByUserId;
+    return creatorId != null && creatorId == _loggedInId;
   }
 
   @override
@@ -1460,7 +1463,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                             ],
                           ),
                         ),
-                        if (_isAdmin)
+                        if (_isOwner)
                           GestureDetector(
                             onTap: _deleteCurrentStory,
                             child: Container(
@@ -1531,7 +1534,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                     ),
 
                   // Viewers bar (admin only — bottom of story)
-                  if (_isAdmin)
+                  if (_isOwner)
                     Positioned(
                       bottom: 0, left: 0, right: 0,
                       child: GestureDetector(
@@ -1740,7 +1743,7 @@ void _openShareSheet(
 
 /// True only when the current session belongs to an admin of [clubId].
 /// Ensures analytics and moderation controls are never shown for other clubs.
-bool _isAdminOfClub(String clubId) {
+bool _isOwnerOfClub(String clubId) {
   final admin = authService.currentAdmin;
   if (admin == null) return false;
   final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
@@ -1954,7 +1957,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
           ),
 
           // ── Engagement stats (own-club admin only) ──
-          if (_isAdminOfClub(widget.post.clubId)) ...[
+          if (_isOwnerOfClub(widget.post.clubId)) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: _EngagementBar(
@@ -1993,7 +1996,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
               child: GestureDetector(
                 onTap: () => _openComments(context),
                 child: Text(
-                  _isAdminOfClub(widget.post.clubId)
+                  _isOwnerOfClub(widget.post.clubId)
                       ? 'View all ${postComments.length} comment${postComments.length == 1 ? '' : 's'}'
                       : 'View comments',
                   style: const TextStyle(color: AppColors.secondaryText, fontSize: 12),
@@ -2228,7 +2231,7 @@ class _EventCardState extends State<_EventCard> {
           ),
 
           // ── Engagement stats (own-club admin only) ──
-          if (_isAdminOfClub(widget.event.clubId)) ...[
+          if (_isOwnerOfClub(widget.event.clubId)) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: _EngagementBar(
@@ -2744,7 +2747,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
           children: [
             Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 4, decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2))),
             Text(
-              _isAdminOfClub(widget.clubId) ? 'Comments (${postComments.length})' : 'Comments',
+              _isOwnerOfClub(widget.clubId) ? 'Comments (${postComments.length})' : 'Comments',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             const Divider(),
@@ -2775,7 +2778,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                 ]),
                               ),
                               // Admin-only delete button (own club only)
-                              if (_isAdminOfClub(widget.clubId))
+                              if (_isOwnerOfClub(widget.clubId))
                                 GestureDetector(
                                   onTap: () {
                                     comments.removeWhere((x) => x.id == c.id);
