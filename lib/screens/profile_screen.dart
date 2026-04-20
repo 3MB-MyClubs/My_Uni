@@ -12,6 +12,7 @@ import '../services/user_state.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
+import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
 import 'settings_screen.dart';
 import 'user_profile_screen.dart';
@@ -1239,6 +1240,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const Icon(Icons.swipe_left_outlined,
                         size: 14, color: AppColors.secondaryText),
                   ],
+                ),
+              ),
+              // View RSVPs link — only visible to the owning club admin
+              Padding(
+                padding: const EdgeInsets.only(left: 84, right: 16, bottom: 8),
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RsvpListScreen(event: e, color: color),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people_outline, size: 14, color: color),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${e.attendeeUserIds.length} attending · View RSVPs',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.chevron_right, size: 14, color: color),
+                    ],
+                  ),
                 ),
               ),
               const Divider(height: 1, indent: 84),

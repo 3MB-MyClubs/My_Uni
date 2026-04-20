@@ -4,6 +4,8 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/rsvp_store.dart';
+import '../widgets/rsvp_button.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -25,8 +27,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
   ];
 
-  late bool _attending;
-
   String get _loggedInId =>
       authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
 
@@ -34,11 +34,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       widget.event.createdByUserId != null &&
       widget.event.createdByUserId == _loggedInId;
 
+  bool get _isEventOwnerClub {
+    final admin = authService.currentAdmin;
+    if (admin == null) return false;
+    try {
+      return clubs.firstWhere((c) => c.adminUserIds.contains(admin.id)).id ==
+          widget.event.clubId;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    // Seed global RSVP store from current data model state
     final userId = authService.currentUser?.id ?? '';
-    _attending = widget.event.attendeeUserIds.contains(userId);
+    rsvpStore.seed(
+      widget.event.id,
+      widget.event.attendeeUserIds.contains(userId),
+    );
   }
 
   void _confirmDelete() {
@@ -78,21 +93,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         Navigator.popUntil(context, (r) => r.isFirst);
       }
     });
-  }
-
-  void _toggleRsvp() {
-    final userId = authService.currentUser?.id ?? '';
-    if (userId.isEmpty) return;
-    setState(() {
-      if (_attending) {
-        widget.event.attendeeUserIds.remove(userId);
-        _attending = false;
-      } else {
-        widget.event.attendeeUserIds.add(userId);
-        _attending = true;
-      }
-    });
-    contentStore.saveEvents();
   }
 
   String _pad(int n) => n.toString().padLeft(2, '0');
@@ -156,7 +156,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Status badge
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
@@ -223,13 +222,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         value: event.location,
                         color: color,
                       )),
-                      const SizedBox(width: 10),
-                      Expanded(child: _InfoCard(
-                        icon: Icons.people_rounded,
-                        label: 'Attending',
-                        value: '${event.attendeeUserIds.length} people',
-                        color: color,
-                      )),
+                      // Attending count — only shown to the owner club admin,
+                      // rebuilds when RSVP changes
+                      if (_isEventOwnerClub) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ListenableBuilder(
+                            listenable: rsvpStore,
+                            builder: (context, _) => _InfoCard(
+                              icon: Icons.people_rounded,
+                              label: 'Attending',
+                              value: '${event.attendeeUserIds.length} people',
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
 
@@ -303,31 +311,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ],
       ),
 
-      // ── Register / Passed button ─────────────────────────────────────────────
+      // ── RSVP button — reads from global store, identical on every screen ────
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              onPressed: isPast ? null : _toggleRsvp,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isPast ? AppColors.surfaceAlt : color,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: AppColors.surfaceAlt,
-                disabledForegroundColor: AppColors.secondaryText,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
-              child: Text(
-                isPast
-                    ? 'This event has passed'
-                    : _attending
-                        ? '✓ You\'re going'
-                        : 'Register for this event',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
+          child: RsvpButton(
+            eventId: event.id,
+            color: color,
+            isPast: isPast,
           ),
         ),
       ),

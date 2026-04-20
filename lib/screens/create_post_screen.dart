@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
-import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../models/news_post.dart';
+import '../widgets/story_image_uploader.dart';
 
 // ── Template definitions ─────────────────────────────────────────────────────
 
@@ -179,67 +179,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     return tagged;
   }
 
-  Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
-    if (picked == null || !mounted) return;
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Photo',
-          resetAspectRatioEnabled: true,
-          rotateButtonsHidden: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: false,
-          showCropGrid: true,
-        ),
-      ],
-    );
-    if (cropped != null && mounted) setState(() => _imagePath = cropped.path);
-  }
-
-  void _showPhotoPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 36, height: 4,
-              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
-              title: const Text('Take a photo', style: TextStyle(color: AppColors.text)),
-              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.camera); },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
-              title: const Text('Choose from library', style: TextStyle(color: AppColors.text)),
-              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.gallery); },
-            ),
-            if (_imagePath != null && !_imagePath!.startsWith('tpl:'))
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Remove photo', style: TextStyle(color: Colors.red)),
-                onTap: () { Navigator.pop(context); setState(() => _imagePath = null); },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _post() {
     final content = _contentController.text.trim();
     if (content.isEmpty || _selectedClub == null) return;
@@ -256,6 +195,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     );
     newsPosts.insert(0, post);
     contentStore.saveNewsPosts();
+    clubNotificationService.notifyFollowersAboutPost(post);
     widget.onPosted?.call();
     Navigator.of(context).pop();
   }
@@ -339,7 +279,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   ],
                 ),
                 SizedBox(
-                  height: 100,
+                  height: 210,
                   child: TabBarView(
                     controller: _mediaTabController,
                     children: [
@@ -349,12 +289,15 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                         onSelect: (id) => setState(() => _imagePath = id),
                       ),
                       // Gallery
-                      _GalleryPickRow(
-                        imagePath: _imagePath != null && !_imagePath!.startsWith('tpl:')
-                            ? _imagePath
-                            : null,
-                        onPick: _showPhotoPicker,
-                        onClear: () => setState(() => _imagePath = null),
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: StoryImageUploader(
+                          imagePath: _imagePath != null && !_imagePath!.startsWith('tpl:')
+                              ? _imagePath
+                              : null,
+                          onChanged: (p) => setState(() => _imagePath = p),
+                          height: 190,
+                        ),
                       ),
                     ],
                   ),
@@ -513,86 +456,6 @@ class _TemplatesRow extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-// ── Gallery pick row ─────────────────────────────────────────────────────────
-
-class _GalleryPickRow extends StatelessWidget {
-  final String? imagePath;
-  final VoidCallback onPick;
-  final VoidCallback onClear;
-
-  const _GalleryPickRow({required this.imagePath, required this.onPick, required this.onClear});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Pick button
-        GestureDetector(
-          onTap: onPick,
-          child: Container(
-            width: 80, height: 80,
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.lightGray,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_photo_alternate_outlined, color: AppColors.secondaryText, size: 28),
-                SizedBox(height: 4),
-                Text('Pick photo', style: TextStyle(fontSize: 10, color: AppColors.secondaryText)),
-              ],
-            ),
-          ),
-        ),
-
-        // Preview of picked photo
-        if (imagePath != null)
-          Stack(
-            children: [
-              Container(
-                width: 80, height: 80,
-                margin: const EdgeInsets.only(top: 10, bottom: 10, right: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.primaryRed, width: 2),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(File(imagePath!), fit: BoxFit.cover),
-                ),
-              ),
-              Positioned(
-                top: 6, right: 6,
-                child: GestureDetector(
-                  onTap: onClear,
-                  child: Container(
-                    width: 20, height: 20,
-                    decoration: const BoxDecoration(
-                      color: Colors.black54,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 13),
-                  ),
-                ),
-              ),
-            ],
-          )
-        else
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              'No photo selected yet.\nTap "Pick photo" to choose\nfrom your library.',
-              style: TextStyle(fontSize: 12, color: AppColors.secondaryText, height: 1.5),
-            ),
-          ),
-      ],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
@@ -534,9 +535,11 @@ class _CreateStorySheetState extends State<_CreateStorySheet> {
       text: text,
       postedAt: DateTime.now(),
       imagePath: _imagePath,
+      createdByUserId: authService.currentAdmin?.id,
     );
     clubStories.insert(0, story);
     contentStore.saveClubStories();
+    clubNotificationService.notifyFollowersAboutStory(story);
     widget.onPosted();
     Navigator.pop(context);
   }

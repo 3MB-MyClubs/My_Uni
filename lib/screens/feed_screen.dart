@@ -831,16 +831,30 @@ class _EventChip extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            // Attendee count
-            Row(
-              children: [
-                const Icon(Icons.people_outline, size: 16, color: AppColors.secondaryText),
-                const SizedBox(width: 6),
-                Text('$attendees attending',
-                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-              ],
-            ),
-            const SizedBox(height: 20),
+            // Attendee count — only shown to the owning club admin
+            if (() {
+              final admin = authService.currentAdmin;
+              if (admin == null) return false;
+              try {
+                return clubs
+                        .firstWhere((c) => c.adminUserIds.contains(admin.id))
+                        .id ==
+                    ev.clubId;
+              } catch (_) {
+                return false;
+              }
+            }()) ...[
+              Row(
+                children: [
+                  const Icon(Icons.people_outline, size: 16, color: AppColors.secondaryText),
+                  const SizedBox(width: 6),
+                  Text('$attendees attending',
+                      style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ] else
+              const SizedBox(height: 20),
             // Action buttons row
             Row(
               children: [

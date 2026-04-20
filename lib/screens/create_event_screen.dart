@@ -1,12 +1,11 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
-import 'package:image_picker/image_picker.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../widgets/story_image_uploader.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
@@ -38,67 +37,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     } catch (_) {
       return null;
     }
-  }
-
-  Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
-    if (picked == null || !mounted) return;
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Photo',
-          resetAspectRatioEnabled: true,
-          rotateButtonsHidden: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: false,
-          showCropGrid: true,
-        ),
-      ],
-    );
-    if (cropped != null && mounted) setState(() => _imagePath = cropped.path);
-  }
-
-  void _showPhotoPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 36, height: 4,
-              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
-              title: const Text('Take a photo', style: TextStyle(color: AppColors.text)),
-              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.camera); },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
-              title: const Text('Choose from library', style: TextStyle(color: AppColors.text)),
-              onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.gallery); },
-            ),
-            if (_imagePath != null)
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Remove photo', style: TextStyle(color: Colors.red)),
-                onTap: () { Navigator.pop(context); setState(() => _imagePath = null); },
-              ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _pickDate(bool isStart) async {
@@ -170,6 +108,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     events.add(newEvent);
     contentStore.saveEvents();
+    clubNotificationService.notifyFollowersAboutEvent(newEvent);
     widget.onCreated?.call();
     Navigator.pop(context);
   }
@@ -218,69 +157,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // ── Cover photo ────────────────────────────────────────────────
-          GestureDetector(
-            onTap: _showPhotoPicker,
-            child: Container(
-              height: 180,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.divider),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _imagePath != null
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.file(File(_imagePath!), fit: BoxFit.cover),
-                        Positioned(
-                          top: 8, right: 8,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _imagePath = null),
-                            child: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.close, color: Colors.white, size: 16),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 8, right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.edit, color: Colors.white, size: 13),
-                                SizedBox(width: 4),
-                                Text('Change', style: TextStyle(color: Colors.white, fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_photo_alternate_rounded,
-                            size: 36, color: AppColors.secondaryText.withValues(alpha: 0.6)),
-                        const SizedBox(height: 8),
-                        const Text('Add cover photo (optional)',
-                            style: TextStyle(color: AppColors.secondaryText, fontSize: 13)),
-                        const SizedBox(height: 4),
-                        const Text('Tap to pick from camera or library',
-                            style: TextStyle(color: AppColors.secondaryText, fontSize: 11)),
-                      ],
-                    ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: StoryImageUploader(
+              imagePath: _imagePath,
+              onChanged: (p) => setState(() => _imagePath = p),
             ),
           ),
           _SectionCard(

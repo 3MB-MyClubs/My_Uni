@@ -9,6 +9,8 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/rsvp_store.dart';
+import '../widgets/rsvp_button.dart';
 import '../services/personalization_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/user_state.dart';
@@ -472,6 +474,17 @@ class _EventBody extends StatelessWidget {
   final Color color;
   const _EventBody({required this.event, required this.color});
 
+  bool get _isCurrentAdminEventOwner {
+    final admin = authService.currentAdmin;
+    if (admin == null) return false;
+    try {
+      return clubs.firstWhere((c) => c.adminUserIds.contains(admin.id)).id ==
+          event.clubId;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -560,7 +573,7 @@ class _EventBody extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (event.attendeeUserIds.isNotEmpty)
+                if (event.attendeeUserIds.isNotEmpty && _isCurrentAdminEventOwner)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(

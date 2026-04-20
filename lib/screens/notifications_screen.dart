@@ -110,6 +110,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ChatScreen(otherUserId: sender.id, otherUserName: sender.name),
         ));
+      case 'story':
+        // No standalone story viewer — open the club profile instead.
+        final club = clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first);
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => ClubProfileScreen(club: club, color: _colorForClub(id)),
+        ));
     }
   }
 
@@ -376,10 +382,28 @@ class _NotificationCard extends StatelessWidget {
   });
 
   _NotifStyle get _style {
-    if (notification.targetType == 'message') {
-      return _NotifStyle(Icons.message_rounded, const Color(0xFF00838F),
-          const Color(0xFFE0F7FA), 'Message');
+    switch (notification.targetType) {
+      case 'message':
+        return _NotifStyle(Icons.message_rounded, const Color(0xFF00838F),
+            const Color(0xFFE0F7FA), 'Message');
+      case 'event':
+        return _NotifStyle(Icons.event_rounded, const Color(0xFFE65100),
+            const Color(0xFFFFF3E0), 'Event');
+      case 'post':
+        return _NotifStyle(Icons.article_rounded, const Color(0xFF2E7D32),
+            const Color(0xFFE8F5E9), 'Post');
+      case 'story':
+        return _NotifStyle(Icons.auto_stories_rounded, const Color(0xFF6A1B9A),
+            const Color(0xFFF3E5F5), 'Story');
+      case 'follow_request':
+      case 'follow_accepted':
+        return _NotifStyle(Icons.person_add_rounded, const Color(0xFF6A1B9A),
+            const Color(0xFFF3E5F5), 'Follow');
+      case 'club':
+        return _NotifStyle(Icons.groups_rounded, AppColors.primaryRed,
+            AppColors.lightRed, 'Club');
     }
+    // Fallback: derive from message text for legacy/untyped notifications.
     final msg = notification.message.toLowerCase();
     if (msg.contains('liked')) {
       return _NotifStyle(Icons.favorite_rounded, const Color(0xFFE91E63),
@@ -388,15 +412,6 @@ class _NotificationCard extends StatelessWidget {
     if (msg.contains('comment')) {
       return _NotifStyle(Icons.chat_bubble_rounded, const Color(0xFF1565C0),
           const Color(0xFFE3F2FD), 'Comment');
-    }
-    if (msg.contains('event') || msg.contains('hack') || msg.contains('night') ||
-        msg.contains('tomorrow') || msg.contains('days')) {
-      return _NotifStyle(Icons.event_rounded, const Color(0xFFE65100),
-          const Color(0xFFFFF3E0), 'Event');
-    }
-    if (msg.contains('posted') || msg.contains('update') || msg.contains('new')) {
-      return _NotifStyle(Icons.article_rounded, const Color(0xFF2E7D32),
-          const Color(0xFFE8F5E9), 'Post');
     }
     if (msg.contains('follow')) {
       return _NotifStyle(Icons.person_add_rounded, const Color(0xFF6A1B9A),

@@ -4,6 +4,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 
@@ -96,22 +97,21 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
     if (cid == null) return;
     final text = _overlayText.trim();
 
-    clubStories.insert(
-      0,
-      ClubStory(
-        id: 'st_${DateTime.now().millisecondsSinceEpoch}',
-        clubId: cid,
-        emoji: null,
-        text: text,
-        postedAt: DateTime.now(),
-        imagePath: _imagePath,
-        textOffsetX: _textFracX,
-        textOffsetY: _textFracY,
-        textColorValue: _currentColor.toARGB32(),
-        createdByUserId: authService.currentAdmin?.id,
-      ),
+    final newStory = ClubStory(
+      id: 'st_${DateTime.now().millisecondsSinceEpoch}',
+      clubId: cid,
+      emoji: null,
+      text: text,
+      postedAt: DateTime.now(),
+      imagePath: _imagePath,
+      textOffsetX: _textFracX,
+      textOffsetY: _textFracY,
+      textColorValue: _currentColor.toARGB32(),
+      createdByUserId: authService.currentAdmin?.id,
     );
+    clubStories.insert(0, newStory);
     contentStore.saveClubStories();
+    clubNotificationService.notifyFollowersAboutStory(newStory);
     widget.onPosted();
     Navigator.pop(context);
   }
