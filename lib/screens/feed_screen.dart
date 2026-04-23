@@ -23,6 +23,8 @@ import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import 'ku_day_section.dart';
+import '../services/rsvp_store.dart';
+import '../widgets/rsvp_button.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -711,6 +713,9 @@ class _EventChip extends StatelessWidget {
     final DateTime end = ev.endTime;
     final String location = ev.location as String;
     final int attendees = (ev.attendeeUserIds as List).length;
+    // Seed global store so the modal RSVP button reflects current state
+    final userId = authService.currentUser?.id ?? '';
+    rsvpStore.seed(ev.id as String, (ev.attendeeUserIds as List).contains(userId));
 
     String fmtDateTime(DateTime dt) {
       const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -883,17 +888,12 @@ class _EventChip extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // RSVP
+                // RSVP — reads/writes global store
                 Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryRed,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('RSVP', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  child: RsvpButton(
+                    eventId: ev.id as String,
+                    color: color,
+                    isPast: end.isBefore(DateTime.now()),
                   ),
                 ),
               ],
@@ -2063,31 +2063,35 @@ class _EventCard extends StatefulWidget {
 }
 
 class _EventCardState extends State<_EventCard> {
-  late bool _attending;
+  bool? _lastAttending;
 
   @override
   void initState() {
     super.initState();
     final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    _attending = widget.event.attendeeUserIds.contains(userId);
-    // Record this user as having seen the event
+    rsvpStore.seed(
+      widget.event.id,
+      widget.event.attendeeUserIds.contains(userId),
+    );
+    _lastAttending = rsvpStore.isAttending(widget.event.id);
+    rsvpStore.addListener(_onRsvpChanged);
     viewTracker.recordView(widget.event.id, userId);
   }
 
-  void _toggleRsvp() {
-    final userId = authService.currentUser?.id ?? '';
-    if (userId.isEmpty) return;
-    setState(() {
-      if (_attending) {
-        widget.event.attendeeUserIds.remove(userId);
-        _attending = false;
-      } else {
-        widget.event.attendeeUserIds.add(userId);
-        _attending = true;
-      }
-    });
-    contentStore.saveEvents();
-    widget.onUpdate();
+  @override
+  void dispose() {
+    rsvpStore.removeListener(_onRsvpChanged);
+    super.dispose();
+  }
+
+  void _onRsvpChanged() {
+    final current = rsvpStore.isAttending(widget.event.id);
+    if (current == _lastAttending) return; // different event changed, skip
+    _lastAttending = current;
+    if (mounted) {
+      setState(() {}); // refresh uniqueAttendees / engagement bar
+      widget.onUpdate();
+    }
   }
 
   @override
@@ -2199,24 +2203,13 @@ class _EventCardState extends State<_EventCard> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Row(
               children: [
-                // RSVP button
+                // RSVP button — reads/writes global store
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
-                  child: GestureDetector(
-                    onTap: _toggleRsvp,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _attending ? AppColors.primaryRed : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.primaryRed),
-                      ),
-                      child: Text(
-                        _attending ? '✓ Going' : 'RSVP',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _attending ? Colors.white : AppColors.primaryRed),
-                      ),
-                    ),
+                  child: RsvpButton(
+                    eventId: widget.event.id,
+                    color: AppColors.primaryRed,
+                    compact: true,
                   ),
                 ),
                 const SizedBox(width: 4),

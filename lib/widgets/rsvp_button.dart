@@ -3,17 +3,6 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/rsvp_store.dart';
 
-/// Shared RSVP button widget — identical behavior across every screen.
-///
-/// [compact] = true  → inline chip row (feed cards, action bars)
-/// [compact] = false → full-height bar (event detail bottom nav, modals)
-///
-/// States:
-///   • isPast=true         → disabled "This event has passed" (full) or "Passed" chip
-///   • attending=false     → "RSVP" (tappable)
-///   • attending=true      → "✓ You are attending" indicator + "Not Coming" button
-///
-/// All reads come from [rsvpStore]; widget rebuilds automatically on any change.
 class RsvpButton extends StatelessWidget {
   final String eventId;
   final Color color;
@@ -28,7 +17,8 @@ class RsvpButton extends StatelessWidget {
     this.compact = false,
   });
 
-  String get _userId => authService.currentUser?.id ?? '';
+  String get _userId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   @override
   Widget build(BuildContext context) {
@@ -43,147 +33,294 @@ class RsvpButton extends StatelessWidget {
           rsvpStore.toggle(eventId, _userId);
         }
 
-        // ── Past ─────────────────────────────────────────────────────────────
-        if (isPast) {
-          if (compact) {
-            return _Chip(
-              label: 'Passed',
-              icon: Icons.event_busy_rounded,
-              filled: false,
-              enabled: false,
-              color: AppColors.secondaryText,
-              onTap: () {},
-            );
-          }
-          return SizedBox(
-            height: 52,
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: null,
-              style: ElevatedButton.styleFrom(
-                disabledBackgroundColor: AppColors.surfaceAlt,
-                disabledForegroundColor: AppColors.secondaryText,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.97, end: 1.0).animate(
+                CurvedAnimation(parent: anim, curve: Curves.easeOut),
               ),
-              child: const Text('This event has passed',
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: child,
             ),
-          );
-        }
-
-        // ── Compact mode ─────────────────────────────────────────────────────
-        if (compact) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _Chip(
-                label: attending ? '✓ Going' : 'RSVP',
-                icon: attending
-                    ? Icons.check_circle_rounded
-                    : Icons.how_to_reg_rounded,
-                filled: attending,
-                enabled: !pending && !attending,
-                color: color,
-                onTap: attending ? () {} : onToggle,
-              ),
-              if (attending) ...[
-                const SizedBox(width: 6),
-                _Chip(
-                  label: 'Not Coming',
-                  icon: Icons.cancel_outlined,
-                  filled: false,
-                  enabled: !pending,
-                  color: AppColors.secondaryText,
-                  onTap: onToggle,
-                ),
-              ],
-            ],
-          );
-        }
-
-        // ── Full mode — attending ─────────────────────────────────────────────
-        if (attending) {
-          return Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    '✓ You are attending',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: color),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: pending ? null : onToggle,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.secondaryText,
-                    side: const BorderSide(color: AppColors.divider),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20),
-                  ),
-                  child: const Text('Not Coming',
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          );
-        }
-
-        // ── Full mode — not attending ─────────────────────────────────────────
-        return SizedBox(
-          height: 52,
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: pending ? null : onToggle,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
-            child: const Text('RSVP',
-                style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
+          child: _build(attending, pending, onToggle),
         );
       },
     );
   }
+
+  Widget _build(bool attending, bool pending, VoidCallback onToggle) {
+    // ── Past ─────────────────────────────────────────────────────────────────
+    if (isPast) {
+      if (compact) {
+        return _CompactChip(
+          key: const ValueKey('past-c'),
+          label: 'Ended',
+          icon: Icons.event_busy_rounded,
+          active: false,
+          enabled: false,
+          color: AppColors.secondaryText,
+          onTap: () {},
+        );
+      }
+      return _FullPastBar(key: const ValueKey('past-f'));
+    }
+
+    // ── Compact ───────────────────────────────────────────────────────────────
+    if (compact) {
+      if (attending) {
+        return Row(
+          key: const ValueKey('compact-attending'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _CompactChip(
+              label: '✓ Going',
+              icon: Icons.check_circle_rounded,
+              active: true,
+              enabled: !pending,
+              color: color,
+              onTap: onToggle,
+            ),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: pending ? null : onToggle,
+              child: AnimatedOpacity(
+                opacity: pending ? 0.4 : 1.0,
+                duration: const Duration(milliseconds: 150),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.close, size: 12, color: AppColors.secondaryText),
+                      SizedBox(width: 3),
+                      Text(
+                        'Not Coming',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+      return _CompactChip(
+        key: const ValueKey('compact-rsvp'),
+        label: 'RSVP',
+        icon: Icons.how_to_reg_rounded,
+        active: false,
+        enabled: !pending,
+        color: color,
+        onTap: onToggle,
+      );
+    }
+
+    // ── Full — attending ──────────────────────────────────────────────────────
+    if (attending) {
+      return SizedBox(
+        key: const ValueKey('full-attending'),
+        height: 56,
+        child: Row(
+          children: [
+            // "You are attending" pill
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      color,
+                      Color.lerp(color, Colors.black, 0.15)!,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.30),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_rounded,
+                        color: Colors.white, size: 19),
+                    SizedBox(width: 8),
+                    Text(
+                      'You are attending',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            // "Not Coming" secondary action
+            SizedBox(
+              width: 88,
+              height: 56,
+              child: GestureDetector(
+                onTap: pending ? null : onToggle,
+                child: AnimatedOpacity(
+                  opacity: pending ? 0.4 : 1.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.divider,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.close_rounded,
+                          size: 17,
+                          color: AppColors.secondaryText,
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'Not Coming',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Full — not attending ──────────────────────────────────────────────────
+    return SizedBox(
+      key: const ValueKey('full-rsvp'),
+      height: 56,
+      width: double.infinity,
+      child: GestureDetector(
+        onTap: pending ? null : onToggle,
+        child: AnimatedOpacity(
+          opacity: pending ? 0.65 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  color,
+                  Color.lerp(color, Colors.black, 0.18)!,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.how_to_reg_rounded,
+                    color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'RSVP',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-// ─── Compact chip ──────────────────────────────────────────────────────────────
+// ─── Past bar ─────────────────────────────────────────────────────────────────
 
-class _Chip extends StatelessWidget {
+class _FullPastBar extends StatelessWidget {
+  const _FullPastBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_busy_rounded,
+              size: 18, color: AppColors.secondaryText),
+          SizedBox(width: 8),
+          Text(
+            'This event has passed',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Compact chip ─────────────────────────────────────────────────────────────
+
+class _CompactChip extends StatelessWidget {
   final String label;
   final IconData icon;
-  final bool filled;
+  final bool active;
   final bool enabled;
   final Color color;
   final VoidCallback onTap;
 
-  const _Chip({
+  const _CompactChip({
+    super.key,
     required this.label,
     required this.icon,
-    required this.filled,
+    required this.active,
     required this.enabled,
     required this.color,
     required this.onTap,
@@ -191,30 +328,51 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor = enabled ? color : color.withValues(alpha: 0.5);
+    final effectiveColor =
+        enabled ? color : color.withValues(alpha: 0.45);
+
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: filled ? color : Colors.transparent,
+          gradient: active
+              ? LinearGradient(
+                  colors: [color, Color.lerp(color, Colors.black, 0.15)!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: active ? null : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: effectiveColor),
+          border: Border.all(color: effectiveColor, width: 1.5),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon,
                 size: 14,
-                color: filled ? Colors.white : effectiveColor),
+                color: active ? Colors.white : effectiveColor),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: filled ? Colors.white : effectiveColor),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: active ? Colors.white : effectiveColor,
+                letterSpacing: 0.1,
+              ),
             ),
           ],
         ),

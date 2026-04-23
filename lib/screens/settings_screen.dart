@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/rsvp_store.dart';
 import '../services/campus_pulse_service.dart';
 import '../services/location_permission_service.dart';
 import '../services/user_prefs_service.dart';
@@ -255,6 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onTap: () {
                 authService.logout();
+                rsvpStore.clear();
                 Navigator.of(context).popUntil((route) => route.isFirst);
                 widget.onLogout();
               },

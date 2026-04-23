@@ -7,7 +7,6 @@ import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
@@ -573,16 +572,22 @@ class _EventBody extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (event.attendeeUserIds.isNotEmpty && _isCurrentAdminEventOwner)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '${event.attendeeUserIds.length} attending',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: color.withValues(alpha: 0.8),
-                      ),
-                    ),
+                if (_isCurrentAdminEventOwner)
+                  ListenableBuilder(
+                    listenable: rsvpStore,
+                    builder: (context, _) {
+                      if (event.attendeeUserIds.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '${event.attendeeUserIds.length} attending',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: color.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      );
+                    },
                   ),
               ],
             ),
@@ -794,29 +799,17 @@ class _EventActions extends StatefulWidget {
 }
 
 class _EventActionsState extends State<_EventActions> {
-  late bool _attending;
   late bool _reminded;
 
   @override
   void initState() {
     super.initState();
-    _attending = widget.event.attendeeUserIds.contains(widget.userId);
+    // Seed global store so this card stays in sync with all other screens
+    rsvpStore.seed(
+      widget.event.id,
+      widget.event.attendeeUserIds.contains(widget.userId),
+    );
     _reminded = personalizationService.isReminded(widget.event.id);
-  }
-
-  void _toggleRsvp() {
-    if (widget.userId.isEmpty) return;
-    setState(() {
-      if (_attending) {
-        widget.event.attendeeUserIds.remove(widget.userId);
-        _attending = false;
-      } else {
-        widget.event.attendeeUserIds.add(widget.userId);
-        _attending = true;
-      }
-    });
-    contentStore.saveEvents();
-    widget.onChanged();
   }
 
   Future<void> _toggleRemind() async {
@@ -849,14 +842,11 @@ class _EventActionsState extends State<_EventActions> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        _ActionChip(
-          label: _attending ? 'Going ✓' : 'RSVP',
-          icon: _attending
-              ? Icons.check_circle_rounded
-              : Icons.how_to_reg_rounded,
+        // RSVP — reads/writes global store, identical state as every other screen
+        RsvpButton(
+          eventId: widget.event.id,
           color: widget.color,
-          filled: _attending,
-          onTap: _toggleRsvp,
+          compact: true,
         ),
         _ActionChip(
           label: 'Calendar',

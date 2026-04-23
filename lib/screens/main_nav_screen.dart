@@ -10,11 +10,11 @@ import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import 'chat_screen.dart';
 import 'feed_screen.dart';
+import 'this_week_screen.dart';
 import 'explore_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
-import 'campus_map_screen.dart';
 import 'create_post_screen.dart';
 import 'create_event_screen.dart';
 import 'create_story_screen.dart';
@@ -181,8 +181,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
   Widget build(BuildContext context) {
     final screens = <Widget>[
       const FeedScreen(),
+      const ThisWeekScreen(),
       const ExploreScreen(),
-      const CampusMapScreen(),
       NotificationsScreen(),
       ProfileScreen(onLogout: widget.onLogout),
       if (widget.isAdmin) const AdminDashboard(),
@@ -219,8 +219,8 @@ class _MainNavScreenState extends State<MainNavScreen> {
           child: Row(
             children: [
               _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', selected: _selectedIndex == 0, onTap: () => setState(() => _selectedIndex = 0)),
-              _NavItem(icon: Icons.search, activeIcon: Icons.search, label: 'Search', selected: _selectedIndex == 1, onTap: () => setState(() => _selectedIndex = 1)),
-              _NavItem(icon: Icons.map_outlined, activeIcon: Icons.map, label: 'Map', selected: _selectedIndex == 2, onTap: () => setState(() => _selectedIndex = 2)),
+              _NavItem(icon: Icons.calendar_today_outlined, activeIcon: Icons.calendar_today, label: 'This Week', selected: _selectedIndex == 1, onTap: () => setState(() => _selectedIndex = 1)),
+              _NavItem(icon: Icons.search, activeIcon: Icons.search, label: 'Search', selected: _selectedIndex == 2, onTap: () => setState(() => _selectedIndex = 2)),
               if (_isClubAdmin) const Expanded(child: SizedBox()), // space for centred FAB
               _NavItem(
                 icon: Icons.notifications_none,
