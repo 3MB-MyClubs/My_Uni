@@ -22,7 +22,6 @@ class UserPrefsService {
     final s = userState;
 
     await _box.putAll({
-      'isPrivate_$userId': s.isPrivate,
       'profilePhotoPath_$userId': s.profilePhotoPaths[userId],
       'bannerPath_$userId': s.bannerPaths[userId],
       'followedUserIds_$userId': s.followedUserIds.toList(),
@@ -33,9 +32,29 @@ class UserPrefsService {
       'shownFollowNotice_$userId': s.shownFollowNotice.toList(),
       'acceptedMessageRequests_$userId': s.acceptedMessageRequests.toList(),
       'pendingBoardRequests_$userId': s.pendingBoardRequests.toList(),
-      // privateUserIds is global (shared across sessions, not per-user).
-      'privateUserIds': s.privateUserIds.toList(),
+      // usernames are global (visible to everyone).
+      'usernames': s.usernames.map((k, v) => MapEntry(k, v)),
     });
+  }
+
+  // ── Load all profile photos (called once at startup) ────────────────────────
+
+  /// Loads every saved profile photo and banner into [userState] so that any
+  /// user's picture is visible to everyone — regardless of who is logged in.
+  void loadAllPhotos() {
+    if (!_initialized) return;
+    for (final key in _box.keys) {
+      final k = key as String;
+      if (k.startsWith('profilePhotoPath_')) {
+        final uid = k.substring('profilePhotoPath_'.length);
+        final path = _box.get(k);
+        if (path != null) userState.profilePhotoPaths[uid] = path as String;
+      } else if (k.startsWith('bannerPath_')) {
+        final uid = k.substring('bannerPath_'.length);
+        final path = _box.get(k);
+        if (path != null) userState.bannerPaths[uid] = path as String;
+      }
+    }
   }
 
   // ── Load ────────────────────────────────────────────────────────────────────
@@ -43,8 +62,6 @@ class UserPrefsService {
   void load(String userId) {
     if (!_initialized) return;
     final s = userState;
-
-    s.isPrivate = _box.get('isPrivate_$userId', defaultValue: false) as bool;
 
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
@@ -74,13 +91,12 @@ class UserPrefsService {
     _restoreSet(s.pendingBoardRequests,
         _box.get('pendingBoardRequests_$userId'));
 
-    final storedPrivate = _box.get('privateUserIds');
-    if (storedPrivate != null) {
-      s.privateUserIds
-        ..clear()
-        ..addAll(List<String>.from(storedPrivate as List));
-      // Always keep the demo default.
-      s.privateUserIds.add('u3');
+    final storedUsernames = _box.get('usernames');
+    if (storedUsernames != null) {
+      s.usernames.clear();
+      (storedUsernames as Map).forEach(
+        (k, v) => s.usernames[k as String] = v as String,
+      );
     }
   }
 

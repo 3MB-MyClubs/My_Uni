@@ -30,15 +30,12 @@ class UserFollowButton extends StatelessWidget {
       builder: (context, _) {
         final isFollowing = userState.isFollowingUser(userId);
         final isPending   = userState.hasPendingRequest(userId);
-        final isPrivate   = userState.isProfilePrivate(userId);
 
         final String label = isPending
             ? 'Requested'
             : isFollowing
                 ? 'Following'
-                : isPrivate
-                    ? 'Request'
-                    : 'Follow';
+                : 'Follow';
 
         final bool filled = !isFollowing && !isPending;
 

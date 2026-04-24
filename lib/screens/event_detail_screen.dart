@@ -6,6 +6,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
+import 'campus_map_screen.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -239,6 +240,43 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                       ],
                     ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── View on Map button ─────────────────────────────────────
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CampusMapScreen()),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: color.withValues(alpha: 0.35),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.map_outlined, color: color, size: 18),
+                          const SizedBox(width: 10),
+                          Text(
+                            'View on Campus Map',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: color,
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(Icons.arrow_forward_ios_rounded, size: 13, color: color.withValues(alpha: 0.7)),
+                        ],
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 20),

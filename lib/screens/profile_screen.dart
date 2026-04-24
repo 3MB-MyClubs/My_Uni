@@ -94,8 +94,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirmed == true && mounted) {
-      setState(() => userState.profilePhotoPaths[userId] = cropped.path);
+      userState.setProfilePhoto(userId, cropped.path);
       userPrefsService.save(userId);
+      setState(() {});
     }
   }
 
@@ -162,9 +163,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = authService.currentUser;
     final admin = authService.currentAdmin;
-
-    final displayName = user?.name ?? admin?.name ?? 'Guest';
-    final displayEmail = user?.email ?? admin?.email ?? '';
+    final myId = user?.id ?? admin?.id ?? '';
+    final realName = user?.name ?? admin?.name ?? 'Guest';
+    final displayName = userState.displayNameFor(myId, realName);
     final isAdmin = admin != null;
 
     final myClubs = isAdmin
@@ -193,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildProfileHeader(displayName, displayEmail, isAdmin, myClubs.length, myEventCount),
+                _buildProfileHeader(displayName, realName, isAdmin, myClubs.length, myEventCount),
                 const Divider(height: 1),
                 _buildMyClubsSection(myClubs),
                 if (isAdmin)
@@ -229,12 +230,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader(
-    String name,
-    String email,
+    String displayName,
+    String realName,
     bool isAdmin,
     int clubCount,
     int eventCount,
   ) {
+    final name = displayName;
     final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
     return Container(
@@ -336,9 +338,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(name,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text)),
-                const SizedBox(height: 2),
-                Text(email,
-                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                if (name != realName) ...[
+                  const SizedBox(height: 2),
+                  Text(realName,
+                      style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                ],
                 if (isAdmin) ...[
                   const SizedBox(height: 6),
                   Container(

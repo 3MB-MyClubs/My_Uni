@@ -469,6 +469,401 @@ final events = [
     attendeeUserIds: ['u3', 'u6', 'u7', 'u10'],
     rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 5, hours: 6)).toIso8601String()},
     imagePath: 'https://picsum.photos/seed/reading_group/800/500'),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TODAY (Thursday) — LIVE NOW
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Event(id: 'ev_th_live1', clubId: 'c4', title: 'Hackathon Kick-off Tanışma Toplantısı',
+    description: 'Pre-Hack-KU meetup happening right now! Meet your future teammates, hear about this year\'s challenge tracks and grab free pizza. Teams can register on the spot.',
+    location: 'ENG Building, Main Hall',
+    dateTime: DateTime.now().subtract(const Duration(minutes: 40)),
+    endTime: DateTime.now().add(const Duration(hours: 1, minutes: 30)),
+    attendeeUserIds: ['u1', 'u2', 'u3', 'u4', 'u5', 'u7', 'u9'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u2': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u3': DateTime.now().subtract(const Duration(hours: 20)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(hours: 18)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(hours: 6)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(hours: 14)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(hours: 10)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/hackathon_kickoff/800/500'),
+
+  Event(id: 'ev_th_live2', clubId: 'c31', title: 'Orkestra Bahar Provası',
+    description: 'Full orchestra rehearsal in progress — seats available for observers. Hear Dvořák and Brahms come alive as 45 student musicians prepare for next week\'s concert.',
+    location: 'KU Amfitiyatrosu',
+    dateTime: DateTime.now().subtract(const Duration(hours: 1, minutes: 15)),
+    endTime: DateTime.now().add(const Duration(hours: 1)),
+    attendeeUserIds: ['u6', 'u8', 'u14'],
+    rsvpTimestamps: {'u6': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/orchestra_rehearsal/800/500'),
+
+  Event(id: 'ev_th_live3', clubId: 'c24', title: 'Kuir Kulübü Haftalık Buluşma',
+    description: 'Weekly open social happening now — coffee, conversations and community. New faces always welcome. No agenda, just vibes and solidarity.',
+    location: 'SOS B108',
+    dateTime: DateTime.now().subtract(const Duration(minutes: 20)),
+    endTime: DateTime.now().add(const Duration(hours: 2)),
+    attendeeUserIds: ['u3', 'u6', 'u10', 'u13'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/queer_gathering/800/500'),
+
+  Event(id: 'ev_th_live4', clubId: 'c25', title: 'Kürtçe Konuşma Pratiği',
+    description: 'Intermediate Kurdish (Kurmancî) conversation session in progress. Native speakers paired with learners for 90 minutes of guided conversation practice.',
+    location: 'SOS B209',
+    dateTime: DateTime.now().subtract(const Duration(minutes: 50)),
+    endTime: DateTime.now().add(const Duration(minutes: 40)),
+    attendeeUserIds: ['u7', 'u10'],
+    rsvpTimestamps: {'u7': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(hours: 6)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/kurdish_class/800/500'),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TODAY (Thursday) — LATER TODAY
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Event(id: 'ev_th1', clubId: 'c28', title: 'Akustik Gece: Singer-Songwriter Showcase',
+    description: 'An intimate evening of original songs by KU students. Six acts performing original material — acoustic guitar, piano and vocal sets. Doors open 30 min early.',
+    location: 'SOS B Atelier',
+    dateTime: DateTime.now().add(const Duration(hours: 2)),
+    endTime: DateTime.now().add(const Duration(hours: 4, minutes: 30)),
+    attendeeUserIds: ['u2', 'u4', 'u5', 'u8', 'u14'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(hours: 20)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(hours: 12)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/acoustic_night/800/500'),
+
+  Event(id: 'ev_th2', clubId: 'c10', title: 'Platon\'un Devleti — Tartışma Gecesi',
+    description: 'Is Plato\'s Republic still relevant? Special one-off debate on justice, power and the ideal society. No prep needed — just come with your opinions.',
+    location: 'SOS B108',
+    dateTime: DateTime.now().add(const Duration(hours: 3)),
+    endTime: DateTime.now().add(const Duration(hours: 5)),
+    attendeeUserIds: ['u3', 'u7', 'u10', 'u5'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/plato_debate/800/500'),
+
+  Event(id: 'ev_th3', clubId: 'c32', title: 'Sosyal Medya İçerik Yarışması Sunumları',
+    description: 'Final presentations of this semester\'s Social Media Strategy Competition. 8 teams pitch their brand campaigns to a panel of industry judges. Public welcome.',
+    location: 'SOS B140 Amphitheatre',
+    dateTime: DateTime.now().add(const Duration(hours: 4)),
+    endTime: DateTime.now().add(const Duration(hours: 7)),
+    attendeeUserIds: ['u2', 'u7', 'u9', 'u13', 'u15'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/marketing_finals/800/500'),
+
+  Event(id: 'ev_th4', clubId: 'c16', title: 'İlk Yardım Sertifika Kursu',
+    description: 'Certified 3-hour first aid course covering CPR, AED use and basic wound care. Completion certificate provided. Limited to 20 participants — register at the door.',
+    location: 'SOS B206',
+    dateTime: DateTime.now().add(const Duration(hours: 5)),
+    endTime: DateTime.now().add(const Duration(hours: 8)),
+    attendeeUserIds: ['u6', 'u8', 'u10', 'u12'],
+    rsvpTimestamps: {'u6': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(hours: 16)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/firstaid_course/800/500'),
+
+  Event(id: 'ev_th5', clubId: 'c39', title: 'Doğaçlama Tiyatro: Açık Sahne Perşembe',
+    description: 'Every Thursday — Improv Night at KU Theatre Club. No script, no plan, pure chaos. Audience members can jump on stage anytime. Free entry, all welcome.',
+    location: 'SOS B206',
+    dateTime: DateTime.now().add(const Duration(hours: 6, minutes: 30)),
+    endTime: DateTime.now().add(const Duration(hours: 9)),
+    attendeeUserIds: ['u1', 'u3', 'u8', 'u11'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u3': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(hours: 18)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(hours: 10)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/improv_thursday/800/500'),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TOMORROW (Friday)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Event(id: 'ev_fri1', clubId: 'c4', title: 'Flutter ile Mobil Uygulama Geliştirme',
+    description: 'Build a fully working campus events app from scratch in one session. Covers widgets, navigation, state management and API calls. Bring your laptop.',
+    location: 'ENG B13',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 1)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 4)),
+    attendeeUserIds: ['u1', 'u2', 'u3', 'u4', 'u5', 'u9', 'u11', 'u15'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u2': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u3': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(days: 2, hours: 6)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(hours: 22)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(hours: 18)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(hours: 10)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/flutter_mobile/800/500'),
+
+  Event(id: 'ev_fri2', clubId: 'c27', title: 'Münazara Kulübü Antrenman Gecesi',
+    description: 'Weekly practice session with motions from this season\'s upcoming tournaments. Experienced members coach newcomers. Great way to sharpen your public speaking.',
+    location: 'SOS B209',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 3)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 5, minutes: 30)),
+    attendeeUserIds: ['u3', 'u7', 'u9', 'u14'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(hours: 14)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/debate_training/800/500'),
+
+  Event(id: 'ev_fri3', clubId: 'c6', title: 'Bahar Şenliği Dans Gösterisi',
+    description: 'KUDans Spring Showcase — the biggest performance of the year! Salsa, Hip-Hop, Contemporary and Folk segments with 35 dancers. Free tickets at the door.',
+    location: 'KU Amfitiyatrosu',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 6)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 8)),
+    attendeeUserIds: ['u1', 'u4', 'u5', 'u6', 'u8', 'u10', 'u12', 'u13', 'u14'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 20)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(hours: 12)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/dance_showcase/800/500'),
+
+  Event(id: 'ev_fri4', clubId: 'c33', title: 'Podcast Kayıt Workshopu',
+    description: 'KU Radio hosts a hands-on workshop: script writing, mic technique, GarageBand editing and publishing your first episode. Studio access provided after the session.',
+    location: 'SOS B111 — Radyo Stüdyosu',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 2)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 5)),
+    attendeeUserIds: ['u7', 'u11', 'u13', 'u15'],
+    rsvpTimestamps: {'u7': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/podcast_workshop/800/500'),
+
+  Event(id: 'ev_fri5', clubId: 'c15', title: 'Girişimci Networking Kahvaltısı',
+    description: 'Informal Friday morning breakfast for founders, aspiring entrepreneurs and startup enthusiasts. No agenda — just coffee, croissants and ambitious people.',
+    location: 'SOS Cafeteria — Upper Floor',
+    dateTime: DateTime.now().add(const Duration(days: 1)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 2)),
+    attendeeUserIds: ['u2', 'u5', 'u7', 'u9', 'u11', 'u13'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(hours: 20)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(hours: 16)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/startup_breakfast/800/500'),
+
+  Event(id: 'ev_fri6', clubId: 'c29', title: '"Waiting for Godot" — Açılış Gecesi',
+    description: 'Opening night of the KU Musical Club\'s production of Beckett\'s masterpiece. Minimalist staging, powerful performances. Running time: 110 minutes. Free entry.',
+    location: 'KU Sahnesi',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 7)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 9, minutes: 15)),
+    attendeeUserIds: ['u1', 'u2', 'u3', 'u5', 'u6', 'u10', 'u14'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(), 'u2': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u3': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/godot_opening/800/500'),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SUNDAY (April 27)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Event(id: 'ev_sun1', clubId: 'c5', title: 'Belgrad Ormanı Sabah Koşusu',
+    description: 'Sunday trail run through Belgrad Forest — 8 km route with easy and hard variants. Transport departs KU main gate at 08:00. Bring water, trail shoes and good energy.',
+    location: 'Belgrad Ormanı (KU Main Gate Departure)',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 1)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 4)),
+    attendeeUserIds: ['u2', 'u3', 'u5', 'u6', 'u8', 'u12'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u3': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(hours: 18)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/trail_run_forest/800/500'),
+
+  Event(id: 'ev_sun2', clubId: 'c13', title: 'İstanbul Altın Saati Fotoğraf Gezisi',
+    description: 'Golden hour shoot around Karaköy and Galata Tower. Meet at Tünel Square, shoot until sunset, then group dinner. Bring any camera — phone shooters very welcome!',
+    location: 'Tünel Meydanı, Beyoğlu (KU Departure 15:30)',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 6)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 10)),
+    attendeeUserIds: ['u1', 'u4', 'u5', 'u10'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/istanbul_photo_walk/800/500'),
+
+  Event(id: 'ev_sun3', clubId: 'c36', title: 'Pazar Oyun Günü',
+    description: 'Board games, card games, video games — bring your favourites or just show up. Settlers of Catan, Ticket to Ride, Among Us, and more. Food and drinks in the lounge.',
+    location: 'SCI 103',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 3)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 8)),
+    attendeeUserIds: ['u2', 'u4', 'u5', 'u9', 'u11', 'u13', 'u15'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(hours: 30)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(hours: 22)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 14)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(hours: 6)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/game_day_sunday/800/500'),
+
+  Event(id: 'ev_sun4', clubId: 'c22', title: 'Beykoz Hayvan Barınağı Ziyareti',
+    description: 'Volunteer visit to Beykoz Animal Shelter — bring food donations, spend time with the animals and help with cleaning. Transport from KU at 10:00. Capacity: 20.',
+    location: 'Beykoz Hayvan Barınağı (KU Departure 10:00)',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 2, minutes: 30)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 6)),
+    attendeeUserIds: ['u5', 'u6', 'u8', 'u12', 'u14'],
+    rsvpTimestamps: {'u5': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(hours: 20)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/animal_shelter_visit/800/500'),
+
+  Event(id: 'ev_sun5', clubId: 'c34', title: 'Pazar Sabahı Çizim Serbest Atölye',
+    description: 'Open Sunday morning drawing session — urban sketching, portraits, still life. No theme, no pressure. Bring your own supplies or borrow from the club. Coffee provided.',
+    location: 'Arts Building Studio 2',
+    dateTime: DateTime.now().add(const Duration(days: 3)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 3)),
+    attendeeUserIds: ['u4', 'u6', 'u10', 'u12'],
+    rsvpTimestamps: {'u4': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(hours: 14)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/sunday_drawing/800/500'),
+
+  Event(id: 'ev_sun6', clubId: 'c35', title: 'Kısa Film Maratonu: Öğrenci Yapımları',
+    description: 'Watch 12 short films made by KU Cinema Club members this semester — from comedy to documentary. Q&A with directors after each screening. Popcorn included.',
+    location: 'SOS B140 Amphitheatre',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 4)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 8)),
+    attendeeUserIds: ['u1', 'u3', 'u5', 'u7', 'u10', 'u13'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u3': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 16)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/short_film_marathon/800/500'),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // BATCH 2 — 20 new events from diverse clubs
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ── Live now ─────────────────────────────────────────────────────────────────
+  Event(id: 'ev_x3', clubId: 'c2', title: '23 Nisan Anma Etkinliği',
+    description: 'KUADK olarak 23 Nisan Ulusal Egemenlik ve Çocuk Bayramı\'nı şiir dinletisi ve belgesel gösterimiyle kutluyoruz. Etkinlik şu an devam ediyor, her an katılabilirsiniz.',
+    location: 'SOS Amfitiyatrosu',
+    dateTime: DateTime.now().subtract(const Duration(minutes: 30)),
+    endTime: DateTime.now().add(const Duration(hours: 1, minutes: 30)),
+    attendeeUserIds: ['u1', 'u7', 'u8', 'u10'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/april23_celebration/800/500'),
+
+  Event(id: 'ev_x7', clubId: 'c23', title: 'UEFA Şampiyonlar Ligi Çeyrek Final İzleme',
+    description: 'KU Kartalları olarak şampiyonlar liginin çeyrek final maçını canlı büyük ekranda izliyoruz! Kafeterya B\'de alan hazır, atıştırmalıklar benden. Şimdi başladı, hemen gel!',
+    location: 'Cafeteria B',
+    dateTime: DateTime.now().subtract(const Duration(minutes: 15)),
+    endTime: DateTime.now().add(const Duration(hours: 2)),
+    attendeeUserIds: ['u3', 'u5', 'u7', 'u9', 'u11', 'u13', 'u15'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(hours: 6)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(hours: 2, minutes: 30)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(minutes: 45)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/ucl_watchparty/800/500'),
+
+  // ── Today later ───────────────────────────────────────────────────────────────
+  Event(id: 'ev_x6', clubId: 'c3', title: 'Masumiyet Müzesi — 2. Okuma Oturumu',
+    description: 'KUBBE Orhan Pamuk okuma grubunun ikinci haftası. Bu oturum 100–200. sayfaları kapsıyor. Tartışma soruları Discord\'da paylaşıldı; kitabı bitirmeden de gelebilirsiniz!',
+    location: 'SOS B108',
+    dateTime: DateTime.now().add(const Duration(hours: 5)),
+    endTime: DateTime.now().add(const Duration(hours: 7)),
+    attendeeUserIds: ['u3', 'u6', 'u7', 'u10'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(hours: 10)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/masumiyetmuzesi/800/500'),
+
+  Event(id: 'ev_x13', clubId: 'c11', title: 'Şampiyonlar Ligi Çeyrek Final — 2. Maç',
+    description: 'Bu akşamki kritik maçı birlikte izliyoruz. Büyük ekran, snacklar kulüpten. Formanı giy, sarı-lacivert renklerinle gel ve tribünümüzü doldur! 💛💙',
+    location: 'Cafeteria A',
+    dateTime: DateTime.now().add(const Duration(hours: 3)),
+    endTime: DateTime.now().add(const Duration(hours: 5)),
+    attendeeUserIds: ['u5', 'u7', 'u9', 'u11', 'u15'],
+    rsvpTimestamps: {'u5': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/fenerbahce_ucl/800/500'),
+
+  Event(id: 'ev_x14', clubId: 'c37', title: 'İstanbul\'un Fethinin 572. Yıldönümü',
+    description: 'Tarih Kulübü olarak 29 Mayıs\'ı önceden anıyoruz — belgesel gösterimi, harita okumaları ve Osmanlı uzmanı Dr. Serkan Yılmaz ile soru-cevap. Tarih meraklısı herkes davetlidir.',
+    location: 'SOS B209 Seminer Salonu',
+    dateTime: DateTime.now().add(const Duration(hours: 5)),
+    endTime: DateTime.now().add(const Duration(hours: 8)),
+    attendeeUserIds: ['u3', 'u6', 'u7', 'u10'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/conquest_anniversary/800/500'),
+
+  Event(id: 'ev_x20', clubId: 'c14', title: 'Karanlığın Kıyısı — 2. Oturum',
+    description: 'D&D kampanyamızın ikinci oturumu! Tavern dövüşü, gizemli NPC\'ler ve beklenmedik bir dönüş sizi bekliyor. Geçen haftayı kaçıranlar için hazır karakter sayfaları mevcut.',
+    location: 'SOS B210',
+    dateTime: DateTime.now().add(const Duration(hours: 7)),
+    endTime: DateTime.now().add(const Duration(hours: 11)),
+    attendeeUserIds: ['u2', 'u5', 'u11'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u5': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u11': DateTime.now().subtract(const Duration(days: 4)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/dnd_session2/800/500'),
+
+  // ── Tomorrow ──────────────────────────────────────────────────────────────────
+  Event(id: 'ev_x1', clubId: 'c7', title: 'Enflasyon ve Para Politikası Paneli',
+    description: 'TCMB\'den kıdemli uzman ve iki akademisyenin katılımıyla Türkiye\'nin mevcut enflasyon dinamiklerini ve faiz politikasını ele alıyoruz. 90 dakika panel + soru-cevap. Ekonomi severlere şiddetle tavsiye edilir!',
+    location: 'SOS B140 Amfitiyatrosu',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 3)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 5)),
+    attendeeUserIds: ['u2', 'u7', 'u9', 'u13'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(hours: 15)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/inflation_panel/800/500'),
+
+  Event(id: 'ev_x4', clubId: 'c30', title: 'Beyin Anatomisi Atölyesi',
+    description: 'KU-SIGN\'in aylık nöroanatomi atölyesi. 3D beyin modeli üzerinde lobus, korteks ve derin yapıların tespiti. Tıp, psikoloji ve biyoloji öğrencileri için özellikle faydalı. Kayıt gerekmiyor.',
+    location: 'Tıp Binası Simülasyon Lab',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 5)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 7)),
+    attendeeUserIds: ['u9', 'u12', 'u10'],
+    rsvpTimestamps: {'u9': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 2)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/brain_anatomy_workshop/800/500'),
+
+  Event(id: 'ev_x8', clubId: 'c38', title: 'Klinik Beceriler Simülasyon Günü',
+    description: 'KUTÖB\'ün aylık simülasyon etkinliği. IV hat açma, venepuntur ve temel fizik muayene becerileri üzerine pratik. Kıdemli tıp öğrencileri gözetiminde manikenlerle çalışma fırsatı.',
+    location: 'Tıp Binası Beceri Lab',
+    dateTime: DateTime.now().add(const Duration(days: 1, hours: 6)),
+    endTime: DateTime.now().add(const Duration(days: 1, hours: 9)),
+    attendeeUserIds: ['u9', 'u12'],
+    rsvpTimestamps: {'u9': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 4)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/clinical_skills_day/800/500'),
+
+  // ── This week ──────────────────────────────────────────────────────────────────
+  Event(id: 'ev_x17', clubId: 'c7', title: 'Borsa ve Yatırım 101',
+    description: 'BIST hisse analizi, temel göstergeler ve portföy çeşitlendirmesi üzerine interaktif atölye. Bloomberg terminali uygulaması dahil. Ekonomi veya finansa meraklı herkes davetlidir!',
+    location: 'ENG Z27',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 3)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 5)),
+    attendeeUserIds: ['u2', 'u7', 'u9', 'u13', 'u15'],
+    rsvpTimestamps: {'u2': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u15': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/stock_market_101/800/500'),
+
+  Event(id: 'ev_x9', clubId: 'c41', title: 'Türk Halk Müziği Bahar Akşamı',
+    description: 'THM Kulübü\'nün bahar dönemi konseri! Saz ve bağlama topluluğumuz halkın sevdiği türküleri seslendirecek. Geleneksel ezgiler, modern yorumlar. Serbest giriş, kayıt gerekmez.',
+    location: 'SOS B Atelier',
+    dateTime: DateTime.now().add(const Duration(days: 3, hours: 6)),
+    endTime: DateTime.now().add(const Duration(days: 3, hours: 9)),
+    attendeeUserIds: ['u8', 'u10', 'u12', 'u14'],
+    rsvpTimestamps: {'u8': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/folk_music_concert/800/500'),
+
+  Event(id: 'ev_x2', clubId: 'c1', title: 'Boğaziçi Kıyısı Tarihi Mimari Yürüyüşü',
+    description: 'KUARHA ile Boğaziçi\'nin yalılarını, köşklerini ve 19. yüzyıl mimarisini keşfediyoruz. Rehberli 3 saatlik yürüyüş, KU ana kapısından hareket. İstanbul\'un mirasına yakın bakış!',
+    location: 'KU Ana Kapısı (Hareket Noktası)',
+    dateTime: DateTime.now().add(const Duration(days: 4, hours: 2)),
+    endTime: DateTime.now().add(const Duration(days: 4, hours: 5)),
+    attendeeUserIds: ['u3', 'u6', 'u7', 'u10'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 3)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/bosphorus_walk/800/500'),
+
+  Event(id: 'ev_x5', clubId: 'c40', title: 'Kafkasya Jeopolitiği: Türk Perspektifi',
+    description: 'Güney Kafkasya\'daki çatışmalar ve Türkiye\'nin bölgesel politikasını ele alıyoruz. Uluslararası ilişkiler fakültesinden iki akademisyen ile derinlemesine analiz. Herkese açık.',
+    location: 'SOS B209',
+    dateTime: DateTime.now().add(const Duration(days: 5, hours: 3)),
+    endTime: DateTime.now().add(const Duration(days: 5, hours: 5)),
+    attendeeUserIds: ['u3', 'u7', 'u10', 'u13'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/caucasus_geopolitics/800/500'),
+
+  Event(id: 'ev_x19', clubId: 'c17', title: 'Yapay Zeka ve Hukuk: Hukuki Çerçeve Paneli',
+    description: 'AB Yapay Zeka Yasası, kişisel veri koruma ve algoritma hesap verebilirliği üzerine panel. Hukuk fakültesinden iki akademisyen ve teknoloji sektöründen bir avukat. Herkese açık.',
+    location: 'SOS B206',
+    dateTime: DateTime.now().add(const Duration(days: 6, hours: 4)),
+    endTime: DateTime.now().add(const Duration(days: 6, hours: 7)),
+    attendeeUserIds: ['u3', 'u9', 'u10', 'u13'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u9': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(days: 2)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/ai_law_panel/800/500'),
+
+  Event(id: 'ev_x10', clubId: 'c9', title: 'İleri Ebru: Battal Tekniği Atölyesi',
+    description: 'Battal Ebru — geleneksel Türk kâğıt mermerleme sanatının en temel ve estetik formu. Bu özel atölyede büyük formatlı kâğıtlara çalışacağız. Temel deneyimi olanlar için.',
+    location: 'SOS Art Studio 1',
+    dateTime: DateTime.now().add(const Duration(days: 6, hours: 7)),
+    endTime: DateTime.now().add(const Duration(days: 6, hours: 9)),
+    attendeeUserIds: ['u4', 'u6', 'u10', 'u12'],
+    rsvpTimestamps: {'u4': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 4)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/battal_ebru/800/500'),
+
+  // ── Next week ──────────────────────────────────────────────────────────────────
+  Event(id: 'ev_x11', clubId: 'c25', title: 'Kürt Kültürü ve Gastronomi Gecesi',
+    description: 'Kürt mutfağından tatlar, müzik ve kültürel sunum. Nevruz geleneğinden esinlenen dekorasyon, geleneksel kıyafet sergisi ve dil oyunları. Herkes davetlidir, giriş ücretsiz!',
+    location: 'SOS Amfitiyatrosu',
+    dateTime: DateTime.now().add(const Duration(days: 8, hours: 6)),
+    endTime: DateTime.now().add(const Duration(days: 8, hours: 10)),
+    attendeeUserIds: ['u3', 'u6', 'u7', 'u10', 'u13'],
+    rsvpTimestamps: {'u3': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'u13': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/kurdish_cultural_night/800/500'),
+
+  Event(id: 'ev_x18', clubId: 'c30', title: 'Nörolojik Rehabilitasyon Sempozyumu',
+    description: 'KU-SIGN yıllık sempozyumu — nörolog, nöropsikolog ve fizyoterapist ile inme sonrası rehabilitasyon, MS tedavisi ve yenilikçi yöntemler. Sertifika verilecek. Kontenjan: 50.',
+    location: 'Tıp Binası Konferans Salonu',
+    dateTime: DateTime.now().add(const Duration(days: 9, hours: 5)),
+    endTime: DateTime.now().add(const Duration(days: 9, hours: 9)),
+    attendeeUserIds: ['u9', 'u12', 'u10'],
+    rsvpTimestamps: {'u9': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 4)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/neurology_symposium/800/500'),
+
+  Event(id: 'ev_x12', clubId: 'c12', title: 'Folklör Kulübü Yıl Sonu Gala Gecesi',
+    description: 'Yılın en büyük folklör etkinliği! Zeybek, horon ve halay bölümleriyle 90 dakikalık gösteriyi kaçırmayın. Kostümler, canlı müzik, fotoğraf standı. Biletler ücretsiz.',
+    location: 'KU Amfitiyatrosu',
+    dateTime: DateTime.now().add(const Duration(days: 10, hours: 7)),
+    endTime: DateTime.now().add(const Duration(days: 10, hours: 10)),
+    attendeeUserIds: ['u4', 'u6', 'u8', 'u12', 'u14'],
+    rsvpTimestamps: {'u4': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(days: 3)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/folklore_gala/800/500'),
+
+  // ── Past events ───────────────────────────────────────────────────────────────
+  Event(id: 'ev_x15', clubId: 'c19', title: 'Kariyer Mentörlük Günü',
+    description: 'Kadın Dayanışma\'nın mentörlük günü harika geçti! 20 mentor ve 60 öğrenci ile sektörleri aşan bire bir görüşmeler yapıldı. Katılan herkese teşekkürler — bir sonraki yıl görüşürüz!',
+    location: 'SOS B140 Amfitiyatrosu',
+    dateTime: DateTime.now().subtract(const Duration(days: 2, hours: 5)),
+    endTime: DateTime.now().subtract(const Duration(days: 2, hours: 1)),
+    attendeeUserIds: ['u4', 'u6', 'u8', 'u10', 'u12', 'u14'],
+    rsvpTimestamps: {'u6': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u12': DateTime.now().subtract(const Duration(days: 4)).toIso8601String(), 'u4': DateTime.now().subtract(const Duration(days: 4, hours: 6)).toIso8601String(), 'u14': DateTime.now().subtract(const Duration(days: 3)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/career_mentorship/800/500'),
+
+  Event(id: 'ev_x16', clubId: 'c2', title: 'Atatürk Belgeseli Gösterimi',
+    description: 'KUADK olarak "Atatürk" belgeselini büyük ekranda izledik. Cumhuriyet tarihinin önemli anları ve günümüze yansımaları üzerine çok derin bir tartışma oturumu gerçekleşti.',
+    location: 'SOS B206',
+    dateTime: DateTime.now().subtract(const Duration(days: 4, hours: 3)),
+    endTime: DateTime.now().subtract(const Duration(days: 4)),
+    attendeeUserIds: ['u1', 'u6', 'u7', 'u8', 'u10'],
+    rsvpTimestamps: {'u1': DateTime.now().subtract(const Duration(days: 8)).toIso8601String(), 'u6': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(), 'u7': DateTime.now().subtract(const Duration(days: 6)).toIso8601String(), 'u8': DateTime.now().subtract(const Duration(days: 5)).toIso8601String(), 'u10': DateTime.now().subtract(const Duration(days: 6, hours: 6)).toIso8601String()},
+    imagePath: 'https://picsum.photos/seed/ataturk_documentary/800/500'),
 ];
 
 // ─── News Posts ───────────────────────────────────────────────────────────────
@@ -643,6 +1038,102 @@ final newsPosts = [
     createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 14)),
     taggedClubIds: ['c7', 'c17'],
   ),
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // BATCH 2 — 20 new posts from diverse clubs (10 text + 10 image)
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  // ── Text posts ────────────────────────────────────────────────────────────────
+  NewsPost(id: 'n41', clubId: 'c7',  authorId: 'u1', title: 'Enflasyon Paneli Yarın!',
+    content: 'Ekonomi Kulübü olarak yarın TCMB uzmanı ve iki akademisyenle "Enflasyon ve Para Politikası" paneli düzenliyoruz. Türkiye\'nin faiz ve enflasyon dinamiklerini anlayabileceğiniz nadir bir fırsat. SOS B140, saat 15:00 — ekonomiyi merak eden herkes beklenilir!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 3))),
+
+  NewsPost(id: 'n42', clubId: 'c1',  authorId: 'u3', title: 'Boğaziçi Yürüyüşü Bu Hafta',
+    content: 'KUARHA olarak bu hafta Boğaziçi kıyısının tarihi mimari mirasını keşfeden rehberli bir yürüyüş düzenliyoruz. Yalılar, köşkler ve 19. yüzyıl Osmanlı dönemi yapılarını yakından göreceğiz. KU ana kapısından hareket, ulaşım kendi imkânlarınızla. Katılım ücretsiz!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 6))),
+
+  NewsPost(id: 'n43', clubId: 'c2',  authorId: 'u1', title: '23 Nisan Anma Etkinliğimiz Başladı',
+    content: 'KUADK olarak 23 Nisan Ulusal Egemenlik ve Çocuk Bayramı kutlamalarımız şu an devam ediyor! Şiir dinletisi, belgesel gösterimi ve öğrenci sunumlarıyla dolu bir program. SOS Amfi\'de hâlâ devam ediyor — gel, paylaş!',
+    createdAt: DateTime.now().subtract(const Duration(minutes: 45))),
+
+  NewsPost(id: 'n44', clubId: 'c30', authorId: 'u3', title: 'Beyin Farkındalık Ayı Başladı',
+    content: 'KU-SIGN olarak Mayıs Beyin Farkındalık Ayı\'nda bir dizi etkinlik düzenliyoruz. Yarınki beyin anatomisi atölyesinin ardından önümüzdeki hafta Nörolojik Rehabilitasyon Sempozyumu geliyor. Tıp, psikoloji ve biyoloji öğrencilerine özellikle tavsiye edilir!',
+    createdAt: DateTime.now().subtract(const Duration(days: 1))),
+
+  NewsPost(id: 'n45', clubId: 'c40', authorId: 'u4', title: 'Kafkasya Jeopolitiği Serimiz Bu Hafta',
+    content: 'Türk Araştırmaları Topluluğu olarak bu hafta "Kafkasya Jeopolitiği: Türk Perspektifi" semineriyle yeni seminer serimize başlıyoruz. Güney Kafkasya\'daki dinamikler ve Türkiye\'nin politikasını derinlemesine analiz edeceğiz. Uluslararası ilişkiler öğrencileri mutlaka kaçırmasın!',
+    createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 5))),
+
+  NewsPost(id: 'n46', clubId: 'c3',  authorId: 'u2', title: 'Masumiyet Müzesi — 2. Oturum Bu Akşam',
+    content: 'KUBBE Orhan Pamuk okuma grubumuzun ikinci oturumu bu akşam 21:00\'de SOS B108\'de! Bu hafta 100–200. sayfaları tartışıyoruz. Tartışma soruları Discord\'da paylaşıldı. Kitabı bitirmeseniz de gelebilirsiniz — herkese açık, sıcak bir atmosfer garanti!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 2))),
+
+  NewsPost(id: 'n47', clubId: 'c23', authorId: 'u1', title: 'Basketbol Kupası Sergileniyor!',
+    content: 'KU Basketbol Takımı\'nın şampiyonluk kupası bu hafta boyunca SOS giriş holünde sergileniyor! Fotoğraf çektirmek isteyenler sabah 09:00 ile akşam 18:00 arasında uğrayabilir. Tüm KU camiasını gururlandıran bu başarıyı birlikte kutlayalım! 🦅🏆',
+    createdAt: DateTime.now().subtract(const Duration(hours: 14))),
+
+  NewsPost(id: 'n48', clubId: 'c38', authorId: 'u3', title: 'Klinik Beceriler Günü Yarın',
+    content: 'KUTÖB olarak yarın Tıp Binası Beceri Lab\'ında aylık simülasyon gününü düzenliyoruz. IV hat, venepuntur ve fizik muayene istasyonları hazır. Kıdemli tıp öğrencileri eğitici olarak katılacak. Tıp fakültesi 1–3. sınıf öğrencilerine öncelikle tavsiye edilir.',
+    createdAt: DateTime.now().subtract(const Duration(hours: 8))),
+
+  NewsPost(id: 'n49', clubId: 'c41', authorId: 'u4', title: 'Halk Müziği Konseri Bu Hafta',
+    content: 'Türk Halk Müziği Kulübü olarak bu haftaki bahar konserimizi duyuruyoruz! Saz ve bağlama topluluğumuz geleneksel türkülerden modern yorumlara uzanan bir repertuvar sunacak. SOS B Atelier\'de, giriş tamamen ücretsiz. Tüm kampüsü bekliyoruz!',
+    createdAt: DateTime.now().subtract(const Duration(days: 2))),
+
+  NewsPost(id: 'n50', clubId: 'c9',  authorId: 'u2', title: 'Ebru Eserlerimiz Sergide!',
+    content: 'Ebru Kulübü\'nün bu dönem atölyelerinde üretilen eserler bu hafta SOS Koridoru\'nda sergileniyor. Battal, taraklı ve bülbül yuvası teknikleriyle üretilmiş 30\'dan fazla özgün çalışma var. Geçerken bir göz atın, destekleriniz bizi mutlu ediyor!',
+    createdAt: DateTime.now().subtract(const Duration(days: 3))),
+
+  // ── Image posts ────────────────────────────────────────────────────────────────
+  NewsPost(id: 'ni31', clubId: 'c7',  authorId: 'u1',
+    content: 'Bloomberg terminali başında analiz seansı 📊 Bu hafta BIST 100 bileşenlerini inceledik. Yarın Borsa ve Yatırım 101 atölyesinde bu verileri gerçek hayata bağlıyoruz!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+    imagePath: 'https://picsum.photos/seed/bloomberg_terminal/800/500'),
+
+  NewsPost(id: 'ni32', clubId: 'c1',  authorId: 'u3',
+    content: 'Troya\'dan ışıl ışıl kareler ✨ Geçen ayki saha gezisinden favori fotoğraflarım. Agamemnon\'un çatısının altında tarihle yüzleşmek inanılmaz bir his.',
+    createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 4)),
+    imagePath: 'https://picsum.photos/seed/troy_archaeological/800/500'),
+
+  NewsPost(id: 'ni33', clubId: 'c2',  authorId: 'u1',
+    content: 'Atatürk\'ü anma törenimizden kareler 🇹🇷 Kampüste okunan şiirler, dalgalanan bayraklar ve saygı duruşu. Her yıl bu anı birlikte yaşamak büyük bir onur.',
+    createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 3)),
+    imagePath: 'https://picsum.photos/seed/ataturk_ceremony/800/500'),
+
+  NewsPost(id: 'ni34', clubId: 'c30', authorId: 'u3',
+    content: 'Beyin modeli workshopundan kareler 🧠 Frontal lob, hipokampüs, amigdala… 3D model üzerinde çalışmak teorinin çok ötesinde bir anlayış kazandırıyor. Bir sonraki atölyeye kayıt açık!',
+    createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 6)),
+    imagePath: 'https://picsum.photos/seed/brain_model_workshop/800/500'),
+
+  NewsPost(id: 'ni35', clubId: 'c40', authorId: 'u4',
+    content: 'Kafkasya panel hazırlıklarımızdan bir an 🗺️ Haritalar, kaynak makaleler ve flip chart ile dolu bir seminer odası. Bu hafta Perşembe — meraklısını bekleriz!',
+    createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 9)),
+    imagePath: 'https://picsum.photos/seed/caucasus_panel/800/500'),
+
+  NewsPost(id: 'ni36', clubId: 'c12', authorId: 'u4',
+    content: 'Gala gecesi provası tam gaz devam ediyor! 💃 Zeybek grubumuzun bu hareketine bayıldım. 10 gün sonra KU Amfi\'deyiz — biletler ücretsiz, yerinizi ayırtmayı unutmayın!',
+    createdAt: DateTime.now().subtract(const Duration(hours: 11)),
+    imagePath: 'https://picsum.photos/seed/folklor_gala_rehearsal/800/500'),
+
+  NewsPost(id: 'ni37', clubId: 'c11', authorId: 'u1',
+    content: 'Derby kutlamaları sürüyor! 💛💙 Kafeterya A dün gece bu haldeydi. Bu akşam Şampiyonlar Ligi için tekrar buradayız — yerinizi erkenden alın 🔥',
+    createdAt: DateTime.now().subtract(const Duration(hours: 16)),
+    imagePath: 'https://picsum.photos/seed/fenerbahce_celebration/800/500'),
+
+  NewsPost(id: 'ni38', clubId: 'c14', authorId: 'u2',
+    content: 'Hafta 1 dungeon haritamızı çizdik 🗺️ DM olarak bu kadar detaylı bir dünya oluşturmak harikaydı. Bu akşam Hafta 2\'de neler olacak bilemiyorum ama karakterleriniz için endişelenin 😈',
+    createdAt: DateTime.now().subtract(const Duration(hours: 20)),
+    imagePath: 'https://picsum.photos/seed/dnd_dungeon_map/800/500'),
+
+  NewsPost(id: 'ni39', clubId: 'c17', authorId: 'u1',
+    content: 'Moot Court hazırlıklarında son rötuşlar 📋 Takımımız davayı içselleştirdi, argümanlar keskin. Yapay Zeka ve Hukuk paneline hazır mısınız? 6 gün kaldı — kayıt açık!',
+    createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 12)),
+    imagePath: 'https://picsum.photos/seed/moot_court_prep/800/500'),
+
+  NewsPost(id: 'ni40', clubId: 'c25', authorId: 'u3',
+    content: 'Kürt Kültür Gecesi hazırlıklarından 🌿 Nevruz sofrasını kuruyor, geleneksel kıyafetleri düzenliyoruz. 8 gün sonra SOS Amfi\'deyiz. Herkesi bekliyoruz — birlikte öğrenelim!',
+    createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 7)),
+    imagePath: 'https://picsum.photos/seed/kurdish_culture_prep/800/500'),
 ];
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -687,6 +1178,18 @@ final comments = [
   Comment(id: 'cm35', postId: 'ni11', userId: 'u5', content: 'I was screaming at that last buzzer 😭🦅',                       createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 6))),
   Comment(id: 'cm36', postId: 'ni21', userId: 'u2', content: 'Tag me as a teammate!! We\'re doing this 💻',                   createdAt: DateTime.now().subtract(const Duration(minutes: 30))),
   Comment(id: 'cm37', postId: 'ni25', userId: 'u4', content: 'Butterflies right before going on stage 🎶 Relatable',          createdAt: DateTime.now().subtract(const Duration(hours: 13))),
+  // Comments on batch-2 posts
+  Comment(id: 'cm38', postId: 'n41', userId: 'u2', content: 'TCMB\'den uzman geliyor mu? Kesinlikle orada olacağım 📈',                  createdAt: DateTime.now().subtract(const Duration(hours: 2))),
+  Comment(id: 'cm39', postId: 'n41', userId: 'u9', content: 'Enflasyon konusu bu dönemin en kritik tartışması — çok değerli bir panel!',  createdAt: DateTime.now().subtract(const Duration(hours: 1))),
+  Comment(id: 'cm40', postId: 'n43', userId: 'u7', content: 'Az önce geçtim, ortam çok güzeldi. Herkese gitmesini tavsiye ederim!',        createdAt: DateTime.now().subtract(const Duration(minutes: 20))),
+  Comment(id: 'cm41', postId: 'n46', userId: 'u3', content: 'Geçen hafta harikaydi, bu hafta da geliyorum 📚',                             createdAt: DateTime.now().subtract(const Duration(hours: 1))),
+  Comment(id: 'cm42', postId: 'n47', userId: 'u5', content: 'Fotoğrafı çektirdim bile! Kupayla poz vermek ayrı bir duygu 🏆🦅',           createdAt: DateTime.now().subtract(const Duration(hours: 12))),
+  Comment(id: 'cm43', postId: 'ni31', userId: 'u2', content: 'Bloomberg erişimi olan bir kulüp — bu muhteşem. Yarın kesinlikle oradayım!',  createdAt: DateTime.now().subtract(const Duration(hours: 4))),
+  Comment(id: 'cm44', postId: 'ni32', userId: 'u6', content: 'Bu fotoğraf bir müzeye yakışır. KUARHA her zaman farklı bir perspektif sunar!', createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 2))),
+  Comment(id: 'cm45', postId: 'ni36', userId: 'u8', content: 'Zeybek grubumuz bu yıl çok iyi, gala gecesi efsane olacak 🔥',               createdAt: DateTime.now().subtract(const Duration(hours: 9))),
+  Comment(id: 'cm46', postId: 'ni37', userId: 'u11', content: 'BU AKŞAM KAFETERYADA 💛💙 Kim gelmiyor ki??',                               createdAt: DateTime.now().subtract(const Duration(hours: 14))),
+  Comment(id: 'cm47', postId: 'ni38', userId: 'u5', content: 'O harita çok detaylı, DM gerçekten çok çalışmış. Bu akşam hazır mıyız?? 🎲', createdAt: DateTime.now().subtract(const Duration(hours: 18))),
+  Comment(id: 'cm48', postId: 'ni40', userId: 'u6', content: 'Bu etkinliği çok bekliyorum! Kürt mutfağını ilk kez deneyeceğim 🌿',          createdAt: DateTime.now().subtract(const Duration(days: 4, hours: 5))),
 ];
 
 // ─── Likes ────────────────────────────────────────────────────────────────────
@@ -771,6 +1274,48 @@ final likes = [
   Like(id: 'l75', postId: 'ni25', userId: 'u5'),
   Like(id: 'l76', postId: 'ni29', userId: 'u4'),
   Like(id: 'l77', postId: 'ni29', userId: 'u8'),
+  // Likes for batch-2 posts
+  Like(id: 'l78',  postId: 'n41',  userId: 'u2'),
+  Like(id: 'l79',  postId: 'n41',  userId: 'u7'),
+  Like(id: 'l80',  postId: 'n41',  userId: 'u9'),
+  Like(id: 'l81',  postId: 'n42',  userId: 'u3'),
+  Like(id: 'l82',  postId: 'n42',  userId: 'u6'),
+  Like(id: 'l83',  postId: 'n43',  userId: 'u1'),
+  Like(id: 'l84',  postId: 'n43',  userId: 'u8'),
+  Like(id: 'l85',  postId: 'n44',  userId: 'u9'),
+  Like(id: 'l86',  postId: 'n44',  userId: 'u12'),
+  Like(id: 'l87',  postId: 'n45',  userId: 'u3'),
+  Like(id: 'l88',  postId: 'n45',  userId: 'u7'),
+  Like(id: 'l89',  postId: 'n46',  userId: 'u6'),
+  Like(id: 'l90',  postId: 'n46',  userId: 'u10'),
+  Like(id: 'l91',  postId: 'n47',  userId: 'u5'),
+  Like(id: 'l92',  postId: 'n47',  userId: 'u9'),
+  Like(id: 'l93',  postId: 'n47',  userId: 'u11'),
+  Like(id: 'l94',  postId: 'n48',  userId: 'u9'),
+  Like(id: 'l95',  postId: 'n49',  userId: 'u8'),
+  Like(id: 'l96',  postId: 'n49',  userId: 'u14'),
+  Like(id: 'l97',  postId: 'n50',  userId: 'u4'),
+  Like(id: 'l98',  postId: 'ni31', userId: 'u2'),
+  Like(id: 'l99',  postId: 'ni31', userId: 'u9'),
+  Like(id: 'l100', postId: 'ni32', userId: 'u6'),
+  Like(id: 'l101', postId: 'ni32', userId: 'u7'),
+  Like(id: 'l102', postId: 'ni33', userId: 'u1'),
+  Like(id: 'l103', postId: 'ni33', userId: 'u8'),
+  Like(id: 'l104', postId: 'ni34', userId: 'u9'),
+  Like(id: 'l105', postId: 'ni34', userId: 'u10'),
+  Like(id: 'l106', postId: 'ni35', userId: 'u3'),
+  Like(id: 'l107', postId: 'ni36', userId: 'u4'),
+  Like(id: 'l108', postId: 'ni36', userId: 'u8'),
+  Like(id: 'l109', postId: 'ni36', userId: 'u12'),
+  Like(id: 'l110', postId: 'ni37', userId: 'u5'),
+  Like(id: 'l111', postId: 'ni37', userId: 'u7'),
+  Like(id: 'l112', postId: 'ni37', userId: 'u11'),
+  Like(id: 'l113', postId: 'ni38', userId: 'u5'),
+  Like(id: 'l114', postId: 'ni38', userId: 'u11'),
+  Like(id: 'l115', postId: 'ni39', userId: 'u3'),
+  Like(id: 'l116', postId: 'ni39', userId: 'u10'),
+  Like(id: 'l117', postId: 'ni40', userId: 'u6'),
+  Like(id: 'l118', postId: 'ni40', userId: 'u7'),
 ];
 
 // ─── Shares ───────────────────────────────────────────────────────────────────
@@ -1096,6 +1641,201 @@ final clubStories = <ClubStory>[
   ClubStory(id: 'st22', clubId: 'c36', emoji: '🧠', text: 'Campus Trivia Night in 2 days!\nTeams of up to 5. Prizes for top 3.\n6 rounds: KU history, pop culture, science & memes 🏆',
     postedAt: DateTime.now().subtract(const Duration(hours: 6)),
     imagePath: 'https://picsum.photos/seed/trivia_story/400/700'),
+
+  // ── New stories — today, live, tomorrow, Sunday ───────────────────────────
+
+  // KUACM (c4) – hackathon kickoff live
+  ClubStory(id: 'st23', clubId: 'c4', emoji: '🔴', text: 'HAPPENING RIGHT NOW 🔥\nHackathon Kick-off Meetup — ENG Main Hall.\nFree pizza, team formation, challenge reveal.\nCome now, doors open!',
+    postedAt: DateTime.now().subtract(const Duration(minutes: 35)),
+    imagePath: 'https://picsum.photos/seed/hackathon_live_story/400/700'),
+
+  // Müzik Kulübü (c28) – tonight acoustic
+  ClubStory(id: 'st24', clubId: 'c28', emoji: '🎸', text: 'TONIGHT — Akustik Gece!\nSOS B Atelier, 8 PM.\n6 original acts, intimate setting.\nFree entry — see you there 🎶',
+    postedAt: DateTime.now().subtract(const Duration(hours: 1)),
+    imagePath: 'https://picsum.photos/seed/acoustic_tonight_story/400/700'),
+
+  // Tiyatro Kulübü (c39) – improv tonight
+  ClubStory(id: 'st25', clubId: 'c39', emoji: '🎭', text: 'Perşembe = Doğaçlama Gecesi!\nBu gece 19:30\'da SOS B206.\nSahneye çık ya da izle — her ikisi de harika 😄',
+    postedAt: DateTime.now().subtract(const Duration(hours: 2)),
+    imagePath: 'https://picsum.photos/seed/improv_tonight_story/400/700'),
+
+  // Orkestra (c31) – rehearsal live
+  ClubStory(id: 'st26', clubId: 'c31', emoji: '🎻', text: 'Şu an prova yapıyoruz!\nKU Amfisi\'nde Brahms ve Dvořák sesleri yükseliyor.\nGelip izleyebilirsiniz — koltuklar açık 🎼',
+    postedAt: DateTime.now().subtract(const Duration(minutes: 50)),
+    imagePath: 'https://picsum.photos/seed/orchestra_live_story/400/700'),
+
+  // Felsefe (c10) – tonight debate
+  ClubStory(id: 'st27', clubId: 'c10', emoji: '🏛️', text: 'Bu Gece: Platon\'un Devleti Tartışması\nSOS B108 — 21:00\n"Adalet nedir?" sorusunu birlikte sorgulayacağız.\nHerkese açık, kayıt gerekmez.',
+    postedAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 30))),
+
+  // Pazarlama (c32) – finals today
+  ClubStory(id: 'st28', clubId: 'c32', emoji: '📈', text: 'Bugün sosyal medya strateji finalleri!\nSOS B140, 16:00\'da başlıyor.\n8 takım sunuyor — jüriye siz de dahil olabilirsiniz 🏆',
+    postedAt: DateTime.now().subtract(const Duration(hours: 3)),
+    imagePath: 'https://picsum.photos/seed/marketing_story/400/700'),
+
+  // KUDans (c6) – showcase tomorrow
+  ClubStory(id: 'st29', clubId: 'c6', emoji: '🕺', text: 'YARIN — Bahar Şenliği Dans Gösterisi!\nKU Amfi, 20:00.\nSalsa · Hip-Hop · Contemporary · Folk\nBiletler kapıda ücretsiz 💃🔥',
+    postedAt: DateTime.now().subtract(const Duration(hours: 2)),
+    imagePath: 'https://picsum.photos/seed/dance_tomorrow_story/400/700'),
+
+  // KUACM (c4) – flutter workshop tomorrow
+  ClubStory(id: 'st30', clubId: 'c4', emoji: '📱', text: 'YARIN — Flutter Workshop!\nENG B13, 17:00.\nSıfırdan mobil uygulama yapıyoruz.\nLaptopunu getir, deneyim gerekmez 💻',
+    postedAt: DateTime.now().subtract(const Duration(hours: 4)),
+    imagePath: 'https://picsum.photos/seed/flutter_tomorrow_story/400/700'),
+
+  // Müzikal (c29) – opening night tomorrow
+  ClubStory(id: 'st31', clubId: 'c29', emoji: '🌟', text: 'YARIN AÇILIŞ GECESİ! 🎉\n"Waiting for Godot" — KU Sahnesi, 20:00.\nTüm provalar tamamlandı, hazırız!\nBizi destekleyin — giriş ücretsiz.',
+    postedAt: DateTime.now().subtract(const Duration(hours: 1)),
+    imagePath: 'https://picsum.photos/seed/godot_opening_story/400/700'),
+
+  // Radyo (c33) – podcast workshop tomorrow
+  ClubStory(id: 'st32', clubId: 'c33', emoji: '🎙️', text: 'Yarın Podcast Workshopu!\nSOS B111 Stüdyo, 15:00.\nScripting · Recording · Editing — her şeyi öğreniyoruz.\nKatılmak için DM at!',
+    postedAt: DateTime.now().subtract(const Duration(hours: 3)),
+    imagePath: 'https://picsum.photos/seed/podcast_tomorrow_story/400/700'),
+
+  // Girişimcilik (c15) – networking breakfast tomorrow
+  ClubStory(id: 'st33', clubId: 'c15', emoji: '☕', text: 'Yarın Girişimci Kahvaltısı!\nSOS Cafeteria Üst Kat, 09:30.\nKroasan + kahve + hırslı insanlar.\nGelmek için kayıt gerekmez 🚀',
+    postedAt: DateTime.now().subtract(const Duration(hours: 5)),
+    imagePath: 'https://picsum.photos/seed/startup_brunch_story/400/700'),
+
+  // KUDAK (c5) – forest run Sunday
+  ClubStory(id: 'st34', clubId: 'c5', emoji: '🌲', text: 'Pazar — Belgrad Ormanı Koşusu!\nKU Ana Kapı, 08:00 hareket.\n8 km parkur, iki seviye var.\nAraç ücretsiz, su getir! 🏃',
+    postedAt: DateTime.now().subtract(const Duration(hours: 7)),
+    imagePath: 'https://picsum.photos/seed/forest_run_story/400/700'),
+
+  // KUFoto (c13) – Istanbul photo walk Sunday
+  ClubStory(id: 'st35', clubId: 'c13', emoji: '🌇', text: 'Pazar — İstanbul Altın Saati Çekimi!\nTünel\'de buluşuyoruz 15:30\'da.\nGalata, Karaköy, sunset shots.\nAkşam yemeği sonrası birlikte 📸',
+    postedAt: DateTime.now().subtract(const Duration(hours: 8)),
+    imagePath: 'https://picsum.photos/seed/istanbul_walk_story/400/700'),
+
+  // Sosyal Aktiviteler (c36) – game day Sunday
+  ClubStory(id: 'st36', clubId: 'c36', emoji: '🎲', text: 'Pazar Oyun Günü! 🎮\nSCI 103, 13:00–18:00.\nCatan · Ticket to Ride · Among Us ve daha fazlası.\nAtıştırmalıklar bende — sen gel 😄',
+    postedAt: DateTime.now().subtract(const Duration(hours: 4)),
+    imagePath: 'https://picsum.photos/seed/game_day_story/400/700'),
+
+  // KU Gönüllüleri (c22) – shelter visit Sunday
+  ClubStory(id: 'st37', clubId: 'c22', emoji: '🐾', text: 'Pazar — Hayvan Barınağı Ziyareti!\nBeykoz\'a gidiyoruz, 10:00\'da KU\'dan hareket.\nYiyecek bağışı getir, köpekler seni bekliyor 🐶❤️',
+    postedAt: DateTime.now().subtract(const Duration(hours: 6)),
+    imagePath: 'https://picsum.photos/seed/shelter_sunday_story/400/700'),
+
+  // Resim Kulübü (c34) – Sunday open studio
+  ClubStory(id: 'st38', clubId: 'c34', emoji: '✏️', text: 'Pazar Sabahı Serbest Atölye!\nArts Studio 2, 10:00–13:00.\nÇiz, boya, eskiz yap — istediğin gibi.\nKahve ikramı benden ☕🎨',
+    postedAt: DateTime.now().subtract(const Duration(hours: 5)),
+    imagePath: 'https://picsum.photos/seed/sunday_studio_story/400/700'),
+
+  // Sinema Kulübü (c35) – short film marathon Sunday
+  ClubStory(id: 'st39', clubId: 'c35', emoji: '🎞️', text: 'Pazar — Kısa Film Maratonu!\nSOS B140, 16:00.\n12 film, 12 yönetmen, 1 harika akşam.\nPopcorn bende, sen gel 🍿🎬',
+    postedAt: DateTime.now().subtract(const Duration(hours: 3)),
+    imagePath: 'https://picsum.photos/seed/short_films_story/400/700'),
+
+  // Münazara (c27) – training tomorrow
+  ClubStory(id: 'st40', clubId: 'c27', emoji: '🎤', text: 'Yarın Antrenman Gecesi — 18:00, SOS B209.\nYeni motionlar, koçluk, gerçek turnuva pratiği.\nYeni üyeler için mükemmel bir başlangıç noktası!',
+    postedAt: DateTime.now().subtract(const Duration(hours: 2))),
+
+  // Hemşirelik (c16) – first aid today
+  ClubStory(id: 'st41', clubId: 'c16', emoji: '🩺', text: 'Bugün İlk Yardım Kursu!\nSOS B206 — 17:00\'de başlıyor.\nSertifika verilecek, sadece 20 kişilik kontenjan.\nKapıda kayıt yapılıyor — acele et!',
+    postedAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 45))),
+
+  // Kuir Kulübü (c24) – weekly meetup live
+  ClubStory(id: 'st42', clubId: 'c24', emoji: '🌈', text: 'Haftalık buluşmamız şu an başladı!\nSOS B108 — kapılar açık, herkese açık.\nKahve var, sohbet var, güvenli alan garantili ✨',
+    postedAt: DateTime.now().subtract(const Duration(minutes: 10)),
+    imagePath: 'https://picsum.photos/seed/queer_meetup_story/400/700'),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // BATCH 2 — 20 new stories from diverse clubs
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // Ekonomi Kulübü (c7)
+  ClubStory(id: 'st43', clubId: 'c7', emoji: '📈', text: 'YARIN — Enflasyon ve Para Politikası Paneli!\nSOS B140, saat 15:00.\nTCMB uzmanı + 2 akademisyen.\nEkonomiyi seviyorsan bu paneli kaçırma 🔥',
+    postedAt: DateTime.now().subtract(const Duration(hours: 3)),
+    imagePath: 'https://picsum.photos/seed/econ_panel_story/400/700'),
+
+  // KUARHA (c1) — Arkeoloji ve Sanat Tarihi
+  ClubStory(id: 'st44', clubId: 'c1', emoji: '🏛️', text: 'Bu Hafta — Boğaziçi Tarihi Yürüyüşü!\nKU Ana Kapı, 4 gün sonra 10:00\'da.\nYalılar · Köşkler · Osmanlı mimarisi.\nRehberli tur, giriş ücretsiz 🚶',
+    postedAt: DateTime.now().subtract(const Duration(hours: 7)),
+    imagePath: 'https://picsum.photos/seed/bosphorus_arch_story/400/700'),
+
+  // KUADK (c2)
+  ClubStory(id: 'st45', clubId: 'c2', emoji: '🇹🇷', text: '23 Nisan kutlamalarımız şu an devam ediyor!\nSOS Amfi — şiir, belgesel, sohbet.\nHâlâ devam ediyor, gel katıl!\nMilli birlik ruhu herkesi bekliyor 🌟',
+    postedAt: DateTime.now().subtract(const Duration(minutes: 20))),
+
+  // KU-SIGN (c30) — Nöroloji
+  ClubStory(id: 'st46', clubId: 'c30', emoji: '🧠', text: 'YARIN — Beyin Anatomisi Atölyesi!\nTıp Binası Sim Lab, 17:00.\n3D beyin modeli üzerinde pratik çalışma.\nTıp · Psikoloji · Biyoloji öğrencileri ❤️',
+    postedAt: DateTime.now().subtract(const Duration(hours: 5)),
+    imagePath: 'https://picsum.photos/seed/brain_workshop_story/400/700'),
+
+  // Türk Araştırmaları (c40)
+  ClubStory(id: 'st47', clubId: 'c40', emoji: '🗺️', text: 'Bu Hafta Perşembe — Kafkasya Jeopolitiği\nSOS B209, 5 gün sonra 15:00.\nGüney Kafkasya ve Türk dış politikası.\nUluslararası ilişkiler severlere tavsiye!',
+    postedAt: DateTime.now().subtract(const Duration(hours: 9))),
+
+  // KUBBE (c3) — Beşeri Bilimler
+  ClubStory(id: 'st48', clubId: 'c3', emoji: '📚', text: 'Bu Akşam — Masumiyet Müzesi 2. Oturum!\nSOS B108, saat 21:00.\n100–200. sayfalar tartışılıyor.\nKitabı bitirmesen de gel — sıcak ortam garantili ☕',
+    postedAt: DateTime.now().subtract(const Duration(hours: 1)),
+    imagePath: 'https://picsum.photos/seed/bookclub_story/400/700'),
+
+  // KU Kartalları (c23)
+  ClubStory(id: 'st49', clubId: 'c23', emoji: '⚽', text: 'ŞU AN CANLI — UEFA Çeyrek Final!\nCafeteria B — büyük ekran, snacklar hazır.\nHemen gel, zaman kaybetme!\nKU takımı birlikte izliyor 🦅🔥',
+    postedAt: DateTime.now().subtract(const Duration(minutes: 10)),
+    imagePath: 'https://picsum.photos/seed/ucl_watchparty_story/400/700'),
+
+  // KUTÖB (c38) — Tıp
+  ClubStory(id: 'st50', clubId: 'c38', emoji: '🩻', text: 'YARIN — Klinik Beceriler Günü!\nBeceri Lab, 18:00.\nIV hat · Venepuntur · Fizik muayene.\nSınırlı kontenjan — yer ayırt!',
+    postedAt: DateTime.now().subtract(const Duration(hours: 6))),
+
+  // THM (c41) — Türk Halk Müziği
+  ClubStory(id: 'st51', clubId: 'c41', emoji: '🎸', text: 'Bu Hafta Cuma — Halk Müziği Bahar Akşamı!\nSOS B Atelier, 20:00.\nSaz · Bağlama · Türküler · Şarkılar.\nGiriş ücretsiz, gel dinle 🌙',
+    postedAt: DateTime.now().subtract(const Duration(hours: 8)),
+    imagePath: 'https://picsum.photos/seed/folk_music_story/400/700'),
+
+  // Ebru Kulübü (c9)
+  ClubStory(id: 'st52', clubId: 'c9', emoji: '🎨', text: '6 Gün Sonra — Battal Ebru Atölyesi!\nSOS Art Studio 1, 19:00.\nBüyük formatlı kâğıtlara battal tekniği.\nTemel deneyim yeterli. Tüm malzeme kulüpten 🌊',
+    postedAt: DateTime.now().subtract(const Duration(hours: 12)),
+    imagePath: 'https://picsum.photos/seed/battal_ebru_story/400/700'),
+
+  // Kürt Dili (c25)
+  ClubStory(id: 'st53', clubId: 'c25', emoji: '🌿', text: '8 Gün Sonra — Kürt Kültür Gecesi!\nSOS Amfi, 18:00.\nYemek · Müzik · Kıyafet · Dil Oyunları.\nHerkes davetli, giriş ücretsiz! Birlikte öğrenelim 💛',
+    postedAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
+    imagePath: 'https://picsum.photos/seed/kurdish_night_story/400/700'),
+
+  // Folklör (c12)
+  ClubStory(id: 'st54', clubId: 'c12', emoji: '💃', text: 'Gala Gecesine 10 Gün Kaldı! 🎉\nKU Amfi\'de zeybek, horon ve halay.\n45 dansçı, canlı müzik, kostümler.\nBilet ücretsiz — yerinizi ayırtın!',
+    postedAt: DateTime.now().subtract(const Duration(hours: 10)),
+    imagePath: 'https://picsum.photos/seed/folklore_gala_story/400/700'),
+
+  // Fenerbahçeliler (c11)
+  ClubStory(id: 'st55', clubId: 'c11', emoji: '💛', text: 'BU AKŞAM — Şampiyonlar Ligi!\nCafeteria A, 3 saat sonra.\nBüyük ekran hazır, yerler dolmadan gel!\nFormanı giy, sarı-lacivert renklerini tak 💙🔥',
+    postedAt: DateTime.now().subtract(const Duration(hours: 2)),
+    imagePath: 'https://picsum.photos/seed/fenerbahce_ucl_story/400/700'),
+
+  // Tarih Kulübü (c37)
+  ClubStory(id: 'st56', clubId: 'c37', emoji: '🏰', text: 'Bu Akşam — İstanbul\'un Fethi Anma!\nSOS B209, 5 saat sonra.\nBelgesel · Harita okumaları · Uzman Q&A.\n572 yıl önce bugün… tarih yaşanıyor! 🌙',
+    postedAt: DateTime.now().subtract(const Duration(hours: 4))),
+
+  // Kadın Dayanışma (c19)
+  ClubStory(id: 'st57', clubId: 'c19', emoji: '🌸', text: 'Kariyer Mentörlük Günü tamamlandı!\n60 öğrenci, 20 mentor, sayısız bağlantı.\nPaylaşımlarınız için teşekkürler 💕\nBir sonraki etkinlik duyurusu yakında!',
+    postedAt: DateTime.now().subtract(const Duration(days: 2, hours: 3))),
+
+  // Hukuk Kulübü (c17)
+  ClubStory(id: 'st58', clubId: 'c17', emoji: '⚖️', text: '6 Gün Sonra — Yapay Zeka ve Hukuk Paneli!\nSOS B206, 16:00.\nAB YZ Yasası · Veri Koruma · Hesap Verebilirlik.\nHukuk severlerin buluşma noktası 📋',
+    postedAt: DateTime.now().subtract(const Duration(days: 1, hours: 2))),
+
+  // IES / D&D (c14)
+  ClubStory(id: 'st59', clubId: 'c14', emoji: '🎲', text: 'BU AKŞAM — Karanlığın Kıyısı Hafta 2!\nSOS B210, 7 saat sonra.\nDungeon bekliyor, karakterler hazır.\nHazır karakter isteyenler DM atabilir 🗡️',
+    postedAt: DateTime.now().subtract(const Duration(hours: 3))),
+
+  // KUMech (c26)
+  ClubStory(id: 'st60', clubId: 'c26', emoji: '🤖', text: 'Robolig robotumuzun prototipi hazır! ⚙️\nMFG Lab\'dan ilk fotoğraflar...\nMekanik + elektronik + yazılım tamam.\nFinal tasarım yarışma öncesi açıklanacak!',
+    postedAt: DateTime.now().subtract(const Duration(days: 1, hours: 6)),
+    imagePath: 'https://picsum.photos/seed/robot_prototype_story/400/700'),
+
+  // AIChE (c21)
+  ClubStory(id: 'st61', clubId: 'c21', emoji: '🔬', text: 'AIChE Bölge Konferansı Hazırlıkları!\nPoster sunumu · Makale yarışması.\nKimya/BioMüh öğrencisi iseniz katılın.\nKayıt için Discord\'a gelin 🧪',
+    postedAt: DateTime.now().subtract(const Duration(days: 2, hours: 8))),
+
+  // İşletme Kulübü (c18)
+  ClubStory(id: 'st62', clubId: 'c18', emoji: '🤝', text: 'Girişimci Networking Dinnerı 11 gün sonra!\nENG Z27, 19:00.\n3 KU mezunu girişimci konuşuyor.\nNetworking yemeği dahil — kayıt ücretsiz 🚀',
+    postedAt: DateTime.now().subtract(const Duration(hours: 13)),
+    imagePath: 'https://picsum.photos/seed/startup_networking_story/400/700'),
 ];
 
 // ─── App Super Admin ─────────────────────────────────────────────────────────

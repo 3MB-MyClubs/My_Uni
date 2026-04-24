@@ -27,27 +27,32 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photoPath = userState.profilePhotoPaths[userId];
-    final bg = backgroundColor ?? AppColors.lightRed;
-    final fg = textColor ?? AppColors.primaryRed;
-    final isCircle = borderRadius == null;
+    return ListenableBuilder(
+      listenable: userState,
+      builder: (context, _) {
+        final photoPath = userState.profilePhotoPaths[userId];
+        final bg = backgroundColor ?? AppColors.lightRed;
+        final fg = textColor ?? AppColors.primaryRed;
+        final isCircle = borderRadius == null;
 
-    if (photoPath != null) {
-      final file = File(photoPath);
-      return ClipRRect(
-        borderRadius: isCircle
-            ? BorderRadius.circular(size / 2)
-            : borderRadius!,
-        child: Image.file(
-          file,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
-        ),
-      );
-    }
-    return _initial(bg, fg, isCircle);
+        if (photoPath != null) {
+          final file = File(photoPath);
+          return ClipRRect(
+            borderRadius: isCircle
+                ? BorderRadius.circular(size / 2)
+                : borderRadius!,
+            child: Image.file(
+              file,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
+            ),
+          );
+        }
+        return _initial(bg, fg, isCircle);
+      },
+    );
   }
 
   Widget _initial(Color bg, Color fg, bool isCircle) {

@@ -1,6 +1,5 @@
 import 'package:hive/hive.dart';
 import '../models/board_member_request.dart';
-import '../models/club.dart';
 import '../models/comment.dart';
 import '../models/event.dart';
 import '../models/like.dart';

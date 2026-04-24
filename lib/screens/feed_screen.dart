@@ -19,6 +19,7 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../services/message_service.dart';
 import 'messages_screen.dart';
+import 'campus_map_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
@@ -282,6 +283,14 @@ class _FeedScreenState extends State<FeedScreen> {
         background: Container(color: AppColors.card),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.map_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CampusMapScreen()),
+          ),
+          tooltip: 'Campus Map',
+        ),
         IconButton(
           icon: const Icon(Icons.send_outlined),
           onPressed: () => Navigator.push(

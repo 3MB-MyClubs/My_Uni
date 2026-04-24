@@ -13,6 +13,7 @@ import '../widgets/club_follow_button.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
+import 'chat_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 
@@ -208,6 +209,39 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     widget.club.description,
                     style: const TextStyle(
                         fontSize: 13, color: AppColors.secondaryText, height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                  // Message button
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          otherUserId: widget.club.id,
+                          otherUserName: widget.club.name,
+                        ),
+                      ),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.secondaryText.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: const Text(
+                        'Message',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ),
                   ),
 
                 ],

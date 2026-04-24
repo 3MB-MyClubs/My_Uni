@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/message.dart';
-import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
-import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
@@ -24,17 +22,29 @@ class _MessagesScreenState extends State<MessagesScreen> {
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
-  // All users the current user follows (excluding self)
-  List<User> get _followedUsers => users
-      .where((u) => userState.isFollowingUser(u.id) && u.id != _myId)
-      .toList();
+  // All contacts: every user (except self) + every club
+  List<_Contact> get _allContacts {
+    final myId = _myId;
+    return [
+      ...users
+          .where((u) => u.id != myId)
+          .map((u) => _Contact(
+                id: u.id,
+                name: userState.displayNameFor(u.id, u.name),
+                isClub: false,
+                isAdmin: u.role == 'admin',
+              )),
+      ...clubs.map((c) => _Contact(id: c.id, name: c.name, isClub: true)),
+    ];
+  }
 
-  // Followed users filtered by search query
-  List<User> get _searchResults {
+  // Contacts filtered by search query
+  List<_Contact> get _searchResults {
     if (_query.isEmpty) return [];
-    return _followedUsers.where((u) =>
-        u.name.toLowerCase().contains(_query.toLowerCase()) ||
-        u.email.toLowerCase().contains(_query.toLowerCase())).toList();
+    final q = _query.toLowerCase();
+    return _allContacts
+        .where((c) => c.name.toLowerCase().contains(q))
+        .toList();
   }
 
   // All messages from both mock seed data and Hive-persisted messages
@@ -75,91 +85,58 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return convo.isEmpty ? null : convo.first;
   }
 
-  String _userName(String userId) {
+  String _nameFor(String otherId) {
     try {
-      return users.firstWhere((u) => u.id == userId).name;
-    } catch (_) {
-      return 'Unknown';
-    }
+      return clubs.firstWhere((c) => c.id == otherId).name;
+    } catch (_) {}
+    try {
+      final u = users.firstWhere((u) => u.id == otherId);
+      return userState.displayNameFor(u.id, u.name);
+    } catch (_) {}
+    return 'Unknown';
   }
 
-  bool _isMutual(String otherId) {
-    final meFollowsThem = userState.isFollowingUser(otherId);
-    final theyFollowMe = users
-        .firstWhere((u) => u.id == otherId, orElse: () => users.first)
-        .followingUserIds
-        .contains(_myId);
-    return meFollowsThem && theyFollowMe;
-  }
+  bool _isClub(String id) => clubs.any((c) => c.id == id);
 
-  void _openChat(String userId, String userName) {
+  void _openChat(String otherId, String otherName) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) =>
-            ChatScreen(otherUserId: userId, otherUserName: userName),
+            ChatScreen(otherUserId: otherId, otherUserName: otherName),
       ),
     ).then((_) => setState(() {}));
   }
 
-  Future<void> _tryOpenChat(String userId, String userName) async {
-    if (userState.isProfilePrivate(userId) && !userState.isFollowingUser(userId)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userState.hasPendingRequest(userId)
-                ? 'Wait for $userName to accept your follow request first.'
-                : 'Request to follow $userName before sending a message.',
+  Widget _avatarFor(String id, String name) {
+    if (_isClub(id)) {
+      final idx = clubs.indexWhere((c) => c.id == id);
+      const clubColors = [
+        Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+        Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+      ];
+      final color = clubColors[(idx < 0 ? 0 : idx) % clubColors.length];
+      return Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Center(
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
-          backgroundColor: AppColors.card,
-          behavior: SnackBarBehavior.floating,
         ),
       );
-      return;
     }
-
-    if (_isMutual(userId) || userState.hasAcceptedMessageRequest(_myId, userId)) {
-      _openChat(userId, userName);
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Send message request?',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
-        ),
-        content: Text(
-          '$userName doesn\'t follow you back yet. Your message will be sent as a request — they\'ll need to accept it before you can chat freely.',
-          style: const TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Send Request'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      userState.acceptMessageRequest(_myId, userId);
-      userPrefsService.save(_myId);
-      _openChat(userId, userName);
-    }
+    return UserAvatar(userId: id, name: name, size: 56, fontSize: 20);
   }
 
   @override
@@ -196,8 +173,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
               autofocus: false,
               onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
-                hintText: 'Search people to message...',
-                prefixIcon: const Icon(Icons.person_search_outlined,
+                hintText: 'Search people or clubs...',
+                prefixIcon: const Icon(Icons.search_rounded,
                     color: AppColors.secondaryText),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
@@ -232,15 +209,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                 size: 48, color: AppColors.secondaryText),
                             const SizedBox(height: 12),
                             Text(
-                              'No followed users match "$_query"',
+                              'No results for "$_query"',
                               style: const TextStyle(
-                                  color: AppColors.secondaryText),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'You can only message people you follow.',
-                              style: TextStyle(
-                                  fontSize: 12,
                                   color: AppColors.secondaryText),
                             ),
                           ],
@@ -250,12 +220,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         itemCount: results.length,
                         separatorBuilder: (context, i) =>
                             const Divider(height: 1, indent: 72),
-                        itemBuilder: (context, i) =>
-                            _UserResultTile(
-                              user: results[i],
-                              onTap: () => _tryOpenChat(
-                                  results[i].id, results[i].name),
-                            ),
+                        itemBuilder: (context, i) => _ContactResultTile(
+                          contact: results[i],
+                          onTap: () =>
+                              _openChat(results[i].id, results[i].name),
+                        ),
                       )
                 // ── Conversation list ─────────────────────────────────────
                 : partnerIds.isEmpty
@@ -275,9 +244,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'Search for a name above to start chatting',
-                              style: TextStyle(
-                                  color: AppColors.secondaryText),
+                              'Search for a person or club above to start chatting',
+                              textAlign: TextAlign.center,
+                              style:
+                                  TextStyle(color: AppColors.secondaryText),
                             ),
                           ],
                         ),
@@ -288,7 +258,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             const Divider(height: 1, indent: 72),
                         itemBuilder: (context, i) {
                           final otherId = partnerIds[i];
-                          final name = _userName(otherId);
+                          final name = _nameFor(otherId);
                           final last = _lastMessage(otherId);
                           final isSentByMe =
                               last != null && last.senderId == _myId;
@@ -296,41 +266,66 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           final unread = !isSentByMe &&
                               messageService.hasUnread(_myId, otherId, all);
                           final unreadCount = unread
-                              ? messageService.unreadCount(_myId, otherId, all)
+                              ? messageService.unreadCount(
+                                  _myId, otherId, all)
                               : 0;
+                          final isClub = _isClub(otherId);
 
                           return InkWell(
-                            onTap: () => _tryOpenChat(otherId, name),
+                            onTap: () => _openChat(otherId, name),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 10),
                               child: Row(
                                 children: [
-                                  // Avatar
-                                  UserAvatar(
-                                    userId: otherId,
-                                    name: name,
-                                    size: 56,
-                                    fontSize: 20,
-                                  ),
+                                  _avatarFor(otherId, name),
                                   const SizedBox(width: 12),
-                                  // Name + message preview
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          name,
-                                          style: TextStyle(
-                                            fontWeight: unread
-                                                ? FontWeight.bold
-                                                : FontWeight.w600,
-                                            fontSize: 15,
-                                            color: unread
-                                                ? AppColors.text
-                                                : AppColors.text,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                name,
+                                                style: TextStyle(
+                                                  fontWeight: unread
+                                                      ? FontWeight.bold
+                                                      : FontWeight.w600,
+                                                  fontSize: 15,
+                                                  color: AppColors.text,
+                                                ),
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (isClub) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.lightRed,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          8),
+                                                ),
+                                                child: const Text(
+                                                  'Club',
+                                                  style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: AppColors
+                                                          .primaryRed,
+                                                      fontWeight:
+                                                          FontWeight.w600),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                         const SizedBox(height: 2),
                                         if (last != null)
@@ -354,7 +349,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  // Time + unread badge or delivery status
                                   if (last != null)
                                     Column(
                                       crossAxisAlignment:
@@ -375,10 +369,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                         const SizedBox(height: 4),
                                         if (unread)
                                           Container(
-                                            constraints: const BoxConstraints(minWidth: 20),
+                                            constraints: const BoxConstraints(
+                                                minWidth: 20),
                                             height: 20,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 6),
+                                            padding: const EdgeInsets
+                                                .symmetric(horizontal: 6),
                                             decoration: BoxDecoration(
                                               color: AppColors.primaryRed,
                                               borderRadius:
@@ -406,7 +401,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                                     ? Icons.done_all
                                                     : Icons.arrow_back_ios_new,
                                                 size: 11,
-                                                color: AppColors.secondaryText,
+                                                color:
+                                                    AppColors.secondaryText,
                                               ),
                                               const SizedBox(width: 3),
                                               Text(
@@ -415,7 +411,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                                     : 'Received',
                                                 style: const TextStyle(
                                                   fontSize: 10,
-                                                  color: AppColors.secondaryText,
+                                                  color:
+                                                      AppColors.secondaryText,
                                                 ),
                                               ),
                                             ],
@@ -460,34 +457,84 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 }
 
-// ─── User Result Tile ─────────────────────────────────────────────────────────
+// ─── Contact data class ────────────────────────────────────────────────────────
 
-class _UserResultTile extends StatelessWidget {
-  final User user;
+class _Contact {
+  final String id;
+  final String name;
+  final bool isClub;
+  final bool isAdmin;
+
+  const _Contact({
+    required this.id,
+    required this.name,
+    required this.isClub,
+    this.isAdmin = false,
+  });
+}
+
+// ─── Contact Result Tile ──────────────────────────────────────────────────────
+
+class _ContactResultTile extends StatelessWidget {
+  final _Contact contact;
   final VoidCallback onTap;
 
-  const _UserResultTile({required this.user, required this.onTap});
+  const _ContactResultTile({required this.contact, required this.onTap});
+
+  static const _clubColors = [
+    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final isClubAdmin = user.role == 'admin';
+    final Widget avatar;
+    final Widget? subtitle;
+
+    if (contact.isClub) {
+      final idx = clubs.indexWhere((c) => c.id == contact.id);
+      final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+      avatar = Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Center(
+          child: Text(
+            contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: color),
+          ),
+        ),
+      );
+      subtitle = null;
+    } else {
+      avatar = UserAvatar(
+          userId: contact.id, name: contact.name, size: 48, fontSize: 18);
+      subtitle = null;
+    }
+
+    final badge = contact.isClub
+        ? 'Club'
+        : contact.isAdmin
+            ? 'Club Admin'
+            : null;
+
     return ListTile(
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: UserAvatar(
-        userId: user.id,
-        name: user.name,
-        size: 48,
-        fontSize: 18,
-      ),
+      leading: avatar,
       title: Row(
         children: [
           Flexible(
-            child: Text(user.name,
+            child: Text(contact.name,
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis),
           ),
-          if (isClubAdmin) ...[
+          if (badge != null) ...[
             const SizedBox(width: 6),
             Container(
               padding:
@@ -496,9 +543,9 @@ class _UserResultTile extends StatelessWidget {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text(
-                'Club Admin',
-                style: TextStyle(
+              child: Text(
+                badge,
+                style: const TextStyle(
                     fontSize: 10,
                     color: AppColors.primaryRed,
                     fontWeight: FontWeight.w600),
@@ -507,9 +554,7 @@ class _UserResultTile extends StatelessWidget {
           ],
         ],
       ),
-      subtitle: Text(user.email,
-          style: const TextStyle(
-              fontSize: 12, color: AppColors.secondaryText)),
+      subtitle: subtitle,
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(

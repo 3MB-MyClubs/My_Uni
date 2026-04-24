@@ -19,15 +19,49 @@ class UserState extends ChangeNotifier {
   // Profile photo image paths keyed by user/admin id.
   final Map<String, String> profilePhotoPaths = {};
 
-  // ── Privacy ──────────────────────────────────────────────────────────────────
+  /// Sets the profile photo path for [userId] and notifies all listeners.
+  void setProfilePhoto(String userId, String path) {
+    profilePhotoPaths[userId] = path;
+    notifyListeners();
+  }
 
-  /// Whether the logged-in user's own profile is private.
-  bool isPrivate = false;
+  /// Sets the banner path for [userId] and notifies all listeners.
+  void setBanner(String userId, String path) {
+    bannerPaths[userId] = path;
+    notifyListeners();
+  }
 
-  /// User IDs that have private profiles (demo: u3 is private by default).
-  final Set<String> privateUserIds = {'u3'};
+  // ── Usernames ─────────────────────────────────────────────────────────────────
 
-  bool isProfilePrivate(String userId) => privateUserIds.contains(userId);
+  /// Custom usernames keyed by user/admin id. If absent the real name is used.
+  final Map<String, String> usernames = {};
+
+  /// Returns the custom username for [userId] if set, otherwise null.
+  String? usernameFor(String userId) => usernames[userId];
+
+  /// Sets [username] for [userId] and notifies listeners.
+  void setUsername(String userId, String username) {
+    usernames[userId] = username;
+    notifyListeners();
+  }
+
+  /// Removes the custom username for [userId] (reverts to real name).
+  void clearUsername(String userId) {
+    usernames.remove(userId);
+    notifyListeners();
+  }
+
+  /// Returns true if [username] is already taken by someone other than [excludeId].
+  bool isUsernameTaken(String username, {String? excludeId}) {
+    final lower = username.toLowerCase();
+    return usernames.entries.any(
+      (e) => e.key != excludeId && e.value.toLowerCase() == lower,
+    );
+  }
+
+  /// The display name to show publicly for [userId]: username if set, else [fallbackName].
+  String displayNameFor(String userId, String fallbackName) =>
+      usernames[userId] ?? fallbackName;
 
   // ── Follow requests ───────────────────────────────────────────────────────────
 

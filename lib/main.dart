@@ -24,6 +24,7 @@ void main() async {
   await messageService.initialize();
   await notificationService.initialize();
   await userPrefsService.initialize();
+  userPrefsService.loadAllPhotos();
   await contentStore.initialize();
   await viewTracker.initialize();
   await personalizationService.initialize();

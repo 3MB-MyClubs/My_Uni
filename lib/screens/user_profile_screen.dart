@@ -67,88 +67,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   String get _myId => authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-  String get _myName => authService.currentUser?.name ?? authService.currentAdmin?.name ?? 'Someone';
 
   void _persist() => userPrefsService.save(_myId);
 
-  bool _isMutual(String otherId) {
-    final meFollowsThem = userState.isFollowingUser(otherId);
-    final theyFollowMe = widget.user.followingUserIds.contains(_myId);
-    return meFollowsThem && theyFollowMe;
-  }
-
-  Future<void> _tryOpenChat() async {
+  void _tryOpenChat() {
     final otherId = widget.user.id;
-    final name = widget.user.name;
-
-    // Block messaging if follow request to a private profile is still pending.
-    if (userState.isProfilePrivate(otherId) &&
-        !userState.isFollowingUser(otherId)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userState.hasPendingRequest(otherId)
-                ? 'Wait for $name to accept your follow request first.'
-                : 'Request to follow $name before sending a message.',
-          ),
-          backgroundColor: AppColors.card,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    if (_isMutual(otherId) || userState.hasAcceptedMessageRequest(_myId, otherId)) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
-      ));
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Send message request?',
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: Text(
-          '$name doesn\'t follow you back yet. Your message will be sent as a request — they\'ll need to accept it before you can chat freely.',
-          style: const TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Send Request'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      userState.acceptMessageRequest(_myId, otherId);
-      _persist();
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
-      ));
-    }
+    final name = userState.displayNameFor(otherId, widget.user.name);
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
+    ));
   }
 
   Future<void> _handleFollowTap() async {
     final user = widget.user;
     final isFollowing = userState.isFollowingUser(user.id);
     final isPending = userState.hasPendingRequest(user.id);
-    final isPrivate = userState.isProfilePrivate(user.id);
     final theyFollowMe = user.followingUserIds.contains(_myId);
 
     // ── Already following → unfollow ─────────────────────────────────────────
@@ -168,46 +101,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return;
     }
 
-    // ── Private profile → send follow request ─────────────────────────────────
-    if (isPrivate) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Request to Follow',
-              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-          content: Text(
-            '${user.name} has a private account. Send them a follow request? Once accepted, you\'ll be able to see their posts and send messages.',
-            style: const TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Send Request'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true && mounted) {
-        setState(() =>
-            userState.sendFollowRequest(_myId, user.id, _myName));
-        _persist();
-      }
-      return;
-    }
-
-    // ── Non-private, they don't follow back → show 1-time notice ─────────────
+    // ── They don't follow back → show 1-time notice ─────────────
     if (!theyFollowMe && !userState.shownFollowNotice.contains(user.id)) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -217,7 +111,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           title: const Text('Follow',
               style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
           content: Text(
-            '${user.name} doesn\'t follow you back yet. You can still follow them — they won\'t need to approve it.',
+            '${userState.displayNameFor(user.id, user.name)} doesn\'t follow you back yet. You can still follow them — they won\'t need to approve it.',
             style: const TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -328,14 +222,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           size: 44,
                           fontSize: 16,
                         ),
-                        title: Text(u.name,
+                        title: Text(
+                            userState.displayNameFor(u.id, u.name),
                             style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.text)),
-                        subtitle: Text(u.email,
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.secondaryText)),
+                        subtitle: userState.usernameFor(u.id) != null
+                            ? Text(u.name,
+                                style: const TextStyle(
+                                    fontSize: 12, color: AppColors.secondaryText))
+                            : null,
                         trailing: const Icon(Icons.chevron_right,
                             color: AppColors.secondaryText),
                       );
@@ -364,7 +261,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             surfaceTintColor: Colors.transparent,
             foregroundColor: AppColors.text,
             pinned: true,
-            title: Text(widget.user.name,
+            title: Text(
+                userState.displayNameFor(widget.user.id, widget.user.name),
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ),
 
@@ -374,12 +272,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               children: [
                 _buildHeader(followers, following),
                 const Divider(height: 1),
-                if (userState.isProfilePrivate(widget.user.id) &&
-                    !userState.isFollowingUser(widget.user.id))
-                  _buildPrivateLock()
-                else ...[
-                  if (subClubs.isNotEmpty) _buildClubsSection(subClubs),
-                ],
+                if (subClubs.isNotEmpty) _buildClubsSection(subClubs),
                 const SizedBox(height: 80),
               ],
             ),
@@ -470,15 +363,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                Text(user.name,
+                Text(userState.displayNameFor(user.id, user.name),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         color: AppColors.text)),
-                const SizedBox(height: 2),
-                Text(user.email,
-                    style: const TextStyle(
-                        fontSize: 13, color: AppColors.secondaryText)),
+                if (userState.usernameFor(user.id) != null) ...[
+                  const SizedBox(height: 2),
+                  Text(user.name,
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.secondaryText)),
+                ],
 
                 // ── Mutuals row ────────────────────────────────────────────
                 if (mutuals.isNotEmpty && !_isOwnProfile) ...[
@@ -602,14 +497,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   const SizedBox(height: 14),
                   Builder(builder: (_) {
                     final isPending = userState.hasPendingRequest(user.id);
-                    final isPrivate = userState.isProfilePrivate(user.id);
                     final String followLabel = isPending
                         ? 'Requested'
                         : isFollowingUser
                             ? 'Following'
-                            : isPrivate
-                                ? 'Request'
-                                : 'Follow';
+                            : 'Follow';
                     final bool followFilled = !isFollowingUser && !isPending;
                     return Row(
                       children: [
@@ -677,40 +569,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ],
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPrivateLock() {
-    final isPending = userState.hasPendingRequest(widget.user.id);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.lightRed,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.lock_rounded, size: 36, color: AppColors.primaryRed),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'This account is private',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isPending
-                ? 'Your follow request is pending. Once accepted, you\'ll be able to see their posts.'
-                : 'Follow this account to see their posts and clubs.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, color: AppColors.secondaryText, height: 1.5),
           ),
         ],
       ),
