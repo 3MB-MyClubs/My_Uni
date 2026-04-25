@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/view_tracker.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/user_follow_button.dart';
 import '../models/comment.dart';
@@ -1195,10 +1196,13 @@ class _StoryBubble extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.card),
-                  child: CircleAvatar(
-                    radius: 24,
-                    backgroundColor: color.withValues(alpha: 0.18),
-                    child: Text(club.name[0], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+                  child: ClubAvatar(
+                    clubId: club.id,
+                    clubName: club.name,
+                    color: color,
+                    size: 48,
+                    fontSize: 18,
+                    shape: 'circle',
                   ),
                 ),
               ),
@@ -1467,11 +1471,13 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                     top: 28, left: 16, right: 16,
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
-                          child: Text(widget.club.name[0],
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                        ClubAvatar(
+                          clubId: widget.club.id,
+                          clubName: widget.club.name,
+                          color: Colors.white,
+                          size: 40,
+                          fontSize: 16,
+                          shape: 'circle',
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1861,10 +1867,13 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 19,
-                  backgroundColor: clubColor.withValues(alpha: 0.15),
-                  child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16)),
+                ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: clubColor,
+                  size: 38,
+                  fontSize: 16,
+                  shape: 'circle',
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2126,10 +2135,13 @@ class _EventCardState extends State<_EventCard> {
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 19,
-                  backgroundColor: clubColor.withValues(alpha: 0.15),
-                  child: Text(club.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: clubColor, fontSize: 16)),
+                ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: clubColor,
+                  size: 38,
+                  fontSize: 16,
+                  shape: 'circle',
                 ),
                 const SizedBox(width: 10),
                 Expanded(

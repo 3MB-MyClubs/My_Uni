@@ -5,6 +5,9 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
+import '../services/user_state.dart';
+import '../widgets/club_avatar.dart';
+import '../widgets/user_avatar.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import 'post_detail_screen.dart';
 
@@ -41,6 +44,36 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  static const _clubColors = [
+    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  Widget _buildOtherAvatar() {
+    final isClub = clubs.any((c) => c.id == widget.otherUserId);
+    if (isClub) {
+      final idx = clubs.indexWhere((c) => c.id == widget.otherUserId);
+      final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+      return ClubAvatar(
+        clubId: widget.otherUserId,
+        clubName: widget.otherUserName,
+        color: color,
+        size: 36,
+        fontSize: 15,
+        borderRadius: 10,
+      );
+    }
+    final u = users.cast().firstWhere(
+      (u) => u.id == widget.otherUserId,
+      orElse: () => null,
+    );
+    if (u != null) {
+      return UserAvatar(userId: u.id, name: u.name, size: 36, fontSize: 15);
+    }
+    return UserAvatar(
+        userId: widget.otherUserId, name: widget.otherUserName, size: 36, fontSize: 15);
+  }
 
   @override
   void initState() {
@@ -149,25 +182,7 @@ class _ChatScreenState extends State<ChatScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.lightRed,
-              ),
-              child: Center(
-                child: Text(
-                  widget.otherUserName.isNotEmpty
-                      ? widget.otherUserName[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryRed,
-                  ),
-                ),
-              ),
-            ),
+            _buildOtherAvatar(),
             const SizedBox(width: 10),
             Text(
               widget.otherUserName,

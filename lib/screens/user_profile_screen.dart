@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
@@ -7,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
@@ -285,7 +285,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget _buildHeader(List<User> followers, List<User> following) {
     final user = widget.user;
     final isFollowingUser = userState.isFollowingUser(user.id);
-    final bannerPath = userState.bannerPaths[user.id];
     final mutuals = _mutuals;
 
     return Container(
@@ -293,23 +292,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Banner (read-only) ───────────────────────────────────────────
-          SizedBox(
-            height: 120,
-            width: double.infinity,
-            child: bannerPath != null
-                ? Image.file(File(bannerPath), fit: BoxFit.cover)
-                : Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1565C0), Color(0xFF6A1B9A)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-          ),
-
           // ── Avatar + stats ───────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
@@ -443,52 +425,57 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                 ],
 
-                // Board role badge — shown when user is a board member of any club.
+                // Board role badges — one per club the user is a board member of.
                 Builder(builder: (_) {
-                  final boardClub = clubs.cast<Club?>().firstWhere(
-                      (c) => c!.boardMemberIds.contains(user.id),
-                      orElse: () => null);
-                  if (boardClub == null) return const SizedBox.shrink();
-                  final title = boardClub.boardMemberTitles[user.id];
-                  final hasTitle = title != null && title.isNotEmpty;
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: GestureDetector(
-                      onTap: () => _openClub(boardClub),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.shield_outlined,
-                                    size: 13, color: Color(0xFF1565C0)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  hasTitle
-                                      ? '$title · ${boardClub.name}'
-                                      : 'Board Member · ${boardClub.name}',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF1565C0),
-                                      fontWeight: FontWeight.w600),
+                  final boardClubs = clubs
+                      .where((c) => c.boardMemberIds.contains(user.id))
+                      .toList();
+                  if (boardClubs.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: boardClubs.map((boardClub) {
+                      final title = boardClub.boardMemberTitles[user.id];
+                      final hasTitle = title != null && title.isNotEmpty;
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: GestureDetector(
+                          onTap: () => _openClub(boardClub),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE3F2FD),
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
-                              ],
-                            ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.shield_outlined,
+                                        size: 13, color: Color(0xFF1565C0)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      hasTitle
+                                          ? '$title · ${boardClub.name}'
+                                          : 'Board Member · ${boardClub.name}',
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF1565C0),
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.chevron_right,
+                                  size: 14, color: Color(0xFF1565C0)),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right,
-                              size: 14, color: Color(0xFF1565C0)),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    }).toList(),
                   );
                 }),
 
@@ -601,23 +588,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   onTap: () => _openClub(club),
                   child: Column(
                     children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: color.withValues(alpha: 0.3)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            club.name[0],
-                            style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: color),
-                          ),
-                        ),
+                      ClubAvatar(
+                        clubId: club.id,
+                        clubName: club.name,
+                        color: color,
+                        size: 56,
+                        fontSize: 22,
+                        borderRadius: 16,
                       ),
                       const SizedBox(height: 6),
                       SizedBox(

@@ -14,6 +14,7 @@ import '../services/personalization_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
+import '../widgets/club_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -511,24 +512,13 @@ class _EventBody extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Circle avatar
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                club.name[0],
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                  fontSize: 20,
-                ),
-              ),
-            ),
+          ClubAvatar(
+            clubId: club.id,
+            clubName: club.name,
+            color: color,
+            size: 44,
+            fontSize: 20,
+            shape: 'circle',
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -626,23 +616,13 @@ class _ClubBody extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                club.name[0],
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                  fontSize: 20,
-                ),
-              ),
-            ),
+          ClubAvatar(
+            clubId: club.id,
+            clubName: club.name,
+            color: color,
+            size: 44,
+            fontSize: 20,
+            shape: 'circle',
           ),
           const SizedBox(width: 12),
           Expanded(

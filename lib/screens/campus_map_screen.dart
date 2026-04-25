@@ -6,7 +6,32 @@ import '../services/mock_data.dart';
 import '../models/event.dart';
 import 'event_detail_screen.dart';
 
-// ── Campus zones with approximate coordinates ─────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// 📍 BUILDING COORDINATES — FILL THESE IN
+//
+// How to get real coordinates:
+//   1. Open Google Maps → find the building on campus
+//   2. Right-click on the building → copy the first two numbers that appear
+//   3. Paste them below as LatLng(latitude, longitude)
+//      (latitude is the first number ~41.xx, longitude is the second ~29.xx)
+//
+// Also update _kMapCenter below to the middle of your campus.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Map center — the camera starts here on open ──────────────────────────────
+const _kMapCenter = LatLng(41.205314, 29.073231);
+
+// ── Building pin coordinates ─────────────────────────────────────────────────
+const _kSCI        = LatLng(41.206352, 29.075228); // Science Building
+const _kENG        = LatLng(41.207009, 29.075530); // Engineering Building
+const _kSNA        = LatLng(41.208207, 29.075522); // SNA
+const _kHenry      = LatLng(41.204730, 29.072518); // Henry Ford Çimleri
+const _kKurucular  = LatLng(41.205044, 29.073767); // Kurucular Salonu
+const _kSOS        = LatLng(41.205891, 29.074844); // SOS Building
+const _kOdeon      = LatLng(41.205670, 29.074322); // Odeon
+const _kCASE       = LatLng(41.2030,   29.0742);   // CASE Building — update when known
+
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _Zone {
   final String id;
@@ -26,40 +51,60 @@ class _Zone {
 
 const _zones = [
   _Zone(
-    id: 'sos',
-    name: 'SOS Building',
-    shortName: 'SOS',
-    position: LatLng(45.2042, 29.0713),
-    locationKeywords: ['SOS'],
-  ),
-  _Zone(
-    id: 'eng',
-    name: 'Engineering',
-    shortName: 'ENG',
-    position: LatLng(41.2024, 29.0731),
-    locationKeywords: ['ENG'],
-  ),
-  _Zone(
     id: 'sci',
-    name: 'Science',
+    name: 'Science Building',
     shortName: 'SCI',
-    position: LatLng(41.2018, 29.0724),
+    position: _kSCI,
     locationKeywords: ['SCI'],
   ),
   _Zone(
-    id: 'library',
-    name: 'Library',
-    shortName: 'LIB',
-    position: LatLng(41.2035, 29.0706),
-    locationKeywords: ['Library', 'AKMER', 'Kütüphane'],
+    id: 'eng',
+    name: 'Engineering Building',
+    shortName: 'ENG',
+    position: _kENG,
+    locationKeywords: ['ENG'],
   ),
   _Zone(
-
-    id: 'arts',
-    name: 'Arts Building',
-    shortName: 'ARTS',
-    position: LatLng(41.2053, 29.0718),
-    locationKeywords: ['Arts', 'Atölye', 'Studio', 'Atelier'],
+    id: 'sna',
+    name: 'SNA',
+    shortName: 'SNA',
+    position: _kSNA,
+    locationKeywords: ['SNA'],
+  ),
+  _Zone(
+    id: 'henry',
+    name: 'Henry Çimleri',
+    shortName: 'Henry',
+    position: _kHenry,
+    locationKeywords: ['Henry'],
+  ),
+  _Zone(
+    id: 'kurucular',
+    name: 'Kurucular Salonu',
+    shortName: 'KUR',
+    position: _kKurucular,
+    locationKeywords: ['Kurucular'],
+  ),
+  _Zone(
+    id: 'sos',
+    name: 'SOS Building',
+    shortName: 'SOS',
+    position: _kSOS,
+    locationKeywords: ['SOS'],
+  ),
+  _Zone(
+    id: 'odeon',
+    name: 'Odeon',
+    shortName: 'Odeon',
+    position: _kOdeon,
+    locationKeywords: ['Odeon'],
+  ),
+  _Zone(
+    id: 'case',
+    name: 'CASE Building',
+    shortName: 'CASE',
+    position: _kCASE,
+    locationKeywords: ['CASE'],
   ),
 ];
 
@@ -78,7 +123,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
 
-  static const _center = LatLng(41.2031, 29.0717);
+  static const _center = _kMapCenter;
 
   @override
   void initState() {
@@ -100,6 +145,20 @@ class _CampusMapScreenState extends State<CampusMapScreen>
   }
 
   // ── Activity scoring ──────────────────────────────────────────────────────
+
+  /// Number of events at [zone] happening this week (live + next 7 days).
+  int _weekEventCount(_Zone zone) {
+    final now = DateTime.now();
+    return events.where((e) {
+      final matches = zone.locationKeywords.any(
+        (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
+      );
+      if (!matches) return false;
+      final isLive = !e.dateTime.isAfter(now) && e.endTime.isAfter(now);
+      final daysAway = e.dateTime.difference(now).inDays;
+      return isLive || (daysAway >= 0 && daysAway <= 7);
+    }).length;
+  }
 
   double _score(_Zone zone) {
     final now = DateTime.now();
@@ -151,6 +210,14 @@ class _CampusMapScreenState extends State<CampusMapScreen>
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Returns an orange→red colour based on weekly event count.
+  Color _heatColor(int count) {
+    if (count >= 4) return const Color(0xFFD32F2F); // deep red
+    if (count == 3) return const Color(0xFFE64A19); // red-orange
+    if (count == 2) return const Color(0xFFF57C00); // orange
+    return const Color(0xFFFFA000);                  // amber
+  }
 
   Color _circleColor(double score, bool live) {
     if (score == 0) return Colors.transparent;
@@ -291,54 +358,97 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                         final score = _score(z);
                         final live = _isLive(z);
                         final selected = z == _selectedZone;
+                        final weekCount = _weekEventCount(z);
                         return Marker(
                           point: z.position,
                           width: 72,
-                          height: 28,
+                          height: 44,
                           child: GestureDetector(
                             onTap: () => setState(
-                              () => _selectedZone = (z == _selectedZone) ? null : z,
+                              () => _selectedZone =
+                                  (z == _selectedZone) ? null : z,
                             ),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: live
-                                      ? Colors.red
-                                      : selected
-                                      ? AppColors.primaryRed
-                                      : score > 0
-                                      ? AppColors.card.withValues(alpha: 0.92)
-                                      : AppColors.card.withValues(alpha: 0.65),
-                                  borderRadius: BorderRadius.circular(7),
-                                  border: Border.all(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Count badge above the pill
+                                if (weekCount > 0)
+                                  Container(
+                                    margin:
+                                        const EdgeInsets.only(bottom: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: live
+                                          ? Colors.red
+                                          : _heatColor(weekCount)
+                                              .withValues(alpha: 0.9),
+                                      borderRadius:
+                                          BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '$weekCount',
+                                          style: const TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Text('🔥',
+                                            style:
+                                                TextStyle(fontSize: 8)),
+                                      ],
+                                    ),
+                                  ),
+                                // Building name pill
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: live
                                         ? Colors.red
                                         : selected
-                                        ? Colors.white
-                                        : score > 0
-                                        ? AppColors.primaryRed.withValues(alpha: 0.5)
-                                        : AppColors.divider.withValues(alpha: 0.5),
-                                    width: selected ? 1.5 : 1,
+                                            ? AppColors.primaryRed
+                                            : score > 0
+                                                ? AppColors.card
+                                                    .withValues(alpha: 0.92)
+                                                : AppColors.card
+                                                    .withValues(alpha: 0.65),
+                                    borderRadius: BorderRadius.circular(7),
+                                    border: Border.all(
+                                      color: live
+                                          ? Colors.red
+                                          : selected
+                                              ? Colors.white
+                                              : score > 0
+                                                  ? AppColors.primaryRed
+                                                      .withValues(alpha: 0.5)
+                                                  : AppColors.divider
+                                                      .withValues(alpha: 0.5),
+                                      width: selected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    z.shortName,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: live || selected
+                                          ? Colors.white
+                                          : score > 0
+                                              ? AppColors.text
+                                              : AppColors.secondaryText,
+                                    ),
                                   ),
                                 ),
-                                child: Text(
-                                  z.shortName,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    color: live || selected
-                                        ? Colors.white
-                                        : score > 0
-                                        ? AppColors.text
-                                        : AppColors.secondaryText,
-                                  ),
-                                ),
-                              ),
+                              ],
                             ),
                           ),
                         );
@@ -415,6 +525,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
             _ZonePanel(
               zone: _selectedZone!,
               events: _zoneEvents(_selectedZone!),
+              weekCount: _weekEventCount(_selectedZone!),
+              isLive: _isLive(_selectedZone!),
+              heatColor: _heatColor(_weekEventCount(_selectedZone!)),
               onEventTap: (e) => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -436,11 +549,17 @@ class _CampusMapScreenState extends State<CampusMapScreen>
 class _ZonePanel extends StatelessWidget {
   final _Zone zone;
   final List<Event> events;
+  final int weekCount;
+  final bool isLive;
+  final Color heatColor;
   final void Function(Event) onEventTap;
 
   const _ZonePanel({
     required this.zone,
     required this.events,
+    required this.weekCount,
+    required this.isLive,
+    required this.heatColor,
     required this.onEventTap,
   });
 
@@ -499,6 +618,59 @@ class _ZonePanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+
+          // ── Heat indicator ─────────────────────────────────────────────
+          Row(
+            children: [
+              // Flame dots
+              ...List.generate(5, (i) {
+                final filled = weekCount > 0 && i < (weekCount.clamp(1, 5));
+                return Padding(
+                  padding: const EdgeInsets.only(right: 3),
+                  child: Icon(
+                    Icons.local_fire_department_rounded,
+                    size: 16,
+                    color: filled
+                        ? (isLive ? Colors.red : heatColor)
+                        : AppColors.divider,
+                  ),
+                );
+              }),
+              const SizedBox(width: 6),
+              Text(
+                weekCount == 0
+                    ? 'No events this week'
+                    : weekCount == 1
+                        ? '1 event this week'
+                        : '$weekCount events this week',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: weekCount == 0
+                      ? AppColors.secondaryText
+                      : (isLive ? Colors.red : heatColor),
+                ),
+              ),
+              if (isLive) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Live now',
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+
           if (events.isEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),

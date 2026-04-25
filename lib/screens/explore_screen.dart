@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/user_follow_button.dart';
@@ -369,23 +370,13 @@ class _ClubCardState extends State<_ClubCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: _color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text(
-                  widget.club.name[0],
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: _color,
-                  ),
-                ),
-              ),
+            ClubAvatar(
+              clubId: widget.club.id,
+              clubName: widget.club.name,
+              color: _color,
+              size: 52,
+              fontSize: 24,
+              borderRadius: 14,
             ),
             const SizedBox(height: 10),
             Text(

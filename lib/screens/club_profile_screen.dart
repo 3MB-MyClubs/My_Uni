@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/board_member_request.dart';
 import '../models/club.dart';
 import '../models/notification.dart';
@@ -9,6 +12,7 @@ import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -85,6 +89,118 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return widget.club.adminUserIds.contains(admin.id);
   }
 
+  Future<void> _pickClubPhoto(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked == null || !mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        IOSUiSettings(title: 'Crop Photo', aspectRatioLockEnabled: true, resetAspectRatioEnabled: false),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Photo',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+        ),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Use this photo?',
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(File(cropped.path), fit: BoxFit.cover),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Use Photo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final ext = cropped.path.contains('.')
+          ? cropped.path.substring(cropped.path.lastIndexOf('.'))
+          : '.jpg';
+      final permanentPath = '${docsDir.path}/club_${widget.club.id}$ext';
+      await File(cropped.path).copy(permanentPath);
+      if (!mounted) return;
+      userState.setClubPhoto(widget.club.id, permanentPath);
+      await userPrefsService.saveClubPhoto(widget.club.id, permanentPath);
+      setState(() {});
+    }
+  }
+
+  void _showClubPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Change Club Photo',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+              ),
+              title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickClubPhoto(ImageSource.camera); },
+            ),
+            const Divider(height: 1, indent: 16),
+            ListTile(
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+              ),
+              title: const Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickClubPhoto(ImageSource.gallery); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openBoardManagement() {
     showModalBottomSheet(
       context: context,
@@ -147,24 +263,34 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 40),
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: widget.color.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: widget.color.withValues(alpha: 0.4), width: 2),
-                        ),
-                        child: Center(
-                          child: Text(
-                            widget.club.name[0],
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
+                      GestureDetector(
+                        onTap: _isThisClubAdmin ? _showClubPhotoOptions : null,
+                        child: Stack(
+                          children: [
+                            ClubAvatar(
+                              clubId: widget.club.id,
+                              clubName: widget.club.name,
                               color: widget.color,
+                              size: 72,
+                              fontSize: 32,
+                              borderRadius: 20,
                             ),
-                          ),
+                            if (_isThisClubAdmin)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryRed,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.card, width: 2),
+                                  ),
+                                  child: const Icon(Icons.edit, color: Colors.white, size: 12),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -670,17 +796,13 @@ class _CollaborationsTab extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 52, height: 52,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: color.withValues(alpha: 0.3)),
-                          ),
-                          child: Center(
-                            child: Text(club.name[0],
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-                          ),
+                        ClubAvatar(
+                          clubId: club.id,
+                          clubName: club.name,
+                          color: color,
+                          size: 52,
+                          fontSize: 22,
+                          borderRadius: 14,
                         ),
                         const SizedBox(height: 6),
                         SizedBox(
@@ -728,16 +850,13 @@ class _CollaborationsTab extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
                       child: Row(
                         children: [
-                          Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(authorClub.name[0],
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15)),
-                            ),
+                          ClubAvatar(
+                            clubId: authorClub.id,
+                            clubName: authorClub.name,
+                            color: color,
+                            size: 36,
+                            fontSize: 15,
+                            borderRadius: 10,
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -1016,9 +1135,9 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    'Board members are restricted to this club only.',
-                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                  const Text(
+                    'Members added here are added instantly, no confirmation needed.',
+                    style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
                   ),
                   const SizedBox(height: 14),
                   // Search field
@@ -1256,19 +1375,6 @@ class _BoardTabState extends State<_BoardTab> {
       .toList();
 
   void _approve(BoardMemberRequest req) {
-    // Guard: already board member elsewhere?
-    final alreadyIn = clubs
-        .where((c) => c.id != req.clubId && c.boardMemberIds.contains(req.userId))
-        .map((c) => c.name)
-        .firstOrNull;
-    if (alreadyIn != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${req.userName} is already a board member of $alreadyIn.'),
-        behavior: SnackBarBehavior.floating,
-      ));
-      return;
-    }
-
     setState(() {
       if (!widget.club.boardMemberIds.contains(req.userId)) {
         widget.club.boardMemberIds.add(req.userId);
@@ -1387,6 +1493,13 @@ class _BoardTabState extends State<_BoardTab> {
     final members = users.where((u) => widget.club.boardMemberIds.contains(u.id)).toList();
     final pending = _pendingRequests;
     final authorized = _isClubAdmin;
+
+    // Request-to-join button state for regular users
+    final currentUser = authService.currentUser;
+    final isAlreadyMember = currentUser != null &&
+        widget.club.boardMemberIds.contains(currentUser.id);
+    final hasPendingRequest = currentUser != null &&
+        userState.hasPendingBoardRequest(currentUser.id, widget.club.id);
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 80),
@@ -1600,8 +1713,64 @@ class _BoardTabState extends State<_BoardTab> {
               ],
             );
           }),
+
+        // ── Request to Join Board (regular users only) ────────────────────────
+        if (!authorized && currentUser != null && !isAlreadyMember)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+            child: GestureDetector(
+              onTap: hasPendingRequest ? null : _requestJoinBoard,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: hasPendingRequest ? Colors.transparent : AppColors.primaryRed,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: hasPendingRequest
+                        ? AppColors.secondaryText.withValues(alpha: 0.4)
+                        : AppColors.primaryRed,
+                  ),
+                ),
+                child: Text(
+                  hasPendingRequest ? 'Request Sent' : 'Request to Join Board',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: hasPendingRequest ? AppColors.secondaryText : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
+  }
+
+  void _requestJoinBoard() {
+    final currentUser = authService.currentUser;
+    if (currentUser == null) return;
+
+    final req = BoardMemberRequest(
+      id: 'req_${currentUser.id}_${widget.club.id}_${DateTime.now().millisecondsSinceEpoch}',
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userEmail: currentUser.email,
+      clubId: widget.club.id,
+      requestedAt: DateTime.now(),
+    );
+    setState(() {
+      boardMemberRequests.add(req);
+      userState.sendBoardRequest(currentUser.id, widget.club.id);
+    });
+    contentStore.saveBoardMemberRequests();
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Board membership request sent!'),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: Color(0xFF2E7D32),
+    ));
   }
 
   String _timeAgoFromDate(DateTime dt) {

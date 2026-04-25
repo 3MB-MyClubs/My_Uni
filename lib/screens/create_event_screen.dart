@@ -15,11 +15,17 @@ class CreateEventScreen extends StatefulWidget {
   State<CreateEventScreen> createState() => _CreateEventScreenState();
 }
 
+const _kLocationChips = [
+  'SCI', 'ENG', 'SNA', 'Henry Çimleri',
+  'Kurucular Salonu', 'SOS', 'Odeon', 'CASE',
+];
+
 class _CreateEventScreenState extends State<CreateEventScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _locationController = TextEditingController();
   String? _imagePath;
+  String? _selectedLocationChip;
 
   DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
   DateTime _endDate = DateTime.now().add(const Duration(hours: 3));
@@ -166,6 +172,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ),
           _SectionCard(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _Field(
                   controller: _titleController,
@@ -174,12 +181,87 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   onChanged: (_) => setState(() {}),
                 ),
                 const Divider(height: 1),
-                _Field(
-                  controller: _locationController,
-                  label: 'Location',
-                  hint: 'e.g. Main Campus, SOS B101',
-                  icon: Icons.location_on_outlined,
-                  onChanged: (_) => setState(() {}),
+                // ── Location picker ──────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined,
+                          size: 18, color: AppColors.secondaryText),
+                      const SizedBox(width: 8),
+                      const Text('Location',
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.secondaryText)),
+                    ],
+                  ),
+                ),
+                // Quick-select chips
+                SizedBox(
+                  height: 36,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                    itemCount: _kLocationChips.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (ctx, i) {
+                      final chip = _kLocationChips[i];
+                      final selected = _selectedLocationChip == chip;
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          _selectedLocationChip = selected ? null : chip;
+                          _locationController.text = selected ? '' : chip;
+                        }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.primaryRed
+                                : AppColors.background,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: selected
+                                  ? AppColors.primaryRed
+                                  : AppColors.divider,
+                            ),
+                          ),
+                          child: Text(
+                            chip,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: selected
+                                  ? Colors.white
+                                  : AppColors.secondaryText,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Custom entry text field
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+                  child: TextField(
+                    controller: _locationController,
+                    style: const TextStyle(fontSize: 14, color: AppColors.text),
+                    onChanged: (v) => setState(() {
+                      // Deselect chip if user typed something different
+                      if (!_kLocationChips.contains(v.trim())) {
+                        _selectedLocationChip = null;
+                      }
+                    }),
+                    decoration: const InputDecoration(
+                      hintText: 'Or type a custom location…',
+                      hintStyle: TextStyle(
+                          color: AppColors.secondaryText, fontSize: 13),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
                 ),
                 const Divider(height: 1),
                 _Field(
@@ -241,7 +323,6 @@ class _Field extends StatelessWidget {
   final String label;
   final String hint;
   final int maxLines;
-  final IconData? icon;
   final ValueChanged<String>? onChanged;
 
   const _Field({
@@ -249,7 +330,6 @@ class _Field extends StatelessWidget {
     required this.label,
     required this.hint,
     this.maxLines = 1,
-    this.icon,
     this.onChanged,
   });
 
@@ -257,32 +337,20 @@ class _Field extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (icon != null) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Icon(icon, size: 18, color: AppColors.secondaryText),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: TextField(
-              controller: controller,
-              maxLines: maxLines,
-              onChanged: onChanged,
-              style: const TextStyle(fontSize: 14, color: AppColors.text),
-              decoration: InputDecoration(
-                labelText: label,
-                labelStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
-                hintText: hint,
-                hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-        ],
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        onChanged: onChanged,
+        style: const TextStyle(fontSize: 14, color: AppColors.text),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle:
+              const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+          hintText: hint,
+          hintStyle:
+              const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+          border: InputBorder.none,
+        ),
       ),
     );
   }

@@ -37,18 +37,21 @@ class UserAvatar extends StatelessWidget {
 
         if (photoPath != null) {
           final file = File(photoPath);
-          return ClipRRect(
-            borderRadius: isCircle
-                ? BorderRadius.circular(size / 2)
-                : borderRadius!,
-            child: Image.file(
-              file,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
-            ),
-          );
+          // Guard: if the file was deleted (e.g. temp dir cleared), fall back.
+          if (file.existsSync()) {
+            return ClipRRect(
+              borderRadius: isCircle
+                  ? BorderRadius.circular(size / 2)
+                  : borderRadius!,
+              child: Image.file(
+                file,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
+              ),
+            );
+          }
         }
         return _initial(bg, fg, isCircle);
       },

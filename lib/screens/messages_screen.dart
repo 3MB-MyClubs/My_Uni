@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 
@@ -108,32 +109,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
     ).then((_) => setState(() {}));
   }
 
+  static const _clubColors = [
+    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
   Widget _avatarFor(String id, String name) {
     if (_isClub(id)) {
       final idx = clubs.indexWhere((c) => c.id == id);
-      const clubColors = [
-        Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-        Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-      ];
-      final color = clubColors[(idx < 0 ? 0 : idx) % clubColors.length];
-      return Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.35)),
-        ),
-        child: Center(
-          child: Text(
-            name.isNotEmpty ? name[0].toUpperCase() : '?',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ),
+      final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+      return ClubAvatar(
+        clubId: id,
+        clubName: name,
+        color: color,
+        size: 56,
+        fontSize: 22,
+        borderRadius: 14,
       );
     }
     return UserAvatar(userId: id, name: name, size: 56, fontSize: 20);
@@ -494,21 +485,13 @@ class _ContactResultTile extends StatelessWidget {
     if (contact.isClub) {
       final idx = clubs.indexWhere((c) => c.id == contact.id);
       final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-      avatar = Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.35)),
-        ),
-        child: Center(
-          child: Text(
-            contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: color),
-          ),
-        ),
+      avatar = ClubAvatar(
+        clubId: contact.id,
+        clubName: contact.name,
+        color: color,
+        size: 48,
+        fontSize: 18,
+        borderRadius: 12,
       );
       subtitle = null;
     } else {

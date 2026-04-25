@@ -13,21 +13,21 @@ class UserState extends ChangeNotifier {
   final Set<String> followedUserIds = {'u1', 'u4'};
   int unreadNotifications = 3;
 
-  // Profile banner image paths keyed by user/admin id.
-  final Map<String, String> bannerPaths = {};
-
   // Profile photo image paths keyed by user/admin id.
   final Map<String, String> profilePhotoPaths = {};
+
+  // Club profile photo paths keyed by club id.
+  final Map<String, String> clubPhotoPaths = {};
+
+  /// Sets the club photo path for [clubId] and notifies all listeners.
+  void setClubPhoto(String clubId, String path) {
+    clubPhotoPaths[clubId] = path;
+    notifyListeners();
+  }
 
   /// Sets the profile photo path for [userId] and notifies all listeners.
   void setProfilePhoto(String userId, String path) {
     profilePhotoPaths[userId] = path;
-    notifyListeners();
-  }
-
-  /// Sets the banner path for [userId] and notifies all listeners.
-  void setBanner(String userId, String path) {
-    bannerPaths[userId] = path;
     notifyListeners();
   }
 

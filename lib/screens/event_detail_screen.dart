@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/rsvp_button.dart';
 import 'campus_map_screen.dart';
 
@@ -293,19 +294,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              club.name[0],
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
-                            ),
-                          ),
+                        ClubAvatar(
+                          clubId: club.id,
+                          clubName: club.name,
+                          color: color,
+                          size: 44,
+                          fontSize: 20,
+                          borderRadius: 12,
                         ),
                         const SizedBox(width: 12),
                         Expanded(

@@ -23,7 +23,6 @@ class UserPrefsService {
 
     await _box.putAll({
       'profilePhotoPath_$userId': s.profilePhotoPaths[userId],
-      'bannerPath_$userId': s.bannerPaths[userId],
       'followedUserIds_$userId': s.followedUserIds.toList(),
       'followedClubIds_$userId': s.followedClubIds.toList(),
       'likedPostIds_$userId': s.likedPostIds.toList(),
@@ -39,8 +38,8 @@ class UserPrefsService {
 
   // ── Load all profile photos (called once at startup) ────────────────────────
 
-  /// Loads every saved profile photo and banner into [userState] so that any
-  /// user's picture is visible to everyone — regardless of who is logged in.
+  /// Loads every saved profile photo, banner, and club photo into [userState]
+  /// so that any user's/club's picture is visible to everyone at startup.
   void loadAllPhotos() {
     if (!_initialized) return;
     for (final key in _box.keys) {
@@ -49,10 +48,10 @@ class UserPrefsService {
         final uid = k.substring('profilePhotoPath_'.length);
         final path = _box.get(k);
         if (path != null) userState.profilePhotoPaths[uid] = path as String;
-      } else if (k.startsWith('bannerPath_')) {
-        final uid = k.substring('bannerPath_'.length);
+      } else if (k.startsWith('clubPhotoPath_')) {
+        final cid = k.substring('clubPhotoPath_'.length);
         final path = _box.get(k);
-        if (path != null) userState.bannerPaths[uid] = path as String;
+        if (path != null) userState.clubPhotoPaths[cid] = path as String;
       }
     }
   }
@@ -65,9 +64,6 @@ class UserPrefsService {
 
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
-
-    final bannerPath = _box.get('bannerPath_$userId');
-    if (bannerPath != null) s.bannerPaths[userId] = bannerPath as String;
 
     _restoreSet(s.followedUserIds, _box.get('followedUserIds_$userId'),
         fallback: {'u1', 'u4'});
@@ -98,6 +94,12 @@ class UserPrefsService {
         (k, v) => s.usernames[k as String] = v as String,
       );
     }
+  }
+
+  /// Persists a club's profile photo path globally (not per-user).
+  Future<void> saveClubPhoto(String clubId, String path) async {
+    if (!_initialized) return;
+    await _box.put('clubPhotoPath_$clubId', path);
   }
 
   /// Removes a specific board request entry from the stored prefs of [userId]
