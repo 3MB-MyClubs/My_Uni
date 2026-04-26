@@ -20,7 +20,6 @@ import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'ku_day_onboarding_sheet.dart';
 import 'user_profile_screen.dart';
-import '../widgets/campus_pulse_card.dart';
 
 // ── Color palette matching the rest of the app ───────────────────────────────
 const _kColors = [
@@ -148,9 +147,6 @@ class _KuDaySectionState extends State<KuDaySection> {
         _DigestStrip(onRefresh: _refresh),
         const SizedBox(height: 10),
 
-        // ── Campus Pulse heatmap ─────────────────────────────────────────────
-        const CampusPulseCard(),
-        const SizedBox(height: 4),
 
         // ── Recommendation cards ─────────────────────────────────────────────
         if (recs.isEmpty)

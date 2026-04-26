@@ -24,7 +24,6 @@ import 'campus_map_screen.dart';
 import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
-import 'ku_day_section.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 
@@ -44,6 +43,17 @@ class _FeedItem {
     required this.score,
     required this.postedAt,
   });
+}
+
+// Inline recommendation marker types
+class _EventSuggestion {
+  final Event event;
+  const _EventSuggestion(this.event);
+}
+
+class _ClubSuggestion {
+  final dynamic club;
+  const _ClubSuggestion(this.club);
 }
 
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
@@ -120,14 +130,49 @@ class _FeedScreenState extends State<FeedScreen> {
         });
   }
 
-  // Builds a flat list alternating posts and people cards (1 card per 10 posts).
+  // Clubs the user doesn't follow, sorted by popularity.
+  List<dynamic> _suggestedClubs() {
+    return clubs
+        .where((c) => !userState.followedClubIds.contains(c.id))
+        .toList()
+      ..sort((a, b) => clubMemberCount(b.id).compareTo(clubMemberCount(a.id)));
+  }
+
+  // Most-viewed upcoming event from the last 14 days.
+  Event? _trendingEvent() {
+    final now = DateTime.now();
+    final cutoff = now.subtract(const Duration(days: 14));
+    final eligible = events
+        .where((e) => e.dateTime.isAfter(cutoff) && e.endTime.isAfter(now))
+        .toList();
+    if (eligible.isEmpty) return null;
+    eligible.sort((a, b) {
+      final scoreA = viewTracker.viewCount(a.id) + eventScore(a.id);
+      final scoreB = viewTracker.viewCount(b.id) + eventScore(b.id);
+      return scoreB.compareTo(scoreA);
+    });
+    return eligible.first;
+  }
+
+  // Builds the mixed feed:
+  //   every 10 posts → People You Might Know card + Trending Event card
+  //   every 15 posts → Club You Might Like card
   List<dynamic> _buildMixedFeed(List<_FeedItem> posts) {
     final result = <dynamic>[];
-    final suggestions = _suggestedUsers();
+    final peopleSuggestions = _suggestedUsers();
+    final clubSuggestions = _suggestedClubs();
+    final trendingEv = _trendingEvent();
+    int clubIdx = 0;
+
     for (int i = 0; i < posts.length; i++) {
       result.add(posts[i]);
-      if ((i + 1) % 10 == 0 && suggestions.isNotEmpty) {
-        result.add(suggestions); // marker: insert people card here
+      if ((i + 1) % 10 == 0) {
+        if (peopleSuggestions.isNotEmpty) result.add(peopleSuggestions);
+        if (trendingEv != null) result.add(_EventSuggestion(trendingEv));
+      }
+      if ((i + 1) % 15 == 0 && clubSuggestions.isNotEmpty) {
+        result.add(_ClubSuggestion(clubSuggestions[clubIdx % clubSuggestions.length]));
+        clubIdx++;
       }
     }
     return result;
@@ -156,7 +201,6 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildStoriesRow(),
             _buildWelcomeCard(live, upcoming),
             _buildEventsStrip(live, upcoming),
-            const SliverToBoxAdapter(child: KuDaySection()),
             if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -219,6 +263,18 @@ class _FeedScreenState extends State<FeedScreen> {
                       return _PeopleSuggestionCard(
                         suggestions: item,
                         onFollowed: () => setState(() {}),
+                      );
+                    }
+                    if (item is _EventSuggestion) {
+                      return _TrendingEventCard(
+                        event: item.event,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    if (item is _ClubSuggestion) {
+                      return _ClubSuggestionCard(
+                        club: item.club,
+                        onUpdate: () => setState(() {}),
                       );
                     }
                     return _buildFeedCard(item as _FeedItem, i);
@@ -1138,6 +1194,344 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
             ),
           ),
           const SizedBox(height: 12),
+          const Divider(height: 1),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Trending Event Card ──────────────────────────────────────────────────────
+
+class _TrendingEventCard extends StatelessWidget {
+  final Event event;
+  final VoidCallback onUpdate;
+
+  static const List<Color> _colors = [
+    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  const _TrendingEventCard({required this.event, required this.onUpdate});
+
+  void _showDetail(BuildContext context, Color color) {
+    final club = clubs.firstWhere((c) => c.id == event.clubId,
+        orElse: () => clubs.first);
+    final DateTime start = event.dateTime;
+    final DateTime end = event.endTime;
+    final userId = authService.currentUser?.id ?? '';
+    rsvpStore.seed(event.id, event.attendeeUserIds.contains(userId));
+
+    String fmt(DateTime dt) {
+      const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '${mo[dt.month-1]} ${dt.day}  ·  $h:$m ${dt.hour < 12 ? "AM" : "PM"}';
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 36, height: 4,
+                  decoration: BoxDecoration(color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Text(club.name.split(' ').first,
+                  style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 12),
+            Text(event.title,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
+            const SizedBox(height: 14),
+            Row(children: [
+              const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
+              const SizedBox(width: 6),
+              Expanded(child: Text(event.location,
+                  style: const TextStyle(fontSize: 14, color: AppColors.text))),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              const Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
+              const SizedBox(width: 6),
+              Text('Starts  ${fmt(start)}',
+                  style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+            ]),
+            const SizedBox(height: 6),
+            Row(children: [
+              const Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
+              const SizedBox(width: 6),
+              Text('Ends  ${fmt(end)}',
+                  style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+            ]),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: RsvpButton(
+                eventId: event.id,
+                color: color,
+                isPast: end.isBefore(DateTime.now()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere((c) => c.id == event.clubId,
+        orElse: () => clubs.first);
+    final idx = clubs.indexOf(club);
+    final color = _colors[idx % _colors.length];
+    final dt = event.dateTime;
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final daysAway = dt.difference(DateTime.now()).inDays;
+    final timeLabel = daysAway == 0 ? 'Today'
+        : daysAway == 1 ? 'Tomorrow'
+        : '${mo[dt.month - 1]} ${dt.day}';
+    final views = viewTracker.viewCount(event.id);
+    final attendees = event.attendeeUserIds.length;
+
+    return GestureDetector(
+      onTap: () => _showDetail(context, color),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        color: AppColors.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.local_fire_department_rounded,
+                      size: 18, color: Colors.deepOrange),
+                  const SizedBox(width: 6),
+                  const Text('Trending This Week',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
+                          color: AppColors.text)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Text(club.name.split(' ').first,
+                        style: TextStyle(fontSize: 11, color: color,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            // Event body
+            Container(
+              margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Colour accent + date chip
+                  Row(
+                    children: [
+                      Container(
+                        width: 4, height: 40,
+                        decoration: BoxDecoration(
+                            color: color, borderRadius: BorderRadius.circular(4)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(event.title,
+                                style: const TextStyle(fontSize: 15,
+                                    fontWeight: FontWeight.bold, color: AppColors.text),
+                                maxLines: 2, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 2),
+                            Row(children: [
+                              Icon(Icons.event_rounded, size: 13, color: color),
+                              const SizedBox(width: 4),
+                              Text(timeLabel,
+                                  style: TextStyle(fontSize: 12, color: color,
+                                      fontWeight: FontWeight.w600)),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (event.location.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      const Icon(Icons.location_on_outlined, size: 14,
+                          color: AppColors.secondaryText),
+                      const SizedBox(width: 4),
+                      Text(event.location,
+                          style: const TextStyle(fontSize: 12,
+                              color: AppColors.secondaryText)),
+                    ]),
+                  ],
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Icon(Icons.people_outline, size: 14,
+                        color: AppColors.secondaryText),
+                    const SizedBox(width: 4),
+                    Text('$attendees attending',
+                        style: const TextStyle(fontSize: 12,
+                            color: AppColors.secondaryText)),
+                    if (views > 0) ...[
+                      const SizedBox(width: 14),
+                      const Icon(Icons.visibility_outlined, size: 14,
+                          color: AppColors.secondaryText),
+                      const SizedBox(width: 4),
+                      Text('$views views',
+                          style: const TextStyle(fontSize: 12,
+                              color: AppColors.secondaryText)),
+                    ],
+                    const Spacer(),
+                    Text('Tap for details',
+                        style: TextStyle(fontSize: 11,
+                            color: color, fontWeight: FontWeight.w500)),
+                    const SizedBox(width: 2),
+                    Icon(Icons.chevron_right_rounded, size: 14, color: color),
+                  ]),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Club Suggestion Card ─────────────────────────────────────────────────────
+
+class _ClubSuggestionCard extends StatefulWidget {
+  final dynamic club;
+  final VoidCallback onUpdate;
+
+  const _ClubSuggestionCard({required this.club, required this.onUpdate});
+
+  @override
+  State<_ClubSuggestionCard> createState() => _ClubSuggestionCardState();
+}
+
+class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
+  static const List<Color> _colors = [
+    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.club;
+    final idx = clubs.indexOf(c);
+    final color = _colors[idx < 0 ? 0 : idx % _colors.length];
+    final memberCount = clubMemberCount(c.id as String);
+    final desc = (c.description as String).isNotEmpty
+        ? c.description as String
+        : 'Discover what this club is all about.';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      color: AppColors.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Icon(Icons.explore_rounded, size: 18, color: color),
+                const SizedBox(width: 6),
+                const Text('Club You Might Like',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
+                        color: AppColors.text)),
+              ],
+            ),
+          ),
+          // Club row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  // Avatar
+                  ClubAvatar(
+                    clubId: c.id as String,
+                    clubName: c.name as String,
+                    color: color,
+                    size: 52,
+                    fontSize: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  // Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(c.name as String,
+                            style: const TextStyle(fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.text),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Text(desc,
+                            style: const TextStyle(fontSize: 12,
+                                color: AppColors.secondaryText, height: 1.3),
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Icon(Icons.people_outline, size: 13, color: color),
+                          const SizedBox(width: 4),
+                          Text('$memberCount members',
+                              style: TextStyle(fontSize: 11, color: color,
+                                  fontWeight: FontWeight.w500)),
+                        ]),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Follow button (self-contained)
+                  ClubFollowButton(clubId: c.id as String),
+                ],
+              ),
+            ),
+          ),
           const Divider(height: 1),
         ],
       ),

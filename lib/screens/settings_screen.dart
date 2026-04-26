@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/rsvp_store.dart';
-import '../services/campus_pulse_service.dart';
-import '../services/location_permission_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-import 'campus_pulse_consent_sheet.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -19,56 +15,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  LocationPermission _permission = LocationPermission.denied;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPermission();
-  }
-
-  Future<void> _loadPermission() async {
-    final p = await locationPermissionService.currentPermission();
-    if (mounted) setState(() => _permission = p);
-  }
-
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-
-  bool get _locationGranted =>
-      _permission == LocationPermission.whileInUse ||
-      _permission == LocationPermission.always;
-
-  bool get _permanentlyDenied =>
-      _permission == LocationPermission.deniedForever;
-
-  String get _permissionLabel {
-    switch (_permission) {
-      case LocationPermission.whileInUse:
-      case LocationPermission.always:
-        return 'Allowed while using app';
-      case LocationPermission.deniedForever:
-        return 'Blocked — tap to open Settings';
-      case LocationPermission.denied:
-      case LocationPermission.unableToDetermine:
-        return 'Not granted';
-    }
-  }
-
-  Future<void> _toggleCampusPulse(bool value) async {
-    if (value && !_locationGranted) {
-      // Show explainer then OS dialog.
-      await showCampusPulseConsentSheet(context);
-      await _loadPermission(); // refresh after dialog
-      // Only flip the switch if permission was actually granted.
-      if (!(_permission == LocationPermission.whileInUse ||
-          _permission == LocationPermission.always)) {
-        return;
-      }
-    }
-    await campusPulseService.setOptIn(_userId, value);
-    setState(() {});
-  }
 
   void _openUsernameSheet() {
     final userId = _userId;
@@ -227,18 +175,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isValidUsername(String value) =>
       RegExp(r'^[a-zA-Z0-9_.À-öø-ÿ]{1,30}$').hasMatch(value);
 
-  Future<void> _clearContributions() async {
-    await campusPulseService.clearContributions();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Local Campus Pulse data cleared.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -285,108 +221,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right_rounded,
                   color: AppColors.secondaryText),
               onTap: _openUsernameSheet,
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Campus Pulse section ─────────────────────────────────────────
-          _SectionHeader(title: 'Campus Pulse'),
-          Container(
-            color: AppColors.card,
-            child: Column(
-              children: [
-                // Main toggle
-                SwitchListTile(
-                  value: campusPulseService.optedIn && _locationGranted,
-                  onChanged: _toggleCampusPulse,
-                  title: const Text(
-                    'Share anonymous location',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Helps show which times campus is busy. '
-                    'Only your approximate campus zone is used — never '
-                    'exact coordinates or individual movement.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  activeThumbColor: AppColors.primaryRed,
-                ),
-
-                Divider(height: 1, color: AppColors.divider),
-
-                // Permission status row
-                ListTile(
-                  dense: true,
-                  leading: Icon(
-                    _locationGranted
-                        ? Icons.check_circle_outline_rounded
-                        : _permanentlyDenied
-                        ? Icons.block_rounded
-                        : Icons.location_off_outlined,
-                    size: 20,
-                    color: _locationGranted
-                        ? Colors.green
-                        : _permanentlyDenied
-                        ? Colors.orange
-                        : AppColors.secondaryText,
-                  ),
-                  title: Text(
-                    'Location permission: $_permissionLabel',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  onTap: _permanentlyDenied
-                      ? () async {
-                          await locationPermissionService.openSettings();
-                          await _loadPermission();
-                        }
-                      : null,
-                ),
-
-                Divider(height: 1, color: AppColors.divider),
-
-                // Clear data button
-                ListTile(
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Colors.orange,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text(
-                    'Clear local heatmap data',
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Removes your locally stored Campus Pulse activity. '
-                    'The heatmap will fall back to event-only data.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  onTap: _clearContributions,
-                ),
-              ],
             ),
           ),
 
