@@ -13,8 +13,17 @@ import 'mock_data.dart';
 ///
 /// On first run the lists keep their seed data from mock_data.dart.
 /// Every subsequent run loads the last saved state.
+///
+/// [_seedVersion] must be incremented whenever mock_data.dart changes event or
+/// post seed data. A version mismatch causes the stored events/posts/stories
+/// to be discarded so the fresh mock data is used instead.
 class ContentStore {
   static const _boxName = 'content_v1';
+
+  /// Bump this integer any time you change mock event / post seed data.
+  /// The stored version is compared on startup; a mismatch clears stale data.
+  static const int _seedVersion = 5;
+
   late Box<dynamic> _box;
   bool _initialized = false;
 
@@ -28,20 +37,36 @@ class ContentStore {
   }
 
   /// Call once after [initialize] to replace in-memory lists with stored data.
-  /// If nothing is stored yet the lists keep their mock-data seed values.
+  /// If nothing is stored yet, or the seed version has changed, the lists keep
+  /// (or reset to) their mock-data seed values.
   void applyToLists() {
-    _load('posts', newsPosts,
-        (m) => NewsPost.fromMap(Map<String, dynamic>.from(m as Map)));
-    _load('events', events,
-        (m) => Event.fromMap(Map<String, dynamic>.from(m as Map)));
-    _load('stories', clubStories,
-        (m) => ClubStory.fromMap(Map<String, dynamic>.from(m as Map)));
+    final storedVersion = _box.get('seedVersion') as int? ?? 0;
+    final versionMatch = storedVersion == _seedVersion;
+
+    // Always load user-generated interaction data (safe across versions)
     _load('comments', comments,
         (m) => Comment.fromMap(Map<String, dynamic>.from(m as Map)));
     _load('likes', likes,
         (m) => Like.fromMap(Map<String, dynamic>.from(m as Map)));
     _load('shares', shares,
         (m) => Share.fromMap(Map<String, dynamic>.from(m as Map)));
+
+    if (versionMatch) {
+      // Load seed data that may have been mutated by user actions
+      _load('posts', newsPosts,
+          (m) => NewsPost.fromMap(Map<String, dynamic>.from(m as Map)));
+      _load('events', events,
+          (m) => Event.fromMap(Map<String, dynamic>.from(m as Map)));
+      _load('stories', clubStories,
+          (m) => ClubStory.fromMap(Map<String, dynamic>.from(m as Map)));
+    } else {
+      // Seed data changed — discard stale Hive data, use fresh mock data,
+      // and write the new version so this only triggers once.
+      _box.delete('posts');
+      _box.delete('events');
+      _box.delete('stories');
+      _box.put('seedVersion', _seedVersion);
+    }
   }
 
   void _load<T>(String key, List<T> target, T Function(dynamic) fromRaw) {

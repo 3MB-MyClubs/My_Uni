@@ -20,6 +20,8 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
+  bool _programmeExpanded = false;
+
   static const List<String> _months = [
     '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -336,6 +338,87 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
 
+                  // ── Activity Tags ──────────────────────────────────────────
+                  if (event.tags.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: event.tags.map((tag) => Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        )).toList(),
+                      ),
+                    ),
+                  ],
+
+                  // ── Featured Guest ─────────────────────────────────────────
+                  if (event.guestSpeaker != null) ...[
+                    const SizedBox(height: 20),
+                    const Text('Featured Guest',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.secondaryText,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.mic_rounded, color: color, size: 22),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              event.guestSpeaker!,
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text),
+                            ),
+                          ),
+                          const Icon(Icons.star_rounded,
+                              color: AppColors.accentGold, size: 18),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Programme ──────────────────────────────────────────────
+                  if (event.schedule != null &&
+                      event.schedule!.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    const Text('Programme',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.secondaryText,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    _ProgrammeCard(
+                      event: event,
+                      color: color,
+                      expanded: _programmeExpanded,
+                      onToggle: () =>
+                          setState(() => _programmeExpanded = !_programmeExpanded),
+                    ),
+                  ],
+
                   const SizedBox(height: 80),
                 ],
               ),
@@ -355,6 +438,264 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Programme Card ───────────────────────────────────────────────────────────
+
+class _ProgrammeCard extends StatelessWidget {
+  final Event event;
+  final Color color;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  const _ProgrammeCard({
+    required this.event,
+    required this.color,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final schedule = event.schedule!;
+    final isRsvpd = rsvpStore.isAttending(event.id);
+    final locked = event.scheduleGated && !isRsvpd;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        children: [
+          // Collapsed / locked header
+          if (!expanded || locked)
+            InkWell(
+              onTap: locked ? null : onToggle,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: locked
+                    ? Row(
+                        children: [
+                          Icon(Icons.lock_outline_rounded,
+                              size: 18, color: AppColors.secondaryText),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'RSVP to unlock the full programme',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.secondaryText),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          ListenableBuilder(
+                            listenable: rsvpStore,
+                            builder: (ctx, _) => _InlineRsvpButton(
+                              eventId: event.id,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Icon(Icons.format_list_bulleted_rounded,
+                              size: 16, color: color),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${schedule.length} sessions',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: color,
+                                fontWeight: FontWeight.w600),
+                          ),
+                          const Spacer(),
+                          Text('Show programme',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: color,
+                                  fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 4),
+                          Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 18, color: color),
+                        ],
+                      ),
+              ),
+            ),
+
+          // Expanded slots
+          if (expanded && !locked) ...[
+            GestureDetector(
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.format_list_bulleted_rounded,
+                        size: 16, color: color),
+                    const SizedBox(width: 8),
+                    Text('${schedule.length} sessions',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: color,
+                            fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('Hide',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w500)),
+                    const SizedBox(width: 4),
+                    Icon(Icons.keyboard_arrow_up_rounded,
+                        size: 18, color: color),
+                  ],
+                ),
+              ),
+            ),
+            for (int i = 0; i < schedule.length; i++) ...[
+              if (i > 0)
+                Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: AppColors.divider),
+              _SlotRow(slot: schedule[i], color: color),
+            ],
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SlotRow extends StatelessWidget {
+  final EventSlot slot;
+  final Color color;
+  const _SlotRow({required this.slot, required this.color});
+
+  String _fmtTime(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: slot.isHighlighted
+          ? color.withValues(alpha: 0.06)
+          : Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Time
+          SizedBox(
+            width: 44,
+            child: Text(
+              _fmtTime(slot.time),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: slot.isHighlighted ? color : AppColors.secondaryText,
+              ),
+            ),
+          ),
+          // Accent bar
+          Container(
+            width: 3,
+            height: slot.subtitle != null ? 36 : 18,
+            margin: const EdgeInsets.only(right: 12, top: 2),
+            decoration: BoxDecoration(
+              color: slot.isHighlighted
+                  ? color
+                  : color.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Title + subtitle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  slot.title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: slot.isHighlighted
+                        ? FontWeight.bold
+                        : FontWeight.w500,
+                    color: AppColors.text,
+                  ),
+                ),
+                if (slot.subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    slot.subtitle!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: slot.isHighlighted
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: slot.isHighlighted
+                          ? color
+                          : AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineRsvpButton extends StatelessWidget {
+  final String eventId;
+  final Color color;
+  const _InlineRsvpButton({required this.eventId, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: rsvpStore,
+      builder: (ctx, _) {
+        final attending = rsvpStore.isAttending(eventId);
+        return GestureDetector(
+          onTap: () {
+            final userId =
+                authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+            rsvpStore.toggle(eventId, userId);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: attending ? Colors.transparent : color,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: attending
+                    ? AppColors.secondaryText.withValues(alpha: 0.4)
+                    : color,
+              ),
+            ),
+            child: Text(
+              attending ? 'Going ✓' : 'RSVP',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: attending ? AppColors.secondaryText : Colors.white,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

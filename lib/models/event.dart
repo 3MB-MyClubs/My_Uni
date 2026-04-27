@@ -1,3 +1,31 @@
+class EventSlot {
+  final DateTime time;
+  final String title;
+  final String? subtitle;
+  final bool isHighlighted;
+
+  const EventSlot({
+    required this.time,
+    required this.title,
+    this.subtitle,
+    this.isHighlighted = false,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'time': time.toIso8601String(),
+        'title': title,
+        'subtitle': subtitle,
+        'isHighlighted': isHighlighted,
+      };
+
+  factory EventSlot.fromMap(Map<String, dynamic> m) => EventSlot(
+        time: DateTime.parse(m['time'] as String),
+        title: m['title'] as String,
+        subtitle: m['subtitle'] as String?,
+        isHighlighted: m['isHighlighted'] as bool? ?? false,
+      );
+}
+
 class Event {
   final String id;
   final String clubId;
@@ -12,6 +40,10 @@ class Event {
   final String? imagePath;
   // The user ID of whoever created this event. Used for ownership-based deletion.
   final String? createdByUserId;
+  final List<String> tags;
+  final String? guestSpeaker;
+  final List<EventSlot>? schedule;
+  final bool scheduleGated;
 
   Event({
     required this.id,
@@ -25,7 +57,12 @@ class Event {
     Map<String, String>? rsvpTimestamps,
     this.imagePath,
     this.createdByUserId,
-  }) : rsvpTimestamps = rsvpTimestamps ?? {};
+    List<String>? tags,
+    this.guestSpeaker,
+    this.schedule,
+    this.scheduleGated = false,
+  })  : rsvpTimestamps = rsvpTimestamps ?? {},
+        tags = tags ?? [];
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -39,6 +76,10 @@ class Event {
         'rsvpTimestamps': rsvpTimestamps,
         'imagePath': imagePath,
         'createdByUserId': createdByUserId,
+        'tags': tags,
+        'guestSpeaker': guestSpeaker,
+        'schedule': schedule?.map((s) => s.toMap()).toList(),
+        'scheduleGated': scheduleGated,
       };
 
   factory Event.fromMap(Map<String, dynamic> m) => Event(
@@ -55,5 +96,13 @@ class Event {
             : {},
         imagePath: m['imagePath'] as String?,
         createdByUserId: m['createdByUserId'] as String?,
+        tags: m['tags'] != null ? List<String>.from(m['tags'] as List) : [],
+        guestSpeaker: m['guestSpeaker'] as String?,
+        schedule: m['schedule'] != null
+            ? (m['schedule'] as List)
+                .map((s) => EventSlot.fromMap(Map<String, dynamic>.from(s as Map)))
+                .toList()
+            : null,
+        scheduleGated: m['scheduleGated'] as bool? ?? false,
       );
 }
