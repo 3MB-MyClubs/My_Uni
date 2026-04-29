@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/mock_data.dart';
 import '../services/personalization_service.dart';
+import '../services/user_prefs_service.dart';
+import '../services/user_state.dart';
+import '../widgets/club_avatar.dart';
 
-/// Lightweight onboarding bottom sheet that asks for interests + time prefs.
+/// Lightweight onboarding bottom sheet: interests → major → times → clubs.
 /// Call via [showKuDayOnboarding].
 Future<void> showKuDayOnboarding(BuildContext context) async {
   await showModalBottomSheet<void>(
@@ -24,7 +28,24 @@ class _OnboardingSheet extends StatefulWidget {
 class _OnboardingSheetState extends State<_OnboardingSheet> {
   final Set<String> _interests = {};
   final Set<String> _times = {};
-  int _step = 0; // 0 = interests, 1 = times
+  String _selectedMajor = '';
+  final Set<String> _followedInOnboarding = {};
+  int _step = 0; // 0 = interests, 1 = major, 2 = times, 3 = clubs
+
+  // ── Club color helper (same palette as event screens) ─────────────────────
+
+  Color _clubColor(String clubId) {
+    const colors = [
+      Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+      Color(0xFF558B2F), Color(0xFF283593), Color(0xFF6D4C41),
+      Color(0xFF00695C), Color(0xFF4527A0), Color(0xFFC62828),
+    ];
+    final idx = clubs.indexWhere((c) => c.id == clubId);
+    return colors[(idx < 0 ? 0 : idx) % colors.length];
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   Future<void> _finish() async {
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
@@ -32,24 +53,33 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       Navigator.pop(context);
       return;
     }
-    await personalizationService.completeOnboarding(uid, _interests, _times);
+    await personalizationService.completeOnboarding(
+        uid, _interests, _times, _selectedMajor);
+    for (final clubId in _followedInOnboarding) {
+      if (!userState.followedClubIds.contains(clubId)) {
+        userState.toggleFollow(clubId);
+      }
+    }
+    await userPrefsService.save(uid);
     if (mounted) Navigator.pop(context);
   }
 
   void _skip() {
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (uid != null) {
-      personalizationService.completeOnboarding(uid, {}, {});
+      personalizationService.completeOnboarding(uid, {}, {}, '');
     }
     Navigator.pop(context);
   }
 
+  // ── Root build ─────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
         24,
@@ -59,10 +89,50 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       ),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 280),
-        child: _step == 0 ? _buildInterestsStep() : _buildTimesStep(),
+        child: _step == 0
+            ? _buildInterestsStep()
+            : _step == 1
+                ? _buildMajorStep()
+                : _step == 2
+                    ? _buildTimesStep()
+                    : _buildClubsStep(),
       ),
     );
   }
+
+  // ── Step dots ──────────────────────────────────────────────────────────────
+
+  Widget _buildStepDots(int current) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(4, (i) {
+        final active = i == current;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: active ? 18 : 6,
+          height: 6,
+          margin: const EdgeInsets.only(right: 4),
+          decoration: BoxDecoration(
+            color: active ? AppColors.primaryRed : AppColors.divider,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _dragHandle() => Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.divider,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
+
+  // ── Step 0 — Interests ─────────────────────────────────────────────────────
 
   Widget _buildInterestsStep() {
     return Column(
@@ -70,17 +140,10 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Center(
-          child: Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
+        _dragHandle(),
+        const SizedBox(height: 10),
+        Center(child: _buildStepDots(0)),
+        const SizedBox(height: 14),
         Row(
           children: [
             Container(
@@ -90,7 +153,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.auto_awesome_rounded,
                 color: AppColors.primaryRed,
                 size: 22,
@@ -101,7 +164,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Your KU Day',
                     style: TextStyle(
                       fontSize: 18,
@@ -110,7 +173,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     ),
                   ),
                   Text(
-                    'Quick setup — just 2 steps',
+                    'Quick setup — just 4 steps',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -123,13 +186,14 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               onPressed: _skip,
               child: Text(
                 'Skip',
-                style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                style: TextStyle(
+                    color: AppColors.secondaryText, fontSize: 13),
               ),
             ),
           ],
         ),
         const SizedBox(height: 24),
-        Text(
+        const Text(
           'What are you into?',
           style: TextStyle(
             fontSize: 16,
@@ -167,21 +231,21 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
+                  color:
+                      selected ? AppColors.primaryRed : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: selected ? AppColors.primaryRed : AppColors.divider,
+                    color: selected
+                        ? AppColors.primaryRed
+                        : AppColors.divider,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (selected) ...[
-                      const Icon(
-                        Icons.check_rounded,
-                        size: 14,
-                        color: Colors.white,
-                      ),
+                      const Icon(Icons.check_rounded,
+                          size: 14, color: Colors.white),
                       const SizedBox(width: 5),
                     ],
                     Text(
@@ -208,8 +272,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+                  borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
             child: const Text(
@@ -222,6 +285,171 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
     );
   }
 
+  // ── Step 1 — Major ─────────────────────────────────────────────────────────
+
+  Widget _buildMajorStep() {
+    return Column(
+      key: const ValueKey('step1'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _dragHandle(),
+        const SizedBox(height: 10),
+        Center(child: _buildStepDots(1)),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            GestureDetector(
+              onTap: () => setState(() => _step = 0),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 18, color: AppColors.secondaryText),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'What\'s your major?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.text,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Padding(
+          padding: EdgeInsets.only(left: 30),
+          child: Text(
+            'We\'ll suggest clubs that fit your field.',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.secondaryText,
+              height: 1.4,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: kFaculties.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (_, i) {
+            final faculty = kFaculties[i];
+            final name = faculty['name'] as String;
+            final depts = faculty['departments'] as String;
+            final selected = _selectedMajor == name;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedMajor = name),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.lightRed
+                      : AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.primaryRed
+                        : AppColors.divider,
+                    width: selected ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.lightRed,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.school_outlined,
+                          size: 18, color: AppColors.primaryRed),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            depts,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.secondaryText),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: selected
+                            ? AppColors.primaryRed
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.primaryRed
+                              : AppColors.divider,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check,
+                              size: 12, color: Colors.white)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _selectedMajor.isNotEmpty
+                ? () => setState(() => _step = 2)
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.surfaceAlt,
+              disabledForegroundColor: AppColors.secondaryText,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Next →',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Step 2 — Times ─────────────────────────────────────────────────────────
+
   Widget _buildTimesStep() {
     const iconMap = {
       'Morning': Icons.wb_sunny_outlined,
@@ -231,33 +459,23 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
     };
 
     return Column(
-      key: const ValueKey('step1'),
+      key: const ValueKey('step2'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Center(
-          child: Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
+        _dragHandle(),
+        const SizedBox(height: 10),
+        Center(child: _buildStepDots(2)),
+        const SizedBox(height: 14),
         Row(
           children: [
             GestureDetector(
-              onTap: () => setState(() => _step = 0),
-              child: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 18,
-                color: AppColors.secondaryText,
-              ),
+              onTap: () => setState(() => _step = 1),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 18, color: AppColors.secondaryText),
             ),
             const SizedBox(width: 12),
-            Expanded(
+            const Expanded(
               child: Text(
                 'When do you usually have time?',
                 style: TextStyle(
@@ -270,8 +488,8 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           ],
         ),
         const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.only(left: 30),
+        const Padding(
+          padding: EdgeInsets.only(left: 30),
           child: Text(
             'We\'ll prioritise events that fit your schedule.',
             style: TextStyle(
@@ -302,10 +520,13 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
+                  color:
+                      selected ? AppColors.primaryRed : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: selected ? AppColors.primaryRed : AppColors.divider,
+                    color: selected
+                        ? AppColors.primaryRed
+                        : AppColors.divider,
                   ),
                 ),
                 child: Row(
@@ -314,7 +535,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     Icon(
                       iconMap[slot],
                       size: 18,
-                      color: selected ? Colors.white : AppColors.secondaryText,
+                      color: selected
+                          ? Colors.white
+                          : AppColors.secondaryText,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -335,19 +558,306 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
+            onPressed: () => setState(() => _step = 3),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Next →',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Step 3 — Club recommendations ─────────────────────────────────────────
+
+  Widget _buildClubsStep() {
+    final alreadyFollowed = userState.followedClubIds;
+
+    // Rank clubs by how many selected interests they match; exclude followed.
+    final candidates = kClubInterestMap.keys
+        .where((id) => !alreadyFollowed.contains(id))
+        .map((id) =>
+            (id, personalizationService.interestMatchCount(id)))
+        .toList()
+      ..sort((a, b) => b.$2.compareTo(a.$2));
+
+    final recommended = candidates.take(6).map((t) => t.$1).toList();
+
+    return Column(
+      key: const ValueKey('step3'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _dragHandle(),
+        const SizedBox(height: 10),
+        Center(child: _buildStepDots(3)),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            GestureDetector(
+              onTap: () => setState(() => _step = 2),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 18, color: AppColors.secondaryText),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.lightRed,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.groups_rounded,
+                  size: 18, color: AppColors.primaryRed),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Clubs picked for you',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  Text(
+                    'Follow to see their posts.',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.secondaryText),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () =>
+                  setState(() => _followedInOnboarding.addAll(recommended)),
+              child: const Text(
+                'Follow all',
+                style: TextStyle(
+                    color: AppColors.primaryRed,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        if (_interests.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _interests
+                .map((tag) => Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color:
+                            AppColors.primaryRed.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color:
+                              AppColors.primaryRed.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Text(
+                        tag,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+        const SizedBox(height: 14),
+        if (recommended.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: Text(
+                'No new clubs to suggest — you\'re already well-connected!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.secondaryText),
+              ),
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: recommended.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (_, i) {
+              final clubId = recommended[i];
+              final club = clubs.firstWhere((c) => c.id == clubId,
+                  orElse: () => clubs.first);
+              final color = _clubColor(clubId);
+              final matchCount =
+                  personalizationService.interestMatchCount(clubId);
+              final isFollowed = _followedInOnboarding.contains(clubId);
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isFollowed
+                      ? AppColors.lightRed
+                      : AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isFollowed
+                        ? AppColors.primaryRed.withValues(alpha: 0.45)
+                        : AppColors.divider,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    ClubAvatar(
+                      clubId: clubId,
+                      clubName: club.name,
+                      color: color,
+                      size: 44,
+                      shape: 'rounded',
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            club.name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (matchCount > 0) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentGold
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '$matchCount interest match${matchCount > 1 ? 'es' : ''}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.accentGold,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        if (_followedInOnboarding.contains(clubId)) {
+                          _followedInOnboarding.remove(clubId);
+                        } else {
+                          _followedInOnboarding.add(clubId);
+                        }
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isFollowed
+                              ? AppColors.primaryRed
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isFollowed
+                                ? AppColors.primaryRed
+                                : AppColors.primaryRed
+                                    .withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          isFollowed ? 'Following' : 'Follow',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isFollowed
+                                ? Colors.white
+                                : AppColors.primaryRed,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
             onPressed: _finish,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+                  borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
             child: const Text(
-              'Done — show my day',
+              'Let\'s go →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: RichText(
+            text: TextSpan(
+              children: [
+                const TextSpan(
+                  text: 'Following ',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.secondaryText),
+                ),
+                TextSpan(
+                  text: '${_followedInOnboarding.length}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primaryRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const TextSpan(
+                  text: ' clubs',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.secondaryText),
+                ),
+              ],
             ),
           ),
         ),

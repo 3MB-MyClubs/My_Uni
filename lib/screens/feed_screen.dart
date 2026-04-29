@@ -663,6 +663,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     stories: entry.stories,
                     seen: entry.seen,
                     color: entry.color,
+                    allClubs: active,
+                    startClubIndex: i,
                     onViewed: () => setState(() => _viewedClubIds.add(entry.club.id)),
                     onDeleted: () => setState(() {}),
                   );
@@ -1546,6 +1548,8 @@ class _StoryBubble extends StatelessWidget {
   final List<ClubStory> stories;
   final bool seen;
   final Color color;
+  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> allClubs;
+  final int startClubIndex;
   final VoidCallback onViewed;
   final VoidCallback onDeleted;
 
@@ -1554,6 +1558,8 @@ class _StoryBubble extends StatelessWidget {
     required this.stories,
     required this.seen,
     required this.color,
+    required this.allClubs,
+    required this.startClubIndex,
     required this.onViewed,
     required this.onDeleted,
   });
@@ -1563,7 +1569,7 @@ class _StoryBubble extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         onViewed();
-        _openStoryViewer(context, club, stories, color);
+        _openStoryViewer(context, allClubs, startClubIndex);
       },
       child: Padding(
         padding: const EdgeInsets.only(right: 10),
@@ -1619,14 +1625,17 @@ class _StoryBubble extends StatelessWidget {
     );
   }
 
-  void _openStoryViewer(BuildContext context, dynamic club, List<ClubStory> stories, Color color) {
+  void _openStoryViewer(
+    BuildContext context,
+    List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> allClubs,
+    int startClubIndex,
+  ) {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
-      barrierColor: Colors.black87,
+      barrierColor: Colors.transparent,
       pageBuilder: (_, a1, a2) => _StoryViewer(
-        club: club,
-        stories: stories,
-        color: color,
+        allClubs: allClubs,
+        startClubIndex: startClubIndex,
         onDeleted: onDeleted,
       ),
       transitionsBuilder: (_, animation, a2, child) =>
@@ -1639,21 +1648,38 @@ class _StoryBubble extends StatelessWidget {
 // ─── Story Viewer ─────────────────────────────────────────────────────────────
 
 class _StoryViewer extends StatefulWidget {
-  final dynamic club;
-  final List<ClubStory> stories;
-  final Color color;
+  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> allClubs;
+  final int startClubIndex;
   final VoidCallback? onDeleted;
 
-  const _StoryViewer({required this.club, required this.stories, required this.color, this.onDeleted});
+  const _StoryViewer({
+    required this.allClubs,
+    required this.startClubIndex,
+    this.onDeleted,
+  });
 
   @override
   State<_StoryViewer> createState() => _StoryViewerState();
 }
 
-class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderStateMixin {
+class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixin {
+  late int _clubIndex;
   late List<ClubStory> _stories;
   int _index = 0;
+
+  // Progress bar timer
   late AnimationController _progressController;
+
+  // Crossfade between stories
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnim;
+
+  // Swipe-down-to-dismiss
+  double _dragOffset = 0;
+  bool _dismissing = false;
+
+  dynamic get _club => widget.allClubs[_clubIndex].club;
+  Color get _color => widget.allClubs[_clubIndex].color;
 
   String get _loggedInId =>
       authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
@@ -1664,17 +1690,35 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
     return creatorId != null && creatorId == _loggedInId;
   }
 
+  void _loadClub(int clubIndex) {
+    _clubIndex = clubIndex;
+    _stories = List.of(widget.allClubs[clubIndex].stories);
+    final uid = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final firstUnseen = _stories.indexWhere(
+        (s) => !viewTracker.viewerIds(s.id).contains(uid));
+    _index = firstUnseen == -1 ? 0 : firstUnseen;
+  }
+
   @override
   void initState() {
     super.initState();
-    _stories = List.of(widget.stories);
+    _loadClub(widget.startClubIndex);
+
     _progressController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 5),
     )..addStatusListener((status) {
         if (status == AnimationStatus.completed) _nextStory();
       });
+
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
+
     _progressController.forward();
+    _fadeController.forward();
     _recordCurrentView();
   }
 
@@ -1685,24 +1729,63 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
     }
   }
 
-  void _nextStory() {
-    if (_index < _stories.length - 1) {
-      setState(() => _index++);
+  /// Crossfade to the new content, then restart progress.
+  void _crossfadeTo(VoidCallback updateState) {
+    _progressController.stop();
+    _fadeController.reverse().then((_) {
+      if (!mounted) return;
+      setState(updateState);
+      _fadeController.forward();
       _progressController.forward(from: 0);
       _recordCurrentView();
+    });
+  }
+
+  void _nextStory() {
+    if (_index < _stories.length - 1) {
+      _crossfadeTo(() => _index++);
+    } else if (_clubIndex < widget.allClubs.length - 1) {
+      _crossfadeTo(() => _loadClub(_clubIndex + 1));
     } else {
-      Navigator.of(context).pop();
+      _animatedPop();
     }
   }
 
   void _prevStory() {
     if (_index > 0) {
-      setState(() => _index--);
-      _progressController.forward(from: 0);
-      _recordCurrentView();
+      _crossfadeTo(() => _index--);
+    } else if (_clubIndex > 0) {
+      _crossfadeTo(() {
+        _clubIndex--;
+        _stories = List.of(widget.allClubs[_clubIndex].stories);
+        _index = _stories.length - 1;
+      });
     } else {
       _progressController.forward(from: 0);
     }
+  }
+
+  /// Slide the card down off screen then pop — smooth exit.
+  void _animatedPop() {
+    if (_dismissing) return;
+    _dismissing = true;
+    _progressController.stop();
+    const dur = Duration(milliseconds: 280);
+    final size = MediaQuery.of(context).size;
+    // Animate _dragOffset to full screen height
+    final start = _dragOffset;
+    final end = size.height;
+    // Use AnimationController for the exit slide
+    final exitCtrl = AnimationController(vsync: this, duration: dur);
+    final exitAnim = Tween<double>(begin: start, end: end)
+        .animate(CurvedAnimation(parent: exitCtrl, curve: Curves.easeInCubic));
+    exitAnim.addListener(() {
+      if (mounted) setState(() => _dragOffset = exitAnim.value);
+    });
+    exitCtrl.forward().then((_) {
+      exitCtrl.dispose();
+      if (mounted) Navigator.of(context).pop();
+    });
   }
 
   void _deleteCurrentStory() {
@@ -1771,6 +1854,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
   @override
   void dispose() {
     _progressController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -1780,18 +1864,45 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
     final size = MediaQuery.of(context).size;
     final hasPhoto = story.imagePath != null;
 
+    // How transparent the barrier gets as user drags down (0→1 over 200px)
+    final dismissProgress = (_dragOffset / 200).clamp(0.0, 1.0);
+    final barrierOpacity = 1.0 - dismissProgress * 0.85;
+
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Center(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SizedBox(
-              width: size.width,
-              height: size.height * 0.88,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
+      backgroundColor: Colors.black.withValues(alpha: barrierOpacity),
+      body: GestureDetector(
+        // Vertical drag for dismiss
+        onVerticalDragUpdate: (details) {
+          if (details.delta.dy > 0) {
+            setState(() => _dragOffset += details.delta.dy);
+          } else if (_dragOffset > 0) {
+            setState(() {
+              _dragOffset = (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
+            });
+          }
+        },
+        onVerticalDragEnd: (details) {
+          if (_dragOffset > 120 || (details.velocity.pixelsPerSecond.dy > 600)) {
+            _animatedPop();
+          } else {
+            setState(() => _dragOffset = 0);
+          }
+        },
+        child: Transform.translate(
+          offset: Offset(0, _dragOffset),
+          child: SafeArea(
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(
+                    20 + dismissProgress * 10),
+                child: FadeTransition(
+                  opacity: _fadeAnim,
+                  child: SizedBox(
+                  width: size.width,
+                  height: size.height * 0.88,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
                   // Background: photo or gradient
                   if (hasPhoto && story.imagePath!.startsWith('https://'))
                     Image.network(
@@ -1800,13 +1911,13 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                       loadingBuilder: (_, child, progress) => progress == null
                           ? child
                           : Container(
-                              color: widget.color.withValues(alpha: 0.18),
+                              color: _color.withValues(alpha: 0.18),
                               child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
                             ),
                       errorBuilder: (_, err, trace) => Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [widget.color, widget.color.withValues(alpha: 0.75), Colors.black],
+                            colors: [_color, _color.withValues(alpha: 0.75), Colors.black],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
@@ -1819,7 +1930,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [widget.color, widget.color.withValues(alpha: 0.75), Colors.black],
+                          colors: [_color, _color.withValues(alpha: 0.75), Colors.black],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         ),
@@ -1866,8 +1977,8 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                     child: Row(
                       children: [
                         ClubAvatar(
-                          clubId: widget.club.id,
-                          clubName: widget.club.name,
+                          clubId: _club.id,
+                          clubName: _club.name,
                           color: Colors.white,
                           size: 40,
                           fontSize: 16,
@@ -1878,7 +1989,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(widget.club.name,
+                              Text(_club.name,
                                   maxLines: 1, overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                               Text(_timeAgoStory(story.postedAt),
@@ -1900,7 +2011,7 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
                             ),
                           ),
                         GestureDetector(
-                          onTap: () => Navigator.of(context).pop(),
+                          onTap: _animatedPop,
                           child: const Icon(Icons.close, color: Colors.white, size: 26),
                         ),
                       ],
@@ -2002,6 +2113,9 @@ class _StoryViewerState extends State<_StoryViewer> with SingleTickerProviderSta
               ),
             ),
           ),
+        ),
+      ),
+        ),
         ),
       ),
     );

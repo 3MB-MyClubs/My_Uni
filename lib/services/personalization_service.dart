@@ -16,6 +16,17 @@ const List<String> kInterests = [
 
 const List<String> kTimeSlots = ['Morning', 'Afternoon', 'Evening', 'Weekend'];
 
+/// Faculty → departments map. Edit here to update the major picker.
+const List<Map<String, dynamic>> kFaculties = [
+  {'name': 'Engineering',                   'departments': 'CS, EE, ME, IE, ChBE'},
+  {'name': 'Sciences',                      'departments': 'Physics, Chemistry, Math, MBG'},
+  {'name': 'Business & Economics',          'departments': 'BA, Economics, IR'},
+  {'name': 'Social Sciences & Humanities',  'departments': 'Psychology, History, Media, Philosophy'},
+  {'name': 'Law',                           'departments': 'Hukuk Fakültesi'},
+  {'name': 'Medicine',                      'departments': 'Tıp Fakültesi'},
+  {'name': 'Undecided',                     'departments': 'Not sure yet'},
+];
+
 // ── Club → interest category mapping ─────────────────────────────────────────
 
 const Map<String, List<String>> kClubInterestMap = {
@@ -64,11 +75,18 @@ const Map<String, List<String>> kClubInterestMap = {
 
 class PersonalizationService extends ChangeNotifier {
   static const _boxName = 'personalization';
+
+  /// Bump this when the onboarding flow changes structurally (new steps, etc.).
+  /// Any user whose stored version doesn't match will be sent through onboarding
+  /// again exactly once — their interests/times/major are NOT cleared.
+  static const int _onboardingVersion = 1;
+
   Box<dynamic>? _box;
 
   bool onboardingComplete = false;
   Set<String> interests = {};
   Set<String> timePrefs = {};
+  String major = '';
   Set<String> hiddenIds = {};
   Set<String> remindedEventIds = {};
 
@@ -80,9 +98,18 @@ class PersonalizationService extends ChangeNotifier {
 
   void load(String userId) {
     if (_box == null) return;
-    onboardingComplete = _box!.get('ob_$userId', defaultValue: false) as bool;
+    // If the stored onboarding version doesn't match the current one,
+    // mark onboarding as incomplete so the user sees the new flow once.
+    // Their existing interests/times/major are preserved.
+    final storedVersion =
+        _box!.get('obv_$userId', defaultValue: 0) as int;
+    final versionMatch = storedVersion == _onboardingVersion;
+
+    onboardingComplete = versionMatch &&
+        (_box!.get('ob_$userId', defaultValue: false) as bool);
     interests = _restoreSet(_box!.get('int_$userId'));
     timePrefs = _restoreSet(_box!.get('tp_$userId'));
+    major = _box!.get('major_$userId', defaultValue: '') as String;
     hiddenIds = _restoreSet(_box!.get('hid_$userId'));
     remindedEventIds = _restoreSet(_box!.get('rem_$userId'));
     notifyListeners();
@@ -94,8 +121,10 @@ class PersonalizationService extends ChangeNotifier {
     if (_box == null) return;
     await _box!.putAll({
       'ob_$userId': onboardingComplete,
+      'obv_$userId': _onboardingVersion,
       'int_$userId': interests.toList(),
       'tp_$userId': timePrefs.toList(),
+      'major_$userId': major,
       'hid_$userId': hiddenIds.toList(),
       'rem_$userId': remindedEventIds.toList(),
     });
@@ -107,10 +136,12 @@ class PersonalizationService extends ChangeNotifier {
     String userId,
     Set<String> selectedInterests,
     Set<String> selectedTimePrefs,
+    String selectedMajor,
   ) async {
     onboardingComplete = true;
     interests = Set.of(selectedInterests);
     timePrefs = Set.of(selectedTimePrefs);
+    major = selectedMajor;
     notifyListeners();
     await save(userId);
   }
