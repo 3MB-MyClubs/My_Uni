@@ -32,16 +32,16 @@ class RsvpListScreen extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Attendees',
+            Text('Attendees',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
             Text('$totalCount registered',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
           ],
         ),
         elevation: 0,
       ),
       body: totalCount == 0
-          ? const Center(
+          ? Center(
               child: Text(
                 'No RSVPs yet.',
                 style: TextStyle(color: AppColors.secondaryText, fontSize: 16),
@@ -51,7 +51,7 @@ class RsvpListScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: entries.length + legacyIds.length,
               separatorBuilder: (_, _) =>
-                  const Divider(height: 1, indent: 72),
+                  Divider(height: 1, indent: 72),
               itemBuilder: (context, i) {
                 final String userId;
                 final DateTime? timestamp;
@@ -91,7 +91,7 @@ class RsvpListScreen extends StatelessWidget {
                   ),
                   title: Text(
                     user.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: AppColors.text,
                         fontSize: 14),
@@ -99,7 +99,7 @@ class RsvpListScreen extends StatelessWidget {
                   subtitle: timestamp != null
                       ? Text(
                           'RSVP\'d ${_formatTimestamp(timestamp)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText),
                         )

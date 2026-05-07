@@ -67,14 +67,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete event?',
+        title: Text('Delete event?',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: const Text('This event will be permanently removed.',
+        content: Text('This event will be permanently removed.',
             style: TextStyle(color: AppColors.secondaryText)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
+            child: Text('Cancel',
                 style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
@@ -84,7 +84,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text('Delete'),
           ),
         ],
       ),
@@ -135,13 +135,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             pinned: true,
             expandedHeight: 200,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+              icon: Icon(Icons.arrow_back_ios_new, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
               if (_isOwner)
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.white),
+                  icon: Icon(Icons.delete_outline, color: Colors.white),
                   onPressed: _confirmDelete,
                 ),
             ],
@@ -169,7 +169,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ),
                           child: Text(
                             _daysLabel(event.dateTime),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -179,7 +179,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         const SizedBox(height: 8),
                         Text(
                           event.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -286,7 +286,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 20),
 
                   // ── Organiser ──────────────────────────────────────────────
-                  const Text('Organised by',
+                  Text('Organised by',
                       style: TextStyle(fontSize: 13, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Container(
@@ -309,7 +309,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         Expanded(
                           child: Text(
                             club.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.text, fontSize: 14),
+                            style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text, fontSize: 14),
                           ),
                         ),
                       ],
@@ -319,7 +319,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 20),
 
                   // ── Description ────────────────────────────────────────────
-                  const Text('About this event',
+                  Text('About this event',
                       style: TextStyle(fontSize: 13, color: AppColors.secondaryText, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Container(
@@ -331,7 +331,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                     child: Text(
                       event.description,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         color: AppColors.text,
                         height: 1.6,
@@ -369,7 +369,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   // ── Featured Guest ─────────────────────────────────────────
                   if (event.guestSpeaker != null) ...[
                     const SizedBox(height: 20),
-                    const Text('Featured Guest',
+                    Text('Featured Guest',
                         style: TextStyle(
                             fontSize: 13,
                             color: AppColors.secondaryText,
@@ -388,13 +388,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           Expanded(
                             child: Text(
                               event.guestSpeaker!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.text),
                             ),
                           ),
-                          const Icon(Icons.star_rounded,
+                          Icon(Icons.star_rounded,
                               color: AppColors.accentGold, size: 18),
                         ],
                       ),
@@ -405,7 +405,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   if (event.schedule != null &&
                       event.schedule!.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    const Text('Programme',
+                    Text('Programme',
                         style: TextStyle(
                             fontSize: 13,
                             color: AppColors.secondaryText,
@@ -504,7 +504,7 @@ class _RsvpPanel extends StatelessWidget {
                                   child: Center(
                                     child: Text(
                                       String.fromCharCode(65 + i),
-                                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                      style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ),
@@ -612,7 +612,7 @@ class _ProgrammeCard extends StatelessWidget {
                           Icon(Icons.lock_outline_rounded,
                               size: 18, color: AppColors.secondaryText),
                           const SizedBox(width: 10),
-                          const Expanded(
+                          Expanded(
                             child: Text(
                               'RSVP to unlock the full programme',
                               style: TextStyle(
@@ -857,10 +857,10 @@ class _InfoCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                    style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                 const SizedBox(height: 2),
                 Text(value,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
               ],
             ),
           ),

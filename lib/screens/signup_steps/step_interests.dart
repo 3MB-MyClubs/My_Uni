@@ -67,7 +67,7 @@ class _StepInterestsState extends State<StepInterests> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   "What's your scene?",
                   style: TextStyle(
                     fontSize: 30,
@@ -80,13 +80,13 @@ class _StepInterestsState extends State<StepInterests> {
                 const SizedBox(height: 10),
                 RichText(
                   text: TextSpan(
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 15,
                         color: SC.body,
                         height: 1.45,
                         letterSpacing: -0.1),
                     children: [
-                      const TextSpan(
+                      TextSpan(
                           text:
                               "Pick a few — we'll match you with clubs, events, and people. "),
                       TextSpan(
@@ -126,7 +126,7 @@ class _StepInterestsState extends State<StepInterests> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (sel) ...[
-                              const Text('✓',
+                              Text('✓',
                                   style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -152,7 +152,7 @@ class _StepInterestsState extends State<StepInterests> {
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   Text(_error!,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: SC.burgundy, fontSize: 13)),
                 ],
               ],
@@ -169,7 +169,7 @@ class _StepInterestsState extends State<StepInterests> {
             child: ElevatedButton(
               onPressed: _submit,
               style: SC.primaryButtonStyle(),
-              child: const Text('Finish setup'),
+              child: Text('Finish setup'),
             ),
           ),
         ),

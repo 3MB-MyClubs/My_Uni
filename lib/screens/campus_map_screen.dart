@@ -232,13 +232,13 @@ class _CampusMapScreenState extends State<CampusMapScreen>
 
   Color _circleColor(double score, bool live) {
     if (score == 0) return Colors.transparent;
-    final alpha = (0.18 + score / 6 * 0.72).clamp(0.0, 0.9);
+    final alpha = (0.25 + score / 6 * 0.65).clamp(0.0, 0.90);
     return live
         ? Colors.red.withValues(alpha: alpha)
         : AppColors.primaryRed.withValues(alpha: alpha);
   }
 
-  double _circleRadius(double score) => 30 + score * 9;
+  double _circleRadius(double score) => 18 + score * 3;
 
   List<CircleMarker> _buildCircles(double pulseValue) {
     final markers = <CircleMarker>[];
@@ -249,9 +249,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
       if (live) {
         markers.add(CircleMarker(
           point: z.position,
-          radius: _circleRadius(score) + 18 + pulseValue * 14,
+          radius: _circleRadius(score) + 8 + pulseValue * 6,
           useRadiusInMeter: false,
-          color: Colors.red.withValues(alpha: 0.07 * pulseValue),
+          color: Colors.red.withValues(alpha: 0.05 * pulseValue),
           borderStrokeWidth: 0,
           borderColor: Colors.transparent,
         ));
@@ -351,7 +351,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Campus Activity Map',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -379,13 +379,13 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: Colors.red,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 5),
-                        const Text(
+                        Text(
                           'Live now',
                           style: TextStyle(
                             fontSize: 11,
@@ -473,14 +473,14 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                       children: [
                                         Text(
                                           '$dayCount',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 9,
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
                                           ),
                                         ),
                                         const SizedBox(width: 2),
-                                        const Text('🔥',
+                                        Text('🔥',
                                             style:
                                                 TextStyle(fontSize: 8)),
                                       ],
@@ -583,7 +583,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Colors.red,
                         shape: BoxShape.circle,
                       ),
@@ -684,7 +684,7 @@ class _ZonePanel extends StatelessWidget {
                 ),
                 child: Text(
                   zone.shortName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primaryRed,
@@ -694,7 +694,7 @@ class _ZonePanel extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 zone.name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
                   color: AppColors.text,
@@ -745,7 +745,7 @@ class _ZonePanel extends StatelessWidget {
                     color: Colors.red.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text('Live now',
+                  child: Text('Live now',
                       style: TextStyle(
                           fontSize: 10,
                           color: Colors.red,
@@ -805,7 +805,7 @@ class _ZonePanel extends StatelessWidget {
                             color: Colors.red.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Live',
                             style: TextStyle(
                               fontSize: 10,
@@ -815,7 +815,7 @@ class _ZonePanel extends StatelessWidget {
                           ),
                         )
                       else
-                        const Icon(
+                        Icon(
                           Icons.chevron_right,
                           size: 14,
                           color: AppColors.secondaryText,

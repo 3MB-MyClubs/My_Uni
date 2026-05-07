@@ -4,6 +4,7 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import '../services/theme_service.dart';
 import 'chat_screen.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
@@ -101,7 +102,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -114,7 +115,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
               decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 20),
-            const Text('Create', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+            Text('Create', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -179,22 +180,29 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screens = <Widget>[
-      const FeedScreen(),
-      const ThisWeekScreen(),
-      const ExploreScreen(),
-      NotificationsScreen(),
-      ProfileScreen(onLogout: widget.onLogout),
-      if (widget.isAdmin) const AdminDashboard(),
-    ];
+    return ListenableBuilder(
+      listenable: themeService,
+      builder: (context, _) {
+        // Non-const instances so Flutter creates new widget objects each rebuild,
+        // which triggers element.update() → markNeedsBuild() on each screen state.
+        final screens = <Widget>[
+          FeedScreen(),
+          ThisWeekScreen(),
+          ExploreScreen(),
+          NotificationsScreen(),
+          ProfileScreen(onLogout: widget.onLogout),
+          if (widget.isAdmin) AdminDashboard(),
+        ];
 
-    return Scaffold(
-      extendBody: true,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: screens,
-      ),
-      bottomNavigationBar: _buildBottomNav(context),
+        return Scaffold(
+          extendBody: true,
+          body: IndexedStack(
+            index: _selectedIndex,
+            children: screens,
+          ),
+          bottomNavigationBar: _buildBottomNav(context),
+        );
+      },
     );
   }
 
@@ -325,13 +333,13 @@ class _NavItem extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(2),
                           constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.primaryRed,
                             shape: BoxShape.circle,
                           ),
                           child: Text(
                             badge > 9 ? '9+' : '$badge',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 8,
                               fontWeight: FontWeight.bold,
@@ -377,7 +385,7 @@ class _CenterAddButton extends StatelessWidget {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [AppColors.primaryRed, AppColors.darkRed],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -392,7 +400,7 @@ class _CenterAddButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+            child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
           ),
         ),
       ),
@@ -478,14 +486,14 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
                   Container(
                     width: 40,
                     height: 40,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.lightRed,
                     ),
                     child: Center(
                       child: Text(
                         senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: AppColors.primaryRed,
                           fontSize: 16,
@@ -500,7 +508,7 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
                       children: [
                         Text(
                           senderName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                             color: AppColors.text,
@@ -511,7 +519,7 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
                           content,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryText,
                           ),
@@ -521,7 +529,7 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
                   ),
                   GestureDetector(
                     onTap: widget.onDismiss,
-                    child: const Icon(Icons.close, size: 16, color: AppColors.secondaryText),
+                    child: Icon(Icons.close, size: 16, color: AppColors.secondaryText),
                   ),
                 ],
               ),
@@ -576,7 +584,7 @@ class _CreateOption extends StatelessWidget {
             const SizedBox(height: 3),
             Text(subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
           ],
         ),
       ),

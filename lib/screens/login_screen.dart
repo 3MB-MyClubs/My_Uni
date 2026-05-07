@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: AppColors.lightRed,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
                     'KU',
                     style: TextStyle(
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              const Text(
+              Text(
                 'Welcome back',
                 style: TextStyle(
                   fontSize: 30,
@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Enter your Koç University email to continue.',
                 style: TextStyle(
                   fontSize: 14,
@@ -103,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   labelText: 'KU Email',
                   hintText: 'you@ku.edu.tr',
-                  prefixIcon: const Icon(Icons.email_outlined,
+                  prefixIcon: Icon(Icons.email_outlined,
                       color: AppColors.secondaryText),
                   errorText: _error,
                   filled: true,
@@ -115,21 +115,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide:
-                        const BorderSide(color: AppColors.divider),
+                        BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
+                    borderSide: BorderSide(
                         color: AppColors.primaryRed, width: 2),
                   ),
                   errorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide:
-                        const BorderSide(color: AppColors.primaryRed),
+                        BorderSide(color: AppColors.primaryRed),
                   ),
                   focusedErrorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
+                    borderSide: BorderSide(
                         color: AppColors.primaryRed, width: 2),
                   ),
                 ),
@@ -151,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     border: Border.all(
                         color: AppColors.primaryRed.withValues(alpha: 0.2)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.bolt_rounded,
@@ -186,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     shadowColor:
                         AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: const Text('Continue',
+                  child: Text('Continue',
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ),

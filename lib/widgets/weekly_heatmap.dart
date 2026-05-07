@@ -124,7 +124,7 @@ class WeeklyHeatmap extends StatelessWidget {
                                       child: Container(
                                         width: 5,
                                         height: 5,
-                                        decoration: const BoxDecoration(
+                                        decoration: BoxDecoration(
                                           color: Colors.red,
                                           shape: BoxShape.circle,
                                         ),

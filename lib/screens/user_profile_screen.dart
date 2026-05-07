@@ -108,17 +108,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Follow',
+          title: Text('Follow',
               style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
           content: Text(
             '${userState.displayNameFor(user.id, user.name)} doesn\'t follow you back yet. You can still follow them — they won\'t need to approve it.',
-            style: const TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
+            style: TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+              child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -127,7 +127,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Follow'),
+              child: Text('Follow'),
             ),
           ],
         ),
@@ -165,7 +165,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         maxChildSize: 0.85,
         expand: false,
         builder: (_, scrollController) => Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
@@ -187,7 +187,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                     const SizedBox(height: 14),
                     Text(title,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: AppColors.text)),
@@ -195,9 +195,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Divider(height: 1),
+              Divider(height: 1),
               if (people.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(32),
                   child: Text('No one here yet.',
                       style: TextStyle(color: AppColors.secondaryText)),
@@ -208,7 +208,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     controller: scrollController,
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: people.length,
-                    separatorBuilder: (_, i) => const Divider(height: 1, indent: 72),
+                    separatorBuilder: (_, i) => Divider(height: 1, indent: 72),
                     itemBuilder: (ctx, i) {
                       final u = people[i];
                       return ListTile(
@@ -224,16 +224,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                         title: Text(
                             userState.displayNameFor(u.id, u.name),
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.text)),
                         subtitle: userState.usernameFor(u.id) != null
                             ? Text(u.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 12, color: AppColors.secondaryText))
                             : null,
-                        trailing: const Icon(Icons.chevron_right,
+                        trailing: Icon(Icons.chevron_right,
                             color: AppColors.secondaryText),
                       );
                     },
@@ -263,7 +263,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             pinned: true,
             title: Text(
                 userState.displayNameFor(widget.user.id, widget.user.name),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ),
 
           SliverToBoxAdapter(
@@ -271,7 +271,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildHeader(followers, following),
-                const Divider(height: 1),
+                Divider(height: 1),
                 if (subClubs.isNotEmpty) _buildClubsSection(subClubs),
                 const SizedBox(height: 80),
               ],
@@ -302,7 +302,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
                           colors: [AppColors.primaryRed, AppColors.accentGold],
@@ -314,7 +314,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         width: 76,
                         height: 76,
                         padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                             shape: BoxShape.circle, color: AppColors.card),
                         child: UserAvatar(
                           userId: user.id,
@@ -346,14 +346,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(userState.displayNameFor(user.id, user.name),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         color: AppColors.text)),
                 if (userState.usernameFor(user.id) != null) ...[
                   const SizedBox(height: 2),
                   Text(user.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 13, color: AppColors.secondaryText)),
                 ],
 
@@ -395,13 +395,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             mutuals.length == 1
                                 ? '${mutuals[0].name.split(' ').first} is a mutual'
                                 : '${mutuals[0].name.split(' ').first} and ${mutuals.length - 1} other${mutuals.length > 2 ? 's' : ''} are mutuals',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12, color: AppColors.secondaryText),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.chevron_right,
+                        Icon(Icons.chevron_right,
                             size: 16, color: AppColors.secondaryText),
                       ],
                     ),
@@ -417,7 +417,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       color: AppColors.lightRed,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text('Club Admin',
+                    child: Text('Club Admin',
                         style: TextStyle(
                             fontSize: 12,
                             color: AppColors.primaryRed,
@@ -453,14 +453,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.shield_outlined,
+                                    Icon(Icons.shield_outlined,
                                         size: 13, color: Color(0xFF1565C0)),
                                     const SizedBox(width: 4),
                                     Text(
                                       hasTitle
                                           ? '$title · ${boardClub.name}'
                                           : 'Board Member · ${boardClub.name}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 12,
                                           color: Color(0xFF1565C0),
                                           fontWeight: FontWeight.w600),
@@ -469,7 +469,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              const Icon(Icons.chevron_right,
+                              Icon(Icons.chevron_right,
                                   size: 14, color: Color(0xFF1565C0)),
                             ],
                           ),
@@ -538,7 +538,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                       .withValues(alpha: 0.5),
                                 ),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Message',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
@@ -569,7 +569,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Subscribed Clubs',
             style: TextStyle(
                 fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
@@ -604,7 +604,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: AppColors.text),
+                          style: TextStyle(fontSize: 11, color: AppColors.text),
                         ),
                       ),
                     ],
@@ -629,13 +629,13 @@ class _StatCell extends StatelessWidget {
     return Column(
       children: [
         Text(value,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.text)),
         const SizedBox(height: 2),
         Text(label,
-            style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+            style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
       ],
     );
   }

@@ -77,7 +77,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -164,7 +164,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Your KU Day',
                     style: TextStyle(
                       fontSize: 18,
@@ -193,7 +193,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           ],
         ),
         const SizedBox(height: 24),
-        const Text(
+        Text(
           'What are you into?',
           style: TextStyle(
             fontSize: 16,
@@ -244,7 +244,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (selected) ...[
-                      const Icon(Icons.check_rounded,
+                      Icon(Icons.check_rounded,
                           size: 14, color: Colors.white),
                       const SizedBox(width: 5),
                     ],
@@ -275,7 +275,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
-            child: const Text(
+            child: Text(
               'Next →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
@@ -301,11 +301,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           children: [
             GestureDetector(
               onTap: () => setState(() => _step = 0),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
+              child: Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: AppColors.secondaryText),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Text(
                 'What\'s your major?',
                 style: TextStyle(
@@ -318,7 +318,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           ],
         ),
         const SizedBox(height: 6),
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(left: 30),
           child: Text(
             'We\'ll suggest clubs that fit your field.',
@@ -367,7 +367,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                         color: AppColors.lightRed,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.school_outlined,
+                      child: Icon(Icons.school_outlined,
                           size: 18, color: AppColors.primaryRed),
                     ),
                     const SizedBox(width: 12),
@@ -377,7 +377,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                         children: [
                           Text(
                             name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: AppColors.text,
@@ -386,7 +386,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                           const SizedBox(height: 2),
                           Text(
                             depts,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.secondaryText),
                           ),
@@ -411,7 +411,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                         ),
                       ),
                       child: selected
-                          ? const Icon(Icons.check,
+                          ? Icon(Icons.check,
                               size: 12, color: Colors.white)
                           : null,
                     ),
@@ -438,7 +438,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
-            child: const Text(
+            child: Text(
               'Next →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
@@ -471,11 +471,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           children: [
             GestureDetector(
               onTap: () => setState(() => _step = 1),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
+              child: Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: AppColors.secondaryText),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Text(
                 'When do you usually have time?',
                 style: TextStyle(
@@ -488,7 +488,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           ],
         ),
         const SizedBox(height: 6),
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(left: 30),
           child: Text(
             'We\'ll prioritise events that fit your schedule.',
@@ -567,7 +567,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
-            child: const Text(
+            child: Text(
               'Next →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
@@ -605,7 +605,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           children: [
             GestureDetector(
               onTap: () => setState(() => _step = 2),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
+              child: Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: AppColors.secondaryText),
             ),
             const SizedBox(width: 10),
@@ -616,11 +616,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.groups_rounded,
+              child: Icon(Icons.groups_rounded,
                   size: 18, color: AppColors.primaryRed),
             ),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -643,7 +643,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             TextButton(
               onPressed: () =>
                   setState(() => _followedInOnboarding.addAll(recommended)),
-              child: const Text(
+              child: Text(
                 'Follow all',
                 style: TextStyle(
                     color: AppColors.primaryRed,
@@ -673,7 +673,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                       ),
                       child: Text(
                         tag,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: AppColors.primaryRed,
                           fontWeight: FontWeight.w500,
@@ -742,7 +742,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                         children: [
                           Text(
                             club.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: AppColors.text,
@@ -762,7 +762,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                               ),
                               child: Text(
                                 '$matchCount interest match${matchCount > 1 ? 'es' : ''}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   color: AppColors.accentGold,
                                   fontWeight: FontWeight.w600,
@@ -828,7 +828,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
-            child: const Text(
+            child: Text(
               'Let\'s go →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
@@ -839,20 +839,20 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           child: RichText(
             text: TextSpan(
               children: [
-                const TextSpan(
+                TextSpan(
                   text: 'Following ',
                   style: TextStyle(
                       fontSize: 12, color: AppColors.secondaryText),
                 ),
                 TextSpan(
                   text: '${_followedInOnboarding.length}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color: AppColors.primaryRed,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const TextSpan(
+                TextSpan(
                   text: ' clubs',
                   style: TextStyle(
                       fontSize: 12, color: AppColors.secondaryText),

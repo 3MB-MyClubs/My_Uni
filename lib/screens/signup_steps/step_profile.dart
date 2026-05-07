@@ -175,7 +175,7 @@ class _StepProfileState extends State<StepProfile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Tell us about you.',
                   style: TextStyle(
                     fontSize: 30,
@@ -186,7 +186,7 @@ class _StepProfileState extends State<StepProfile> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'This shows up on your campus profile.',
                   style: TextStyle(
                       fontSize: 15,
@@ -214,7 +214,7 @@ class _StepProfileState extends State<StepProfile> {
                               color: SC.ink,
                               border: Border.all(color: SC.bg, width: 3),
                             ),
-                            child: const Icon(Icons.add,
+                            child: Icon(Icons.add,
                                 color: Colors.white, size: 15),
                           ),
                         ),
@@ -228,7 +228,7 @@ class _StepProfileState extends State<StepProfile> {
                 TextField(
                   controller: _nameController,
                   textInputAction: TextInputAction.next,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: SC.ink, fontSize: 16, letterSpacing: -0.1),
                   decoration: SC.fieldDecoration(
                     label: 'Full name',
@@ -266,7 +266,7 @@ class _StepProfileState extends State<StepProfile> {
                   obscureText: _obscurePassword,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: SC.ink, fontSize: 16, letterSpacing: -0.1),
                   decoration: SC.fieldDecoration(
                     label: 'Password',
@@ -299,7 +299,7 @@ class _StepProfileState extends State<StepProfile> {
             child: ElevatedButton(
               onPressed: _submit,
               style: SC.primaryButtonStyle(),
-              child: const Text('Continue'),
+              child: Text('Continue'),
             ),
           ),
         ),
@@ -326,11 +326,11 @@ class _DashedCircleAvatar extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: initials.isEmpty
-            ? const Icon(Icons.person_outline_rounded,
+            ? Icon(Icons.person_outline_rounded,
                 color: SC.burgundy, size: 32)
             : Text(
                 initials,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w600,
                   color: SC.burgundy,
@@ -388,7 +388,7 @@ class _YearSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Year',
           style: TextStyle(
               fontSize: 13,
@@ -442,7 +442,7 @@ class _YearSelector extends StatelessWidget {
         if (errorText != null) ...[
           const SizedBox(height: 6),
           Text(errorText!,
-              style: const TextStyle(color: SC.burgundy, fontSize: 12)),
+              style: TextStyle(color: SC.burgundy, fontSize: 12)),
         ],
       ],
     );
@@ -473,24 +473,24 @@ class _MajorField extends StatelessWidget {
 
   List<TextSpan> _highlight(String text, String query) {
     if (query.isEmpty) {
-      return [TextSpan(text: text, style: const TextStyle(color: SC.ink))];
+      return [TextSpan(text: text, style: TextStyle(color: SC.ink))];
     }
     final lower = text.toLowerCase();
     final idx   = lower.indexOf(query.toLowerCase());
     if (idx < 0) {
-      return [TextSpan(text: text, style: const TextStyle(color: SC.ink))];
+      return [TextSpan(text: text, style: TextStyle(color: SC.ink))];
     }
     return [
       if (idx > 0)
         TextSpan(text: text.substring(0, idx),
-            style: const TextStyle(color: SC.ink)),
+            style: TextStyle(color: SC.ink)),
       TextSpan(
           text: text.substring(idx, idx + query.length),
-          style: const TextStyle(
+          style: TextStyle(
               color: SC.burgundy, fontWeight: FontWeight.w700)),
       if (idx + query.length < text.length)
         TextSpan(text: text.substring(idx + query.length),
-            style: const TextStyle(color: SC.ink)),
+            style: TextStyle(color: SC.ink)),
     ];
   }
 
@@ -503,7 +503,7 @@ class _MajorField extends StatelessWidget {
           controller: controller,
           focusNode: focusNode,
           textInputAction: TextInputAction.next,
-          style: const TextStyle(
+          style: TextStyle(
               color: SC.ink, fontSize: 16, letterSpacing: -0.1),
           onChanged: onChanged,
           onTap: onTap,
@@ -521,11 +521,11 @@ class _MajorField extends StatelessWidget {
                       width: 18,
                       height: 18,
                       margin: const EdgeInsets.all(12),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: SC.muted,
                       ),
-                      child: const Icon(Icons.close,
+                      child: Icon(Icons.close,
                           color: Colors.white, size: 12),
                     ),
                   )
@@ -554,7 +554,7 @@ class _MajorField extends StatelessWidget {
               shrinkWrap: true,
               itemCount: suggestions.length,
               separatorBuilder: (_, _) =>
-                  const Divider(height: 1, color: SC.hair),
+                  Divider(height: 1, color: SC.hair),
               itemBuilder: (_, i) {
                 final m = suggestions[i];
                 return InkWell(
@@ -565,7 +565,7 @@ class _MajorField extends StatelessWidget {
                     child: RichText(
                       text: TextSpan(
                         children: _highlight(m, controller.text),
-                        style: const TextStyle(fontSize: 15),
+                        style: TextStyle(fontSize: 15),
                       ),
                     ),
                   ),

@@ -40,15 +40,15 @@ class SC {
 
     return InputDecoration(
       labelText:  label,
-      labelStyle: const TextStyle(color: SC.muted, fontSize: 14),
+      labelStyle: TextStyle(color: SC.muted, fontSize: 14),
       hintText:   hint,
-      hintStyle:  const TextStyle(color: SC.muted, fontSize: 15),
+      hintStyle:  TextStyle(color: SC.muted, fontSize: 15),
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       suffixText: suffixText,
-      suffixStyle: const TextStyle(color: SC.muted, fontSize: 14),
+      suffixStyle: TextStyle(color: SC.muted, fontSize: 14),
       errorText:  errorText,
-      errorStyle: const TextStyle(color: SC.burgundy, fontSize: 12),
+      errorStyle: TextStyle(color: SC.burgundy, fontSize: 12),
       filled:     true,
       fillColor:  SC.card,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -68,7 +68,7 @@ class SC {
         minimumSize: const Size(double.infinity, 52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         elevation: 0,
-        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.1),
+        textStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.1),
       );
 
   // ── Wrap content in the signup light theme ────────────────────
@@ -84,15 +84,15 @@ class SC {
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: SC.card,
-          labelStyle: const TextStyle(color: SC.muted),
-          hintStyle: const TextStyle(color: SC.muted),
-          errorStyle: const TextStyle(color: SC.burgundy, fontSize: 12),
+          labelStyle: TextStyle(color: SC.muted),
+          hintStyle: TextStyle(color: SC.muted),
+          errorStyle: TextStyle(color: SC.burgundy, fontSize: 12),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: SC.hair, width: 1.5),
+            borderSide: BorderSide(color: SC.hair, width: 1.5),
           ),
         ),
-        textTheme: const TextTheme(
+        textTheme: TextTheme(
           bodyLarge:  TextStyle(color: SC.ink),
           bodyMedium: TextStyle(color: SC.ink),
           bodySmall:  TextStyle(color: SC.body),

@@ -41,14 +41,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete post?',
+        title: Text('Delete post?',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: const Text('This post will be permanently removed.',
+        content: Text('This post will be permanently removed.',
             style: TextStyle(color: AppColors.secondaryText)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
+            child: Text('Cancel',
                 style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
@@ -58,7 +58,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text('Delete'),
           ),
         ],
       ),
@@ -138,13 +138,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         foregroundColor: AppColors.text,
         surfaceTintColor: Colors.transparent,
         title: Text(club.name,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         actions: [
           if (_isOwner)
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              icon: Icon(Icons.delete_outline, color: Colors.red),
               onPressed: _confirmDelete,
             ),
         ],
@@ -186,12 +186,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(author.name,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
                                         color: AppColors.primaryRed)),
                                 Text(_timeAgo(widget.post.createdAt),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 12, color: AppColors.secondaryText)),
                               ],
                             ),
@@ -229,17 +229,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                               const SizedBox(width: 5),
                               Text('$likeCount',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 14, color: AppColors.secondaryText)),
                             ],
                           ),
                         ),
                         const SizedBox(width: 18),
-                        const Icon(Icons.chat_bubble_outline,
+                        Icon(Icons.chat_bubble_outline,
                             color: AppColors.secondaryText, size: 22),
                         const SizedBox(width: 5),
                         Text('${postComments.length}',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 14, color: AppColors.secondaryText)),
                       ],
                     ),
@@ -251,7 +251,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Text(widget.post.content,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 15,
                             color: AppColors.text,
                             height: 1.6)),
@@ -266,7 +266,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
                       child: Text('Comments (${postComments.length})',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                               color: AppColors.text)),
@@ -295,20 +295,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   Row(
                                     children: [
                                       Text(commenter.name,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,
                                               color: AppColors.text)),
                                       const SizedBox(width: 6),
                                       Text(_timeAgo(c.createdAt),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontSize: 11,
                                               color: AppColors.secondaryText)),
                                     ],
                                   ),
                                   const SizedBox(height: 3),
                                   Text(c.content,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 13,
                                           color: AppColors.text,
                                           height: 1.4)),
@@ -319,7 +319,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         ),
                       );
                     }),
-                    const Divider(height: 1),
+                    Divider(height: 1),
                   ],
 
                   const SizedBox(height: 80),
@@ -349,7 +349,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       decoration: InputDecoration(
                         hintText: 'Add a comment...',
                         hintStyle:
-                            const TextStyle(color: AppColors.secondaryText),
+                            TextStyle(color: AppColors.secondaryText),
                         filled: true,
                         fillColor: AppColors.lightGray,
                         contentPadding: const EdgeInsets.symmetric(
@@ -368,11 +368,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     child: Container(
                       width: 40,
                       height: 40,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.primaryRed,
                       ),
-                      child: const Icon(Icons.send_rounded,
+                      child: Icon(Icons.send_rounded,
                           color: Colors.white, size: 18),
                     ),
                   ),

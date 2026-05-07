@@ -340,7 +340,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             _dontMissSection(dontMiss),
           ],
 
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
       ),
     );
@@ -355,14 +355,14 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       child: Container(
         padding: EdgeInsets.fromLTRB(
             20, MediaQuery.of(context).padding.top + 16, 20, 16),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.5)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Events at KU',
               style: TextStyle(
                 fontSize: 26,
@@ -376,23 +376,23 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
               children: [
                 Text(
                   '$totalUpcoming upcoming',
-                  style: const TextStyle(fontSize: 13, color: AppColors.secondaryText),
+                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
                 ),
                 if (liveCount > 0) ...[
-                  const Text('  ·  ',
+                  Text('  ·  ',
                       style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
                   Container(
                     width: 7,
                     height: 7,
                     margin: const EdgeInsets.only(right: 5),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.primaryRed,
                       shape: BoxShape.circle,
                     ),
                   ),
                   Text(
                     '$liveCount live now',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       color: AppColors.primaryRed,
                       fontWeight: FontWeight.w600,
@@ -519,11 +519,11 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   color: AppColors.lightRed,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.radio_button_checked_rounded,
+                child: Icon(Icons.radio_button_checked_rounded,
                     color: AppColors.primaryRed, size: 30),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'No live events right now',
                 style: TextStyle(
                     fontSize: 16,
@@ -531,7 +531,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     color: AppColors.text),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Switch to By Date to browse upcoming events.',
                 textAlign: TextAlign.center,
                 style:
@@ -551,7 +551,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         children: [
           _PulseDot(color: AppColors.primaryRed),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Happening right now',
             style: TextStyle(
               fontSize: 15,
@@ -569,7 +569,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             ),
             child: Text(
               '${liveNow.length}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primaryRed,
@@ -617,7 +617,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     }
 
     if (uniqueDates.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
+      return SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
     const monthNames = [
@@ -642,7 +642,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Text(
                 'BROWSE BY DAY',
@@ -668,7 +668,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         children: [
                           Text(
                             item.monthLabel!,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: AppColors.secondaryText,
@@ -839,12 +839,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
       child: Row(
         children: [
-          const Icon(Icons.calendar_today_rounded,
+          Icon(Icons.calendar_today_rounded,
               size: 14, color: AppColors.secondaryText),
           const SizedBox(width: 8),
           Text(
             _dayLabel(_selectedDay),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
               color: AppColors.text,
@@ -853,7 +853,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
           const SizedBox(width: 6),
           Text(
             '· ${dayEvents.length} event${dayEvents.length > 1 ? 's' : ''}',
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 13, color: AppColors.secondaryText),
           ),
         ],
@@ -1003,7 +1003,7 @@ class _LiveCard extends StatelessWidget {
                 children: [
                   _PulseDot(color: Colors.white),
                   const SizedBox(width: 7),
-                  const Text(
+                  Text(
                     'LIVE NOW',
                     style: TextStyle(
                         fontSize: 11,
@@ -1013,7 +1013,7 @@ class _LiveCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(remainingLabel,
-                      style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                      style: TextStyle(fontSize: 11, color: Colors.white70)),
                 ],
               ),
             ),
@@ -1024,7 +1024,7 @@ class _LiveCard extends StatelessWidget {
                 children: [
                   Text(
                     event.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppColors.text),
@@ -1032,25 +1032,25 @@ class _LiveCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.groups_outlined,
+                      Icon(Icons.groups_outlined,
                           size: 14, color: AppColors.secondaryText),
                       const SizedBox(width: 5),
                       Expanded(
                         child: Text(
                           club.name.split(' ').first,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.secondaryText),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Icon(Icons.location_on_outlined,
+                      Icon(Icons.location_on_outlined,
                           size: 14, color: AppColors.secondaryText),
                       const SizedBox(width: 5),
                       Flexible(
                         child: Text(
                           event.location,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.secondaryText),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1135,7 +1135,7 @@ class _EventCard extends StatelessWidget {
                 children: [
                   Text(
                     event.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppColors.text),
@@ -1145,13 +1145,13 @@ class _EventCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.groups_outlined,
+                      Icon(Icons.groups_outlined,
                           size: 13, color: AppColors.secondaryText),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           club.name.split(' ').first,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.secondaryText),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1161,13 +1161,13 @@ class _EventCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined,
+                      Icon(Icons.location_on_outlined,
                           size: 13, color: AppColors.secondaryText),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           event.location,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.secondaryText),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1178,12 +1178,12 @@ class _EventCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Icon(Icons.people_outline,
+                        Icon(Icons.people_outline,
                             size: 13, color: AppColors.secondaryText),
                         const SizedBox(width: 4),
                         Text(
                           '$attendeeCount attending',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.secondaryText),
                         ),
                       ],
@@ -1193,13 +1193,13 @@ class _EventCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.mic_rounded,
+                        Icon(Icons.mic_rounded,
                             size: 13, color: AppColors.accentGold),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
                             event.guestSpeaker!,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.secondaryText,
                                 fontStyle: FontStyle.italic),
@@ -1317,7 +1317,7 @@ class _DontMissCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               event.title,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.text),
             ),
             const SizedBox(height: 6),
@@ -1328,13 +1328,13 @@ class _DontMissCard extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 12, color: color, fontWeight: FontWeight.w600),
                 ),
-                const Text('  ·  ',
+                Text('  ·  ',
                     style:
                         TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                 Flexible(
                   child: Text(
                     event.location,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 12, color: AppColors.secondaryText),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1345,13 +1345,13 @@ class _DontMissCard extends StatelessWidget {
             Text(
               club.name.split(' ').first,
               style:
-                  const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                  TextStyle(fontSize: 12, color: AppColors.secondaryText),
             ),
             if (event.guestSpeaker != null) ...[
               const SizedBox(height: 6),
               Row(
                 children: [
-                  const Icon(Icons.mic_rounded,
+                  Icon(Icons.mic_rounded,
                       size: 13, color: AppColors.accentGold),
                   const SizedBox(width: 5),
                   Flexible(
@@ -1423,7 +1423,7 @@ class _ViewChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.divider),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(

@@ -186,7 +186,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 10),
             Text(
               widget.otherUserName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],
         ),
@@ -195,9 +195,9 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: CircularProgressIndicator())
                 : _conversation.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'No messages yet.\nSay hello!',
                           textAlign: TextAlign.center,
@@ -271,7 +271,7 @@ class _SharedPostBubble extends StatelessWidget {
             color: AppColors.card,
             borderRadius: BorderRadius.circular(14),
           ),
-          child: const Text('Post no longer available',
+          child: Text('Post no longer available',
               style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
         ),
       );
@@ -340,7 +340,7 @@ class _SharedPostBubble extends StatelessWidget {
                             clubName.isNotEmpty
                                 ? clubName[0].toUpperCase()
                                 : '?',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
@@ -360,7 +360,7 @@ class _SharedPostBubble extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(Icons.open_in_new_rounded,
+                      Icon(Icons.open_in_new_rounded,
                           size: 14, color: AppColors.secondaryText),
                     ],
                   ),
@@ -391,7 +391,7 @@ class _SharedPostBubble extends StatelessWidget {
                     child: Center(
                       child: Text(
                         clubName.isNotEmpty ? clubName[0].toUpperCase() : '?',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 30,
                           fontWeight: FontWeight.bold,
@@ -405,7 +405,7 @@ class _SharedPostBubble extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                   child: Text(
                     caption,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 12.5, color: AppColors.text, height: 1.4),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
@@ -420,7 +420,7 @@ class _SharedPostBubble extends StatelessWidget {
                     children: [
                       Text(
                         _timeLabel(sentAt),
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 10, color: AppColors.secondaryText),
                       ),
                       Row(
@@ -554,7 +554,7 @@ class _InputBar extends StatelessWidget {
                 decoration: InputDecoration(
                   hintText: 'Message...',
                   hintStyle:
-                      const TextStyle(color: AppColors.secondaryText),
+                      TextStyle(color: AppColors.secondaryText),
                   filled: true,
                   fillColor: AppColors.lightGray,
                   contentPadding: const EdgeInsets.symmetric(
@@ -573,11 +573,11 @@ class _InputBar extends StatelessWidget {
               child: Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppColors.primaryRed,
                 ),
-                child: const Icon(Icons.send_rounded,
+                child: Icon(Icons.send_rounded,
                     color: Colors.white, size: 20),
               ),
             ),

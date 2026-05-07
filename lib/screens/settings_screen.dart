@@ -6,6 +6,7 @@ import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../services/theme_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -43,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 bottom: MediaQuery.of(ctx).viewInsets.bottom,
               ),
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.card,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
@@ -62,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    const Text(
+                    Text(
                       'Set Username',
                       style: TextStyle(
                         fontSize: 18,
@@ -71,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Choose how others see you. Your real name stays for search.',
                       style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
                     ),
@@ -80,16 +81,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       controller: controller,
                       autofocus: true,
                       maxLength: 30,
-                      style: const TextStyle(color: AppColors.text),
+                      style: TextStyle(color: AppColors.text),
                       decoration: InputDecoration(
                         prefixText: '@',
-                        prefixStyle: const TextStyle(
+                        prefixStyle: TextStyle(
                           color: AppColors.primaryRed,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                         hintText: 'your_username',
-                        hintStyle: const TextStyle(color: AppColors.secondaryText),
+                        hintStyle: TextStyle(color: AppColors.secondaryText),
                         errorText: isTaken
                             ? 'This username is already taken'
                             : (!isValid && value.isNotEmpty)
@@ -103,10 +104,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
+                          borderSide: BorderSide(
                               color: AppColors.primaryRed, width: 1.5),
                         ),
-                        counterStyle: const TextStyle(
+                        counterStyle: TextStyle(
                             color: AppColors.secondaryText, fontSize: 11),
                       ),
                       inputFormatters: [
@@ -116,7 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onChanged: (_) => setSheetState(() {}),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Letters, numbers, underscores and dots. Leave blank to use your real name.',
                       style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
                     ),
@@ -126,7 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancel',
+                            child: Text('Cancel',
                                 style: TextStyle(color: AppColors.secondaryText)),
                           ),
                         ),
@@ -156,7 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     setState(() {});
                                   }
                                 : null,
-                            child: const Text('Save',
+                            child: Text('Save',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                           ),
@@ -193,7 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Settings',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -216,10 +217,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: AppColors.lightRed,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.alternate_email_rounded,
+                child: Icon(Icons.alternate_email_rounded,
                     color: AppColors.primaryRed, size: 20),
               ),
-              title: const Text(
+              title: Text(
                 'Username',
                 style: TextStyle(
                     fontWeight: FontWeight.w600, color: AppColors.text),
@@ -228,10 +229,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 userState.usernameFor(_userId) != null
                     ? '@${userState.usernameFor(_userId)}'
                     : 'Not set — tap to choose one',
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 12, color: AppColors.secondaryText),
               ),
-              trailing: const Icon(Icons.chevron_right_rounded,
+              trailing: Icon(Icons.chevron_right_rounded,
                   color: AppColors.secondaryText),
               onTap: _openUsernameSheet,
             ),
@@ -262,18 +263,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: AppColors.lightRed,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.tune_rounded,
+                        child: Icon(Icons.tune_rounded,
                             color: AppColors.primaryRed, size: 20),
                       ),
-                      title: const Text('My Preferences',
+                      title: Text('My Preferences',
                           style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
                       subtitle: Text(
                         summary.isNotEmpty ? summary : 'Not set — tap to configure',
-                        style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: const Icon(Icons.chevron_right_rounded,
+                      trailing: Icon(Icons.chevron_right_rounded,
                           color: AppColors.secondaryText),
                       onTap: () => _openPreferencesSheet(times),
                     ),
@@ -281,6 +282,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               );
             },
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Appearance section ───────────────────────────────────────────
+          _SectionHeader(title: 'Appearance'),
+          ListenableBuilder(
+            listenable: themeService,
+            builder: (context, _) => Container(
+              color: AppColors.card,
+              child: SwitchListTile(
+                secondary: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightRed,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    themeService.isDark
+                        ? Icons.dark_mode_rounded
+                        : Icons.light_mode_rounded,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  themeService.isDark ? 'Dark Mode' : 'Light Mode',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: AppColors.text),
+                ),
+                subtitle: Text(
+                  themeService.isDark
+                      ? 'Switch to light theme'
+                      : 'Switch to dark theme',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.secondaryText),
+                ),
+                value: themeService.isDark,
+                activeThumbColor: AppColors.primaryRed,
+                onChanged: (v) => themeService.setDark(v),
+              ),
+            ),
           ),
 
           const SizedBox(height: 24),
@@ -297,9 +341,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: Colors.red.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.logout, color: Colors.red, size: 20),
+                child: Icon(Icons.logout, color: Colors.red, size: 20),
               ),
-              title: const Text(
+              title: Text(
                 'Log Out',
                 style: TextStyle(
                   color: Colors.red,
@@ -332,7 +376,7 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
           color: AppColors.secondaryText,
@@ -384,7 +428,7 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -410,11 +454,11 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                 decoration: BoxDecoration(
                     color: AppColors.lightRed,
                     borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.tune_rounded,
+                child: Icon(Icons.tune_rounded,
                     color: AppColors.primaryRed, size: 20),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -479,7 +523,7 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: const Text('Save changes',
+              child: Text('Save changes',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ),
@@ -510,7 +554,7 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (sel) ...[
-                  const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                  Icon(Icons.check_rounded, size: 13, color: Colors.white),
                   const SizedBox(width: 5),
                 ],
                 Text(tag,
@@ -557,7 +601,7 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                   decoration: BoxDecoration(
                       color: AppColors.lightRed,
                       borderRadius: BorderRadius.circular(9)),
-                  child: const Icon(Icons.school_outlined,
+                  child: Icon(Icons.school_outlined,
                       size: 16, color: AppColors.primaryRed),
                 ),
                 const SizedBox(width: 12),
@@ -566,12 +610,12 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(name,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: AppColors.text)),
                       Text(depts,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppColors.secondaryText)),
                     ],
                   ),
@@ -587,7 +631,7 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                         width: 1.5),
                   ),
                   child: sel
-                      ? const Icon(Icons.check, size: 12, color: Colors.white)
+                      ? Icon(Icons.check, size: 12, color: Colors.white)
                       : null,
                 ),
               ],

@@ -71,13 +71,13 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   color: AppColors.lightRed,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Center(
+                child: Center(
                   child: Icon(Icons.admin_panel_settings,
                       color: AppColors.primaryRed, size: 28),
                 ),
               ),
               const SizedBox(height: 28),
-              const Text(
+              Text(
                 'Club Admin Login',
                 style: TextStyle(
                   fontSize: 30,
@@ -86,7 +86,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Enter your club admin credentials to manage your club.',
                 style: TextStyle(
                   fontSize: 14,
@@ -120,7 +120,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline,
+                  prefixIcon: Icon(Icons.lock_outline,
                       color: AppColors.secondaryText),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -142,11 +142,11 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide:
-                        const BorderSide(color: AppColors.divider),
+                        BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
+                    borderSide: BorderSide(
                         color: AppColors.primaryRed, width: 2),
                   ),
                 ),
@@ -167,7 +167,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                     shadowColor:
                         AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: const Text('Sign In as Admin',
+                  child: Text('Sign In as Admin',
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
@@ -203,21 +203,21 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.divider),
+          borderSide: BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide:
-              const BorderSide(color: AppColors.primaryRed, width: 2),
+              BorderSide(color: AppColors.primaryRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryRed),
+          borderSide: BorderSide(color: AppColors.primaryRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide:
-              const BorderSide(color: AppColors.primaryRed, width: 2),
+              BorderSide(color: AppColors.primaryRed, width: 2),
         ),
       ),
     );

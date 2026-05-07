@@ -88,7 +88,7 @@ class RsvpButton extends StatelessWidget {
               child: AnimatedOpacity(
                 opacity: pending ? 0.4 : 1.0,
                 duration: const Duration(milliseconds: 150),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -150,7 +150,7 @@ class RsvpButton extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.check_circle_rounded,
@@ -190,7 +190,7 @@ class RsvpButton extends StatelessWidget {
                         width: 1.5,
                       ),
                     ),
-                    child: const Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
@@ -248,7 +248,7 @@ class RsvpButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.how_to_reg_rounded,
@@ -286,7 +286,7 @@ class _FullPastBar extends StatelessWidget {
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.event_busy_rounded,

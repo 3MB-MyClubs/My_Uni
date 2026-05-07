@@ -64,7 +64,7 @@ class AuthChoiceScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 22),
-                  const Text(
+                  Text(
                     'UniHub',
                     style: TextStyle(
                       fontSize: 38,
@@ -104,7 +104,7 @@ class AuthChoiceScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
+                  Text(
                     'Connect with your campus',
                     style: TextStyle(
                       fontSize: 22,
@@ -113,7 +113,7 @@ class AuthChoiceScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'Join clubs, attend events, and stay connected with the Koç University community.',
                     style: TextStyle(
                       fontSize: 13,
@@ -135,7 +135,7 @@ class AuthChoiceScreen extends StatelessWidget {
                       elevation: 2,
                       shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
                     ),
-                    child: const Text('Log In',
+                    child: Text('Log In',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
@@ -152,7 +152,7 @@ class AuthChoiceScreen extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                     ),
-                    child: const Text('Create Account',
+                    child: Text('Create Account',
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
@@ -170,7 +170,7 @@ class AuthChoiceScreen extends StatelessWidget {
                           },
                         )),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Club Admin? Sign in here',
                         style: TextStyle(
                           fontSize: 13,

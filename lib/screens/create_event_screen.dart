@@ -137,10 +137,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         foregroundColor: AppColors.text,
         leading: TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
         ),
         leadingWidth: 80,
-        title: const Text('New Event', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        title: Text('New Event', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
         centerTitle: true,
         actions: [
           ValueListenableBuilder(
@@ -180,16 +180,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   hint: 'e.g. Spring Hackathon',
                   onChanged: (_) => setState(() {}),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1),
                 // ── Location picker ──────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.location_on_outlined,
+                      Icon(Icons.location_on_outlined,
                           size: 18, color: AppColors.secondaryText),
                       const SizedBox(width: 8),
-                      const Text('Location',
+                      Text('Location',
                           style: TextStyle(
                               fontSize: 13, color: AppColors.secondaryText)),
                     ],
@@ -246,14 +246,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
                   child: TextField(
                     controller: _locationController,
-                    style: const TextStyle(fontSize: 14, color: AppColors.text),
+                    style: TextStyle(fontSize: 14, color: AppColors.text),
                     onChanged: (v) => setState(() {
                       // Deselect chip if user typed something different
                       if (!_kLocationChips.contains(v.trim())) {
                         _selectedLocationChip = null;
                       }
                     }),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Or type a custom location…',
                       hintStyle: TextStyle(
                           color: AppColors.secondaryText, fontSize: 13),
@@ -263,7 +263,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ),
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1),
                 _Field(
                   controller: _descController,
                   label: 'Description',
@@ -284,7 +284,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   onDateTap: () => _pickDate(true),
                   onTimeTap: () => _pickTime(true),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1),
                 _DateTimeRow(
                   label: 'Ends',
                   dateTime: _endDate,
@@ -341,14 +341,14 @@ class _Field extends StatelessWidget {
         controller: controller,
         maxLines: maxLines,
         onChanged: onChanged,
-        style: const TextStyle(fontSize: 14, color: AppColors.text),
+        style: TextStyle(fontSize: 14, color: AppColors.text),
         decoration: InputDecoration(
           labelText: label,
           labelStyle:
-              const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+              TextStyle(color: AppColors.secondaryText, fontSize: 13),
           hintText: hint,
           hintStyle:
-              const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+              TextStyle(color: AppColors.secondaryText, fontSize: 13),
           border: InputBorder.none,
         ),
       ),
@@ -396,7 +396,7 @@ class _DateTimeRow extends StatelessWidget {
               SizedBox(
                 width: 52,
                 child: Text(label,
-                    style: const TextStyle(fontSize: 14, color: AppColors.text, fontWeight: FontWeight.w500)),
+                    style: TextStyle(fontSize: 14, color: AppColors.text, fontWeight: FontWeight.w500)),
               ),
               const SizedBox(width: 12),
               GestureDetector(
@@ -408,7 +408,7 @@ class _DateTimeRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(_fmtDate(dateTime),
-                      style: const TextStyle(fontSize: 13, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
+                      style: TextStyle(fontSize: 13, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 8),
@@ -421,14 +421,14 @@ class _DateTimeRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(_fmtTime(dateTime),
-                      style: const TextStyle(fontSize: 13, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
+                      style: TextStyle(fontSize: 13, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
           ),
           if (error != null) ...[
             const SizedBox(height: 4),
-            Text(error!, style: const TextStyle(fontSize: 11, color: Colors.red)),
+            Text(error!, style: TextStyle(fontSize: 11, color: Colors.red)),
           ],
         ],
       ),

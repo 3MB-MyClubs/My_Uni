@@ -168,7 +168,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                         ? null
                         : (d) => _activateTextAt(d.localPosition, size),
                     child: Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
                           begin: Alignment.topLeft,
@@ -294,7 +294,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(24),
                           ),
-                          child: const Text('Done',
+                          child: Text('Done',
                               style: TextStyle(
                                   color: Colors.black,
                                   fontWeight: FontWeight.bold,
@@ -322,7 +322,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.white30),
                           ),
-                          child: const Text('Aa',
+                          child: Text('Aa',
                               style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -339,7 +339,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                             color: AppColors.primaryRed,
                             borderRadius: BorderRadius.circular(24),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text('Post',
@@ -417,7 +417,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -432,24 +432,24 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
-              title: const Text('Take a photo', style: TextStyle(color: AppColors.text)),
+              leading: Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
+              title: Text('Take a photo', style: TextStyle(color: AppColors.text)),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.camera);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
-              title: const Text('Choose from library', style: TextStyle(color: AppColors.text)),
+              leading: Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
+              title: Text('Choose from library', style: TextStyle(color: AppColors.text)),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.gallery);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('Remove photo', style: TextStyle(color: Colors.red)),
+              leading: Icon(Icons.delete_outline, color: Colors.red),
+              title: Text('Remove photo', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(context);
                 setState(() {
@@ -539,7 +539,7 @@ class _CircleBtn extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(8),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Colors.black38,
             shape: BoxShape.circle,
           ),
@@ -573,7 +573,7 @@ class _BottomPickBtn extends StatelessWidget {
               Icon(icon, color: Colors.white, size: 18),
               const SizedBox(width: 6),
               Text(label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 13)),

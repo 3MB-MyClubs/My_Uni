@@ -148,7 +148,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         backgroundColor: AppColors.card,
         foregroundColor: AppColors.text,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           'Messages',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
@@ -165,11 +165,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
               onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
                 hintText: 'Search people or clubs...',
-                prefixIcon: const Icon(Icons.search_rounded,
+                prefixIcon: Icon(Icons.search_rounded,
                     color: AppColors.secondaryText),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close, size: 18),
+                        icon: Icon(Icons.close, size: 18),
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _query = '');
@@ -196,12 +196,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.search_off,
+                            Icon(Icons.search_off,
                                 size: 48, color: AppColors.secondaryText),
                             const SizedBox(height: 12),
                             Text(
                               'No results for "$_query"',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: AppColors.secondaryText),
                             ),
                           ],
@@ -210,7 +210,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     : ListView.separated(
                         itemCount: results.length,
                         separatorBuilder: (context, i) =>
-                            const Divider(height: 1, indent: 72),
+                            Divider(height: 1, indent: 72),
                         itemBuilder: (context, i) => _ContactResultTile(
                           contact: results[i],
                           onTap: () =>
@@ -223,10 +223,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.chat_bubble_outline,
+                            Icon(Icons.chat_bubble_outline,
                                 size: 72, color: AppColors.secondaryText),
                             const SizedBox(height: 16),
-                            const Text(
+                            Text(
                               'No messages yet',
                               style: TextStyle(
                                   fontSize: 18,
@@ -234,7 +234,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                   color: AppColors.text),
                             ),
                             const SizedBox(height: 8),
-                            const Text(
+                            Text(
                               'Search for a person or club above to start chatting',
                               textAlign: TextAlign.center,
                               style:
@@ -246,7 +246,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     : ListView.separated(
                         itemCount: partnerIds.length,
                         separatorBuilder: (context, i) =>
-                            const Divider(height: 1, indent: 72),
+                            Divider(height: 1, indent: 72),
                         itemBuilder: (context, i) {
                           final otherId = partnerIds[i];
                           final name = _nameFor(otherId);
@@ -305,7 +305,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                                       BorderRadius.circular(
                                                           8),
                                                 ),
-                                                child: const Text(
+                                                child: Text(
                                                   'Club',
                                                   style: TextStyle(
                                                       fontSize: 10,
@@ -375,7 +375,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                                 unreadCount > 99
                                                     ? '99+'
                                                     : '$unreadCount',
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.bold,
@@ -400,7 +400,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                                 isSentByMe
                                                     ? 'Delivered'
                                                     : 'Received',
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontSize: 10,
                                                   color:
                                                       AppColors.secondaryText,
@@ -514,7 +514,7 @@ class _ContactResultTile extends StatelessWidget {
         children: [
           Flexible(
             child: Text(contact.name,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis),
           ),
           if (badge != null) ...[
@@ -528,7 +528,7 @@ class _ContactResultTile extends StatelessWidget {
               ),
               child: Text(
                 badge,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 10,
                     color: AppColors.primaryRed,
                     fontWeight: FontWeight.w600),
@@ -544,7 +544,7 @@ class _ContactResultTile extends StatelessWidget {
           color: AppColors.primaryRed,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text(
+        child: Text(
           'Message',
           style: TextStyle(
               fontSize: 12,

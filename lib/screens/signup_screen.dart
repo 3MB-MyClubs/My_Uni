@@ -220,7 +220,7 @@ class _WelcomePage extends StatelessWidget {
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'EST. 1993',
                           style: TextStyle(
@@ -249,7 +249,7 @@ class _WelcomePage extends StatelessWidget {
 
                 // Hero text
                 RichText(
-                  text: const TextSpan(
+                  text: TextSpan(
                     style: TextStyle(
                       fontSize: 40,
                       fontWeight: FontWeight.w700,
@@ -267,7 +267,7 @@ class _WelcomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Class schedules, dining, events, and the\npeople who make Koç University home.',
                   style: TextStyle(
                     fontSize: 16,
@@ -293,7 +293,7 @@ class _WelcomePage extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onCreateAccount,
                   style: SC.primaryButtonStyle(),
-                  child: const Text('Create account'),
+                  child: Text('Create account'),
                 ),
               ),
               const SizedBox(height: 12),
@@ -304,22 +304,22 @@ class _WelcomePage extends StatelessWidget {
                   onPressed: onHaveAccount,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: SC.ink,
-                    side: const BorderSide(color: SC.hairStrong, width: 1),
+                    side: BorderSide(color: SC.hairStrong, width: 1),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
-                    textStyle: const TextStyle(
+                    textStyle: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w500,
                         letterSpacing: -0.1),
                   ),
-                  child: const Text('I already have one'),
+                  child: Text('I already have one'),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
                 'By continuing you agree to our Terms\nand acknowledge the Privacy Policy.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11, color: SC.muted, height: 1.5),
               ),
             ],
@@ -341,7 +341,7 @@ class _KuShield extends StatelessWidget {
         height: 50,
         color: SC.burgundy,
         alignment: const Alignment(0, 0.15),
-        child: const Text(
+        child: Text(
           'KU',
           style: TextStyle(
             color: Colors.white,
@@ -407,7 +407,7 @@ class _SignupHeader extends StatelessWidget {
                 GestureDetector(
                   onTap: onBack,
                   behavior: HitTestBehavior.opaque,
-                  child: const Row(
+                  child: Row(
                     children: [
                       Text('‹',
                           style: TextStyle(
@@ -424,7 +424,7 @@ class _SignupHeader extends StatelessWidget {
                 // Step counter
                 Text(
                   '$step / $total',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: SC.muted,
                     letterSpacing: 1,
@@ -441,7 +441,7 @@ class _SignupHeader extends StatelessWidget {
                           child: Text(
                             rightLabel!,
                             textAlign: TextAlign.right,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 17,
                                 color: SC.muted),
                           ),

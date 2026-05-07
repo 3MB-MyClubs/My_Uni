@@ -43,14 +43,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _contentTab = 0; // 0 = Posts, 1 = Stories, 2 = Events
 
   Widget _initialAvatar(String name) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: AppColors.lightRed,
         ),
         child: Center(
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : '?',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
               color: AppColors.primaryRed,
@@ -88,7 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Use this photo?',
+        title: Text('Use this photo?',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
         content: ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -98,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -107,7 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Use Photo'),
+            child: Text('Use Photo'),
           ),
         ],
       ),
@@ -136,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -154,31 +154,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Change Profile Photo',
+            Text('Change Profile Photo',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
             const SizedBox(height: 16),
             ListTile(
               leading: Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+                child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
               ),
-              title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
-              subtitle: const Text('Use your camera right now', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              title: Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              subtitle: Text('Use your camera right now', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
               onTap: () {
                 Navigator.pop(context);
                 _pickProfilePhoto(userId, ImageSource.camera);
               },
             ),
-            const Divider(height: 1, indent: 16),
+            Divider(height: 1, indent: 16),
             ListTile(
               leading: Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+                child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
               ),
-              title: const Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
-              subtitle: const Text('Pick from your photo library', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              title: Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              subtitle: Text('Pick from your photo library', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
               onTap: () {
                 Navigator.pop(context);
                 _pickProfilePhoto(userId, ImageSource.gallery);
@@ -226,7 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildProfileHeader(displayName, realName, isAdmin, myClubs.length, myEventCount),
-                const Divider(height: 1),
+                Divider(height: 1),
                 _buildMyClubsSection(myClubs),
                 if (!isAdmin) ...[
                   const SizedBox(height: 8),
@@ -249,10 +249,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: AppColors.card,
       surfaceTintColor: Colors.transparent,
       pinned: true,
-      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
       actions: [
         IconButton(
-          icon: const Icon(Icons.settings_outlined),
+          icon: Icon(Icons.settings_outlined),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -308,7 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
                             colors: [AppColors.primaryRed, AppColors.accentGold],
@@ -319,7 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Container(
                           width: 88,
                           height: 88,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: AppColors.card,
                           ),
@@ -353,7 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             shape: BoxShape.circle,
                             border: Border.all(color: AppColors.card, width: 2.5),
                           ),
-                          child: const Icon(Icons.camera_alt_rounded,
+                          child: Icon(Icons.camera_alt_rounded,
                               color: Colors.white, size: 14),
                         ),
                       ),
@@ -388,12 +388,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             // ── Name + username ──────────────────────────────────────────
             Text(name,
-                style: const TextStyle(
+                style: TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 17, color: AppColors.text)),
             if (name != realName) ...[
               const SizedBox(height: 2),
               Text(realName,
-                  style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
             ],
 
             // ── Role badge ───────────────────────────────────────────────
@@ -435,7 +435,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(width: 5),
                     Text(
                       isSuperAdmin ? 'Super Admin' : 'Club Admin',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -443,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     if (managedClub != null) ...[
                       const SizedBox(width: 6),
-                      const Text('·',
+                      Text('·',
                           style: TextStyle(
                               fontSize: 12,
                               color: Colors.white60,
@@ -451,7 +451,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(width: 6),
                       Text(
                         managedClub.name.split(' ').first,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11,
                             color: Colors.white70,
                             fontWeight: FontWeight.w500),
@@ -495,7 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 5),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
+                                gradient: LinearGradient(
                                   colors: [
                                     Color(0xFF1565C0),
                                     Color(0xFF1976D2)
@@ -516,19 +516,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.shield_rounded,
+                                  Icon(Icons.shield_rounded,
                                       size: 14, color: Colors.white),
                                   const SizedBox(width: 5),
                                   Text(
                                     hasTitle ? title : 'Board Member',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 13,
                                         color: Colors.white,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.2),
                                   ),
                                   const SizedBox(width: 6),
-                                  const Text('·',
+                                  Text('·',
                                       style: TextStyle(
                                           fontSize: 13,
                                           color: Colors.white70,
@@ -536,7 +536,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   const SizedBox(width: 6),
                                   Text(
                                     boardClub.name.split(' ').first,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontSize: 12,
                                         color: Colors.white70,
                                         fontWeight: FontWeight.w500),
@@ -545,7 +545,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             const SizedBox(width: 4),
-                            const Icon(Icons.chevron_right,
+                            Icon(Icons.chevron_right,
                                 size: 16, color: Color(0xFF1565C0)),
                           ],
                         ),
@@ -587,7 +587,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.primaryRed),
               SizedBox(width: 8),
@@ -652,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             fontWeight: FontWeight.w700,
                                             color: color)),
                                     Text('$sh:$sm–$eh:$em · ${c['room']}',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 10,
                                             color: AppColors.secondaryText)),
                                   ],
@@ -699,10 +699,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Section header
               Row(
                 children: [
-                  const Icon(Icons.groups_2_rounded,
+                  Icon(Icons.groups_2_rounded,
                       size: 18, color: AppColors.primaryRed),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'My Clubs',
                     style: TextStyle(
                         fontSize: 16,
@@ -720,7 +720,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: Text(
                         '${myClubs.length}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             color: AppColors.primaryRed),
@@ -741,7 +741,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         border: Border.all(
                             color: AppColors.divider, width: 1),
                       ),
-                      child: const Column(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.explore_outlined,
@@ -815,7 +815,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     textAlign: TextAlign.center,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.text,
@@ -857,10 +857,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                   child: Row(
                     children: [
-                      const Icon(Icons.shield_rounded,
+                      Icon(Icons.shield_rounded,
                           size: 18, color: Color(0xFF1565C0)),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'Board Members',
                         style: TextStyle(
                             fontSize: 16,
@@ -877,7 +877,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: Text(
                           '${managedClub.boardMemberIds.length}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF1565C0)),
@@ -895,12 +895,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.pending_actions_outlined,
+                              Icon(Icons.pending_actions_outlined,
                                   size: 12, color: Color(0xFFF57C00)),
                               const SizedBox(width: 3),
                               Text(
                                 '$pendingCount pending',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFFF57C00)),
@@ -910,7 +910,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                       const Spacer(),
-                      const Icon(Icons.chevron_right_rounded,
+                      Icon(Icons.chevron_right_rounded,
                           size: 18, color: AppColors.secondaryText),
                     ],
                   ),
@@ -929,7 +929,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       border: Border.all(
                           color: const Color(0xFFBBDEFB), width: 1),
                     ),
-                    child: const Column(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.shield_outlined,
@@ -960,7 +960,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return Column(
                       children: [
                         if (i > 0)
-                          const Divider(
+                          Divider(
                               height: 1,
                               indent: 60,
                               color: AppColors.divider),
@@ -993,7 +993,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(u.name,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
                                               color: AppColors.text)),
@@ -1020,7 +1020,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     borderRadius:
                                         BorderRadius.circular(20),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(Icons.shield_rounded,
@@ -1082,7 +1082,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 1),
+        Divider(height: 1),
         Container(
           color: AppColors.card,
           child: Column(
@@ -1095,7 +1095,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Icon(Icons.grid_view_rounded, size: 18, color: clubColor),
                     const SizedBox(width: 8),
-                    const Text('My Content',
+                    Text('My Content',
                         style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -1171,13 +1171,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title,
-            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
         content: Text(message,
-            style: const TextStyle(color: AppColors.secondaryText)),
+            style: TextStyle(color: AppColors.secondaryText)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
+            child: Text('Cancel',
                 style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
@@ -1187,7 +1187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text('Delete'),
           ),
         ],
       ),
@@ -1207,7 +1207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 20),
             color: Colors.red.withValues(alpha: 0.85),
-            child: const Icon(Icons.delete_outline, color: Colors.white, size: 22),
+            child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
           confirmDismiss: (_) => _confirmDelete('Delete post?',
               'This post will be permanently removed.'),
@@ -1262,18 +1262,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 title: Text(
                   p.content.length > 80 ? '${p.content.substring(0, 80)}…' : p.content,
-                  style: const TextStyle(fontSize: 13, color: AppColors.text, height: 1.4),
+                  style: TextStyle(fontSize: 13, color: AppColors.text, height: 1.4),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   _timeAgoLabel(p.createdAt),
-                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                  style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
                 ),
-                trailing: const Icon(Icons.swipe_left_outlined,
+                trailing: Icon(Icons.swipe_left_outlined,
                     size: 16, color: AppColors.secondaryText),
               ),
-              const Divider(height: 1, indent: 84),
+              Divider(height: 1, indent: 84),
             ],
           ),
         );
@@ -1347,7 +1347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Center(
                             child: Text(
                               _timeAgoLabel(s.postedAt),
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 9,
                                   color: Colors.white70,
                                   fontWeight: FontWeight.w500),
@@ -1382,7 +1382,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             color: Colors.red.withValues(alpha: 0.85),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.delete_outline,
+                          child: Icon(Icons.delete_outline,
                               color: Colors.white, size: 14),
                         ),
                       ),
@@ -1435,7 +1435,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Image.file(File(story.imagePath as String), fit: BoxFit.cover)
                 else
                   Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
                         begin: Alignment.topLeft,
@@ -1477,7 +1477,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: Colors.black45,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 18),
+                    child: Icon(Icons.close, color: Colors.white, size: 18),
                   ),
                 ),
                 // Time label
@@ -1488,7 +1488,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Center(
                     child: Text(
                       _timeAgoLabel(story.postedAt as DateTime),
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
                           color: Colors.white60,
                           fontWeight: FontWeight.w500),
@@ -1540,7 +1540,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 20),
             color: Colors.red.withValues(alpha: 0.85),
-            child: const Icon(Icons.delete_outline, color: Colors.white, size: 22),
+            child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
           confirmDismiss: (_) => _confirmDelete(
             'Delete event?',
@@ -1596,7 +1596,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 title: Text(
                   e.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.text),
@@ -1605,7 +1605,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 subtitle: Text(
                   e.location,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11, color: AppColors.secondaryText),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1629,7 +1629,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.swipe_left_outlined,
+                    Icon(Icons.swipe_left_outlined,
                         size: 14, color: AppColors.secondaryText),
                   ],
                 ),
@@ -1661,7 +1661,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              const Divider(height: 1, indent: 84),
+              Divider(height: 1, indent: 84),
             ],
           ),
         );
@@ -1765,7 +1765,7 @@ class _EmptyHint extends StatelessWidget {
       child: Center(
         child: Text(
           text,
-          style: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+          style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
         ),
       ),
     );
@@ -1781,9 +1781,9 @@ class _StatCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+        Text(label, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
       ],
     );
   }

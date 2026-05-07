@@ -114,7 +114,7 @@ class _KuDaySectionState extends State<KuDaySection> {
                       color: Colors.white,
                     ),
                     const SizedBox(width: 5),
-                    const Text(
+                    Text(
                       'Your KU Day',
                       style: TextStyle(
                         fontSize: 13,
@@ -275,7 +275,7 @@ class _EmptyState extends StatelessWidget {
                   color: AppColors.primaryRed,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Text(
+                child: Text(
                   'Set up',
                   style: TextStyle(
                     color: Colors.white,
@@ -538,7 +538,7 @@ class _EventBody extends StatelessWidget {
                       Container(
                         width: 6,
                         height: 6,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: Colors.red,
                           shape: BoxShape.circle,
                         ),

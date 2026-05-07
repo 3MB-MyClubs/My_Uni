@@ -60,7 +60,7 @@ Widget buildPostBanner({
                   width: double.infinity,
                   height: height,
                   color: fallbackColor.withValues(alpha: 0.12),
-                  child: const Center(
+                  child: Center(
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white54),
                   ),
@@ -225,10 +225,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         surfaceTintColor: Colors.transparent,
         leading: TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
         ),
         leadingWidth: 70,
-        title: const Text('New Post', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('New Post', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -245,7 +245,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('Post', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                child: Text('Post', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               ),
             ),
           ),
@@ -273,7 +273,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   labelColor: AppColors.primaryRed,
                   unselectedLabelColor: AppColors.secondaryText,
                   indicatorColor: AppColors.primaryRed,
-                  tabs: const [
+                  tabs: [
                     Tab(text: 'Templates'),
                     Tab(text: 'Gallery'),
                   ],
@@ -302,7 +302,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1),
               ],
             ),
           ),
@@ -322,7 +322,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                         color: AppColors.primaryRed.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(Icons.admin_panel_settings, color: AppColors.primaryRed, size: 20),
                       ),
                     ),
@@ -332,8 +332,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(adminName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text)),
-                          const Text('Club Admin', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text)),
+                          Text('Club Admin', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                         ],
                       ),
                     ),
@@ -343,7 +343,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
                 // Club picker
                 if (_myClubs.length > 1) ...[
-                  const Text('Posting as', style: TextStyle(fontSize: 12, color: AppColors.secondaryText, fontWeight: FontWeight.w500)),
+                  Text('Posting as', style: TextStyle(fontSize: 12, color: AppColors.secondaryText, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 6),
                   Container(
                     decoration: BoxDecoration(
@@ -356,7 +356,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                       child: DropdownButton<_ClubOption>(
                         value: _selectedClub,
                         isExpanded: true,
-                        hint: const Text('Select club', style: TextStyle(color: AppColors.secondaryText)),
+                        hint: Text('Select club', style: TextStyle(color: AppColors.secondaryText)),
                         dropdownColor: AppColors.card,
                         items: _myClubs.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
                         onChanged: (v) => setState(() => _selectedClub = v),
@@ -368,7 +368,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
                 // Tag hint
                 Row(
-                  children: const [
+                  children: [
                     Icon(Icons.alternate_email, size: 13, color: AppColors.secondaryText),
                     SizedBox(width: 4),
                     Text('Use @ClubName to tag a collaborating club',
@@ -381,8 +381,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 TextField(
                   controller: _contentController,
                   onChanged: (_) => setState(() {}),
-                  style: const TextStyle(fontSize: 15, color: AppColors.text, height: 1.6),
-                  decoration: const InputDecoration(
+                  style: TextStyle(fontSize: 15, color: AppColors.text, height: 1.6),
+                  decoration: InputDecoration(
                     hintText: 'Write something for your club members…',
                     hintStyle: TextStyle(fontSize: 15, color: AppColors.secondaryText),
                     border: InputBorder.none,
@@ -437,14 +437,14 @@ class _TemplatesRow extends StatelessWidget {
             child: Stack(
               children: [
                 if (isSelected)
-                  const Center(child: Icon(Icons.check_circle, color: Colors.white, size: 24)),
+                  Center(child: Icon(Icons.check_circle, color: Colors.white, size: 24)),
                 Positioned(
                   bottom: 4,
                   left: 0, right: 0,
                   child: Text(
                     tpl.label,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10, color: Colors.white,
                       fontWeight: FontWeight.w600,
                       shadows: [Shadow(blurRadius: 4, color: Colors.black54)],

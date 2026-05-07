@@ -185,12 +185,11 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── Feed tab state ─────────────────────────────────────────────────────────
-  // 0 = For You, 1 = Following, 2 = Events, 3 = Clubs
+  // 0 = For You (all clubs), 1 = Following (followed clubs only)
   int _feedTab = 0;
 
   @override
   Widget build(BuildContext context) {
-    // "Following" tab → followed only; all others → all clubs visible
     _followedOnly = _feedTab == 1;
 
     final mixed = _buildMixedFeed(_buildFeed());
@@ -209,6 +208,7 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildStoriesRow(),
             _buildContextBar(),
             _buildScheduleStrip(),
+            _buildQuickAccess(),
             _buildWelcomeCard(live, upcoming),
             _buildEventsStrip(live, upcoming),
             if (mixed.isEmpty)
@@ -223,10 +223,10 @@ class _FeedScreenState extends State<FeedScreen> {
                         Icon(Icons.explore_outlined, size: 64,
                             color: AppColors.secondaryText.withValues(alpha: 0.35)),
                         const SizedBox(height: 18),
-                        const Text('Nothing here yet',
+                        Text('Nothing here yet',
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
                         const SizedBox(height: 8),
-                        const Text('Follow clubs to see their posts\nand events in your feed',
+                        Text('Follow clubs to see their posts\nand events in your feed',
                             style: TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.4),
                             textAlign: TextAlign.center),
                         const SizedBox(height: 24),
@@ -239,8 +239,8 @@ class _FeedScreenState extends State<FeedScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             elevation: 0,
                           ),
-                          icon: const Icon(Icons.explore_rounded, size: 18),
-                          label: const Text('Explore All Clubs',
+                          icon: Icon(Icons.explore_rounded, size: 18),
+                          label: Text('Explore All Clubs',
                               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                         ),
                       ],
@@ -254,12 +254,12 @@ class _FeedScreenState extends State<FeedScreen> {
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
                   child: Row(
                     children: [
-                      const Text('Latest',
+                      Text('Latest',
                           style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
                       const Spacer(),
                       Text(
                         _followedOnly ? 'From followed clubs' : 'All clubs',
-                        style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
                       ),
                     ],
                   ),
@@ -292,7 +292,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   childCount: mixed.length,
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverToBoxAdapter(child: SizedBox(height: 16)),
             ],
           ],
         ),
@@ -338,7 +338,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             const SizedBox(height: 1),
             RichText(
-              text: const TextSpan(
+              text: TextSpan(
                 children: [
                   TextSpan(
                     text: 'Uni',
@@ -363,19 +363,27 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ],
         ),
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1E0A22), AppColors.card],
-            ),
-          ),
+        background: Builder(
+          builder: (ctx) {
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            return Container(
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1E0A22), AppColors.card],
+                      )
+                    : null,
+                color: isDark ? null : AppColors.card,
+              ),
+            );
+          },
         ),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.map_outlined),
+          icon: Icon(Icons.map_outlined),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CampusMapScreen()),
@@ -383,7 +391,7 @@ class _FeedScreenState extends State<FeedScreen> {
           tooltip: 'Campus Map',
         ),
         IconButton(
-          icon: const Icon(Icons.send_outlined),
+          icon: Icon(Icons.send_outlined),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const MessagesScreen()),
@@ -394,70 +402,82 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  // ── Feed Tabs (For You / Following / Events / Clubs) ─────────────────────
+  // ── Feed Tabs (For You / Following) ──────────────────────────────────────
   SliverToBoxAdapter _buildFeedTabs() {
-    const labels = ['For You', 'Following', 'Events', 'Clubs'];
+    const labels = ['For You', 'Following'];
     return SliverToBoxAdapter(
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1E0A22), AppColors.card],
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: List.generate(labels.length, (i) {
-              final active = _feedTab == i;
-              return GestureDetector(
-                onTap: () => setState(() => _feedTab = i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: active
-                        ? const LinearGradient(
-                            colors: [AppColors.primaryRed, Color(0xFF6A1530)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : null,
-                    color: active ? null : Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: active
-                          ? AppColors.primaryRed.withValues(alpha: 0.6)
-                          : AppColors.glassEdge,
-                      width: active ? 0 : 1,
+      child: Builder(
+        builder: (ctx) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return Container(
+            decoration: BoxDecoration(
+              gradient: isDark
+                  ? LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF1E0A22), AppColors.card],
+                    )
+                  : null,
+              color: isDark ? null : AppColors.card,
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: List.generate(labels.length, (i) {
+                  final active = _feedTab == i;
+                  return GestureDetector(
+                    onTap: () => setState(() => _feedTab = i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: active
+                            ? LinearGradient(
+                                colors: [AppColors.primaryRed, Color(0xFF6A1530)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
+                        color: active
+                            ? null
+                            : isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: active
+                              ? AppColors.primaryRed.withValues(alpha: 0.6)
+                              : AppColors.divider,
+                          width: 1,
+                        ),
+                        boxShadow: active
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primaryRed.withValues(alpha: 0.35),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Text(
+                        labels[i],
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                          color: active ? Colors.white : AppColors.secondaryText,
+                          letterSpacing: active ? 0.2 : 0,
+                        ),
+                      ),
                     ),
-                    boxShadow: active
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primaryRed.withValues(alpha: 0.35),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    labels[i],
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                      color: active ? Colors.white : AppColors.secondaryText,
-                      letterSpacing: active ? 0.2 : 0,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
+                  );
+                }),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -477,7 +497,10 @@ class _FeedScreenState extends State<FeedScreen> {
     final finalsLabel = weeksToFinals > 0 ? 'Finals in $weeksToFinals wks' : 'Finals now';
 
     return SliverToBoxAdapter(
-      child: Padding(
+      child: Builder(
+        builder: (ctx) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
         child: Row(
           children: [
@@ -486,16 +509,21 @@ class _FeedScreenState extends State<FeedScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1A1226), Color(0xFF140818)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: isDark
+                      ? LinearGradient(
+                          colors: [Color(0xFF1A1226), Color(0xFF140818)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: isDark ? null : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.glassEdge),
+                  border: Border.all(color: isDark ? AppColors.glassEdge : AppColors.divider),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : AppColors.primaryRed.withValues(alpha: 0.05),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -503,15 +531,15 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
                 child: Row(
                   children: [
-                    Text(weatherIcon, style: const TextStyle(fontSize: 22)),
+                    Text(weatherIcon, style: TextStyle(fontSize: 22)),
                     const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(weather,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text, letterSpacing: -0.2)),
-                        const Text('Istanbul · Campus',
+                        Text('Istanbul · Campus',
                             style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                       ],
                     ),
@@ -545,13 +573,13 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Text('📅', style: TextStyle(fontSize: 22)),
+                    Text('📅', style: TextStyle(fontSize: 22)),
                     const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(weekLabel,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text, letterSpacing: -0.2)),
                         Text(finalsLabel,
                             style: TextStyle(fontSize: 11, color: AppColors.primaryRed.withValues(alpha: 0.8))),
@@ -563,6 +591,8 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ],
         ),
+      );
+        },
       ),
     );
   }
@@ -618,7 +648,7 @@ class _FeedScreenState extends State<FeedScreen> {
       });
     }
 
-    if (schedule.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    if (schedule.isEmpty) return SliverToBoxAdapter(child: SizedBox.shrink());
 
     final visible = _scheduleExpanded ? schedule : schedule.take(2).toList();
 
@@ -628,10 +658,10 @@ class _FeedScreenState extends State<FeedScreen> {
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.glassEdge),
+          border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
+              color: AppColors.primaryRed.withValues(alpha: 0.07),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -644,9 +674,9 @@ class _FeedScreenState extends State<FeedScreen> {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Row(
                 children: [
-                  const Text('📋', style: TextStyle(fontSize: 14)),
+                  Text('📋', style: TextStyle(fontSize: 14)),
                   const SizedBox(width: 7),
-                  const Text('Today\'s Schedule',
+                  Text('Today\'s Schedule',
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text, letterSpacing: -0.3)),
                   const Spacer(),
                   if (schedule.length > 2)
@@ -660,7 +690,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       ),
                       child: Text(
                         _scheduleExpanded ? 'Less' : 'All ${schedule.length}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -681,11 +711,11 @@ class _FeedScreenState extends State<FeedScreen> {
                 decoration: BoxDecoration(
                   color: isNow
                       ? color.withValues(alpha: 0.08)
-                      : Colors.white.withValues(alpha: 0.03),
+                      : AppColors.surfaceAlt.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(10),
                   border: isNow
                       ? Border.all(color: color.withValues(alpha: 0.25))
-                      : null,
+                      : Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
                 ),
                 child: Row(
                   children: [
@@ -715,7 +745,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           const SizedBox(height: 2),
                           Text(
                             '${item['room']} · ${item['time']}  ${item['dur']}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
                           ),
                         ],
                       ),
@@ -736,34 +766,75 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── Quick Campus Access Grid ───────────────────────────────────────────────
 
+  SliverToBoxAdapter _buildQuickAccess() {
+    final items = [
+      (icon: Icons.local_library_outlined,   label: 'Library', color: const Color(0xFF1565C0)),
+      (icon: Icons.directions_bus_outlined,  label: 'Shuttle', color: const Color(0xFF2E7D32)),
+      (icon: Icons.print_outlined,           label: 'Print',   color: const Color(0xFF6A1B9A)),
+      (icon: Icons.fitness_center_outlined,  label: 'Gym',     color: const Color(0xFFE65100)),
+      (icon: Icons.local_hospital_outlined,  label: 'Health',  color: const Color(0xFF00838F)),
+      (icon: Icons.coffee_outlined,          label: 'Coffee',  color: const Color(0xFF795548)),
+    ];
+
+    Widget tile(({IconData icon, String label, Color color}) item, bool last) {
+      return Expanded(
+        child: Padding(
+          padding: EdgeInsets.only(right: last ? 0 : 8),
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: item.color.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                children: [
+                  Icon(item.icon, color: item.color, size: 22),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.label,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.text),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.apps_rounded, size: 13, color: AppColors.secondaryText),
+                SizedBox(width: 6),
+                Text(
+                  'QUICK ACCESS',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondaryText, letterSpacing: 0.8),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(children: [tile(items[0], false), tile(items[1], false), tile(items[2], true)]),
+            const SizedBox(height: 8),
+            Row(children: [tile(items[3], false), tile(items[4], false), tile(items[5], true)]),
+          ],
+        ),
+      ),
+    );
+  }
+
   SliverToBoxAdapter _buildWelcomeCard(List<dynamic> live, List<dynamic> upcoming) {
     if (live.isNotEmpty) {
       return SliverToBoxAdapter(
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red.withValues(alpha: 0.18)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 8, height: 8,
-                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '${live.length} event${live.length > 1 ? 's' : ''} happening right now on campus',
-                  style: const TextStyle(fontSize: 13, color: Colors.red, fontWeight: FontWeight.w600),
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.red, size: 16),
-            ],
-          ),
-        ),
+        child: _LiveBanner(event: live.first as Event),
       );
     }
 
@@ -781,16 +852,16 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.event_rounded, size: 18, color: AppColors.primaryRed),
+              Icon(Icons.event_rounded, size: 18, color: AppColors.primaryRed),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Next Up · $label',
-                        style: const TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
+                        style: TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
                     Text(nextEvent.title as String,
-                        style: const TextStyle(fontSize: 13, color: AppColors.text, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 13, color: AppColors.text, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis),
                   ],
                 ),
@@ -801,11 +872,11 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    return const SliverToBoxAdapter(child: SizedBox(height: 6));
+    return SliverToBoxAdapter(child: SizedBox(height: 6));
   }
 
   SliverToBoxAdapter _buildEventsStrip(List<dynamic> live, List<dynamic> upcoming) {
-    if (live.isEmpty && upcoming.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    if (live.isEmpty && upcoming.isEmpty) return SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Column(
@@ -814,66 +885,74 @@ class _FeedScreenState extends State<FeedScreen> {
           // ── Happening Now ──
           if (live.isNotEmpty) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 8, height: 8,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    width: 7, height: 7,
+                    decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Colors.red.withValues(alpha: 0.5), blurRadius: 6)]),
                   ),
-                  const SizedBox(width: 6),
-                  const Text('Happening Now', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+                  const SizedBox(width: 7),
+                  Text('LIVE RIGHT NOW',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                          color: AppColors.secondaryText, letterSpacing: 0.9)),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.25)),
                     ),
-                    child: Text('${live.length} live', style: const TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600)),
+                    child: Text('${live.length} live',
+                        style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
             ),
             SizedBox(
-              height: 110,
+              height: 192,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 itemCount: live.length,
                 itemBuilder: (ctx, i) => _EventChip(event: live[i], isLive: true),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
           ],
 
           // ── Upcoming ──
           if (upcoming.isNotEmpty) ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+              padding: EdgeInsets.fromLTRB(16, live.isNotEmpty ? 4 : 16, 16, 10),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Icon(Icons.event_rounded, size: 16, color: AppColors.primaryRed),
-                  const SizedBox(width: 6),
-                  const Text('Upcoming Events', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+                  Text('UPCOMING',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                          color: AppColors.secondaryText, letterSpacing: 0.9)),
                   const Spacer(),
-                  Text('${upcoming.length} events', style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                  Text('${upcoming.length} events',
+                      style: TextStyle(fontSize: 12, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
             SizedBox(
-              height: 110,
+              height: 192,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 itemCount: upcoming.length,
                 itemBuilder: (ctx, i) => _EventChip(event: upcoming[i], isLive: false),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
           ],
 
-          const Divider(height: 1),
+          Divider(height: 1),
         ],
       ),
     );
@@ -917,7 +996,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   SliverToBoxAdapter _buildStoriesRow() {
     final active = _activeStoryClubs();
-    if (active.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    if (active.isEmpty) return SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Container(
@@ -946,7 +1025,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 },
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1),
           ],
         ),
       ),
@@ -978,6 +1057,195 @@ class _FeedScreenState extends State<FeedScreen> {
 
 // ─── Feed Filter Option (used inside showMenu) ───────────────────────────────
 
+// ─── Live Banner ─────────────────────────────────────────────────────────────
+
+class _LiveBanner extends StatefulWidget {
+  final Event event;
+  const _LiveBanner({required this.event});
+
+  @override
+  State<_LiveBanner> createState() => _LiveBannerState();
+}
+
+class _LiveBannerState extends State<_LiveBanner> {
+  static const List<Color> _colors = [
+    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  ];
+
+  String get _userId => authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    rsvpStore.seed(widget.event.id, widget.event.attendeeUserIds.contains(_userId));
+    // ── Bug fix: listen so attendee count + button state update on RSVP ──
+    rsvpStore.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    rsvpStore.removeListener(_refresh);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere((c) => c.id == widget.event.clubId,
+        orElse: () => clubs.first);
+    final idx = clubs.indexOf(club);
+    final color = _colors[idx % _colors.length];
+    final now = DateTime.now();
+    final remaining = widget.event.endTime.difference(now);
+    final attending = rsvpStore.isAttending(widget.event.id);
+    // Live attendee count reacts to rsvpStore via _refresh listener
+    final attendeeCount = widget.event.attendeeUserIds.length;
+
+    final remainingLabel = remaining.inHours >= 1
+        ? '${remaining.inHours}h ${remaining.inMinutes % 60}m left'
+        : '${remaining.inMinutes}m left';
+    final startTime =
+        '${widget.event.dateTime.hour.toString().padLeft(2, '0')}:${widget.event.dateTime.minute.toString().padLeft(2, '0')}';
+
+    return GestureDetector(
+      onTap: () => _EventChip._showEventDetail(context, widget.event, true, color),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Thin color bar at top
+            Container(
+              height: 3,
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Club name + LIVE pill + time remaining
+                  Row(
+                    children: [
+                      Text(
+                        club.name,
+                        style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6, height: 6,
+                              decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 5),
+                            Text('LIVE',
+                                style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Event title
+                  Text(
+                    widget.event.title,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text, height: 1.2),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 10),
+                  // Info row: location · time · attending
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 13, color: AppColors.secondaryText),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(widget.event.location,
+                            style: TextStyle(color: AppColors.secondaryText, fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(Icons.access_time_rounded, size: 13, color: AppColors.secondaryText),
+                      const SizedBox(width: 3),
+                      Text(startTime, style: TextStyle(color: AppColors.secondaryText, fontSize: 12)),
+                      const SizedBox(width: 10),
+                      Icon(Icons.people_outline, size: 13, color: AppColors.secondaryText),
+                      const SizedBox(width: 3),
+                      Text('$attendeeCount attending',
+                          style: TextStyle(color: AppColors.secondaryText, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(remainingLabel,
+                      style: TextStyle(fontSize: 11, color: Colors.red.withValues(alpha: 0.7), fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 14),
+                  // Join now / Going button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: attending
+                        ? OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primaryRed,
+                              side: BorderSide(color: AppColors.primaryRed, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: Icon(Icons.check_circle_rounded, size: 16),
+                            label: Text('Going · tap to cancel',
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                            onPressed: () => rsvpStore.toggle(widget.event.id, _userId),
+                          )
+                        : ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryRed,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            icon: Icon(Icons.how_to_reg_rounded, size: 16),
+                            label: Text('Join now',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            onPressed: () => rsvpStore.toggle(widget.event.id, _userId),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Schedule Badge ───────────────────────────────────────────────────────────
 
 class _ScheduleBadge extends StatelessWidget {
@@ -1004,18 +1272,18 @@ class _ScheduleBadge extends StatelessWidget {
 
 // ─── Event Chip ───────────────────────────────────────────────────────────────
 
-class _EventChip extends StatelessWidget {
+class _EventChip extends StatefulWidget {
   final dynamic event;
   final bool isLive;
+
+  const _EventChip({required this.event, required this.isLive});
 
   static const List<Color> _colors = [
     Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
     Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
   ];
 
-  const _EventChip({required this.event, required this.isLive});
-
-  void _showEventDetail(BuildContext context, dynamic ev, bool live, Color color) {
+  static void _showEventDetail(BuildContext context, dynamic ev, bool live, Color color) {
     final club = clubs.firstWhere((c) => c.id == ev.clubId, orElse: () => clubs.first);
     final DateTime start = ev.dateTime;
     final DateTime end = ev.endTime;
@@ -1052,7 +1320,7 @@ class _EventChip extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1086,41 +1354,41 @@ class _EventChip extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)),
-                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                   ),
               ],
             ),
             const SizedBox(height: 12),
             // Title
             Text(ev.title as String,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
             const SizedBox(height: 16),
             // Location
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
+                Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
                 const SizedBox(width: 6),
-                Expanded(child: Text(location, style: const TextStyle(fontSize: 14, color: AppColors.text))),
+                Expanded(child: Text(location, style: TextStyle(fontSize: 14, color: AppColors.text))),
               ],
             ),
             const SizedBox(height: 10),
             // Start time
             Row(
               children: [
-                const Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
+                Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
                 const SizedBox(width: 6),
                 Text('Starts  ${fmtDateTime(start)}',
-                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                    style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
               ],
             ),
             const SizedBox(height: 6),
             // End time
             Row(
               children: [
-                const Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
+                Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
                 const SizedBox(width: 6),
                 Text('Ends  ${fmtDateTime(end)}',
-                    style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                    style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
               ],
             ),
             const SizedBox(height: 14),
@@ -1159,10 +1427,10 @@ class _EventChip extends StatelessWidget {
             }()) ...[
               Row(
                 children: [
-                  const Icon(Icons.people_outline, size: 16, color: AppColors.secondaryText),
+                  Icon(Icons.people_outline, size: 16, color: AppColors.secondaryText),
                   const SizedBox(width: 6),
                   Text('$attendees attending',
-                      style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                      style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
                 ],
               ),
               const SizedBox(height: 20),
@@ -1193,25 +1461,25 @@ class _EventChip extends StatelessWidget {
                         ? OutlinedButton(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.primaryRed,
-                              side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                              side: BorderSide(color: AppColors.primaryRed, width: 1.5),
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: addToCalendar,
-                            child: const Icon(Icons.calendar_month_outlined, size: 20),
+                            child: Icon(Icons.calendar_month_outlined, size: 20),
                           )
                         : Expanded(
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.primaryRed,
-                                side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                                side: BorderSide(color: AppColors.primaryRed, width: 1.5),
                                 padding: const EdgeInsets.symmetric(vertical: 13),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                              label: const Text('Calendar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                              icon: Icon(Icons.calendar_month_outlined, size: 18),
+                              label: Text('Calendar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                               onPressed: addToCalendar,
                             ),
                           ),
@@ -1235,11 +1503,42 @@ class _EventChip extends StatelessWidget {
   }
 
   @override
+  State<_EventChip> createState() => _EventChipState();
+}
+
+class _EventChipState extends State<_EventChip> {
+  @override
+  void initState() {
+    super.initState();
+    final userId = authService.currentUser?.id ?? '';
+    rsvpStore.seed(
+      widget.event.id as String,
+      (widget.event.attendeeUserIds as List).contains(userId),
+    );
+    rsvpStore.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    rsvpStore.removeListener(_refresh);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final event = widget.event;
+    final isLive = widget.isLive;
     final club = clubs.firstWhere((c) => c.id == event.clubId, orElse: () => clubs.first);
     final idx = clubs.indexOf(club);
-    final color = _colors[idx % _colors.length];
+    final color = _EventChip._colors[idx % _EventChip._colors.length];
     final dt = event.dateTime as DateTime;
+    final userId = authService.currentUser?.id ?? '';
+    final attending = rsvpStore.isAttending(event.id as String);
+    final pending = rsvpStore.isPending(event.id as String);
 
     String timeLabel;
     if (isLive) {
@@ -1256,30 +1555,42 @@ class _EventChip extends StatelessWidget {
       timeLabel = daysAway == 0 ? 'Today' : daysAway == 1 ? 'Tomorrow' : 'In $daysAway days';
     }
 
+    void onRsvpTap() {
+      if (pending || userId.isEmpty) return;
+      rsvpStore.toggle(event.id as String, userId);
+    }
+
     return GestureDetector(
-      onTap: () => _showEventDetail(context, event, isLive, color),
+      onTap: () => _EventChip._showEventDetail(context, event, isLive, color),
       child: Container(
-        width: 150,
+        width: 158,
         margin: const EdgeInsets.only(right: 10, bottom: 4),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isLive ? Colors.red.withValues(alpha: 0.6) : color.withValues(alpha: 0.3),
+            color: isLive ? Colors.red.withValues(alpha: 0.55) : color.withValues(alpha: 0.25),
             width: isLive ? 1.5 : 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.07),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Colour bar + live badge
             Container(
-              height: 40,
+              height: 44,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                color: color.withValues(alpha: 0.12),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               child: Row(
                 children: [
                   Expanded(
@@ -1296,23 +1607,24 @@ class _EventChip extends StatelessWidget {
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                      child: Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                     )
                   else
-                    Icon(Icons.event, size: 14, color: color),
+                    Icon(Icons.event_rounded, size: 15, color: color),
                 ],
               ),
             ),
-            // Event title + time
+            // Event title
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 3),
               child: Text(
                 event.title as String,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text, height: 1.3),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text, height: 1.3),
               ),
             ),
+            // Time label
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text(
@@ -1321,6 +1633,50 @@ class _EventChip extends StatelessWidget {
                   fontSize: 11,
                   color: isLive ? Colors.red : AppColors.primaryRed,
                   fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Spacer(),
+            // RSVP button row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+              child: GestureDetector(
+                onTap: onRsvpTap,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: attending ? color : color.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                    border: attending ? null : Border.all(color: color.withValues(alpha: 0.40), width: 1),
+                  ),
+                  child: Center(
+                    child: pending
+                        ? SizedBox(
+                            width: 14, height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: attending ? Colors.white : color),
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                attending ? Icons.check_circle_rounded : Icons.how_to_reg_rounded,
+                                size: 13,
+                                color: attending ? Colors.white : color,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                attending ? 'Going' : 'RSVP',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: attending ? Colors.white : color,
+                                  letterSpacing: attending ? 0 : 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -1363,9 +1719,9 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                const Icon(Icons.people_outline, size: 18, color: AppColors.primaryRed),
+                Icon(Icons.people_outline, size: 18, color: AppColors.primaryRed),
                 const SizedBox(width: 6),
-                const Text(
+                Text(
                   'People You Might Know',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
                 ),
@@ -1426,7 +1782,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.text,
@@ -1439,7 +1795,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                 if (mutualCount == 0) return const SizedBox.shrink();
                                 return Text(
                                   '$mutualCount mutual',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 10, color: AppColors.secondaryText),
                                 );
                               }),
@@ -1464,7 +1820,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
             ),
           ),
           const SizedBox(height: 12),
-          const Divider(height: 1),
+          Divider(height: 1),
         ],
       ),
     );
@@ -1504,7 +1860,7 @@ class _TrendingEventCard extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1529,27 +1885,27 @@ class _TrendingEventCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(event.title,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
             const SizedBox(height: 14),
             Row(children: [
-              const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
+              Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
               const SizedBox(width: 6),
               Expanded(child: Text(event.location,
-                  style: const TextStyle(fontSize: 14, color: AppColors.text))),
+                  style: TextStyle(fontSize: 14, color: AppColors.text))),
             ]),
             const SizedBox(height: 10),
             Row(children: [
-              const Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
+              Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
               const SizedBox(width: 6),
               Text('Starts  ${fmt(start)}',
-                  style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
             ]),
             const SizedBox(height: 6),
             Row(children: [
-              const Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
+              Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
               const SizedBox(width: 6),
               Text('Ends  ${fmt(end)}',
-                  style: const TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
             ]),
             const SizedBox(height: 24),
             SizedBox(
@@ -1594,10 +1950,10 @@ class _TrendingEventCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Row(
                 children: [
-                  const Icon(Icons.local_fire_department_rounded,
+                  Icon(Icons.local_fire_department_rounded,
                       size: 18, color: Colors.deepOrange),
                   const SizedBox(width: 6),
-                  const Text('Trending This Week',
+                  Text('Trending This Week',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
                           color: AppColors.text)),
                   const Spacer(),
@@ -1639,7 +1995,7 @@ class _TrendingEventCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(event.title,
-                                style: const TextStyle(fontSize: 15,
+                                style: TextStyle(fontSize: 15,
                                     fontWeight: FontWeight.bold, color: AppColors.text),
                                 maxLines: 2, overflow: TextOverflow.ellipsis),
                             const SizedBox(height: 2),
@@ -1658,11 +2014,11 @@ class _TrendingEventCard extends StatelessWidget {
                   if (event.location.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Row(children: [
-                      const Icon(Icons.location_on_outlined, size: 14,
+                      Icon(Icons.location_on_outlined, size: 14,
                           color: AppColors.secondaryText),
                       const SizedBox(width: 4),
                       Text(event.location,
-                          style: const TextStyle(fontSize: 12,
+                          style: TextStyle(fontSize: 12,
                               color: AppColors.secondaryText)),
                     ]),
                   ],
@@ -1672,15 +2028,15 @@ class _TrendingEventCard extends StatelessWidget {
                         color: AppColors.secondaryText),
                     const SizedBox(width: 4),
                     Text('$attendees attending',
-                        style: const TextStyle(fontSize: 12,
+                        style: TextStyle(fontSize: 12,
                             color: AppColors.secondaryText)),
                     if (views > 0) ...[
                       const SizedBox(width: 14),
-                      const Icon(Icons.visibility_outlined, size: 14,
+                      Icon(Icons.visibility_outlined, size: 14,
                           color: AppColors.secondaryText),
                       const SizedBox(width: 4),
                       Text('$views views',
-                          style: const TextStyle(fontSize: 12,
+                          style: TextStyle(fontSize: 12,
                               color: AppColors.secondaryText)),
                     ],
                     const Spacer(),
@@ -1693,7 +2049,7 @@ class _TrendingEventCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1),
           ],
         ),
       ),
@@ -1742,7 +2098,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
               children: [
                 Icon(Icons.explore_rounded, size: 18, color: color),
                 const SizedBox(width: 6),
-                const Text('Club You Might Like',
+                Text('Club You Might Like',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
                         color: AppColors.text)),
               ],
@@ -1775,13 +2131,13 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(c.name as String,
-                            style: const TextStyle(fontSize: 14,
+                            style: TextStyle(fontSize: 14,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.text),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
                         Text(desc,
-                            style: const TextStyle(fontSize: 12,
+                            style: TextStyle(fontSize: 12,
                                 color: AppColors.secondaryText, height: 1.3),
                             maxLines: 2, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 6),
@@ -1802,7 +2158,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
               ),
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1),
         ],
       ),
     );
@@ -1852,10 +2208,10 @@ class _StoryBubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: seen
-                      ? const LinearGradient(
+                      ? LinearGradient(
                           colors: [AppColors.secondaryText, AppColors.secondaryText],
                         )
-                      : const LinearGradient(
+                      : LinearGradient(
                           colors: [AppColors.primaryRed, AppColors.accentGold],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -1863,7 +2219,7 @@ class _StoryBubble extends StatelessWidget {
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.card),
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.card),
                   child: ClubAvatar(
                     clubId: club.id,
                     clubName: club.name,
@@ -2064,14 +2420,14 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete story?',
+        title: Text('Delete story?',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: const Text('This story will be permanently removed.',
+        content: Text('This story will be permanently removed.',
             style: TextStyle(color: AppColors.secondaryText)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -2080,7 +2436,7 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text('Delete'),
           ),
         ],
       ),
@@ -2180,7 +2536,7 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
                           ? child
                           : Container(
                               color: _color.withValues(alpha: 0.18),
-                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
                             ),
                       errorBuilder: (_, err, trace) => Container(
                         decoration: BoxDecoration(
@@ -2259,9 +2615,9 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
                             children: [
                               Text(_club.name,
                                   maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                               Text(_timeAgoStory(story.postedAt),
-                                  style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                                  style: TextStyle(color: Colors.white70, fontSize: 11)),
                             ],
                           ),
                         ),
@@ -2275,12 +2631,12 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
                                 color: Colors.red.withValues(alpha: 0.25),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+                              child: Icon(Icons.delete_outline, color: Colors.white, size: 20),
                             ),
                           ),
                         GestureDetector(
                           onTap: _animatedPop,
-                          child: const Icon(Icons.close, color: Colors.white, size: 26),
+                          child: Icon(Icons.close, color: Colors.white, size: 26),
                         ),
                       ],
                     ),
@@ -2290,7 +2646,7 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
                   if (story.emoji != null)
                     Positioned(
                       left: 28, bottom: 80,
-                      child: Text(story.emoji!, style: const TextStyle(fontSize: 52)),
+                      child: Text(story.emoji!, style: TextStyle(fontSize: 52)),
                     ),
 
                   // Overlay text at saved position + color
@@ -2356,14 +2712,14 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.remove_red_eye_outlined, color: Colors.white70, size: 18),
+                              Icon(Icons.remove_red_eye_outlined, color: Colors.white70, size: 18),
                               const SizedBox(width: 6),
                               Text(
                                 '${viewTracker.viewCount(_stories[_index].id)} viewer${viewTracker.viewCount(_stories[_index].id) == 1 ? '' : 's'}',
-                                style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                                style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(width: 4),
-                              const Icon(Icons.chevron_right, color: Colors.white54, size: 16),
+                              Icon(Icons.chevron_right, color: Colors.white54, size: 16),
                             ],
                           ),
                         ),
@@ -2407,7 +2763,7 @@ class _ViewersSheet extends StatelessWidget {
       minChildSize: 0.3,
       maxChildSize: 0.9,
       builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -2426,26 +2782,26 @@ class _ViewersSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: Row(
                 children: [
-                  const Icon(Icons.remove_red_eye_outlined, color: AppColors.primaryRed, size: 20),
+                  Icon(Icons.remove_red_eye_outlined, color: AppColors.primaryRed, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '${viewerList.length} viewer${viewerList.length == 1 ? '' : 's'}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text),
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close, color: AppColors.secondaryText, size: 22),
+                    child: Icon(Icons.close, color: AppColors.secondaryText, size: 22),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1),
             // List
             Expanded(
               child: viewerList.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -2459,7 +2815,7 @@ class _ViewersSheet extends StatelessWidget {
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: viewerList.length,
-                      separatorBuilder: (_, s) => const Divider(height: 1, indent: 60),
+                      separatorBuilder: (_, s) => Divider(height: 1, indent: 60),
                       itemBuilder: (_, i) {
                         final user = viewerList[i];
                         return ListTile(
@@ -2468,11 +2824,11 @@ class _ViewersSheet extends StatelessWidget {
                             backgroundColor: AppColors.primaryRed.withValues(alpha: 0.12),
                             child: Text(
                               user.name.isNotEmpty ? user.name[0] : '?',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed),
                             ),
                           ),
-                          title: Text(user.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.text)),
-                          subtitle: Text(user.email, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                          title: Text(user.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.text)),
+                          subtitle: Text(user.email, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                         );
                       },
                     ),
@@ -2660,7 +3016,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                         children: [
                           Flexible(
                             child: Text(club.name,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
                                 overflow: TextOverflow.ellipsis),
                           ),
                           const SizedBox(width: 6),
@@ -2687,7 +3043,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                               children: [
                                 Text(
                                   author.name,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 13,
                                     color: AppColors.primaryRed,
                                     fontWeight: FontWeight.w600,
@@ -2696,7 +3052,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                                 const SizedBox(width: 6),
                                 Text(
                                   _timeAgo(widget.post.createdAt),
-                                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                                  style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
                                 ),
                               ],
                             ),
@@ -2707,7 +3063,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                   ),
                 ),
                 ClubFollowButton(clubId: club.id, size: 'small'),
-                IconButton(icon: const Icon(Icons.more_horiz, color: AppColors.secondaryText), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+                IconButton(icon: Icon(Icons.more_horiz, color: AppColors.secondaryText), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
               ],
             ),
           ),
@@ -2727,7 +3083,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                 if (_showHeart)
                   ScaleTransition(
                     scale: Tween(begin: 0.5, end: 1.4).animate(CurvedAnimation(parent: _heartController, curve: Curves.elasticOut)),
-                    child: const Icon(Icons.favorite, color: Colors.white, size: 80),
+                    child: Icon(Icons.favorite, color: Colors.white, size: 80),
                   ),
               ],
             ),
@@ -2790,8 +3146,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: RichText(
               text: TextSpan(children: [
-                TextSpan(text: '${club.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
-                TextSpan(text: widget.post.content, style: const TextStyle(color: AppColors.text, fontSize: 13)),
+                TextSpan(text: '${club.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
+                TextSpan(text: widget.post.content, style: TextStyle(color: AppColors.text, fontSize: 13)),
               ]),
             ),
           ),
@@ -2807,7 +3163,7 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                   _isOwnerOfClub(widget.post.clubId)
                       ? 'View all ${postComments.length} comment${postComments.length == 1 ? '' : 's'}'
                       : 'View comments',
-                  style: const TextStyle(color: AppColors.secondaryText, fontSize: 12),
+                  style: TextStyle(color: AppColors.secondaryText, fontSize: 12),
                 ),
               ),
             ),
@@ -2819,8 +3175,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                 final commenter = users.firstWhere((u) => u.id == last.userId, orElse: () => users.first);
                 return RichText(
                   text: TextSpan(children: [
-                    TextSpan(text: '${commenter.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 12)),
-                    TextSpan(text: last.content, style: const TextStyle(color: AppColors.text, fontSize: 12)),
+                    TextSpan(text: '${commenter.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 12)),
+                    TextSpan(text: last.content, style: TextStyle(color: AppColors.text, fontSize: 12)),
                   ]),
                 );
               }),
@@ -2927,18 +3283,18 @@ class _EventCardState extends State<_EventCard> {
                       Row(
                         children: [
                           Flexible(
-                            child: Text(club.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text), overflow: TextOverflow.ellipsis),
+                            child: Text(club.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text), overflow: TextOverflow.ellipsis),
                           ),
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(color: AppColors.accentGold.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                            child: const Text('Event', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFB8860B))),
+                            child: Text('Event', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFB8860B))),
                           ),
                           if (badge != null) ...[const SizedBox(width: 4), badge],
                         ],
                       ),
-                      Text(daysLabel, style: const TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
+                      Text(daysLabel, style: TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
@@ -2983,11 +3339,11 @@ class _EventCardState extends State<_EventCard> {
                         ),
                         child: Text(
                           '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(widget.event.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4, color: Colors.black45)])),
+                      Text(widget.event.title, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4, color: Colors.black45)])),
                     ],
                   ),
                 ),
@@ -3061,8 +3417,8 @@ class _EventCardState extends State<_EventCard> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: RichText(
               text: TextSpan(children: [
-                TextSpan(text: '${club.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
-                TextSpan(text: widget.event.description, style: const TextStyle(color: AppColors.text, fontSize: 13)),
+                TextSpan(text: '${club.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
+                TextSpan(text: widget.event.description, style: TextStyle(color: AppColors.text, fontSize: 13)),
               ]),
             ),
           ),
@@ -3113,10 +3469,10 @@ class _EngagementBar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.remove_red_eye_outlined, size: 13, color: AppColors.secondaryText),
+                Icon(Icons.remove_red_eye_outlined, size: 13, color: AppColors.secondaryText),
                 const SizedBox(width: 3),
                 Text('$views view${views == 1 ? '' : 's'}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.secondaryText,
+                    style: TextStyle(fontSize: 12, color: AppColors.secondaryText,
                         decoration: TextDecoration.underline)),
               ],
             ),
@@ -3124,21 +3480,21 @@ class _EngagementBar extends StatelessWidget {
         ],
         if (likes > 0) ...[
           if (views > 0) const SizedBox(width: 10),
-          const Icon(Icons.favorite, size: 13, color: Colors.pink),
+          Icon(Icons.favorite, size: 13, color: Colors.pink),
           const SizedBox(width: 3),
-          Text('$likes $likesLabel', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
+          Text('$likes $likesLabel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
         ],
         if (commenters > 0) ...[
           const SizedBox(width: 10),
-          const Icon(Icons.chat_bubble, size: 13, color: Color(0xFF1565C0)),
+          Icon(Icons.chat_bubble, size: 13, color: Color(0xFF1565C0)),
           const SizedBox(width: 3),
-          Text('$commenters ${commenters == 1 ? 'person' : 'people'} commented', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+          Text('$commenters ${commenters == 1 ? 'person' : 'people'} commented', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
         ],
         if (shares > 0) ...[
           const SizedBox(width: 10),
-          const Icon(Icons.send, size: 13, color: Color(0xFF2E7D32)),
+          Icon(Icons.send, size: 13, color: Color(0xFF2E7D32)),
           const SizedBox(width: 3),
-          Text('$shares share${shares == 1 ? '' : 's'}', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+          Text('$shares share${shares == 1 ? '' : 's'}', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
         ],
       ],
     );
@@ -3272,7 +3628,7 @@ class _ShareSheetState extends State<_ShareSheet> {
       maxChildSize: 0.88,
       snap: true,
       builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -3291,9 +3647,9 @@ class _ShareSheetState extends State<_ShareSheet> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                   const SizedBox(height: 2),
-                  const Text(
+                  Text(
                     'Choose how you\'d like to share this',
                     style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
                   ),
@@ -3301,7 +3657,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.lightGray),
+            Divider(height: 1, color: AppColors.lightGray),
 
             Expanded(
               child: ListView(
@@ -3322,7 +3678,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                               color: Colors.green.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
@@ -3331,17 +3687,17 @@ class _ShareSheetState extends State<_ShareSheet> {
                               ],
                             ),
                           )
-                        : const Icon(Icons.chevron_right_rounded, color: AppColors.secondaryText),
+                        : Icon(Icons.chevron_right_rounded, color: AppColors.secondaryText),
                     onTap: _storyPosted ? null : _addToStory,
                   ),
 
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     child: Divider(height: 1, color: AppColors.lightGray),
                   ),
 
                   // ── Option 2: Send to Friend ──────────────────────────
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.fromLTRB(16, 6, 16, 8),
                     child: Text(
                       'SEND TO A FRIEND',
@@ -3361,8 +3717,8 @@ class _ShareSheetState extends State<_ShareSheet> {
                       child: TextField(
                         controller: _searchCtrl,
                         onChanged: (v) => setState(() => _query = v),
-                        style: const TextStyle(fontSize: 14),
-                        decoration: const InputDecoration(
+                        style: TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
                           hintText: 'Search friends',
                           hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 14),
                           prefixIcon: Icon(Icons.search, size: 18, color: AppColors.secondaryText),
@@ -3375,7 +3731,7 @@ class _ShareSheetState extends State<_ShareSheet> {
 
                   // Friends list
                   if (filtered.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 28),
                       child: Center(
                         child: Text(
@@ -3439,9 +3795,9 @@ class _ShareOptionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                 ],
               ),
             ),
@@ -3473,8 +3829,8 @@ class _FriendSendRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                Text(user.email, style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                Text(user.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(user.email, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
               ],
             ),
           ),
@@ -3489,7 +3845,7 @@ class _FriendSendRow extends StatelessWidget {
                 border: sent ? Border.all(color: Colors.green.withValues(alpha: 0.35)) : null,
               ),
               child: sent
-                  ? const Row(
+                  ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.check_rounded, size: 13, color: Colors.green),
@@ -3497,7 +3853,7 @@ class _FriendSendRow extends StatelessWidget {
                         Text('Sent', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w600)),
                       ],
                     )
-                  : const Text('Send', style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
+                  : Text('Send', style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -3546,18 +3902,18 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       minChildSize: 0.4,
       maxChildSize: 0.92,
       builder: (context, scrollController) => Container(
-        decoration: const BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
         child: Column(
           children: [
             Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 4, decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2))),
             Text(
               _isOwnerOfClub(widget.clubId) ? 'Comments (${postComments.length})' : 'Comments',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
-            const Divider(),
+            Divider(),
             Expanded(
               child: postComments.isEmpty
-                  ? const Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: AppColors.secondaryText)))
+                  ? Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: AppColors.secondaryText)))
                   : ListView.builder(
                       controller: scrollController,
                       itemCount: postComments.length,
@@ -3569,16 +3925,16 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CircleAvatar(radius: 16, backgroundColor: AppColors.lightRed, child: Text(commenter.name[0], style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13))),
+                              CircleAvatar(radius: 16, backgroundColor: AppColors.lightRed, child: Text(commenter.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13))),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                   RichText(text: TextSpan(children: [
-                                    TextSpan(text: '${commenter.name}  ', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
-                                    TextSpan(text: c.content, style: const TextStyle(color: AppColors.text, fontSize: 13)),
+                                    TextSpan(text: '${commenter.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
+                                    TextSpan(text: c.content, style: TextStyle(color: AppColors.text, fontSize: 13)),
                                   ])),
                                   const SizedBox(height: 2),
-                                  Text(_timeAgo(c.createdAt), style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                                  Text(_timeAgo(c.createdAt), style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                                 ]),
                               ),
                               // Admin-only delete button (own club only)
@@ -3607,7 +3963,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                   CircleAvatar(
                     radius: 16,
                     backgroundColor: AppColors.lightRed,
-                    child: Text((authService.currentUser?.name[0] ?? 'U').toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13)),
+                    child: Text((authService.currentUser?.name[0] ?? 'U').toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13)),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -3615,7 +3971,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       controller: _controller,
                       decoration: InputDecoration(
                         hintText: 'Add a comment...',
-                        hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                        hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
                         filled: true, fillColor: AppColors.lightGray,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
@@ -3624,7 +3980,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  GestureDetector(onTap: _post, child: const Text('Post', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 14))),
+                  GestureDetector(onTap: _post, child: Text('Post', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 14))),
                 ],
               ),
             ),

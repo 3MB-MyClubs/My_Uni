@@ -89,7 +89,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       appBar: AppBar(
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           'Explore',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
@@ -98,7 +98,7 @@ class _ExploreScreenState extends State<ExploreScreen>
           labelColor: AppColors.primaryRed,
           unselectedLabelColor: AppColors.secondaryText,
           indicatorColor: AppColors.primaryRed,
-          tabs: const [
+          tabs: [
             Tab(text: 'Clubs'),
             Tab(text: 'People'),
           ],
@@ -124,7 +124,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         _buildClubsGrid(),
         _buildUpcomingEventsHeader(),
         _buildEventsList(),
-        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+        SliverToBoxAdapter(child: SizedBox(height: 80)),
       ],
     );
   }
@@ -138,10 +138,10 @@ class _ExploreScreenState extends State<ExploreScreen>
           onChanged: (v) => setState(() => _clubQuery = v),
           decoration: InputDecoration(
             hintText: 'Search clubs...',
-            prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText),
+            prefixIcon: Icon(Icons.search, color: AppColors.secondaryText),
             suffixIcon: _clubQuery.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: Icon(Icons.close, size: 18),
                     onPressed: () {
                       _clubSearchController.clear();
                       setState(() => _clubQuery = '');
@@ -206,7 +206,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (filtered.isEmpty) {
       return SliverPadding(
         padding: const EdgeInsets.all(32),
-        sliver: const SliverToBoxAdapter(
+        sliver: SliverToBoxAdapter(
           child: Center(
             child: Text(
               'No clubs found',
@@ -234,7 +234,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   }
 
   SliverToBoxAdapter _buildUpcomingEventsHeader() {
-    return const SliverToBoxAdapter(
+    return SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
         child: Text(
@@ -274,10 +274,10 @@ class _ExploreScreenState extends State<ExploreScreen>
             decoration: InputDecoration(
               hintText: 'Search people...',
               prefixIcon:
-                  const Icon(Icons.person_search, color: AppColors.secondaryText),
+                  Icon(Icons.person_search, color: AppColors.secondaryText),
               suffixIcon: _peopleQuery.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close, size: 18),
+                      icon: Icon(Icons.close, size: 18),
                       onPressed: () {
                         _peopleSearchController.clear();
                         setState(() => _peopleQuery = '');
@@ -300,14 +300,14 @@ class _ExploreScreenState extends State<ExploreScreen>
               ? Center(
                   child: Text(
                     _peopleQuery.isEmpty ? 'Type a name to search people' : 'No people found',
-                    style: const TextStyle(color: AppColors.secondaryText),
+                    style: TextStyle(color: AppColors.secondaryText),
                   ),
                 )
               : ListView.separated(
                   padding: const EdgeInsets.only(bottom: 80),
                   itemCount: people.length,
                   separatorBuilder: (context, i) =>
-                      const Divider(height: 1, indent: 72),
+                      Divider(height: 1, indent: 72),
                   itemBuilder: (context, i) =>
                       _PeopleCard(user: people[i], onStateChanged: () => setState(() {})),
                 ),
@@ -381,7 +381,7 @@ class _ClubCardState extends State<_ClubCard> {
             const SizedBox(height: 10),
             Text(
               widget.club.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: AppColors.text,
@@ -393,14 +393,14 @@ class _ClubCardState extends State<_ClubCard> {
             Text(
               '$members members',
               style:
-                  const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                  TextStyle(fontSize: 12, color: AppColors.secondaryText),
             ),
             const SizedBox(height: 4),
             Expanded(
               child: Text(
                 widget.club.description,
                 style:
-                    const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                    TextStyle(fontSize: 12, color: AppColors.secondaryText),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -461,7 +461,7 @@ class _PeopleCard extends StatelessWidget {
           Flexible(
             child: Text(
               user.name,
-              style: const TextStyle(
+              style: TextStyle(
                   fontWeight: FontWeight.w600, fontSize: 14),
               overflow: TextOverflow.ellipsis,
             ),
@@ -475,7 +475,7 @@ class _PeopleCard extends StatelessWidget {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text(
+              child: Text(
                 'Club Admin',
                 style: TextStyle(
                     fontSize: 10,
@@ -489,7 +489,7 @@ class _PeopleCard extends StatelessWidget {
       subtitle: Text(
         user.email,
         style:
-            const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            TextStyle(fontSize: 12, color: AppColors.secondaryText),
       ),
       trailing: ListenableBuilder(
         listenable: userState,
@@ -516,7 +516,7 @@ class _PeopleCard extends StatelessWidget {
                       color: AppColors.lightRed,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.chat_bubble_outline,
+                    child: Icon(Icons.chat_bubble_outline,
                         size: 16, color: AppColors.primaryRed),
                   ),
                 ),
@@ -589,7 +589,7 @@ class _EventCardState extends State<_EventCard> {
               children: [
                 Text(
                   '${dt.day}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primaryRed,
@@ -598,7 +598,7 @@ class _EventCardState extends State<_EventCard> {
                 ),
                 Text(
                   _monthAbbr(dt.month),
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11, color: AppColors.primaryRed),
                 ),
               ],
@@ -611,7 +611,7 @@ class _EventCardState extends State<_EventCard> {
               children: [
                 Text(
                   widget.event.title as String,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -619,29 +619,29 @@ class _EventCardState extends State<_EventCard> {
                 const SizedBox(height: 2),
                 Text(
                   club.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12, color: AppColors.secondaryText),
                 ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    const Icon(Icons.schedule,
+                    Icon(Icons.schedule,
                         size: 12, color: AppColors.primaryRed),
                     const SizedBox(width: 3),
                     Text(
                       daysLabel,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
                           color: AppColors.primaryRed,
                           fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(width: 10),
-                    const Icon(Icons.people_outline,
+                    Icon(Icons.people_outline,
                         size: 12, color: AppColors.secondaryText),
                     const SizedBox(width: 3),
                     Text(
                       '${(widget.event.attendeeUserIds as List).length} attending',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12, color: AppColors.secondaryText),
                     ),
                   ],

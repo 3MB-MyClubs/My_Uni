@@ -69,7 +69,7 @@ class _StepEmailState extends State<StepEmail> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Title
-                const Text(
+                Text(
                   "What's your\nschool email?",
                   style: TextStyle(
                     fontSize: 30,
@@ -80,7 +80,7 @@ class _StepEmailState extends State<StepEmail> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   "We'll send a code to confirm you're a Koç student.",
                   style: TextStyle(
                     fontSize: 15,
@@ -98,7 +98,7 @@ class _StepEmailState extends State<StepEmail> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: SC.ink, fontSize: 16, letterSpacing: -0.1),
                   decoration: SC.fieldDecoration(
                     label: 'University email',
@@ -123,11 +123,11 @@ class _StepEmailState extends State<StepEmail> {
                       Container(
                         width: 18,
                         height: 18,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: SC.burgundy,
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
                             'i',
                             style: TextStyle(
@@ -142,7 +142,7 @@ class _StepEmailState extends State<StepEmail> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: RichText(
-                          text: const TextSpan(
+                          text: TextSpan(
                             style: TextStyle(
                               color: SC.burgundyDeep,
                               fontSize: 12,
@@ -179,7 +179,7 @@ class _StepEmailState extends State<StepEmail> {
             child: ElevatedButton(
               onPressed: _submit,
               style: SC.primaryButtonStyle(),
-              child: const Text('Continue'),
+              child: Text('Continue'),
             ),
           ),
         ),

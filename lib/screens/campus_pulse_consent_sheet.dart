@@ -180,7 +180,7 @@ class _ConsentSheetState extends State<_ConsentSheet> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text(
+                  : Text(
                       'Enable location sharing',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,

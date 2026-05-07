@@ -181,7 +181,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 _SectionHeader(title: 'Older'),
                 _buildGroup(older),
               ],
-              const SliverToBoxAdapter(child: SizedBox(height: 32)),
+              SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           ],
         ),
@@ -192,7 +192,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   SliverToBoxAdapter _buildHeader() {
     return SliverToBoxAdapter(
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [AppColors.primaryRed, Color(0xFFB71C1C)],
             begin: Alignment.topLeft,
@@ -209,7 +209,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Notifications',
                         style: TextStyle(
                           fontSize: 26,
@@ -232,8 +232,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 if (_unreadCount > 0)
                   TextButton.icon(
                     onPressed: _markAllRead,
-                    icon: const Icon(Icons.done_all, color: Colors.white, size: 16),
-                    label: const Text(
+                    icon: Icon(Icons.done_all, color: Colors.white, size: 16),
+                    label: Text(
                       'Mark all read',
                       style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
@@ -338,7 +338,7 @@ class _SectionHeader extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
                 color: AppColors.secondaryText,
@@ -355,7 +355,7 @@ class _SectionHeader extends StatelessWidget {
                 ),
                 child: Text(
                   '$count',
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -488,7 +488,7 @@ class _NotificationCard extends StatelessWidget {
                         const Spacer(),
                         Text(
                           timeLabel,
-                          style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                          style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
                         ),
                         if (!isRead) ...[
                           const SizedBox(width: 6),
@@ -605,7 +605,7 @@ class _FollowRequestCard extends StatelessWidget {
                               color: const Color(0xFFF3E5F5),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Follow Request',
                               style: TextStyle(
                                 fontSize: 10,
@@ -617,14 +617,14 @@ class _FollowRequestCard extends StatelessWidget {
                           ),
                           const Spacer(),
                           Text(timeLabel,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 11, color: AppColors.secondaryText)),
                           if (!isRead) ...[
                             const SizedBox(width: 6),
                             Container(
                               width: 7,
                               height: 7,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: Color(0xFF6A1B9A),
                                 shape: BoxShape.circle,
                               ),
@@ -660,7 +660,7 @@ class _FollowRequestCard extends StatelessWidget {
                           color: AppColors.primaryRed,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Accept',
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -684,7 +684,7 @@ class _FollowRequestCard extends StatelessWidget {
                           border: Border.all(
                               color: AppColors.secondaryText.withValues(alpha: 0.4)),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Decline',
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -704,7 +704,7 @@ class _FollowRequestCard extends StatelessWidget {
                 alreadyHandled && userState.isFollowingUser(fromId)
                     ? 'You accepted this request.'
                     : 'You declined this request.',
-                style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
             ],
           ],
@@ -795,7 +795,7 @@ class _BoardMemberRequestCard extends StatelessWidget {
                               color: const Color(0xFFE3F2FD),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Board Request',
                               style: TextStyle(
                                 fontSize: 10,
@@ -807,12 +807,12 @@ class _BoardMemberRequestCard extends StatelessWidget {
                           ),
                           const Spacer(),
                           Text(timeLabel,
-                              style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                              style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                           if (!isRead) ...[
                             const SizedBox(width: 6),
                             Container(
                               width: 7, height: 7,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: Color(0xFF1565C0),
                                 shape: BoxShape.circle,
                               ),
@@ -833,7 +833,7 @@ class _BoardMemberRequestCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Club: ${club.name}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
                       ),
                     ],
                   ),
@@ -846,14 +846,14 @@ class _BoardMemberRequestCard extends StatelessWidget {
                 club.boardMemberIds.contains(fromId)
                     ? 'Approved — ${requester.name} is now a board member.'
                     : 'This request was declined.',
-                style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               )
             else
               Row(
                 children: [
-                  const Icon(Icons.touch_app_outlined, size: 13, color: Color(0xFF1565C0)),
+                  Icon(Icons.touch_app_outlined, size: 13, color: Color(0xFF1565C0)),
                   const SizedBox(width: 4),
-                  const Text(
+                  Text(
                     'Tap to review in the club\'s Board tab',
                     style: TextStyle(fontSize: 12, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
                   ),
@@ -895,13 +895,13 @@ class _EmptyState extends StatelessWidget {
               color: AppColors.lightRed,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.notifications_none_rounded, size: 44, color: AppColors.primaryRed),
+            child: Icon(Icons.notifications_none_rounded, size: 44, color: AppColors.primaryRed),
           ),
           const SizedBox(height: 16),
-          const Text('All caught up!',
+          Text('All caught up!',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
           const SizedBox(height: 6),
-          const Text('No notifications yet.',
+          Text('No notifications yet.',
               style: TextStyle(fontSize: 14, color: AppColors.secondaryText)),
         ],
       ),

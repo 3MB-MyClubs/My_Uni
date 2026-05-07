@@ -109,7 +109,7 @@ class _StepVerifyState extends State<StepVerify> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Check your inbox.',
                   style: TextStyle(
                     fontSize: 30,
@@ -122,16 +122,16 @@ class _StepVerifyState extends State<StepVerify> {
                 const SizedBox(height: 10),
                 RichText(
                   text: TextSpan(
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 15,
                         color: SC.body,
                         height: 1.45,
                         letterSpacing: -0.1),
                     children: [
-                      const TextSpan(text: 'We sent a 6-digit code to\n'),
+                      TextSpan(text: 'We sent a 6-digit code to\n'),
                       TextSpan(
                         text: displayEmail,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: SC.ink, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -160,7 +160,7 @@ class _StepVerifyState extends State<StepVerify> {
                 if (_error != null) ...[
                   const SizedBox(height: 10),
                   Text(_error!,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: SC.burgundy, fontSize: 13)),
                 ],
 
@@ -168,7 +168,7 @@ class _StepVerifyState extends State<StepVerify> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Didn't get it?",
+                    Text("Didn't get it?",
                         style: TextStyle(
                             fontSize: 14, color: SC.muted)),
                     GestureDetector(
@@ -202,7 +202,7 @@ class _StepVerifyState extends State<StepVerify> {
             child: ElevatedButton(
               onPressed: _verify,
               style: SC.primaryButtonStyle(),
-              child: const Text('Verify'),
+              child: Text('Verify'),
             ),
           ),
         ),
@@ -287,13 +287,13 @@ class _OtpBoxState extends State<_OtpBox> {
             LengthLimitingTextInputFormatter(1),
           ],
           onChanged: widget.onChanged,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w600,
             color: SC.ink,
             letterSpacing: -0.5,
           ),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,

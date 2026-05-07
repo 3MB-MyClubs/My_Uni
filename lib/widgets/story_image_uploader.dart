@@ -54,7 +54,7 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -72,16 +72,16 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
-              title: const Text('Take a photo', style: TextStyle(color: AppColors.text)),
+              leading: Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
+              title: Text('Take a photo', style: TextStyle(color: AppColors.text)),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.camera);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
-              title: const Text('Choose from library', style: TextStyle(color: AppColors.text)),
+              leading: Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
+              title: Text('Choose from library', style: TextStyle(color: AppColors.text)),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.gallery);
@@ -89,8 +89,8 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
             ),
             if (widget.imagePath != null)
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Remove photo', style: TextStyle(color: Colors.red)),
+                leading: Icon(Icons.delete_outline, color: Colors.red),
+                title: Text('Remove photo', style: TextStyle(color: Colors.red)),
                 onTap: () {
                   Navigator.pop(context);
                   widget.onChanged(null);
@@ -126,11 +126,11 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
                       onTap: () => widget.onChanged(null),
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: Colors.black54,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close, color: Colors.white, size: 16),
+                        child: Icon(Icons.close, color: Colors.white, size: 16),
                       ),
                     ),
                   ),
@@ -143,7 +143,7 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.edit, color: Colors.white, size: 13),
@@ -165,12 +165,12 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
                     color: AppColors.secondaryText.withValues(alpha: 0.6),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Add cover photo (optional)',
                     style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Tap to pick from camera or library',
                     style: TextStyle(color: AppColors.secondaryText, fontSize: 11),
                   ),

@@ -114,7 +114,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Use this photo?',
+        title: Text('Use this photo?',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
         content: ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -124,7 +124,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -133,7 +133,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Use Photo'),
+            child: Text('Use Photo'),
           ),
         ],
       ),
@@ -158,7 +158,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -173,26 +173,26 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Change Club Photo',
+            Text('Change Club Photo',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
             const SizedBox(height: 16),
             ListTile(
               leading: Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+                child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
               ),
-              title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              title: Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
               onTap: () { Navigator.pop(context); _pickClubPhoto(ImageSource.camera); },
             ),
-            const Divider(height: 1, indent: 16),
+            Divider(height: 1, indent: 16),
             ListTile(
               leading: Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+                child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
               ),
-              title: const Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              title: Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
               onTap: () { Navigator.pop(context); _pickClubPhoto(ImageSource.gallery); },
             ),
           ],
@@ -240,7 +240,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             actions: [
               if (_isThisClubAdmin)
                 IconButton(
-                  icon: const Icon(Icons.manage_accounts_outlined),
+                  icon: Icon(Icons.manage_accounts_outlined),
                   tooltip: 'Manage Board',
                   onPressed: _openBoardManagement,
                 ),
@@ -287,7 +287,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                     shape: BoxShape.circle,
                                     border: Border.all(color: AppColors.card, width: 2),
                                   ),
-                                  child: const Icon(Icons.edit, color: Colors.white, size: 12),
+                                  child: Icon(Icons.edit, color: Colors.white, size: 12),
                                 ),
                               ),
                           ],
@@ -299,7 +299,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               ),
               title: Text(
                 widget.club.name,
-                style: const TextStyle(
+                style: TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.text),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -333,7 +333,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                   // Description
                   Text(
                     widget.club.description,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13, color: AppColors.secondaryText, height: 1.5),
                   ),
                   const SizedBox(height: 12),
@@ -358,7 +358,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                           color: AppColors.secondaryText.withValues(alpha: 0.5),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Message',
                         textAlign: TextAlign.center,
                         style: TextStyle(
@@ -384,7 +384,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 labelColor: AppColors.primaryRed,
                 unselectedLabelColor: AppColors.secondaryText,
                 indicatorColor: AppColors.primaryRed,
-                tabs: const [
+                tabs: [
                   Tab(text: 'Posts'),
                   Tab(text: 'Events'),
                   Tab(text: 'Collabs'),
@@ -425,7 +425,7 @@ class _PostsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (posts.isEmpty) {
-      return const Center(
+      return Center(
         child: Text('No posts yet.', style: TextStyle(color: AppColors.secondaryText)),
       );
     }
@@ -517,17 +517,17 @@ class _PostGridTile extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.favorite, size: 11, color: Colors.white),
+                Icon(Icons.favorite, size: 11, color: Colors.white),
                 const SizedBox(width: 3),
                 Text('$likeCount',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600,
                         shadows: [Shadow(blurRadius: 2, color: Colors.black)])),
                 const SizedBox(width: 7),
-                const Icon(Icons.chat_bubble_rounded, size: 11, color: Colors.white),
+                Icon(Icons.chat_bubble_rounded, size: 11, color: Colors.white),
                 const SizedBox(width: 3),
                 Text('$commentCount',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600,
                         shadows: [Shadow(blurRadius: 2, color: Colors.black)])),
               ],
@@ -627,7 +627,7 @@ class _EventsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      return const Center(
+      return Center(
         child: Text('No events yet.', style: TextStyle(color: AppColors.secondaryText)),
       );
     }
@@ -673,13 +673,13 @@ class _EventsTab extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text('${dt.day}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: AppColors.primaryRed,
                             height: 1)),
                     Text(monthAbbr(dt.month),
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11, color: AppColors.primaryRed)),
                   ],
                 ),
@@ -690,32 +690,32 @@ class _EventsTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(event.title as String,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 3),
                     Text(event.description as String,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12, color: AppColors.secondaryText),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 5),
                     Row(
                       children: [
-                        const Icon(Icons.schedule, size: 12, color: AppColors.primaryRed),
+                        Icon(Icons.schedule, size: 12, color: AppColors.primaryRed),
                         const SizedBox(width: 3),
                         Text(daysLabel,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.primaryRed,
                                 fontWeight: FontWeight.w500)),
                         const SizedBox(width: 10),
-                        const Icon(Icons.people_outline,
+                        Icon(Icons.people_outline,
                             size: 12, color: AppColors.secondaryText),
                         const SizedBox(width: 3),
                         Text('${(event.attendeeUserIds as List).length} attending',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12, color: AppColors.secondaryText)),
                       ],
                     ),
@@ -761,7 +761,7 @@ class _CollaborationsTab extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8, bottom: 80),
       children: [
         if (isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(40),
             child: Center(
               child: Text(
@@ -774,7 +774,7 @@ class _CollaborationsTab extends StatelessWidget {
 
         // ── Partner clubs banner row ──
         if (partnerClubs.isNotEmpty) ...[
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text('Partner Clubs',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
@@ -811,7 +811,7 @@ class _CollaborationsTab extends StatelessWidget {
                               textAlign: TextAlign.center,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                              style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                         ),
                       ],
                     ),
@@ -820,12 +820,12 @@ class _CollaborationsTab extends StatelessWidget {
               },
             ),
           ),
-          const Divider(height: 24),
+          Divider(height: 24),
         ],
 
         // ── Tagged posts ──
         if (taggedPosts.isNotEmpty) ...[
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text('Posts featuring this club',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
@@ -864,10 +864,10 @@ class _CollaborationsTab extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(authorClub.name,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.text),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.text),
                                     overflow: TextOverflow.ellipsis),
                                 Text(timeAgo(post.createdAt as DateTime),
-                                    style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                                    style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                               ],
                             ),
                           ),
@@ -902,13 +902,13 @@ class _CollaborationsTab extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       child: Row(
                         children: [
-                          const Icon(Icons.favorite, size: 14, color: Colors.pink),
+                          Icon(Icons.favorite, size: 14, color: Colors.pink),
                           const SizedBox(width: 4),
-                          Text('$likeCount', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                          Text('$likeCount', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                           const SizedBox(width: 12),
-                          const Icon(Icons.chat_bubble_outline, size: 14, color: AppColors.secondaryText),
+                          Icon(Icons.chat_bubble_outline, size: 14, color: AppColors.secondaryText),
                           const SizedBox(width: 4),
-                          Text('$commentCount', style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                          Text('$commentCount', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                         ],
                       ),
                     ),
@@ -990,13 +990,13 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text('Set title for ${u.name}',
-            style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLength: 40,
-          style: const TextStyle(color: AppColors.text),
-          decoration: const InputDecoration(
+          style: TextStyle(color: AppColors.text),
+          decoration: InputDecoration(
             hintText: 'e.g. President, Secretary…',
             hintStyle: TextStyle(color: AppColors.secondaryText),
           ),
@@ -1004,16 +1004,16 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           if (current.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(ctx, ''),
-              child: const Text('Remove title', style: TextStyle(color: AppColors.primaryRed)),
+              child: Text('Remove title', style: TextStyle(color: AppColors.primaryRed)),
             ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save'),
+            child: Text('Save'),
           ),
         ],
       ),
@@ -1035,18 +1035,18 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Remove Board Member',
+        title: Text('Remove Board Member',
             style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
         content: Text('Are you sure you want to remove ${u.name} from the board?',
-            style: const TextStyle(color: AppColors.secondaryText)),
+            style: TextStyle(color: AppColors.secondaryText)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove', style: TextStyle(color: AppColors.primaryRed)),
+            child: Text('Remove', style: TextStyle(color: AppColors.primaryRed)),
           ),
         ],
       ),
@@ -1057,20 +1057,20 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Confirm Removal',
+        title: Text('Confirm Removal',
             style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
         content: Text(
             'This will permanently remove ${u.name} from the board of ${widget.club.name}. Continue?',
-            style: const TextStyle(color: AppColors.secondaryText)),
+            style: TextStyle(color: AppColors.secondaryText)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Remove'),
+            child: Text('Yes, Remove'),
           ),
         ],
       ),
@@ -1098,7 +1098,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
       maxChildSize: 0.92,
       expand: false,
       builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -1121,10 +1121,10 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(Icons.manage_accounts_outlined,
+                      Icon(Icons.manage_accounts_outlined,
                           color: AppColors.primaryRed, size: 22),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'Manage Board Members',
                         style: TextStyle(
                           fontSize: 17,
@@ -1135,7 +1135,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'Members added here are added instantly, no confirmation needed.',
                     style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
                   ),
@@ -1144,11 +1144,11 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                   TextField(
                     controller: _searchController,
                     onChanged: (v) => setState(() => _query = v),
-                    style: const TextStyle(fontSize: 14, color: AppColors.text),
+                    style: TextStyle(fontSize: 14, color: AppColors.text),
                     decoration: InputDecoration(
                       hintText: 'Search users by name...',
-                      hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 14),
-                      prefixIcon: const Icon(Icons.search, color: AppColors.secondaryText, size: 20),
+                      hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 14),
+                      prefixIcon: Icon(Icons.search, color: AppColors.secondaryText, size: 20),
                       filled: true,
                       fillColor: AppColors.background,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -1163,7 +1163,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
               ),
             ),
 
-            const Divider(height: 1),
+            Divider(height: 1),
 
             Expanded(
               child: ListView(
@@ -1172,7 +1172,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                 children: [
                   // Search results
                   if (matches.isNotEmpty) ...[
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: Text('Add to Board',
                           style: TextStyle(
@@ -1191,12 +1191,12 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                             textColor: AppColors.primaryRed,
                           ),
                           title: Text(u.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.text)),
                           subtitle: Text(u.email,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 12, color: AppColors.secondaryText)),
                           trailing: TextButton(
                             onPressed: () => _addMember(u.id),
@@ -1208,11 +1208,11 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: const Text('Add',
+                            child: Text('Add',
                                 style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         )),
-                    const Divider(height: 16),
+                    Divider(height: 16),
                   ],
 
                   // Current board members
@@ -1222,7 +1222,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                       boardMembers.isEmpty
                           ? 'No board members yet'
                           : 'Current Board Members (${boardMembers.length})',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: AppColors.secondaryText,
@@ -1230,7 +1230,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                     ),
                   ),
                   if (boardMembers.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: Text(
                         'Search for a user above to add them to the board.',
@@ -1249,7 +1249,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                             textColor: const Color(0xFF1565C0),
                           ),
                           title: Text(u.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.text)),
@@ -1271,20 +1271,20 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                                 ),
                               ),
                               Text(u.email,
-                                  style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                                  style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                             ],
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined,
+                                icon: Icon(Icons.edit_outlined,
                                     color: Color(0xFF1565C0), size: 20),
                                 tooltip: 'Set title',
                                 onPressed: () => _editTitleInSheet(u),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.remove_circle_outline,
+                                icon: Icon(Icons.remove_circle_outline,
                                     color: AppColors.secondaryText, size: 22),
                                 tooltip: 'Remove from board',
                                 onPressed: () => _removeMember(u),
@@ -1330,13 +1330,13 @@ class _BoardTabState extends State<_BoardTab> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text('Set title for ${u.name}',
-            style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLength: 40,
-          style: const TextStyle(color: AppColors.text),
-          decoration: const InputDecoration(
+          style: TextStyle(color: AppColors.text),
+          decoration: InputDecoration(
             hintText: 'e.g. President, Secretary…',
             hintStyle: TextStyle(color: AppColors.secondaryText),
           ),
@@ -1344,16 +1344,16 @@ class _BoardTabState extends State<_BoardTab> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           if (current.isNotEmpty)
             TextButton(
               onPressed: () => Navigator.pop(ctx, ''),
-              child: const Text('Remove title', style: TextStyle(color: AppColors.primaryRed)),
+              child: Text('Remove title', style: TextStyle(color: AppColors.primaryRed)),
             ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save'),
+            child: Text('Save'),
           ),
         ],
       ),
@@ -1433,20 +1433,20 @@ class _BoardTabState extends State<_BoardTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Remove Board Member',
+        title: Text('Remove Board Member',
             style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
         content: Text(
           'Are you sure you want to remove ${u.name} from the board?',
-          style: const TextStyle(color: AppColors.secondaryText),
+          style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove', style: TextStyle(color: AppColors.primaryRed)),
+            child: Text('Remove', style: TextStyle(color: AppColors.primaryRed)),
           ),
         ],
       ),
@@ -1458,21 +1458,21 @@ class _BoardTabState extends State<_BoardTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Confirm Removal',
+        title: Text('Confirm Removal',
             style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
         content: Text(
           'This will permanently remove ${u.name} from the board of ${widget.club.name}. Continue?',
-          style: const TextStyle(color: AppColors.secondaryText),
+          style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Remove'),
+            child: Text('Yes, Remove'),
           ),
         ],
       ),
@@ -1511,9 +1511,9 @@ class _BoardTabState extends State<_BoardTab> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                const Icon(Icons.pending_actions_outlined, color: Color(0xFFF57C00), size: 20),
+                Icon(Icons.pending_actions_outlined, color: Color(0xFFF57C00), size: 20),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'Pending Requests',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
                 ),
@@ -1526,7 +1526,7 @@ class _BoardTabState extends State<_BoardTab> {
                   ),
                   child: Text(
                     '${pending.length}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF57C00)),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF57C00)),
                   ),
                 ),
               ],
@@ -1559,14 +1559,14 @@ class _BoardTabState extends State<_BoardTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(req.userName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
                           Text(req.userEmail,
-                              style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                              style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                           const SizedBox(height: 2),
                           Text(
                             'Requested ${_timeAgoFromDate(req.requestedAt)}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
                           ),
                         ],
                       ),
@@ -1575,13 +1575,13 @@ class _BoardTabState extends State<_BoardTab> {
                   const SizedBox(width: 8),
                   // Decline
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.primaryRed, size: 22),
+                    icon: Icon(Icons.close_rounded, color: AppColors.primaryRed, size: 22),
                     tooltip: 'Decline',
                     onPressed: () => _decline(req),
                   ),
                   // Approve
                   IconButton(
-                    icon: const Icon(Icons.check_rounded, color: Color(0xFF2E7D32), size: 22),
+                    icon: Icon(Icons.check_rounded, color: Color(0xFF2E7D32), size: 22),
                     tooltip: 'Approve',
                     onPressed: () => _approve(req),
                   ),
@@ -1589,7 +1589,7 @@ class _BoardTabState extends State<_BoardTab> {
               ),
             );
           }),
-          const Divider(height: 1),
+          Divider(height: 1),
           const SizedBox(height: 8),
         ],
 
@@ -1600,9 +1600,9 @@ class _BoardTabState extends State<_BoardTab> {
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Row(
             children: [
-              const Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
+              Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Board Members',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
               ),
@@ -1615,18 +1615,18 @@ class _BoardTabState extends State<_BoardTab> {
                 ),
                 child: Text(
                   '${members.length}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1565C0)),
                 ),
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
+        Divider(height: 1),
 
         // ── Board Members list ─────────────────────────────────────────────────
         if (members.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 48),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1659,22 +1659,22 @@ class _BoardTabState extends State<_BoardTab> {
                     textColor: const Color(0xFF1565C0),
                   ),
                   title: Text(u.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (title != null && title.isNotEmpty)
                         Text(title,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF1565C0),
                                 fontWeight: FontWeight.w600))
                       else
-                        const Text('Board Member',
+                        Text('Board Member',
                             style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
                       Text(u.email,
-                          style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                     ],
                   ),
                   trailing: authorized
@@ -1683,13 +1683,13 @@ class _BoardTabState extends State<_BoardTab> {
                           children: [
                             if (isAdmin)
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined,
+                                icon: Icon(Icons.edit_outlined,
                                     color: Color(0xFF1565C0), size: 20),
                                 tooltip: 'Set title',
                                 onPressed: () => _editTitle(u),
                               ),
                             IconButton(
-                              icon: const Icon(Icons.remove_circle_outline,
+                              icon: Icon(Icons.remove_circle_outline,
                                   color: AppColors.secondaryText, size: 22),
                               tooltip: 'Remove from board',
                               onPressed: () => _confirmRemove(u),
@@ -1702,14 +1702,14 @@ class _BoardTabState extends State<_BoardTab> {
                             color: const Color(0xFFE3F2FD),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text('Board',
+                          child: Text('Board',
                               style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF1565C0))),
                         ),
                 ),
-                const Divider(height: 1, indent: 72),
+                Divider(height: 1, indent: 72),
               ],
             );
           }),
@@ -1793,11 +1793,11 @@ class _StatCell extends StatelessWidget {
     return Column(
       children: [
         Text(value,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
         const SizedBox(height: 2),
         Text(label,
-            style: const TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+            style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
       ],
     );
   }

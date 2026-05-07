@@ -64,7 +64,7 @@ class _StepDoneState extends State<StepDone>
             // ── Radial burgundy wash from top ───────────────────
             Positioned.fill(
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: RadialGradient(
                     center: Alignment(0, -1.0),
                     radius: 1.2,
@@ -91,7 +91,7 @@ class _StepDoneState extends State<StepDone>
                           _KuSeal(),
                           const SizedBox(height: 28),
 
-                          const Text(
+                          Text(
                             'WELCOME TO KOÇ',
                             style: TextStyle(
                               fontSize: 11,
@@ -105,7 +105,7 @@ class _StepDoneState extends State<StepDone>
                           Text(
                             "You're in,\n$_firstName.",
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 40,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
@@ -115,7 +115,7 @@ class _StepDoneState extends State<StepDone>
                           ),
                           const SizedBox(height: 16),
 
-                          const Text(
+                          Text(
                             'Your schedule, dining hours, and\n12 nearby events are ready.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
@@ -148,7 +148,7 @@ class _StepDoneState extends State<StepDone>
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       'NEXT UP · TODAY',
                                       style: TextStyle(
                                         fontSize: 10,
@@ -157,7 +157,7 @@ class _StepDoneState extends State<StepDone>
                                       ),
                                     ),
                                     const SizedBox(height: 6),
-                                    const Text(
+                                    Text(
                                       'CS 240 · Algorithms',
                                       style: TextStyle(
                                         fontSize: 17,
@@ -166,13 +166,13 @@ class _StepDoneState extends State<StepDone>
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    const Text(
+                                    Text(
                                       'Hadley Hall 105 · 11:00 AM',
                                       style: TextStyle(
                                           fontSize: 13,
                                           color: Color(0x99FFFFFF)),
                                     ),
-                                    const Divider(
+                                    Divider(
                                       height: 24,
                                       color: Color(0x1AFFFFFF),
                                     ),
@@ -180,7 +180,7 @@ class _StepDoneState extends State<StepDone>
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Text(
+                                        Text(
                                           'Robotics Club · Tonight 7pm',
                                           style: TextStyle(
                                               fontSize: 13,
@@ -197,7 +197,7 @@ class _StepDoneState extends State<StepDone>
                                             borderRadius:
                                                 BorderRadius.circular(100),
                                           ),
-                                          child: const Text(
+                                          child: Text(
                                             'RSVP',
                                             style: TextStyle(
                                               fontSize: 12,
@@ -230,7 +230,7 @@ class _StepDoneState extends State<StepDone>
                           bg: Colors.white,
                           fg: const Color(0xFF0B0B0C),
                         ),
-                        child: const Text('Take me to campus'),
+                        child: Text('Take me to campus'),
                       ),
                     ),
                   ),
@@ -262,7 +262,7 @@ class _KuSeal extends StatelessWidget {
           ),
         ],
       ),
-      child: const Center(
+      child: Center(
         child: Text(
           'KU',
           style: TextStyle(
