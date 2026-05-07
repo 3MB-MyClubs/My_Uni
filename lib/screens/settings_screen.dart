@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -175,6 +176,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isValidUsername(String value) =>
       RegExp(r'^[a-zA-Z0-9_.À-öø-ÿ]{1,30}$').hasMatch(value);
 
+  void _openPreferencesSheet(Set<String> _) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditPreferencesSheet(
+        userId: _userId,
+        onSaved: () => setState(() {}),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -222,6 +235,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: AppColors.secondaryText),
               onTap: _openUsernameSheet,
             ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Preferences section ──────────────────────────────────────────
+          _SectionHeader(title: 'Preferences'),
+          ListenableBuilder(
+            listenable: personalizationService,
+            builder: (context, _) {
+              final major = personalizationService.major;
+              final interests = personalizationService.interests;
+              final times = personalizationService.timePrefs;
+              final summary = [
+                if (major.isNotEmpty) major,
+                if (interests.isNotEmpty) interests.take(2).join(', ') + (interests.length > 2 ? '…' : ''),
+              ].join(' · ');
+              return Container(
+                color: AppColors.card,
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.lightRed,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.tune_rounded,
+                            color: AppColors.primaryRed, size: 20),
+                      ),
+                      title: const Text('My Preferences',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+                      subtitle: Text(
+                        summary.isNotEmpty ? summary : 'Not set — tap to configure',
+                        style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText),
+                      onTap: () => _openPreferencesSheet(times),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
 
           const SizedBox(height: 24),
@@ -280,6 +339,310 @@ class _SectionHeader extends StatelessWidget {
           letterSpacing: 0.8,
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edit Preferences Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EditPreferencesSheet extends StatefulWidget {
+  final String userId;
+  final VoidCallback onSaved;
+  const _EditPreferencesSheet({required this.userId, required this.onSaved});
+
+  @override
+  State<_EditPreferencesSheet> createState() => _EditPreferencesSheetState();
+}
+
+class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
+  late Set<String> _interests;
+  late Set<String> _times;
+  late String _major;
+  int _tab = 0;
+  static const _tabLabels = ['Interests', 'Major', 'Schedule'];
+
+  @override
+  void initState() {
+    super.initState();
+    _interests = Set.of(personalizationService.interests);
+    _times = Set.of(personalizationService.timePrefs);
+    _major = personalizationService.major;
+  }
+
+  Future<void> _save() async {
+    await personalizationService.completeOnboarding(
+        widget.userId, _interests, _times, _major);
+    await userPrefsService.save(widget.userId);
+    if (mounted) {
+      Navigator.pop(context);
+      widget.onSaved();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                    color: AppColors.lightRed,
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.tune_rounded,
+                    color: AppColors.primaryRed, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('My Preferences',
+                        style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text)),
+                    Text('Interests, major & schedule',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.secondaryText)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Tab chips
+          Row(
+            children: List.generate(_tabLabels.length, (i) {
+              final sel = _tab == i;
+              return Padding(
+                padding: EdgeInsets.only(right: i < 2 ? 8 : 0),
+                child: GestureDetector(
+                  onTap: () => setState(() => _tab = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: sel ? AppColors.primaryRed : AppColors.surfaceAlt,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(_tabLabels[i],
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                            color: sel ? Colors.white : AppColors.text)),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 18),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _tab == 0
+                ? _buildInterestsTab()
+                : _tab == 1
+                    ? _buildMajorTab()
+                    : _buildScheduleTab(),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: const Text('Save changes',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInterestsTab() {
+    return Wrap(
+      key: const ValueKey('interests'),
+      spacing: 8,
+      runSpacing: 8,
+      children: kInterests.map((tag) {
+        final sel = _interests.contains(tag);
+        return GestureDetector(
+          onTap: () => setState(() => sel ? _interests.remove(tag) : _interests.add(tag)),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: sel ? AppColors.primaryRed : AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                  color: sel ? AppColors.primaryRed : AppColors.divider),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (sel) ...[
+                  const Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                  const SizedBox(width: 5),
+                ],
+                Text(tag,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: sel ? Colors.white : AppColors.text)),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMajorTab() {
+    return ListView.separated(
+      key: const ValueKey('major'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: kFaculties.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final faculty = kFaculties[i];
+        final name = faculty['name'] as String;
+        final depts = faculty['departments'] as String;
+        final sel = _major == name;
+        return GestureDetector(
+          onTap: () => setState(() => _major = name),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: sel ? AppColors.lightRed : AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: sel ? AppColors.primaryRed : AppColors.divider,
+                  width: sel ? 1.5 : 1),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                      color: AppColors.lightRed,
+                      borderRadius: BorderRadius.circular(9)),
+                  child: const Icon(Icons.school_outlined,
+                      size: 16, color: AppColors.primaryRed),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text)),
+                      Text(depts,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.secondaryText)),
+                    ],
+                  ),
+                ),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 20, height: 20,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: sel ? AppColors.primaryRed : Colors.transparent,
+                    border: Border.all(
+                        color: sel ? AppColors.primaryRed : AppColors.divider,
+                        width: 1.5),
+                  ),
+                  child: sel
+                      ? const Icon(Icons.check, size: 12, color: Colors.white)
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScheduleTab() {
+    const iconMap = {
+      'Morning': Icons.wb_sunny_outlined,
+      'Afternoon': Icons.wb_cloudy_outlined,
+      'Evening': Icons.nights_stay_outlined,
+      'Weekend': Icons.weekend_outlined,
+    };
+    return GridView.count(
+      key: const ValueKey('schedule'),
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 2.8,
+      children: kTimeSlots.map((slot) {
+        final sel = _times.contains(slot);
+        return GestureDetector(
+          onTap: () => setState(
+              () => sel ? _times.remove(slot) : _times.add(slot)),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            decoration: BoxDecoration(
+              color: sel ? AppColors.primaryRed : AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: sel ? AppColors.primaryRed : AppColors.divider),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(iconMap[slot],
+                    size: 18,
+                    color: sel ? Colors.white : AppColors.secondaryText),
+                const SizedBox(width: 8),
+                Text(slot,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: sel ? Colors.white : AppColors.text)),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

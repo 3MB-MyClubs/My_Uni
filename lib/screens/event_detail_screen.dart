@@ -1,3 +1,4 @@
+import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import 'package:flutter/material.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
@@ -427,17 +428,145 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ],
       ),
 
-      // ── RSVP button — reads from global store, identical on every screen ────
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: RsvpButton(
-            eventId: event.id,
-            color: color,
-            isPast: isPast,
-          ),
-        ),
+      // ── RSVP bottom panel ────────────────────────────────────────────────────
+      bottomNavigationBar: _RsvpPanel(
+        event: event,
+        color: color,
+        isPast: isPast,
       ),
+    );
+  }
+}
+
+// ─── RSVP Bottom Panel ────────────────────────────────────────────────────────
+
+class _RsvpPanel extends StatelessWidget {
+  final Event event;
+  final Color color;
+  final bool isPast;
+
+  const _RsvpPanel({
+    required this.event,
+    required this.color,
+    required this.isPast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: rsvpStore,
+      builder: (context, _) {
+        final attending = rsvpStore.isAttending(event.id);
+        final count = event.attendeeUserIds.length;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 24,
+                offset: const Offset(0, -8),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Attendee social proof row ──────────────────────────────
+                  if (!isPast && count > 0) ...[
+                    Row(
+                      children: [
+                        // Stacked avatar circles
+                        SizedBox(
+                          width: (count.clamp(1, 4) * 20 + 12).toDouble(),
+                          height: 26,
+                          child: Stack(
+                            children: List.generate(count.clamp(1, 4), (i) {
+                              final hue = (i * 60.0) % 360;
+                              return Positioned(
+                                left: i * 20.0,
+                                child: Container(
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: HSLColor.fromAHSL(1, hue, 0.55, 0.42).toColor(),
+                                    border: Border.all(color: AppColors.card, width: 2),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      String.fromCharCode(65 + i),
+                                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            attending
+                                ? 'You + ${count - 1} ${count - 1 == 1 ? 'other' : 'others'} going'
+                                : '$count ${count == 1 ? 'person' : 'people'} going — join them!',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: attending
+                                  ? color.withValues(alpha: 0.9)
+                                  : AppColors.secondaryText,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        // Add to calendar — compact icon
+                        GestureDetector(
+                          onTap: () {
+                            cal.Add2Calendar.addEvent2Cal(cal.Event(
+                              title: event.title,
+                              description: event.description,
+                              location: event.location,
+                              startDate: event.dateTime,
+                              endDate: event.endTime,
+                              allDay: false,
+                            ));
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: color.withValues(alpha: 0.2)),
+                            ),
+                            child: Icon(Icons.calendar_month_outlined, size: 18, color: color),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // ── RSVP button ────────────────────────────────────────────
+                  RsvpButton(
+                    eventId: event.id,
+                    color: color,
+                    isPast: isPast,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

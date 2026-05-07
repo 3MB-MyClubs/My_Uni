@@ -25,6 +25,7 @@ import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
+import '../services/personalization_service.dart';
 import '../widgets/rsvp_button.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
@@ -210,8 +211,6 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildScheduleStrip(),
             _buildWelcomeCard(live, upcoming),
             _buildEventsStrip(live, upcoming),
-            _buildQuickAccessGrid(),
-            _buildDiningCard(),
             if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -320,35 +319,59 @@ class _FeedScreenState extends State<FeedScreen> {
       surfaceTintColor: Colors.transparent,
       floating: true,
       snap: true,
-      expandedHeight: 72,
+      expandedHeight: 76,
       collapsedHeight: 56,
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.fromLTRB(16, 0, 56, 10),
+        titlePadding: const EdgeInsets.fromLTRB(18, 0, 56, 12),
         title: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$_greeting, $_firstName 👋',
-              style: const TextStyle(fontSize: 13, color: AppColors.secondaryText, fontWeight: FontWeight.normal),
+              '$_greeting, $_firstName',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.secondaryText.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.1,
+              ),
             ),
+            const SizedBox(height: 1),
             RichText(
               text: const TextSpan(
                 children: [
                   TextSpan(
                     text: 'Uni',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.primaryRed, letterSpacing: -0.5),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                      color: AppColors.primaryRed,
+                      letterSpacing: -0.8,
+                    ),
                   ),
                   TextSpan(
                     text: 'Hub',
-                    style: TextStyle(fontWeight: FontWeight.w300, fontSize: 20, color: AppColors.text, letterSpacing: -0.5),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w200,
+                      fontSize: 22,
+                      color: AppColors.text,
+                      letterSpacing: -0.8,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        background: Container(color: AppColors.card),
+        background: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1E0A22), AppColors.card],
+            ),
+          ),
+        ),
       ),
       actions: [
         IconButton(
@@ -376,8 +399,14 @@ class _FeedScreenState extends State<FeedScreen> {
     const labels = ['For You', 'Following', 'Events', 'Clubs'];
     return SliverToBoxAdapter(
       child: Container(
-        color: AppColors.card,
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1E0A22), AppColors.card],
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -386,24 +415,42 @@ class _FeedScreenState extends State<FeedScreen> {
               return GestureDetector(
                 onTap: () => setState(() => _feedTab = i),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                   decoration: BoxDecoration(
-                    color: active ? AppColors.primaryRed : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
+                    gradient: active
+                        ? const LinearGradient(
+                            colors: [AppColors.primaryRed, Color(0xFF6A1530)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: active ? null : Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(22),
                     border: Border.all(
                       color: active
-                          ? AppColors.primaryRed
-                          : AppColors.secondaryText.withValues(alpha: 0.3),
+                          ? AppColors.primaryRed.withValues(alpha: 0.6)
+                          : AppColors.glassEdge,
+                      width: active ? 0 : 1,
                     ),
+                    boxShadow: active
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primaryRed.withValues(alpha: 0.35),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: Text(
                     labels[i],
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w400,
                       color: active ? Colors.white : AppColors.secondaryText,
+                      letterSpacing: active ? 0.2 : 0,
                     ),
                   ),
                 ),
@@ -431,28 +478,39 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
         child: Row(
           children: [
             // Weather card
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.secondaryText.withValues(alpha: 0.1)),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A1226), Color(0xFF140818)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.glassEdge),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    Text(weatherIcon, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 8),
+                    Text(weatherIcon, style: const TextStyle(fontSize: 22)),
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(weather,
                             style: const TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
+                                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text, letterSpacing: -0.2)),
                         const Text('Istanbul · Campus',
                             style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
                       ],
@@ -465,24 +523,38 @@ class _FeedScreenState extends State<FeedScreen> {
             // Academic week card
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.secondaryText.withValues(alpha: 0.1)),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primaryRed.withValues(alpha: 0.18),
+                      AppColors.card,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.primaryRed.withValues(alpha: 0.2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryRed.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    const Text('📅', style: TextStyle(fontSize: 20)),
-                    const SizedBox(width: 8),
+                    const Text('📅', style: TextStyle(fontSize: 22)),
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(weekLabel,
                             style: const TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
+                                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text, letterSpacing: -0.2)),
                         Text(finalsLabel,
-                            style: const TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                            style: TextStyle(fontSize: 11, color: AppColors.primaryRed.withValues(alpha: 0.8))),
                       ],
                     ),
                   ],
@@ -498,39 +570,98 @@ class _FeedScreenState extends State<FeedScreen> {
   // ── Schedule Strip (today's classes) ──────────────────────────────────────
   bool _scheduleExpanded = false;
 
-  static const _schedule = [
-    {'title': 'CS 342 · Operating Systems', 'room': 'ENG-B12', 'time': '09:00', 'dur': '50 min', 'status': 'now',   'color': 0xFF1565C0},
-    {'title': 'MATH 251 · Linear Algebra',  'room': 'SCI-A08', 'time': '11:00', 'dur': '50 min', 'status': 'next',  'color': 0xFF2E7D32},
-    {'title': 'ENG 201 · Tech Writing',     'room': 'HUM-103', 'time': '13:30', 'dur': '80 min', 'status': 'later', 'color': 0xFF6A1B9A},
-    {'title': 'CS 342 · HW #4 Due',         'room': 'Gradescope', 'time': '23:59', 'dur': '',   'status': 'later', 'color': 0xFFE65100, 'deadline': true},
-  ];
+  // days: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri — defined in personalization_service.dart
+  List<Map<String, dynamic>> get _allCourses => kCourseSchedule;
 
   SliverToBoxAdapter _buildScheduleStrip() {
-    final visible = _scheduleExpanded ? _schedule : _schedule.take(2).toList();
+    final now = DateTime.now();
+    final todayWeekday = now.weekday; // 1=Mon … 5=Fri
+    final todayMinutes = now.hour * 60 + now.minute;
+
+    // Filter to today's courses, sorted by start time
+    final todayAll = _allCourses
+        .where((c) => (c['days'] as List).contains(todayWeekday))
+        .toList()
+      ..sort((a, b) {
+        final aM = (a['startH'] as int) * 60 + (a['startM'] as int);
+        final bM = (b['startH'] as int) * 60 + (b['startM'] as int);
+        return aM.compareTo(bM);
+      });
+
+    // Compute status for each
+    List<Map<String, dynamic>> schedule = [];
+    bool nextAssigned = false;
+    for (final c in todayAll) {
+      final startMin = (c['startH'] as int) * 60 + (c['startM'] as int);
+      final endMin   = (c['endH']   as int) * 60 + (c['endM']   as int);
+      final String status;
+      if (todayMinutes >= startMin && todayMinutes < endMin) {
+        status = 'now';
+      } else if (todayMinutes < startMin && !nextAssigned) {
+        status = 'next';
+        nextAssigned = true;
+      } else {
+        status = todayMinutes >= endMin ? 'done' : 'later';
+      }
+      final sh = (c['startH'] as int).toString().padLeft(2, '0');
+      final sm = (c['startM'] as int).toString().padLeft(2, '0');
+      final eh = (c['endH']   as int).toString().padLeft(2, '0');
+      final em = (c['endM']   as int).toString().padLeft(2, '0');
+      final dur = (endMin - startMin);
+      schedule.add({
+        'title': c['title'],
+        'room':  c['room'],
+        'time':  '$sh:$sm – $eh:$em',
+        'dur':   '${dur ~/ 60}h ${dur % 60 == 0 ? '' : '${dur % 60}m'}'.trim(),
+        'status': status,
+        'color':  c['color'],
+      });
+    }
+
+    if (schedule.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    final visible = _scheduleExpanded ? schedule : schedule.take(2).toList();
 
     return SliverToBoxAdapter(
       child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+        margin: const EdgeInsets.fromLTRB(14, 12, 14, 0),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.secondaryText.withValues(alpha: 0.1)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.glassEdge),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Row(
                 children: [
+                  const Text('📋', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 7),
                   const Text('Today\'s Schedule',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text, letterSpacing: -0.3)),
                   const Spacer(),
+                  if (schedule.length > 2)
                   GestureDetector(
                     onTap: () => setState(() => _scheduleExpanded = !_scheduleExpanded),
-                    child: Text(
-                      _scheduleExpanded ? 'Less' : 'All ${_schedule.length}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _scheduleExpanded ? 'Less' : 'All ${schedule.length}',
+                        style: const TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 ],
@@ -539,21 +670,33 @@ class _FeedScreenState extends State<FeedScreen> {
 
             // Schedule items
             ...visible.map((item) {
-              final isDeadline = item['deadline'] == true;
               final status = item['status'] as String;
               final color = Color(item['color'] as int);
-              final statusLabel = status == 'now' ? 'NOW' : status == 'next' ? 'NEXT' : null;
+              final isNow = status == 'now';
+              final statusLabel = isNow ? 'NOW' : status == 'next' ? 'NEXT' : null;
 
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              return Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                decoration: BoxDecoration(
+                  color: isNow
+                      ? color.withValues(alpha: 0.08)
+                      : Colors.white.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(10),
+                  border: isNow
+                      ? Border.all(color: color.withValues(alpha: 0.25))
+                      : null,
+                ),
                 child: Row(
                   children: [
-                    // Left color bar
                     Container(
-                      width: 3, height: 42,
+                      width: 3, height: 38,
                       decoration: BoxDecoration(
                         color: color,
                         borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 6),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -562,26 +705,29 @@ class _FeedScreenState extends State<FeedScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(item['title'] as String,
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isNow ? AppColors.text : AppColors.text.withValues(alpha: 0.85),
+                                letterSpacing: -0.2,
+                              ),
                               overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
                           Text(
-                            isDeadline
-                                ? '${item['room']} · ${item['time']}'
-                                : '${item['room']} · ${item['time']}  ${item['dur']}',
+                            '${item['room']} · ${item['time']}  ${item['dur']}',
                             style: const TextStyle(fontSize: 11, color: AppColors.secondaryText),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    if (isDeadline)
-                      _ScheduleBadge(label: 'DUE', color: color)
-                    else if (statusLabel != null)
+                    if (statusLabel != null)
                       _ScheduleBadge(label: statusLabel, color: color),
                   ],
                 ),
               );
             }),
+            const SizedBox(height: 4),
           ],
         ),
       ),
@@ -589,198 +735,6 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── Quick Campus Access Grid ───────────────────────────────────────────────
-  static const _quickAccess = [
-    {'icon': '📚', 'label': 'Library',  'sub': '3 seats free'},
-    {'icon': '🚌', 'label': 'Shuttle',  'sub': '4 min away'},
-    {'icon': '🖨',  'label': 'Print',    'sub': 'ENG-B floor 1'},
-    {'icon': '🏋',  'label': 'Gym',      'sub': 'Low traffic'},
-    {'icon': '💊', 'label': 'Health',   'sub': 'Walk-ins open'},
-    {'icon': '☕', 'label': 'Coffee',   'sub': '0 min queue'},
-  ];
-
-  SliverToBoxAdapter _buildQuickAccessGrid() {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(14, 14, 14, 8),
-            child: Text('Quick Access',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: GridView.count(
-              crossAxisCount: 3,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.1,
-              children: _quickAccess.map((q) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.secondaryText.withValues(alpha: 0.1)),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(q['icon']!, style: const TextStyle(fontSize: 22)),
-                      const SizedBox(height: 4),
-                      Text(q['label']!,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
-                      Text(q['sub']!,
-                          style: const TextStyle(fontSize: 10, color: AppColors.secondaryText),
-                          textAlign: TextAlign.center),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Dining Halls Card ─────────────────────────────────────────────────────
-  int _diningTab = 0;
-
-  static const _dining = [
-    {'name': 'North Café',       'status': 'open',   'closes': '21:00', 'crowd': 'quiet', 'special': 'Grilled salmon + rice bowl'},
-    {'name': 'Main Cafeteria',   'status': 'open',   'closes': '20:00', 'crowd': 'busy',  'special': 'BBQ night — ribs & sides'},
-    {'name': 'South Deli',       'status': 'closed', 'closes': '—',     'crowd': '—',     'special': 'Opens 07:30 tomorrow'},
-  ];
-
-  SliverToBoxAdapter _buildDiningCard() {
-    final d = _dining[_diningTab];
-    final isOpen = d['status'] == 'open';
-    final crowdColor = d['crowd'] == 'busy'
-        ? Colors.orange
-        : d['crowd'] == 'quiet'
-            ? Colors.green
-            : AppColors.secondaryText;
-
-    return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.secondaryText.withValues(alpha: 0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 12, 14, 8),
-              child: Text('Dining',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text)),
-            ),
-
-            // Tabs
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-              child: Row(
-                children: List.generate(_dining.length, (i) {
-                  final active = _diningTab == i;
-                  final dClosed = _dining[i]['status'] == 'closed';
-                  return GestureDetector(
-                    onTap: () => setState(() => _diningTab = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: active ? AppColors.primaryRed : Colors.transparent,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: active
-                              ? AppColors.primaryRed
-                              : AppColors.secondaryText.withValues(alpha: 0.25),
-                        ),
-                      ),
-                      child: Text(
-                        _dining[i]['name']!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                          color: active
-                              ? Colors.white
-                              : dClosed
-                                  ? AppColors.secondaryText.withValues(alpha: 0.5)
-                                  : AppColors.secondaryText,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-
-            // Content
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Row(
-                children: [
-                  // Status dot
-                  Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(
-                      color: isOpen ? Colors.green : Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isOpen ? 'Open · closes ${d['closes']}' : 'Closed',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isOpen ? Colors.green : Colors.red,
-                    ),
-                  ),
-                  if (isOpen) ...[
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: crowdColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        d['crowd']!,
-                        style: TextStyle(fontSize: 11, color: crowdColor, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (d['special'] != null && d['special']!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Row(
-                  children: [
-                    const Text('⭐', style: TextStyle(fontSize: 13)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        d['special']!,
-                        style: const TextStyle(fontSize: 13, color: AppColors.text),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 
   SliverToBoxAdapter _buildWelcomeCard(List<dynamic> live, List<dynamic> upcoming) {
     if (live.isNotEmpty) {
@@ -1214,43 +1168,65 @@ class _EventChip extends StatelessWidget {
               const SizedBox(height: 20),
             ] else
               const SizedBox(height: 20),
-            // Action buttons row
-            Row(
-              children: [
-                // Add to Calendar
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primaryRed,
-                      side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            // Action buttons row — Calendar collapses to icon when attending
+            // so the RSVP button has enough horizontal room for its inner layout.
+            ListenableBuilder(
+              listenable: rsvpStore,
+              builder: (ctx, _) {
+                final attending = rsvpStore.isAttending(ev.id as String);
+                void addToCalendar() {
+                  final calEvent = cal.Event(
+                    title: ev.title as String,
+                    description: ev.description as String,
+                    location: location,
+                    startDate: start,
+                    endDate: end,
+                    allDay: false,
+                  );
+                  cal.Add2Calendar.addEvent2Cal(calEvent);
+                }
+
+                return Row(
+                  children: [
+                    // Calendar: full button when not attending, icon-only when attending
+                    attending
+                        ? OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primaryRed,
+                              side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: addToCalendar,
+                            child: const Icon(Icons.calendar_month_outlined, size: 20),
+                          )
+                        : Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primaryRed,
+                                side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                              label: const Text('Calendar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                              onPressed: addToCalendar,
+                            ),
+                          ),
+                    const SizedBox(width: 10),
+                    // RSVP — full remaining width
+                    Expanded(
+                      child: RsvpButton(
+                        eventId: ev.id as String,
+                        color: color,
+                        isPast: end.isBefore(DateTime.now()),
+                      ),
                     ),
-                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                    label: const Text('Calendar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                    onPressed: () {
-                      final calEvent = cal.Event(
-                        title: ev.title as String,
-                        description: ev.description as String,
-                        location: location,
-                        startDate: start,
-                        endDate: end,
-                        allDay: false,
-                      );
-                      cal.Add2Calendar.addEvent2Cal(calEvent);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // RSVP — reads/writes global store
-                Expanded(
-                  child: RsvpButton(
-                    eventId: ev.id as String,
-                    color: color,
-                    isPast: end.isBefore(DateTime.now()),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -1267,8 +1243,14 @@ class _EventChip extends StatelessWidget {
 
     String timeLabel;
     if (isLive) {
-      final minAgo = DateTime.now().difference(dt).inMinutes;
-      timeLabel = 'Started ${minAgo}m ago';
+      final diff = DateTime.now().difference(dt);
+      if (diff.inDays >= 1) {
+        timeLabel = 'Started ${diff.inDays} ${diff.inDays == 1 ? 'day' : 'days'} ago';
+      } else if (diff.inHours >= 1) {
+        timeLabel = 'Started ${diff.inHours}h ago';
+      } else {
+        timeLabel = 'Started ${diff.inMinutes}m ago';
+      }
     } else {
       final daysAway = dt.difference(DateTime.now()).inDays;
       timeLabel = daysAway == 0 ? 'Today' : daysAway == 1 ? 'Tomorrow' : 'In $daysAway days';

@@ -123,11 +123,25 @@ class _CampusMapScreenState extends State<CampusMapScreen>
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
 
+  // Selected day for the heatmap (start-of-day, local time)
+  late DateTime _selectedDay;
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return _selectedDay.year == now.year &&
+        _selectedDay.month == now.month &&
+        _selectedDay.day == now.day;
+  }
+
+  static DateTime _startOfDay(DateTime d) =>
+      DateTime(d.year, d.month, d.day);
+
   static const _center = _kMapCenter;
 
   @override
   void initState() {
     super.initState();
+    _selectedDay = _startOfDay(DateTime.now());
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -146,38 +160,38 @@ class _CampusMapScreenState extends State<CampusMapScreen>
 
   // ── Activity scoring ──────────────────────────────────────────────────────
 
-  /// Number of events at [zone] happening this week (live + next 7 days).
+  /// Returns true if [e] falls on [_selectedDay] (starts or is live during that day).
+  bool _onSelectedDay(Event e) {
+    final dayStart = _selectedDay;
+    final dayEnd = dayStart.add(const Duration(days: 1));
+    // Event starts during the day OR is live (started before dayEnd, ends after dayStart)
+    return e.dateTime.isBefore(dayEnd) && e.endTime.isAfter(dayStart);
+  }
+
+  /// Number of events at [zone] on the selected day.
   int _weekEventCount(_Zone zone) {
-    final now = DateTime.now();
     return events.where((e) {
       final matches = zone.locationKeywords.any(
         (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
       );
-      if (!matches) return false;
-      final isLive = !e.dateTime.isAfter(now) && e.endTime.isAfter(now);
-      final daysAway = e.dateTime.difference(now).inDays;
-      return isLive || (daysAway >= 0 && daysAway <= 7);
+      return matches && _onSelectedDay(e);
     }).length;
   }
 
   double _score(_Zone zone) {
-    final now = DateTime.now();
     double s = 0;
+    final now = DateTime.now();
     for (final e in events) {
       final matches = zone.locationKeywords.any(
         (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
       );
-      if (!matches) { continue; }
+      if (!matches || !_onSelectedDay(e)) continue;
 
       final isLive = !e.dateTime.isAfter(now) && e.endTime.isAfter(now);
-      final daysAway = e.dateTime.difference(now).inDays;
-
       if (isLive) {
         s += 3.0 + e.attendeeUserIds.length * 0.4;
-      } else if (daysAway >= 0 && daysAway == 0) {
+      } else {
         s += 1.5 + e.attendeeUserIds.length * 0.2;
-      } else if (daysAway > 0 && daysAway <= 7) {
-        s += 0.6 + e.attendeeUserIds.length * 0.1;
       }
     }
     return s.clamp(0, 6);
@@ -185,25 +199,22 @@ class _CampusMapScreenState extends State<CampusMapScreen>
 
   bool _isLive(_Zone zone) {
     final now = DateTime.now();
-    return events.any((e) {
-      return zone.locationKeywords.any(
-            (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
-          ) &&
-          !e.dateTime.isAfter(now) &&
-          e.endTime.isAfter(now);
-    });
+    return events.any((e) =>
+        zone.locationKeywords.any(
+          (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
+        ) &&
+        !e.dateTime.isAfter(now) &&
+        e.endTime.isAfter(now) &&
+        _onSelectedDay(e));
   }
 
   List<Event> _zoneEvents(_Zone zone) {
-    final now = DateTime.now();
     return events
         .where((e) {
           final ok = zone.locationKeywords.any(
             (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
           );
-          if (!ok) { return false; }
-          return e.dateTime.difference(now).inDays >= 0 ||
-              (!e.dateTime.isAfter(now) && e.endTime.isAfter(now));
+          return ok && _onSelectedDay(e);
         })
         .toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
@@ -261,6 +272,74 @@ class _CampusMapScreenState extends State<CampusMapScreen>
       }
     }
     return markers;
+  }
+
+  // ── Day picker ────────────────────────────────────────────────────────────
+
+  static const _dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  static const _monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  Widget _buildDayPicker() {
+    final today = _startOfDay(DateTime.now());
+    // Show today + next 6 days
+    final days = List.generate(7, (i) => today.add(Duration(days: i)));
+
+    return Container(
+      color: AppColors.card,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: days.map((day) {
+            final isSelected = day == _selectedDay;
+            final isToday = day == today;
+            return GestureDetector(
+              onTap: () => setState(() {
+                _selectedDay = day;
+                _selectedZone = null;
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primaryRed : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primaryRed
+                        : AppColors.secondaryText.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isToday ? 'Today' : _dayNames[day.weekday % 7],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected ? Colors.white70 : AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${day.day} ${_monthNames[day.month - 1]}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? Colors.white : AppColors.text,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -324,6 +403,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
       ),
       body: Column(
         children: [
+          // ── Day picker strip ──────────────────────────────────────────────
+          _buildDayPicker(),
+
           // ── Map ───────────────────────────────────────────────────────────
           Expanded(
             child: AnimatedBuilder(
@@ -358,7 +440,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                         final score = _score(z);
                         final live = _isLive(z);
                         final selected = z == _selectedZone;
-                        final weekCount = _weekEventCount(z);
+                        final dayCount = _weekEventCount(z);
                         return Marker(
                           point: z.position,
                           width: 72,
@@ -372,7 +454,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 // Count badge above the pill
-                                if (weekCount > 0)
+                                if (dayCount > 0)
                                   Container(
                                     margin:
                                         const EdgeInsets.only(bottom: 2),
@@ -381,7 +463,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                     decoration: BoxDecoration(
                                       color: live
                                           ? Colors.red
-                                          : _heatColor(weekCount)
+                                          : _heatColor(dayCount)
                                               .withValues(alpha: 0.9),
                                       borderRadius:
                                           BorderRadius.circular(10),
@@ -390,7 +472,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          '$weekCount',
+                                          '$dayCount',
                                           style: const TextStyle(
                                             fontSize: 9,
                                             fontWeight: FontWeight.bold,
@@ -525,9 +607,10 @@ class _CampusMapScreenState extends State<CampusMapScreen>
             _ZonePanel(
               zone: _selectedZone!,
               events: _zoneEvents(_selectedZone!),
-              weekCount: _weekEventCount(_selectedZone!),
+              dayCount: _weekEventCount(_selectedZone!),
               isLive: _isLive(_selectedZone!),
               heatColor: _heatColor(_weekEventCount(_selectedZone!)),
+              dayLabel: _isToday ? 'today' : '${_dayNames[_selectedDay.weekday % 7]} ${_selectedDay.day} ${_monthNames[_selectedDay.month - 1]}',
               onEventTap: (e) => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -549,17 +632,19 @@ class _CampusMapScreenState extends State<CampusMapScreen>
 class _ZonePanel extends StatelessWidget {
   final _Zone zone;
   final List<Event> events;
-  final int weekCount;
+  final int dayCount;
   final bool isLive;
   final Color heatColor;
+  final String dayLabel;
   final void Function(Event) onEventTap;
 
   const _ZonePanel({
     required this.zone,
     required this.events,
-    required this.weekCount,
+    required this.dayCount,
     required this.isLive,
     required this.heatColor,
+    required this.dayLabel,
     required this.onEventTap,
   });
 
@@ -624,7 +709,7 @@ class _ZonePanel extends StatelessWidget {
             children: [
               // Flame dots
               ...List.generate(5, (i) {
-                final filled = weekCount > 0 && i < (weekCount.clamp(1, 5));
+                final filled = dayCount > 0 && i < (dayCount.clamp(1, 5));
                 return Padding(
                   padding: const EdgeInsets.only(right: 3),
                   child: Icon(
@@ -638,15 +723,15 @@ class _ZonePanel extends StatelessWidget {
               }),
               const SizedBox(width: 6),
               Text(
-                weekCount == 0
-                    ? 'No events this week'
-                    : weekCount == 1
-                        ? '1 event this week'
-                        : '$weekCount events this week',
+                dayCount == 0
+                    ? 'No events $dayLabel'
+                    : dayCount == 1
+                        ? '1 event $dayLabel'
+                        : '$dayCount events $dayLabel',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: weekCount == 0
+                  color: dayCount == 0
                       ? AppColors.secondaryText
                       : (isLive ? Colors.red : heatColor),
                 ),
@@ -675,7 +760,7 @@ class _ZonePanel extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
-                'No upcoming events this week',
+                'No events $dayLabel',
                 style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
               ),
             )
