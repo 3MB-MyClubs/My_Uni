@@ -5,7 +5,7 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
-import '../services/user_state.dart';
+
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'create_post_screen.dart' show buildPostBanner;
