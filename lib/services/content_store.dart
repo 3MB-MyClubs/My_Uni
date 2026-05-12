@@ -22,7 +22,7 @@ class ContentStore {
 
   /// Bump this integer any time you change mock event / post seed data.
   /// The stored version is compared on startup; a mismatch clears stale data.
-  static const int _seedVersion = 5;
+  static const int _seedVersion = 6;
 
   late Box<dynamic> _box;
   bool _initialized = false;

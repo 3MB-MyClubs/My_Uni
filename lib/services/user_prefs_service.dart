@@ -23,6 +23,10 @@ class UserPrefsService {
 
     await _box.putAll({
       'profilePhotoPath_$userId': s.profilePhotoPaths[userId],
+      'coverPhotoPath_$userId': s.coverPhotoPaths[userId],
+      'bio_$userId': s.bios[userId],
+      'major_$userId': s.majors[userId],
+      'year_$userId': s.years[userId],
       'followedUserIds_$userId': s.followedUserIds.toList(),
       'followedClubIds_$userId': s.followedClubIds.toList(),
       'likedPostIds_$userId': s.likedPostIds.toList(),
@@ -48,10 +52,18 @@ class UserPrefsService {
         final uid = k.substring('profilePhotoPath_'.length);
         final path = _box.get(k);
         if (path != null) userState.profilePhotoPaths[uid] = path as String;
+      } else if (k.startsWith('coverPhotoPath_')) {
+        final uid = k.substring('coverPhotoPath_'.length);
+        final path = _box.get(k);
+        if (path != null) userState.coverPhotoPaths[uid] = path as String;
       } else if (k.startsWith('clubPhotoPath_')) {
         final cid = k.substring('clubPhotoPath_'.length);
         final path = _box.get(k);
         if (path != null) userState.clubPhotoPaths[cid] = path as String;
+      } else if (k.startsWith('clubBannerPath_')) {
+        final cid = k.substring('clubBannerPath_'.length);
+        final path = _box.get(k);
+        if (path != null) userState.clubBannerPaths[cid] = path as String;
       }
     }
   }
@@ -64,6 +76,20 @@ class UserPrefsService {
 
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
+
+    final coverPhotoPath = _box.get('coverPhotoPath_$userId');
+    if (coverPhotoPath != null) {
+      s.coverPhotoPaths[userId] = coverPhotoPath as String;
+    }
+
+    final bio = _box.get('bio_$userId');
+    if (bio != null) s.bios[userId] = bio as String;
+
+    final major = _box.get('major_$userId');
+    if (major != null) s.majors[userId] = major as String;
+
+    final year = _box.get('year_$userId');
+    if (year != null) s.years[userId] = year as String;
 
     _restoreSet(s.followedUserIds, _box.get('followedUserIds_$userId'),
         fallback: {'u1', 'u4'});
@@ -100,6 +126,18 @@ class UserPrefsService {
   Future<void> saveClubPhoto(String clubId, String path) async {
     if (!_initialized) return;
     await _box.put('clubPhotoPath_$clubId', path);
+  }
+
+  /// Persists a club's banner/cover image path globally.
+  Future<void> saveClubBanner(String clubId, String path) async {
+    if (!_initialized) return;
+    await _box.put('clubBannerPath_$clubId', path);
+  }
+
+  /// Removes the club banner from storage.
+  Future<void> removeClubBanner(String clubId) async {
+    if (!_initialized) return;
+    await _box.delete('clubBannerPath_$clubId');
   }
 
   /// Removes a specific board request entry from the stored prefs of [userId]

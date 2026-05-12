@@ -44,6 +44,9 @@ class Event {
   final String? guestSpeaker;
   final List<EventSlot>? schedule;
   final bool scheduleGated;
+  /// Hex color string (e.g. 'FF8C1D40') chosen by the creator.
+  /// Overrides the auto-generated club color in EventDetailScreen.
+  final String? accentColorHex;
 
   Event({
     required this.id,
@@ -61,6 +64,7 @@ class Event {
     this.guestSpeaker,
     this.schedule,
     this.scheduleGated = false,
+    this.accentColorHex,
   })  : rsvpTimestamps = rsvpTimestamps ?? {},
         tags = tags ?? [];
 
@@ -80,6 +84,7 @@ class Event {
         'guestSpeaker': guestSpeaker,
         'schedule': schedule?.map((s) => s.toMap()).toList(),
         'scheduleGated': scheduleGated,
+        'accentColorHex': accentColorHex,
       };
 
   factory Event.fromMap(Map<String, dynamic> m) => Event(
@@ -104,5 +109,6 @@ class Event {
                 .toList()
             : null,
         scheduleGated: m['scheduleGated'] as bool? ?? false,
+        accentColorHex: m['accentColorHex'] as String?,
       );
 }

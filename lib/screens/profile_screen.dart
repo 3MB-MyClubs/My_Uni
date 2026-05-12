@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../widgets/club_avatar.dart';
 import '../models/club.dart';
+import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
@@ -41,11 +42,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
 
   int _contentTab = 0; // 0 = Posts, 1 = Stories, 2 = Events
+  static const List<String> _yearOptions = [
+    '1st Year',
+    '2nd Year',
+    '3rd Year',
+    '4th Year',
+    '5th Year',
+    'Graduate',
+  ];
 
   Widget _initialAvatar(String name) => Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: AppColors.lightRed,
+          color: AppColors.primaryRed.withValues(alpha: 0.18),
         ),
         child: Center(
           child: Text(
@@ -86,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppColors.surfaceAlt,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Use this photo?',
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
@@ -131,13 +140,779 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _pickCoverPhoto(String userId, ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 88);
+    if (picked == null || !mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+      uiSettings: [
+        IOSUiSettings(
+          title: 'Crop Cover',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+        ),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Cover',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+        ),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final ext = cropped.path.contains('.')
+        ? cropped.path.substring(cropped.path.lastIndexOf('.'))
+        : '.jpg';
+    final permanentPath = '${docsDir.path}/profile_cover_$userId$ext';
+    await File(cropped.path).copy(permanentPath);
+
+    if (!mounted) return;
+    userState.setCoverPhoto(userId, permanentPath);
+    await userPrefsService.save(userId);
+  }
+
+  void _showCoverPhotoOptions(BuildContext context, String userId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Cover Photo',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+              ),
+              title: Text(
+                'Take a Photo',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              subtitle: Text(
+                'Capture a new cover image',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickCoverPhoto(userId, ImageSource.camera);
+              },
+            ),
+            Divider(height: 1, indent: 16, color: AppColors.divider),
+            ListTile(
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+              ),
+              title: Text(
+                'Choose from Library',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              subtitle: Text(
+                'Pick an image from your photo library',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickCoverPhoto(userId, ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editMajorAndYear(BuildContext context, String userId) async {
+    final majorController = TextEditingController(
+      text: userState.majors[userId] ?? '',
+    );
+    var selectedYear = userState.years[userId];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          backgroundColor: AppColors.surfaceAlt,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Major & Year',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.text,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: majorController,
+                maxLength: 48,
+                style: TextStyle(color: AppColors.text),
+                decoration: InputDecoration(
+                  labelText: 'Major',
+                  hintText: 'e.g. Business Administration',
+                  hintStyle: TextStyle(color: AppColors.secondaryText),
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: selectedYear != null && selectedYear!.isNotEmpty
+                    ? selectedYear
+                    : null,
+                dropdownColor: AppColors.card,
+                decoration: const InputDecoration(
+                  labelText: 'Year',
+                ),
+                items: _yearOptions
+                    .map(
+                      (year) => DropdownMenuItem<String>(
+                        value: year,
+                        child: Text(
+                          year,
+                          style: TextStyle(color: AppColors.text),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setModalState(() => selectedYear = value),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                userState.setMajor(userId, majorController.text);
+                userState.setYear(userId, selectedYear ?? '');
+                await userPrefsService.save(userId);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    majorController.dispose();
+  }
+
+  Future<void> _editBio(BuildContext context, String userId) async {
+    final bioController = TextEditingController(text: userState.bios[userId] ?? '');
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Bio',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.text,
+          ),
+        ),
+        content: TextField(
+          controller: bioController,
+          maxLength: 80,
+          maxLines: 3,
+          style: TextStyle(color: AppColors.text),
+          decoration: InputDecoration(
+            hintText: 'Tell people a little about yourself',
+            hintStyle: TextStyle(color: AppColors.secondaryText),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              userState.setBio(userId, bioController.text);
+              await userPrefsService.save(userId);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    bioController.dispose();
+  }
+
+  Map<int, List<Map<String, dynamic>>> _scheduleByDay() {
+    final byDay = <int, List<Map<String, dynamic>>>{};
+    for (final course in kCourseSchedule) {
+      for (final day in course['days'] as List) {
+        byDay.putIfAbsent(day as int, () => []).add(course);
+      }
+    }
+
+    for (final courses in byDay.values) {
+      courses.sort((a, b) {
+        final aMinutes = (a['startH'] as int) * 60 + (a['startM'] as int);
+        final bMinutes = (b['startH'] as int) * 60 + (b['startM'] as int);
+        return aMinutes.compareTo(bMinutes);
+      });
+    }
+    return byDay;
+  }
+
+  _ScheduleOccurrence? _findUpcomingCourse() {
+    final now = DateTime.now();
+    final today = DateUtils.dateOnly(now);
+    _ScheduleOccurrence? upcoming;
+
+    for (int offset = 0; offset < 14; offset++) {
+      final date = today.add(Duration(days: offset));
+      for (final course in kCourseSchedule) {
+        final days = List<int>.from(course['days'] as List);
+        if (!days.contains(date.weekday)) continue;
+
+        final start = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          course['startH'] as int,
+          course['startM'] as int,
+        );
+        final end = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          course['endH'] as int,
+          course['endM'] as int,
+        );
+
+        if (!start.isAfter(now)) continue;
+        final occurrence = _ScheduleOccurrence(
+          course: course,
+          weekday: date.weekday,
+          start: start,
+          end: end,
+        );
+
+        if (upcoming == null || start.isBefore(upcoming.start)) {
+          upcoming = occurrence;
+        }
+      }
+    }
+
+    return upcoming;
+  }
+
+  String _padTime(int n) => n.toString().padLeft(2, '0');
+
+  String _formatCourseTimeRange(Map<String, dynamic> course) {
+    final sh = _padTime(course['startH'] as int);
+    final sm = _padTime(course['startM'] as int);
+    final eh = _padTime(course['endH'] as int);
+    final em = _padTime(course['endM'] as int);
+    return '$sh:$sm-$eh:$em';
+  }
+
+  String _longWeekdayLabel(int weekday) {
+    const labels = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return labels[(weekday - 1).clamp(0, labels.length - 1)];
+  }
+
+  String _relativeDayLabel(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateUtils.dateOnly(now);
+    final target = DateUtils.dateOnly(dateTime);
+    final dayDiff = target.difference(today).inDays;
+
+    if (dayDiff == 0) return 'Today';
+    if (dayDiff == 1) return 'Tomorrow';
+    return _longWeekdayLabel(dateTime.weekday);
+  }
+
+  List<User> _followersForUser(String userId) {
+    return users
+        .where((user) => user.id != userId && user.followingUserIds.contains(userId))
+        .toList();
+  }
+
+  List<User> _followingUsers() {
+    return users
+        .where((user) => userState.followedUserIds.contains(user.id))
+        .toList();
+  }
+
+  void _showFollowersSheet(List<User> followers) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.72,
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.people_alt_outlined,
+                      size: 18, color: AppColors.primaryRed),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Followers',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${followers.length}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: followers.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No followers yet.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: followers.length,
+                        separatorBuilder: (_, _) =>
+                            Divider(height: 1, color: AppColors.divider),
+                        itemBuilder: (_, index) {
+                          final follower = followers[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 0, vertical: 4),
+                            leading: UserAvatar(
+                              userId: follower.id,
+                              name: follower.name,
+                              size: 42,
+                              fontSize: 18,
+                            ),
+                            title: Text(
+                              userState.displayNameFor(
+                                  follower.id, follower.name),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                              ),
+                            ),
+                            subtitle: userState.usernameFor(follower.id) != null
+                                ? Text(
+                                    follower.name,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  )
+                                : null,
+                            trailing: Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppColors.secondaryText,
+                            ),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      UserProfileScreen(user: follower),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFollowingSheet(List<User> following) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.72,
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.person_add_alt_1_outlined,
+                      size: 18, color: AppColors.primaryRed),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Following',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${following.length}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: following.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Not following anyone yet.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: following.length,
+                        separatorBuilder: (_, _) =>
+                            Divider(height: 1, color: AppColors.divider),
+                        itemBuilder: (_, index) {
+                          final person = following[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 0, vertical: 4),
+                            leading: UserAvatar(
+                              userId: person.id,
+                              name: person.name,
+                              size: 42,
+                              fontSize: 18,
+                            ),
+                            title: Text(
+                              userState.displayNameFor(person.id, person.name),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                              ),
+                            ),
+                            subtitle: userState.usernameFor(person.id) != null
+                                ? Text(
+                                    person.name,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  )
+                                : null,
+                            trailing: Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppColors.secondaryText,
+                            ),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      UserProfileScreen(user: person),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFullScheduleSheet() {
+    final byDay = _scheduleByDay();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.82,
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.calendar_month_rounded,
+                      size: 18, color: AppColors.primaryRed),
+                  const SizedBox(width: 8),
+                  Text(
+                    'My Weekly Schedule',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: 5,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (_, index) {
+                    final day = index + 1;
+                    final courses = byDay[day] ?? [];
+                    final isToday = day == DateTime.now().weekday;
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                _longWeekdayLabel(day),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: isToday
+                                      ? AppColors.primaryRed
+                                      : AppColors.text,
+                                ),
+                              ),
+                              if (isToday) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryRed
+                                        .withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    'Today',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primaryRed,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (courses.isEmpty)
+                            Text(
+                              'No classes scheduled.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.secondaryText,
+                              ),
+                            )
+                          else
+                            ...courses.map((course) {
+                              final color = Color(course['color'] as int);
+                              final title =
+                                  (course['title'] as String).split(' · ').first;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: color.withValues(alpha: 0.26),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: color,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${_formatCourseTimeRange(course)} · ${course['room']}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showProfilePhotoOptions(BuildContext context, String userId) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
@@ -160,7 +935,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ListTile(
               leading: Container(
                 width: 42, height: 42,
-                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
               ),
               title: Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
@@ -170,11 +945,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _pickProfilePhoto(userId, ImageSource.camera);
               },
             ),
-            Divider(height: 1, indent: 16),
+            Divider(height: 1, indent: 16, color: AppColors.divider),
             ListTile(
               leading: Container(
                 width: 42, height: 42,
-                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
               ),
               title: Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
@@ -225,8 +1000,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildProfileHeader(displayName, realName, isAdmin, myClubs.length, myEventCount),
-                Divider(height: 1),
+                ListenableBuilder(
+                  listenable: userState,
+                  builder: (context, _) => _buildProfileHeader(
+                    displayName,
+                    realName,
+                    isAdmin,
+                    myClubs.length,
+                    myEventCount,
+                  ),
+                ),
+                Divider(height: 1, color: AppColors.divider),
                 _buildMyClubsSection(myClubs),
                 if (!isAdmin) ...[
                   const SizedBox(height: 8),
@@ -246,10 +1030,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   SliverAppBar _buildAppBar(BuildContext context, String name) {
     return SliverAppBar(
-      backgroundColor: AppColors.card,
+      backgroundColor: AppColors.background,
       surfaceTintColor: Colors.transparent,
+      foregroundColor: AppColors.text,
       pinned: true,
-      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.text)),
       actions: [
         IconButton(
           icon: Icon(Icons.settings_outlined),
@@ -275,10 +1060,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final isSuperAdmin = isAdmin && authService.currentAdmin?.id == 'admin1';
 
-    // Stats for regular users: clubs, events, board count
-    final boardCount = !isAdmin
-        ? clubs.where((c) => c.boardMemberIds.contains(myId)).length
-        : 0;
+    final followers = !isAdmin ? _followersForUser(myId) : const <User>[];
+    final following = !isAdmin ? _followingUsers() : const <User>[];
 
     // Stats for club admins: posts, events, board members
     final Club? managedClub = isAdmin
@@ -289,19 +1072,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? newsPosts.where((p) => p.clubId == managedClub.id).length
         : 0;
     final int boardMemberCount = managedClub?.boardMemberIds.length ?? 0;
+    if (isAdmin) {
+      return _buildAdminProfileHeader(
+        name: name,
+        realName: realName,
+        isSuperAdmin: isSuperAdmin,
+        managedClub: managedClub,
+        myId: myId,
+        postCount: postCount,
+        eventCount: eventCount,
+        boardMemberCount: boardMemberCount,
+      );
+    }
 
+    return _buildStudentProfileHeader(
+      name: name,
+      realName: realName,
+      userId: myId,
+      clubCount: clubCount,
+      followers: followers,
+      following: following,
+    );
+  }
+
+  Widget _buildAdminProfileHeader({
+    required String name,
+    required String realName,
+    required bool isSuperAdmin,
+    required Club? managedClub,
+    required String myId,
+    required int postCount,
+    required int eventCount,
+    required int boardMemberCount,
+  }) {
     return Container(
-      color: AppColors.card,
+      color: AppColors.background,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Avatar + stats row ───────────────────────────────────────
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Tappable avatar with gradient ring + edit badge
                 GestureDetector(
                   onTap: () => _showProfilePhotoOptions(context, myId),
                   child: Stack(
@@ -321,7 +1134,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           height: 88,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.card,
+                            color: AppColors.background,
                           ),
                           padding: const EdgeInsets.all(2),
                           child: () {
@@ -351,211 +1164,379 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed,
                             shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.card, width: 2.5),
+                            border: Border.all(color: AppColors.background, width: 2.5),
                           ),
-                          child: Icon(Icons.camera_alt_rounded,
-                              color: Colors.white, size: 14),
+                          child: Icon(
+                            Icons.camera_alt_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 24),
-                // 3-stat row
                 Expanded(
-                  child: isAdmin
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _StatCell(value: '$postCount', label: 'Posts'),
-                            _StatCell(value: '$eventCount', label: 'Events'),
-                            _StatCell(value: '$boardMemberCount', label: 'Members'),
-                          ],
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _StatCell(value: '$clubCount', label: 'Clubs'),
-                            _StatCell(value: '$eventCount', label: 'Events'),
-                            _StatCell(value: '$boardCount', label: 'Boards'),
-                          ],
-                        ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _StatCell(value: '$postCount', label: 'Posts'),
+                      _StatCell(value: '$eventCount', label: 'Events'),
+                      _StatCell(value: '$boardMemberCount', label: 'Members'),
+                    ],
+                  ),
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // ── Name + username ──────────────────────────────────────────
-            Text(name,
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 17, color: AppColors.text)),
+            Text(
+              name,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 17,
+                color: AppColors.text,
+              ),
+            ),
             if (name != realName) ...[
               const SizedBox(height: 2),
-              Text(realName,
-                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-            ],
-
-            // ── Role badge ───────────────────────────────────────────────
-            if (isAdmin) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isSuperAdmin
-                        ? [const Color(0xFF6A1B9A), const Color(0xFF8E24AA)]
-                        : [AppColors.primaryRed, const Color(0xFFE53935)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isSuperAdmin
-                              ? const Color(0xFF6A1B9A)
-                              : AppColors.primaryRed)
-                          .withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isSuperAdmin
-                          ? Icons.admin_panel_settings_rounded
-                          : Icons.shield_rounded,
-                      size: 13,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      isSuperAdmin ? 'Super Admin' : 'Club Admin',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.2),
-                    ),
-                    if (managedClub != null) ...[
-                      const SizedBox(width: 6),
-                      Text('·',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white60,
-                              fontWeight: FontWeight.w400)),
-                      const SizedBox(width: 6),
-                      Text(
-                        managedClub.name.split(' ').first,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ],
-                ),
+              Text(
+                realName,
+                style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
               ),
             ],
-
-            // ── Board badges (regular users, one per club) ───────────────
-            if (!isAdmin)
-              Builder(builder: (_) {
-                final userId = authService.currentUser?.id ?? '';
-                if (userId.isEmpty) return const SizedBox.shrink();
-                final boardClubs = clubs
-                    .where((c) => c.boardMemberIds.contains(userId))
-                    .toList();
-                if (boardClubs.isEmpty) return const SizedBox.shrink();
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: boardClubs.map((boardClub) {
-                    final title = boardClub.boardMemberTitles[userId];
-                    final hasTitle = title != null && title.isNotEmpty;
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ClubProfileScreen(
-                              club: boardClub,
-                              color: _clubColor(clubs.indexOf(boardClub)),
-                            ),
-                          ),
-                        ).then((_) => setState(() {})),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 5),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF1565C0),
-                                    Color(0xFF1976D2)
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF1565C0)
-                                        .withValues(alpha: 0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.shield_rounded,
-                                      size: 14, color: Colors.white),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    hasTitle ? title : 'Board Member',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.2),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text('·',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white70,
-                                          fontWeight: FontWeight.w400)),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    boardClub.name.split(' ').first,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white70,
-                                        fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.chevron_right,
-                                size: 16, color: Color(0xFF1565C0)),
-                          ],
-                        ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isSuperAdmin
+                      ? [const Color(0xFF6A1B9A), const Color(0xFF8E24AA)]
+                      : [AppColors.primaryRed, const Color(0xFFE53935)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isSuperAdmin
+                            ? const Color(0xFF6A1B9A)
+                            : AppColors.primaryRed)
+                        .withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isSuperAdmin
+                        ? Icons.admin_panel_settings_rounded
+                        : Icons.shield_rounded,
+                    size: 13,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    isSuperAdmin ? 'Super Admin' : 'Club Admin',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  if (managedClub != null) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '·',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w400,
                       ),
-                    );
-                  }).toList(),
-                );
-              }),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      managedClub.name.split(' ').first,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStudentProfileHeader({
+    required String name,
+    required String realName,
+    required String userId,
+    required int clubCount,
+    required List<User> followers,
+    required List<User> following,
+  }) {
+    final coverPath = userState.coverPhotoPaths[userId];
+    final coverFile = coverPath != null ? File(coverPath) : null;
+    final hasCover = coverFile != null && coverFile.existsSync();
+    final major = (userState.majors[userId] ?? '').trim();
+    final year = (userState.years[userId] ?? '').trim();
+    final bio = (userState.bios[userId] ?? '').trim();
+    final majorYearText = [if (major.isNotEmpty) major, if (year.isNotEmpty) year].join(' · ');
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 188,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                GestureDetector(
+                  onTap: () => _showCoverPhotoOptions(context, userId),
+                  child: Container(
+                    height: 130,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B0000), Color(0xFF1a1a2e)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      image: hasCover
+                          ? DecorationImage(
+                              image: FileImage(coverFile),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: hasCover
+                        ? DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.35),
+                                ],
+                              ),
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+                Positioned(
+                  bottom: -50,
+                  left: 16,
+                  child: GestureDetector(
+                    onTap: () => _showProfilePhotoOptions(context, userId),
+                    child: Stack(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [AppColors.primaryRed, AppColors.accentGold],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.background,
+                            ),
+                            padding: const EdgeInsets.all(2),
+                            child: () {
+                              final photoPath = userState.profilePhotoPaths[userId];
+                              final file = photoPath != null ? File(photoPath) : null;
+                              if (file != null && file.existsSync()) {
+                                return ClipOval(
+                                  child: Image.file(
+                                    file,
+                                    fit: BoxFit.cover,
+                                    width: 96,
+                                    height: 96,
+                                    errorBuilder: (ctx, e, st) => _initialAvatar(name),
+                                  ),
+                                );
+                              }
+                              return _initialAvatar(name);
+                            }(),
+                          ),
+                        ),
+                        Positioned(
+                          right: 1,
+                          bottom: 1,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.background, width: 2.5),
+                            ),
+                            child: Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 58),
+          Text(
+            name,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+              color: AppColors.text,
+            ),
+          ),
+          if (name != realName) ...[
+            const SizedBox(height: 2),
+            Text(
+              realName,
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+            ),
+          ],
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () => _editMajorAndYear(context, userId),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.school_outlined, size: 17, color: AppColors.primaryRed),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      majorYearText.isEmpty ? 'Add major & year' : majorYearText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: majorYearText.isEmpty
+                            ? AppColors.secondaryText
+                            : AppColors.text,
+                        fontStyle: majorYearText.isEmpty
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: () => _editBio(context, userId),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.edit_note_rounded, size: 18, color: AppColors.primaryRed),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      bio.isEmpty ? 'Add a bio…' : bio,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: bio.isEmpty ? AppColors.secondaryText : AppColors.text,
+                        fontStyle: bio.isEmpty ? FontStyle.italic : FontStyle.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _buildStudentStatsCard(
+            clubCount: clubCount,
+            followers: followers,
+            following: following,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudentStatsCard({
+    required int clubCount,
+    required List<User> followers,
+    required List<User> following,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _BigStatCell(
+              icon: Icons.groups_2_rounded,
+              value: '$clubCount',
+              label: 'Clubs',
+            ),
+          ),
+          Container(width: 1, height: 56, color: AppColors.divider),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showFollowersSheet(followers),
+              child: _BigStatCell(
+                icon: Icons.people_alt_outlined,
+                value: '${followers.length}',
+                label: 'Followers',
+              ),
+            ),
+          ),
+          Container(width: 1, height: 56, color: AppColors.divider),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showFollowingSheet(following),
+              child: _BigStatCell(
+                icon: Icons.person_add_alt_1_outlined,
+                value: '${following.length}',
+                label: 'Following',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -563,109 +1544,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Schedule section (student users only — shows YOUR OWN schedule) ─────────
 
   Widget _buildScheduleSection() {
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    // Group courses by day
-    final byDay = <int, List<Map<String, dynamic>>>{};
-    for (final c in kCourseSchedule) {
-      for (final d in c['days'] as List) {
-        byDay.putIfAbsent(d as int, () => []).add(c);
-      }
-    }
-    for (final list in byDay.values) {
-      list.sort((a, b) {
-        final aM = (a['startH'] as int) * 60 + (a['startM'] as int);
-        final bM = (b['startH'] as int) * 60 + (b['startM'] as int);
-        return aM.compareTo(bM);
-      });
-    }
-
-    String pad(int n) => n.toString().padLeft(2, '0');
+    final upcoming = _findUpcomingCourse();
+    final title = upcoming == null
+        ? 'No upcoming classes'
+        : (upcoming.course['title'] as String).split(' · ').first;
+    final subtitle = upcoming == null
+        ? 'Tap to view your full weekly schedule.'
+        : '${_relativeDayLabel(upcoming.start)} · ${_formatCourseTimeRange(upcoming.course)} · ${upcoming.course['room']}';
+    final accentColor = upcoming != null
+        ? Color(upcoming.course['color'] as int)
+        : AppColors.primaryRed;
 
     return Container(
-      color: AppColors.card,
+      color: AppColors.surfaceAlt,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.primaryRed),
-              SizedBox(width: 8),
-              Text('My Schedule',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...List.generate(5, (i) {
-            final day = i + 1;
-            final courses = byDay[day] ?? [];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Day label
-                  SizedBox(
-                    width: 34,
-                    child: Text(
-                      dayNames[i],
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: day == DateTime.now().weekday
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: _showFullScheduleSheet,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.schedule_rounded,
+                    color: accentColor,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Upcoming Class',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                          color: AppColors.secondaryText,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.35,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
                   ),
-                  // Course pills
-                  Expanded(
-                    child: courses.isEmpty
-                        ? Text('—',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.secondaryText.withValues(alpha: 0.4)))
-                        : Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: courses.map((c) {
-                              final color = Color(c['color'] as int);
-                              final sh = pad(c['startH'] as int);
-                              final sm = pad(c['startM'] as int);
-                              final eh = pad(c['endH'] as int);
-                              final em = pad(c['endM'] as int);
-                              final title = (c['title'] as String).split(' · ').first;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: color.withValues(alpha: 0.3)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(title,
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: color)),
-                                    Text('$sh:$sm–$eh:$em · ${c['room']}',
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            color: AppColors.secondaryText)),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.secondaryText,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -691,7 +1659,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         // ── My Clubs ──────────────────────────────────────────────────────
         Container(
-          color: AppColors.card,
+          color: AppColors.surfaceAlt,
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,7 +1683,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.lightRed,
+                        color: AppColors.primaryRed.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -837,7 +1805,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (managedClub != null) ...[
           const SizedBox(height: 8),
           Container(
-            color: AppColors.card,
+            color: AppColors.surfaceAlt,
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -872,7 +1840,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE3F2FD),
+                          color: const Color(0x1A1565C0),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -889,7 +1857,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFF3E0),
+                            color: const Color(0x1AF57C00),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
@@ -924,10 +1892,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         vertical: 18, horizontal: 16),
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD).withValues(alpha: 0.5),
+                      color: const Color(0x1A1565C0).withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: const Color(0xFFBBDEFB), width: 1),
+                          color: const Color(0x281565C0), width: 1),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1016,7 +1984,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 9, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFE3F2FD),
+                                    color: const Color(0x1A1565C0),
                                     borderRadius:
                                         BorderRadius.circular(20),
                                   ),
@@ -1082,9 +2050,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Divider(height: 1),
+        Divider(height: 1, color: AppColors.divider),
         Container(
-          color: AppColors.card,
+          color: AppColors.surfaceAlt,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1168,7 +2136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
+        backgroundColor: AppColors.surfaceAlt,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title,
             style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
@@ -1273,7 +2241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 trailing: Icon(Icons.swipe_left_outlined,
                     size: 16, color: AppColors.secondaryText),
               ),
-              Divider(height: 1, indent: 84),
+              Divider(height: 1, indent: 84, color: AppColors.divider),
             ],
           ),
         );
@@ -1661,7 +2629,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              Divider(height: 1, indent: 84),
+              Divider(height: 1, indent: 84, color: AppColors.divider),
             ],
           ),
         );
@@ -1712,7 +2680,7 @@ class _ContentTabChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? color : AppColors.surfaceAlt,
+          color: selected ? color : AppColors.card,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected ? color : AppColors.divider,
@@ -1735,7 +2703,7 @@ class _ContentTabChip extends StatelessWidget {
               decoration: BoxDecoration(
                 color: selected
                     ? Colors.white.withValues(alpha: 0.25)
-                    : AppColors.divider,
+                    : AppColors.lightRed,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -1787,4 +2755,57 @@ class _StatCell extends StatelessWidget {
       ],
     );
   }
+}
+
+class _BigStatCell extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _BigStatCell({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: AppColors.primaryRed),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: AppColors.text,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.secondaryText,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScheduleOccurrence {
+  final Map<String, dynamic> course;
+  final int weekday;
+  final DateTime start;
+  final DateTime end;
+
+  const _ScheduleOccurrence({
+    required this.course,
+    required this.weekday,
+    required this.start,
+    required this.end,
+  });
 }

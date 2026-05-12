@@ -6,188 +6,227 @@ class AuthChoiceScreen extends StatelessWidget {
   final VoidCallback onLogin;
   final VoidCallback onSignUp;
   final VoidCallback onAdminLogin;
-  const AuthChoiceScreen({super.key, required this.onLogin, required this.onSignUp, required this.onAdminLogin});
+
+  const AuthChoiceScreen({
+    super.key,
+    required this.onLogin,
+    required this.onSignUp,
+    required this.onAdminLogin,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          // ── KU branded header ─────────────────────────────────────────
-          Container(
-            height: size.height * 0.48,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF6A1530), AppColors.primaryRed, AppColors.darkRed],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(44),
-                bottomRight: Radius.circular(44),
-              ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // KU seal
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        'KU',
-                        style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.primaryRed,
-                          letterSpacing: 2,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double heroGap =
+                (constraints.maxHeight * 0.42).clamp(170.0, 320.0).toDouble();
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildWordmark(),
+                      SizedBox(height: heroGap),
+                      _buildHeroCopy(),
+                      const SizedBox(height: 28),
+                      _buildActions(context),
+                      const SizedBox(height: 18),
+                      Center(
+                        child: Text(
+                          'By continuing you agree to our Terms\nand acknowledge the Privacy Policy.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.55,
+                            color: AppColors.secondaryText,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  Text(
-                    'UniHub',
-                    style: TextStyle(
-                      fontSize: 38,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Koç University  ·  Istanbul',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.white.withValues(alpha: 0.75),
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  // Gold accent line
-                  Container(
-                    width: 40,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: AppColors.accentGold,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Action area ───────────────────────────────────────────────
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 36, 28, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Connect with your campus',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Join clubs, attend events, and stay connected with the Koç University community.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.secondaryText,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Log In button
-                  ElevatedButton(
-                    onPressed: onLogin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryRed,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      elevation: 2,
-                      shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
-                    ),
-                    child: Text('Log In',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Sign Up button
-                  OutlinedButton(
-                    onPressed: onSignUp,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primaryRed,
-                      side: BorderSide(
-                          color: AppColors.primaryRed, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: Text('Create Account',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
-                  ),
-
-                  const Spacer(),
-
-                  // Admin link
-                  Center(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        _fadeSlideRoute(ClubAdminAuthScreen(
-                          onAdminLogin: () {
-                            Navigator.of(context).pop();
-                            onAdminLogin();
-                          },
-                        )),
-                      ),
-                      child: Text(
-                        'Club Admin? Sign in here',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.secondaryText,
-                          decoration: TextDecoration.underline,
-                          decorationColor: AppColors.secondaryText,
+                      const SizedBox(height: 10),
+                      Center(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).push(
+                            _fadeSlideRoute(
+                              ClubAdminAuthScreen(
+                                onAdminLogin: () {
+                                  Navigator.of(context).pop();
+                                  onAdminLogin();
+                                },
+                              ),
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.secondaryText,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                          ),
+                          child: Text(
+                            'Club admin sign in',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
+    );
+  }
+
+  Widget _buildWordmark() {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.primaryRed,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            'KU',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: -0.4,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'EST. 1993',
+              style: TextStyle(
+                fontSize: 10.5,
+                letterSpacing: 1.3,
+                fontWeight: FontWeight.w700,
+                color: AppColors.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              'Koç University',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroCopy() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your campus,',
+          style: TextStyle(
+            fontSize: 30,
+            height: 1.05,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -1.2,
+            color: AppColors.text,
+          ),
+        ),
+        Text(
+          'in your pocket.',
+          style: TextStyle(
+            fontSize: 30,
+            height: 1.05,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -1.2,
+            color: AppColors.primaryRed,
+          ),
+        ),
+        const SizedBox(height: 14),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: Text(
+            'Class schedules, dining, events, and the people who make Koç University home.',
+            style: TextStyle(
+              fontSize: 15.5,
+              height: 1.45,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActions(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 56,
+          child: ElevatedButton(
+            onPressed: onSignUp,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+            ),
+            child: const Text(
+              'Create account',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 56,
+          child: OutlinedButton(
+            onPressed: onLogin,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.text,
+              side: BorderSide(color: AppColors.divider),
+              backgroundColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+            ),
+            child: Text(
+              'I already have one',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -195,9 +234,11 @@ class AuthChoiceScreen extends StatelessWidget {
         pageBuilder: (context, animation, secondaryAnimation) => page,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final slide = Tween<Offset>(
-                  begin: const Offset(0, 0.06), end: Offset.zero)
-              .animate(CurvedAnimation(
-                  parent: animation, curve: Curves.easeOutCubic));
+            begin: const Offset(0, 0.06),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          );
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(position: slide, child: child),

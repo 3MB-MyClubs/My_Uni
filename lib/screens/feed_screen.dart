@@ -22,6 +22,7 @@ import '../services/message_service.dart';
 import 'messages_screen.dart';
 import 'campus_map_screen.dart';
 import 'user_profile_screen.dart';
+import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
@@ -2999,13 +3000,19 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
             child: Row(
               children: [
-                ClubAvatar(
-                  clubId: club.id,
-                  clubName: club.name,
-                  color: clubColor,
-                  size: 38,
-                  fontSize: 16,
-                  shape: 'circle',
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ClubProfileScreen(club: club, color: clubColor),
+                  )),
+                  child: ClubAvatar(
+                    clubId: club.id,
+                    clubName: club.name,
+                    color: clubColor,
+                    size: 38,
+                    fontSize: 16,
+                    shape: 'circle',
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -3015,9 +3022,15 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                       Row(
                         children: [
                           Flexible(
-                            child: Text(club.name,
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
-                                overflow: TextOverflow.ellipsis),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => ClubProfileScreen(club: club, color: clubColor),
+                              )),
+                              child: Text(club.name,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
                           ),
                           const SizedBox(width: 6),
                           // ignore: use_null_aware_elements
@@ -3267,13 +3280,19 @@ class _EventCardState extends State<_EventCard> {
             padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
             child: Row(
               children: [
-                ClubAvatar(
-                  clubId: club.id,
-                  clubName: club.name,
-                  color: clubColor,
-                  size: 38,
-                  fontSize: 16,
-                  shape: 'circle',
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ClubProfileScreen(club: club, color: clubColor),
+                  )),
+                  child: ClubAvatar(
+                    clubId: club.id,
+                    clubName: club.name,
+                    color: clubColor,
+                    size: 38,
+                    fontSize: 16,
+                    shape: 'circle',
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -3283,7 +3302,13 @@ class _EventCardState extends State<_EventCard> {
                       Row(
                         children: [
                           Flexible(
-                            child: Text(club.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text), overflow: TextOverflow.ellipsis),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => ClubProfileScreen(club: club, color: clubColor),
+                              )),
+                              child: Text(club.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text), overflow: TextOverflow.ellipsis),
+                            ),
                           ),
                           const SizedBox(width: 6),
                           Container(

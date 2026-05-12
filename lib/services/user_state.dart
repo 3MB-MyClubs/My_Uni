@@ -16,8 +16,23 @@ class UserState extends ChangeNotifier {
   // Profile photo image paths keyed by user/admin id.
   final Map<String, String> profilePhotoPaths = {};
 
+  // Profile cover photo image paths keyed by user/admin id.
+  final Map<String, String> coverPhotoPaths = {};
+
+  // Student bios keyed by user id.
+  final Map<String, String> bios = {};
+
+  // Student majors keyed by user id.
+  final Map<String, String> majors = {};
+
+  // Student years keyed by user id.
+  final Map<String, String> years = {};
+
   // Club profile photo paths keyed by club id.
   final Map<String, String> clubPhotoPaths = {};
+
+  // Club banner/cover image paths keyed by club id.
+  final Map<String, String> clubBannerPaths = {};
 
   /// Sets the club photo path for [clubId] and notifies all listeners.
   void setClubPhoto(String clubId, String path) {
@@ -25,9 +40,60 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets the club banner image path for [clubId] and notifies all listeners.
+  void setClubBanner(String clubId, String path) {
+    clubBannerPaths[clubId] = path;
+    notifyListeners();
+  }
+
+  /// Removes the club banner for [clubId].
+  void removeClubBanner(String clubId) {
+    clubBannerPaths.remove(clubId);
+    notifyListeners();
+  }
+
   /// Sets the profile photo path for [userId] and notifies all listeners.
   void setProfilePhoto(String userId, String path) {
     profilePhotoPaths[userId] = path;
+    notifyListeners();
+  }
+
+  /// Sets the profile cover path for [userId] and notifies all listeners.
+  void setCoverPhoto(String userId, String path) {
+    coverPhotoPaths[userId] = path;
+    notifyListeners();
+  }
+
+  /// Sets the student bio for [userId] and notifies all listeners.
+  void setBio(String userId, String bio) {
+    final value = bio.trim();
+    if (value.isEmpty) {
+      bios.remove(userId);
+    } else {
+      bios[userId] = value;
+    }
+    notifyListeners();
+  }
+
+  /// Sets the student major for [userId] and notifies all listeners.
+  void setMajor(String userId, String major) {
+    final value = major.trim();
+    if (value.isEmpty) {
+      majors.remove(userId);
+    } else {
+      majors[userId] = value;
+    }
+    notifyListeners();
+  }
+
+  /// Sets the student year for [userId] and notifies all listeners.
+  void setYear(String userId, String year) {
+    final value = year.trim();
+    if (value.isEmpty) {
+      years.remove(userId);
+    } else {
+      years[userId] = value;
+    }
     notifyListeners();
   }
 

@@ -21,6 +21,27 @@ import 'chat_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 
+bool _isDarkClubTheme(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _clubPagePanel(BuildContext context) => _isDarkClubTheme(context)
+    ? const Color(0xFF160008)
+    : AppColors.surfaceAlt;
+
+Color _clubPageCard(BuildContext context) =>
+    _isDarkClubTheme(context) ? const Color(0x0EFFFFFF) : AppColors.card;
+
+Color _clubPageBorder(BuildContext context) =>
+    _isDarkClubTheme(context) ? const Color(0x14FFFFFF) : AppColors.divider;
+
+Color _clubPageStrongBorder(BuildContext context) => _isDarkClubTheme(context)
+    ? const Color(0x2EFFFFFF)
+    : AppColors.divider.withValues(alpha: 0.95);
+
+Color _clubPageBodyText(BuildContext context) => _isDarkClubTheme(context)
+    ? const Color(0xD1FFFFFF)
+    : AppColors.text.withValues(alpha: 0.82);
+
 class ClubProfileScreen extends StatefulWidget {
   final Club club;
   final Color color;
@@ -34,6 +55,7 @@ class ClubProfileScreen extends StatefulWidget {
 class _ClubProfileScreenState extends State<ClubProfileScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final List<({String emoji, String label})> _clubHighlights = [];
 
   @override
   void initState() {
@@ -153,6 +175,110 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     }
   }
 
+  // ── Banner (cover) photo ─────────────────────────────────────────────────────
+
+  Future<void> _pickClubBanner(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 90);
+    if (picked == null || !mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+      uiSettings: [
+        IOSUiSettings(title: 'Crop Banner', aspectRatioLockEnabled: true, resetAspectRatioEnabled: false),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Banner',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+        ),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final ext = cropped.path.contains('.')
+        ? cropped.path.substring(cropped.path.lastIndexOf('.'))
+        : '.jpg';
+    final permanentPath = '${docsDir.path}/club_banner_${widget.club.id}$ext';
+    await File(cropped.path).copy(permanentPath);
+    if (!mounted) return;
+    userState.setClubBanner(widget.club.id, permanentPath);
+    await userPrefsService.saveClubBanner(widget.club.id, permanentPath);
+    setState(() {});
+  }
+
+  void _showBannerOptions() {
+    final hasBanner = userState.clubBannerPaths.containsKey(widget.club.id);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Cover Photo',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
+            const SizedBox(height: 4),
+            Text('This photo appears as the background of your club page',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+              ),
+              title: Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickClubBanner(ImageSource.camera); },
+            ),
+            Divider(height: 1, indent: 16),
+            ListTile(
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+              ),
+              title: Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+              onTap: () { Navigator.pop(context); _pickClubBanner(ImageSource.gallery); },
+            ),
+            if (hasBanner) ...[
+              Divider(height: 1, indent: 16),
+              ListTile(
+                leading: Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.delete_outline, color: Colors.red),
+                ),
+                title: const Text('Remove Cover Photo', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  userState.removeClubBanner(widget.club.id);
+                  await userPrefsService.removeClubBanner(widget.club.id);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showClubPhotoOptions() {
     showModalBottomSheet(
       context: context,
@@ -201,6 +327,86 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     );
   }
 
+  void _addHighlight() {
+    final emojiController = TextEditingController();
+    final labelController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _clubPagePanel(ctx),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('New Highlight',
+            style: TextStyle(
+                color: AppColors.text, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: emojiController,
+              decoration: InputDecoration(
+                hintText: 'Emoji (e.g. 🎤)',
+                hintStyle: TextStyle(color: AppColors.secondaryText),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _clubPageBorder(ctx)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.primaryRed),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              style: TextStyle(color: AppColors.text),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: labelController,
+              decoration: InputDecoration(
+                hintText: 'Label (e.g. Gallery)',
+                hintStyle: TextStyle(color: AppColors.secondaryText),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _clubPageBorder(ctx)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.primaryRed),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              style: TextStyle(color: AppColors.text),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: TextStyle(color: AppColors.secondaryText)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              final emoji = emojiController.text.trim();
+              final label = labelController.text.trim();
+              Navigator.pop(ctx);
+              if (emoji.isNotEmpty && label.isNotEmpty) {
+                setState(() => _clubHighlights.add((emoji: emoji, label: label)));
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    ).then((_) {
+      emojiController.dispose();
+      labelController.dispose();
+    });
+  }
+
   void _openBoardManagement() {
     showModalBottomSheet(
       context: context,
@@ -208,6 +414,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _BoardManagementSheet(club: widget.club),
     ).then((_) => setState(() {}));
+  }
+
+  String _handleFor(String name) {
+    final words = name.split(RegExp(r'[\s\-]+'));
+    final initials = words
+        .where((w) => w.isNotEmpty && RegExp(r'[A-Za-z]').hasMatch(w[0]))
+        .map((w) => w[0])
+        .join()
+        .toLowerCase();
+    return initials.isEmpty ? name.toLowerCase().replaceAll(RegExp(r'\s+'), '') : initials;
   }
 
   String _timeAgo(DateTime dt) {
@@ -225,172 +441,365 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   @override
   Widget build(BuildContext context) {
     final memberCount = clubMemberCount(widget.club.id);
+    final bg = AppColors.background;
+    final cardColor = _clubPageCard(context);
+    final borderColor = _clubPageBorder(context);
+    final borderBright = _clubPageStrongBorder(context);
+    final subText = AppColors.secondaryText;
+    final panelText = AppColors.text;
+    final bodyText = _clubPageBodyText(context);
+    final handle = _handleFor(widget.club.name);
+    final showFollowAction = !_isThisClubAdmin;
+    final showMediaAction = _isThisClubAdmin;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       body: NestedScrollView(
         headerSliverBuilder: (context, _) => [
-          // ── Collapsing app bar ──
+          // ── Nav bar ──
           SliverAppBar(
-            expandedHeight: 200,
             pinned: true,
-            backgroundColor: AppColors.card,
+            toolbarHeight: 44,
+            backgroundColor: bg,
             surfaceTintColor: Colors.transparent,
-            foregroundColor: AppColors.text,
+            automaticallyImplyLeading: false,
+            titleSpacing: 0,
+            leading: IconButton(
+              icon: Icon(Icons.chevron_left_rounded, color: panelText, size: 28),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('@$handle',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: panelText,
+                        letterSpacing: -0.3)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified_rounded, size: 10, color: AppColors.primaryRed),
+                    const SizedBox(width: 3),
+                    Text('Official Club',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.primaryRed,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ],
+            ),
+            centerTitle: true,
             actions: [
-              if (_isThisClubAdmin)
-                IconButton(
-                  icon: Icon(Icons.manage_accounts_outlined),
-                  tooltip: 'Manage Board',
-                  onPressed: _openBoardManagement,
-                ),
+              IconButton(
+                icon: Icon(Icons.more_horiz_rounded, color: panelText, size: 22),
+                onPressed: _isThisClubAdmin ? _openBoardManagement : null,
+              ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      widget.color,
-                      widget.color.withValues(alpha: 0.5),
-                      AppColors.background,
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 40),
-                      GestureDetector(
-                        onTap: _isThisClubAdmin ? _showClubPhotoOptions : null,
-                        child: Stack(
-                          children: [
-                            ClubAvatar(
-                              clubId: widget.club.id,
-                              clubName: widget.club.name,
-                              color: widget.color,
-                              size: 72,
-                              fontSize: 32,
-                              borderRadius: 20,
+          ),
+
+          // ── Scrollable header ──
+          SliverToBoxAdapter(
+            child: ListenableBuilder(
+              listenable: userState,
+              builder: (context, _) {
+                final bannerPath = userState.clubBannerPaths[widget.club.id];
+                final hasBanner = bannerPath != null && File(bannerPath).existsSync();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.topCenter,
+                          radius: 1.4,
+                          colors: [
+                            widget.color.withValues(alpha: 0.10),
+                            Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.68],
+                        ),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Optional banner photo
+                          if (hasBanner) ...[
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.file(
+                                File(bannerPath),
+                                height: 120,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                            if (_isThisClubAdmin)
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryRed,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.card, width: 2),
-                                  ),
-                                  child: Icon(Icons.edit, color: Colors.white, size: 12),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // Avatar + Stats row
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: _isThisClubAdmin ? _showClubPhotoOptions : null,
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      width: 104,
+                                      height: 104,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(28),
+                                        gradient: LinearGradient(
+                                          begin: const Alignment(-0.8, -0.8),
+                                          end: const Alignment(0.8, 0.8),
+                                          colors: [
+                                            widget.color.withValues(alpha: 0.23),
+                                            widget.color.withValues(alpha: 0.44),
+                                          ],
+                                        ),
+                                        border: Border.all(
+                                            color: widget.color.withValues(alpha: 0.40),
+                                            width: 2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                              color: widget.color.withValues(alpha: 0.10),
+                                              blurRadius: 0,
+                                              spreadRadius: 4),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(26),
+                                        child: ClubAvatar(
+                                          clubId: widget.club.id,
+                                          clubName: widget.club.name,
+                                          color: widget.color,
+                                          size: 104,
+                                          fontSize: 46,
+                                          borderRadius: 28,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_isThisClubAdmin)
+                                      Positioned(
+                                        right: 2,
+                                        bottom: 2,
+                                        child: Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryRed,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: bg, width: 2),
+                                          ),
+                                          child: Icon(Icons.edit,
+                                              color: panelText, size: 11),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
-                          ],
-                        ),
+                              const SizedBox(width: 22),
+                              Expanded(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _StatCell(
+                                        value: '${_clubPosts.length}',
+                                        label: 'Posts',
+                                        dark: true),
+                                    Container(width: 1, height: 28, color: borderColor),
+                                    _StatCell(
+                                        value: '$memberCount',
+                                        label: 'Members',
+                                        dark: true),
+                                    Container(width: 1, height: 28, color: borderColor),
+                                    _StatCell(
+                                        value: '${_clubEvents.length}',
+                                        label: 'Events',
+                                        dark: true),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // Name
+                          Text(
+                            widget.club.name,
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: panelText,
+                              letterSpacing: -0.5,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // Badges
+                          Wrap(
+                            spacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.color.withValues(alpha: 0.13),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text('@$handle',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: widget.color,
+                                        letterSpacing: 0.3)),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 9, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text('Cultural',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.primaryRed)),
+                              ),
+                              Text('· Est. 2010',
+                                  style: TextStyle(
+                                      fontSize: 10, color: AppColors.secondaryText)),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Bio
+                          Text(
+                            widget.club.description,
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: bodyText,
+                                height: 1.6),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // Action buttons: Follow | Message | +
+                          Row(
+                            children: [
+                              if (showFollowAction) ...[
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: ClubFollowButton(
+                                        clubId: widget.club.id, size: 'large'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ] else
+                                const Spacer(),
+                              Expanded(
+                                flex: showFollowAction ? 1 : 2,
+                                child: GestureDetector(
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ChatScreen(
+                                        otherUserId: widget.club.id,
+                                        otherUserName: widget.club.name,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Container(
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: borderBright),
+                                    ),
+                                    child: Center(
+                                      child: Text('Message',
+                                          style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: panelText)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (showMediaAction) ...[
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: _showBannerOptions,
+                                  child: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: cardColor,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: borderColor),
+                                    ),
+                                    child: Icon(
+                                      hasBanner
+                                          ? Icons.add_photo_alternate_outlined
+                                          : Icons.image_outlined,
+                                      color: panelText,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              title: Text(
-                widget.club.name,
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.text),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              titlePadding: const EdgeInsets.only(left: 56, bottom: 14, right: 16),
+                    ),
+
+                    // Highlights rail
+                    _HighlightsRail(
+                      clubColor: widget.color,
+                      highlights: _clubHighlights,
+                      onAdd: _isThisClubAdmin ? _addHighlight : null,
+                    ),
+
+                    // Section divider
+                    Container(height: 1, color: borderColor),
+                  ],
+                );
+              },
             ),
           ),
 
-          // ── Stats + follow + description ──
-          SliverToBoxAdapter(
-            child: Container(
-              color: AppColors.card,
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Stats row
-                  Row(
-                    children: [
-                      _StatCell(value: '${_clubPosts.length}', label: 'Posts'),
-                      const SizedBox(width: 28),
-                      _StatCell(value: '$memberCount', label: 'Members'),
-                      const SizedBox(width: 28),
-                      _StatCell(value: '${_clubEvents.length}', label: 'Events'),
-                      const Spacer(),
-                      // Follow button
-                      ClubFollowButton(clubId: widget.club.id, size: 'large'),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Description
-                  Text(
-                    widget.club.description,
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.secondaryText, height: 1.5),
-                  ),
-                  const SizedBox(height: 12),
-                  // Message button
-                  GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          otherUserId: widget.club.id,
-                          otherUserName: widget.club.name,
-                        ),
-                      ),
-                    ),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.secondaryText.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      child: Text(
-                        'Message',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: AppColors.text,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                ],
-              ),
-            ),
-          ),
-
-          // ── Tab bar ──
+          // ── Sticky tab bar ──
           SliverPersistentHeader(
             pinned: true,
             delegate: _StickyTabBarDelegate(
               TabBar(
                 controller: _tabController,
                 labelColor: AppColors.primaryRed,
-                unselectedLabelColor: AppColors.secondaryText,
+                unselectedLabelColor: subText,
                 indicatorColor: AppColors.primaryRed,
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelPadding: EdgeInsets.zero,
                 tabs: [
-                  Tab(text: 'Posts'),
-                  Tab(text: 'Events'),
-                  Tab(text: 'Collabs'),
-                  Tab(text: 'Board'),
+                  _IconTab(icon: Icons.grid_view_rounded, label: 'POSTS'),
+                  _IconTab(icon: Icons.event_rounded, label: 'EVENTS'),
+                  _IconTab(icon: Icons.people_alt_outlined, label: 'COLLABS'),
+                  _IconTab(icon: Icons.assignment_outlined, label: 'BOARD'),
                 ],
               ),
+              backgroundColor: bg,
+              height: 58,
             ),
           ),
         ],
@@ -426,7 +835,8 @@ class _PostsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (posts.isEmpty) {
       return Center(
-        child: Text('No posts yet.', style: TextStyle(color: AppColors.secondaryText)),
+        child: Text('No posts yet.',
+            style: TextStyle(color: AppColors.secondaryText)),
       );
     }
 
@@ -626,9 +1036,13 @@ class _EventsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = _clubPageCard(context);
+    final borderColor = _clubPageBorder(context);
+    final panelColor = _clubPagePanel(context);
     if (events.isEmpty) {
       return Center(
-        child: Text('No events yet.', style: TextStyle(color: AppColors.secondaryText)),
+        child: Text('No events yet.',
+            style: TextStyle(color: AppColors.secondaryText)),
       );
     }
     return ListView.separated(
@@ -655,76 +1069,96 @@ class _EventsTab extends StatelessWidget {
             ),
           ),
           child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cardColor,
+              border: Border.all(color: borderColor),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date badge
+                Container(
+                  width: 48,
+                  padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: panelColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(monthAbbr(dt.month),
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryRed,
+                              letterSpacing: 0.5)),
+                      Text('${dt.day}',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.text,
+                              height: 1.1)),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('${dt.day}',
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryRed,
-                            height: 1)),
-                    Text(monthAbbr(dt.month),
-                        style: TextStyle(
-                            fontSize: 11, color: AppColors.primaryRed)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(event.title as String,
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 3),
-                    Text(event.description as String,
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.secondaryText),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Icon(Icons.schedule, size: 12, color: AppColors.primaryRed),
-                        const SizedBox(width: 3),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(event.title as String,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: AppColors.text,
+                              letterSpacing: -0.2),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 7),
+                      Row(children: [
+                        Icon(Icons.access_time_rounded,
+                            size: 11, color: AppColors.secondaryText),
+                        const SizedBox(width: 4),
                         Text(daysLabel,
                             style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.primaryRed,
-                                fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 10),
+                                fontSize: 11, color: AppColors.secondaryText)),
+                      ]),
+                      const SizedBox(height: 3),
+                      Row(children: [
                         Icon(Icons.people_outline,
-                            size: 12, color: AppColors.secondaryText),
-                        const SizedBox(width: 3),
-                        Text('${(event.attendeeUserIds as List).length} attending',
+                            size: 11, color: AppColors.secondaryText),
+                        const SizedBox(width: 4),
+                        Text(
+                            '${(event.attendeeUserIds as List).length} attending',
                             style: TextStyle(
-                                fontSize: 12, color: AppColors.secondaryText)),
-                      ],
-                    ),
-                  ],
+                                fontSize: 11, color: AppColors.secondaryText)),
+                      ]),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Text('RSVP',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
         );
       },
     );
@@ -755,6 +1189,9 @@ class _CollaborationsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = _clubPageCard(context);
+    final borderColor = _clubPageBorder(context);
+    final strongBorderColor = _clubPageStrongBorder(context);
     final isEmpty = taggedPosts.isEmpty && partnerClubs.isEmpty;
 
     return ListView(
@@ -772,63 +1209,92 @@ class _CollaborationsTab extends StatelessWidget {
             ),
           ),
 
-        // ── Partner clubs banner row ──
+        // ── Partner clubs ──
         if (partnerClubs.isNotEmpty) ...[
           Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text('Partner Clubs',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
+            child: Text('PARTNER CLUBS',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: AppColors.secondaryText)),
           ),
-          SizedBox(
-            height: 90,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: partnerClubs.length,
-              itemBuilder: (ctx, i) {
-                final club = partnerClubs[i];
-                final color = _colors[clubs.indexOf(club) % _colors.length];
-                return GestureDetector(
-                  onTap: () => Navigator.push(ctx,
-                      MaterialPageRoute(builder: (_) => ClubProfileScreen(club: club, color: color))),
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ClubAvatar(
-                          clubId: club.id,
-                          clubName: club.name,
-                          color: color,
-                          size: 52,
-                          fontSize: 22,
-                          borderRadius: 14,
-                        ),
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          width: 64,
-                          child: Text(club.name.split(' ').first,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                        ),
-                      ],
-                    ),
+          ...partnerClubs.map((club) {
+            final color = _colors[clubs.indexOf(club) % _colors.length];
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: GestureDetector(
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(
+                        builder: (_) => ClubProfileScreen(club: club, color: color))),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    border: Border.all(color: borderColor),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                );
-              },
-            ),
-          ),
-          Divider(height: 24),
+                  child: Row(
+                    children: [
+                      ClubAvatar(
+                        clubId: club.id,
+                        clubName: club.name,
+                        color: color,
+                        size: 48,
+                        fontSize: 20,
+                        borderRadius: 14,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(club.name,
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.text,
+                                    letterSpacing: -0.2)),
+                            const SizedBox(height: 2),
+                            Text('${clubMemberCount(club.id)} members',
+                                style: TextStyle(
+                                    fontSize: 11, color: AppColors.secondaryText)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: strongBorderColor),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('View ›',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 4),
         ],
 
         // ── Tagged posts ──
         if (taggedPosts.isNotEmpty) ...[
           Padding(
             padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('Posts featuring this club',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
+            child: Text('POSTS FEATURING THIS CLUB',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: AppColors.secondaryText)),
           ),
           ...taggedPosts.map((post) {
             final authorClub = clubs.firstWhere((c) => c.id == post.clubId, orElse: () => clubs.first);
@@ -840,8 +1306,13 @@ class _CollaborationsTab extends StatelessWidget {
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => PostDetailScreen(post: post, clubColor: color))),
               child: Container(
-                color: AppColors.card,
-                margin: const EdgeInsets.only(bottom: 8),
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  border: Border.all(color: borderColor),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                clipBehavior: Clip.hardEdge,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -927,16 +1398,27 @@ class _CollaborationsTab extends StatelessWidget {
 
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
-  const _StickyTabBarDelegate(this.tabBar);
+  final Color backgroundColor;
+  final double height;
+  const _StickyTabBarDelegate(this.tabBar,
+      {required this.backgroundColor, this.height = 0});
+
+  double get _h => height > 0 ? height : tabBar.preferredSize.height;
 
   @override
-  double get minExtent => tabBar.preferredSize.height;
+  double get minExtent => _h;
   @override
-  double get maxExtent => tabBar.preferredSize.height;
+  double get maxExtent => _h;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(color: AppColors.card, child: tabBar);
+    return ColoredBox(
+      color: backgroundColor,
+      child: SizedBox(
+        height: _h,
+        child: Center(child: tabBar),
+      ),
+    );
   }
 
   @override
@@ -1493,6 +1975,10 @@ class _BoardTabState extends State<_BoardTab> {
     final members = users.where((u) => widget.club.boardMemberIds.contains(u.id)).toList();
     final pending = _pendingRequests;
     final authorized = _isClubAdmin;
+    final cardColor = _clubPageCard(context);
+    final borderColor = _clubPageBorder(context);
+    final panelText = AppColors.text;
+    final mutedText = AppColors.secondaryText;
 
     // Request-to-join button state for regular users
     final currentUser = authService.currentUser;
@@ -1507,26 +1993,26 @@ class _BoardTabState extends State<_BoardTab> {
         // ── Pending Requests (admin/board only) ───────────────────────────────
         if (authorized && pending.isNotEmpty) ...[
           Container(
-            color: AppColors.card,
+            color: cardColor,
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Icon(Icons.pending_actions_outlined, color: Color(0xFFF57C00), size: 20),
+                const Icon(Icons.pending_actions_outlined, color: Color(0xFFF57C00), size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'Pending Requests',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: panelText),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
+                    color: const Color(0x1EF57C00),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '${pending.length}',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF57C00)),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF57C00)),
                   ),
                 ),
               ],
@@ -1535,7 +2021,7 @@ class _BoardTabState extends State<_BoardTab> {
           ...pending.map((req) {
             final requester = users.where((u) => u.id == req.userId).firstOrNull;
             return Container(
-              color: AppColors.card,
+              color: cardColor,
               margin: const EdgeInsets.only(bottom: 1),
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Row(
@@ -1560,13 +2046,13 @@ class _BoardTabState extends State<_BoardTab> {
                         children: [
                           Text(req.userName,
                               style: TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                                  fontSize: 14, fontWeight: FontWeight.w600, color: panelText)),
                           Text(req.userEmail,
-                              style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                              style: TextStyle(fontSize: 12, color: mutedText)),
                           const SizedBox(height: 2),
                           Text(
                             'Requested ${_timeAgoFromDate(req.requestedAt)}',
-                            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                            style: TextStyle(fontSize: 11, color: mutedText),
                           ),
                         ],
                       ),
@@ -1596,33 +2082,33 @@ class _BoardTabState extends State<_BoardTab> {
         // ── Board Members header ───────────────────────────────────────────────
         Container(
           width: double.infinity,
-          color: AppColors.card,
+          color: cardColor,
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Row(
             children: [
-              Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
+              const Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
               const SizedBox(width: 8),
               Text(
                 'Board Members',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: panelText),
               ),
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD),
+                  color: const Color(0x1E1565C0),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   '${members.length}',
-                  style: TextStyle(
+                  style: const TextStyle(
                       fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1565C0)),
                 ),
               ),
             ],
           ),
         ),
-        Divider(height: 1),
+        Divider(height: 1, color: borderColor),
 
         // ── Board Members list ─────────────────────────────────────────────────
         if (members.isEmpty)
@@ -1631,13 +2117,13 @@ class _BoardTabState extends State<_BoardTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.shield_outlined, size: 48, color: AppColors.secondaryText),
+                Icon(Icons.shield_outlined, size: 48, color: mutedText),
                 SizedBox(height: 12),
                 Text('No board members yet.',
-                    style: TextStyle(fontSize: 15, color: AppColors.secondaryText)),
+                    style: TextStyle(fontSize: 15, color: mutedText)),
                 SizedBox(height: 6),
                 Text('Approved requests will appear here.',
-                    style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                    style: TextStyle(fontSize: 12, color: mutedText)),
               ],
             ),
           )
@@ -1660,21 +2146,21 @@ class _BoardTabState extends State<_BoardTab> {
                   ),
                   title: Text(u.name,
                       style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                          fontSize: 14, fontWeight: FontWeight.w600, color: panelText)),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (title != null && title.isNotEmpty)
                         Text(title,
-                            style: TextStyle(
+                            style: const TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFF1565C0),
                                 fontWeight: FontWeight.w600))
                       else
                         Text('Board Member',
-                            style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                            style: TextStyle(fontSize: 12, color: mutedText)),
                       Text(u.email,
-                          style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          style: TextStyle(fontSize: 11, color: mutedText)),
                     ],
                   ),
                   trailing: authorized
@@ -1683,14 +2169,14 @@ class _BoardTabState extends State<_BoardTab> {
                           children: [
                             if (isAdmin)
                               IconButton(
-                                icon: Icon(Icons.edit_outlined,
+                                icon: const Icon(Icons.edit_outlined,
                                     color: Color(0xFF1565C0), size: 20),
                                 tooltip: 'Set title',
                                 onPressed: () => _editTitle(u),
                               ),
                             IconButton(
                               icon: Icon(Icons.remove_circle_outline,
-                                  color: AppColors.secondaryText, size: 22),
+                                  color: mutedText, size: 22),
                               tooltip: 'Remove from board',
                               onPressed: () => _confirmRemove(u),
                             ),
@@ -1699,17 +2185,17 @@ class _BoardTabState extends State<_BoardTab> {
                       : Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE3F2FD),
+                            color: const Color(0x1E1565C0),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text('Board',
+                          child: const Text('Board',
                               style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF1565C0))),
                         ),
                 ),
-                Divider(height: 1, indent: 72),
+                Divider(height: 1, indent: 72, color: borderColor),
               ],
             );
           }),
@@ -1729,7 +2215,7 @@ class _BoardTabState extends State<_BoardTab> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: hasPendingRequest
-                        ? AppColors.secondaryText.withValues(alpha: 0.4)
+                        ? AppColors.divider
                         : AppColors.primaryRed,
                   ),
                 ),
@@ -1739,7 +2225,7 @@ class _BoardTabState extends State<_BoardTab> {
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
-                    color: hasPendingRequest ? AppColors.secondaryText : Colors.white,
+                    color: hasPendingRequest ? mutedText : Colors.white,
                   ),
                 ),
               ),
@@ -1786,7 +2272,8 @@ class _BoardTabState extends State<_BoardTab> {
 class _StatCell extends StatelessWidget {
   final String value;
   final String label;
-  const _StatCell({required this.value, required this.label});
+  final bool dark;
+  const _StatCell({required this.value, required this.label, this.dark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1794,11 +2281,164 @@ class _StatCell extends StatelessWidget {
       children: [
         Text(value,
             style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text)),
         const SizedBox(height: 2),
         Text(label,
-            style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+            style: TextStyle(
+                fontSize: 13,
+                color: dark
+                    ? AppColors.secondaryText.withValues(alpha: 0.9)
+                    : AppColors.secondaryText)),
       ],
+    );
+  }
+}
+
+// ─── Icon tab (icon + label) ──────────────────────────────────────────────────
+
+class _IconTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _IconTab({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tab(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(height: 4),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Highlights rail ──────────────────────────────────────────────────────────
+
+class _HighlightsRail extends StatelessWidget {
+  final Color clubColor;
+  final List<({String emoji, String label})> highlights;
+  final VoidCallback? onAdd;
+
+  const _HighlightsRail({
+    required this.clubColor,
+    required this.highlights,
+    this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColors.background;
+    final solid = _clubPagePanel(context);
+    final borderColor = _clubPageStrongBorder(context);
+    // Always show the "+" circle so the rail is never absent.
+    final totalItems = highlights.length + 1;
+
+    return SizedBox(
+      height: 112,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        itemCount: totalItems,
+        itemBuilder: (_, i) {
+          // "+" add button — always rendered; tappable only for the club admin
+          if (i == highlights.length) {
+            return Padding(
+              padding: const EdgeInsets.only(right: 13),
+              child: GestureDetector(
+                onTap: onAdd, // null for non-admins → visually present but inert
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: solid,
+                        border: Border.all(
+                          color: borderColor,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Icon(Icons.add_rounded,
+                            color: AppColors.text, size: 30),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    SizedBox(
+                      width: 70,
+                      child: Text('New',
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.secondaryText)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final (:emoji, :label) = highlights[i];
+          return Padding(
+            padding: const EdgeInsets.only(right: 13),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: SweepGradient(
+                      colors: [clubColor, AppColors.primaryRed, clubColor],
+                      stops: const [0.0, 0.54, 1.0],
+                    ),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 66,
+                      height: 66,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: solid,
+                        border: Border.all(color: bg, width: 2.5),
+                      ),
+                      child: Center(
+                          child: Text(emoji,
+                              style: const TextStyle(fontSize: 26))),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                SizedBox(
+                  width: 70,
+                  child: Text(label,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.secondaryText)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

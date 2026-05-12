@@ -6,7 +6,14 @@
       "Bash(awk 'NR>=74 && NR<=78' lib/screens/club_admin_auth_screen.dart)",
       "Bash(awk 'NR>=148 && NR<=152' lib/screens/club_admin_auth_screen.dart)",
       "Bash(/Users/hakantuncay/flutter/bin/dart format:*)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); pkg=[p for p in d['packages'] if p['name']=='flutter_map']; print\\(pkg[0] if pkg else 'not found'\\)\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); pkg=[p for p in d['packages'] if p['name']=='flutter_map']; print\\(pkg[0] if pkg else 'not found'\\)\")",
+      "Bash(gunzip)",
+      "Bash(tar xf:*)",
+      "Bash(curl -L --compressed \"https://api.anthropic.com/v1/design/h/icZ52KMUZ-8yPxtReT2OZQ?open_file=Club+Profile.html\" -o /tmp/Club_Profile.html)",
+      "Bash(python3 -c ':*)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }
