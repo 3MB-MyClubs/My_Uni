@@ -1,14 +1,7 @@
 import 'package:flutter/material.dart';
+import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import 'signup_steps/signup_theme.dart';
-import 'signup_steps/step_email.dart';
-import 'signup_steps/step_verify.dart';
-import 'signup_steps/step_profile.dart';
-import 'signup_steps/step_interests.dart';
-import 'signup_steps/step_done.dart';
 
-/// 5-screen signup flow: Email → Verify → Profile → Interests → Done.
-/// Drop-in replacement — same class name, same constructor signature.
 class SignUpScreen extends StatefulWidget {
   final VoidCallback onSignUp;
   final VoidCallback? onBack;
@@ -19,163 +12,179 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  final PageController _pageController = PageController();
-  int _currentStep = 0;
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+  String? _error;
 
-  // Pages: 0=Email, 1=Verify, 2=Profile, 3=Interests, 4=Done
-  static const int _totalPages = 5;
-  // Steps with visible progress header: pages 0-3
-  static const int _totalVisibleSteps = 4;
-
-  // ── Shared form state ─────────────────────────────────────────
-  String _email    = '';
-  String _name     = '';
-  String _major    = '';
-  String _year     = '';
-  String _password = '';
-  List<String> _interests = [];
-  String? _signUpError;
-
-  // ── Navigation ────────────────────────────────────────────────
-  void _goNext() {
-    if (_currentStep < _totalPages - 1) {
-      setState(() => _currentStep++);
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeInOutCubic,
-      );
+  void _handleSignUp() {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final name = _nameController.text.trim();
+    final emailRegex = RegExp(r'^[a-zA-Z0-9_.+-]+@ku\.edu\.tr$');
+    if (email.isEmpty || password.isEmpty || name.isEmpty) {
+      setState(() => _error = 'All fields are required');
+      return;
     }
-  }
-
-  void _goBack() {
-    if (_currentStep > 0) {
-      setState(() => _currentStep--);
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 360),
-        curve: Curves.easeInOutCubic,
-      );
-    } else {
-      widget.onBack?.call();
+    if (!emailRegex.hasMatch(email)) {
+      setState(() => _error = 'Please use your @ku.edu.tr email');
+      return;
     }
-  }
-
-  void _handleFinish() {
-    setState(() => _signUpError = null);
-    final success = authService.signUp(_name, _email, _password);
+    final success = authService.signUp(name, email, password);
     if (success) {
       widget.onSignUp();
     } else {
-      setState(() {
-        _signUpError = 'An account with this email already exists.';
-        _currentStep = 0; // back to email step
-      });
-      _pageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOutCubic,
-      );
+      setState(() => _error = 'An account with this email already exists');
     }
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
-  }
-
-  // ── Header logic ──────────────────────────────────────────────
-  // Only pages 0-3 show the progress header
-  bool get _showHeader => _currentStep < _totalVisibleSteps;
-
-  int get _visibleStep => _currentStep + 1; // 1=Email(1/4) … 4=Interests(4/4)
-
-  String? get _rightLabel {
-    if (_currentStep == 0) return 'Help';
-    if (_currentStep == 3) return 'Skip';
-    return null;
-  }
-
-  VoidCallback? get _onRight {
-    if (_currentStep == 3) return () => _handleFinish(); // skip interests
-    return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: SC.lightTheme(),
-      child: Scaffold(
-        backgroundColor: SC.bg,
-        body: SafeArea(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: AppColors.text,
+        leading: BackButton(
+            onPressed:
+                widget.onBack ?? () => Navigator.of(context).maybePop()),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Progress header (pages 0-3 only) ─────────────
-              AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                child: _showHeader
-                    ? _SignupHeader(
-                        step: _visibleStep,
-                        total: _totalVisibleSteps,
-                        onBack: _goBack,
-                        rightLabel: _rightLabel,
-                        onRight: _onRight,
-                      )
-                    : const SizedBox.shrink(),
-              ),
+              const SizedBox(height: 12),
 
-              // ── Pages ─────────────────────────────────────────
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    // Page 0: Email
-                    StepEmail(
-                      initialValue: _email,
-                      externalError: _signUpError,
-                      onNext: (email) {
-                        setState(() => _email = email);
-                        _goNext();
-                      },
+              // KU badge
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.lightRed,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Center(
+                  child: Text(
+                    'KU',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.primaryRed,
+                      letterSpacing: 1,
                     ),
-                    // Page 1: Verify
-                    StepVerify(
-                      email: _email,
-                      onNext: _goNext,
-                      onResend: () {/* wire to real email service */},
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              const Text(
+                'Create your account',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use your @ku.edu.tr email to join the Koç University community.',
+                style: TextStyle(
+                  fontSize: 14,
+                  
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Name
+              _buildField(
+                controller: _nameController,
+                label: 'Full Name',
+                hint: 'e.g. Ali Yılmaz',
+                icon: Icons.person_outline,
+              ),
+              const SizedBox(height: 14),
+
+              // Email
+              _buildField(
+                controller: _emailController,
+                label: 'KU Email',
+                hint: 'you@ku.edu.tr',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+                errorText: _error,
+              ),
+              const SizedBox(height: 14),
+
+              // Password
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                onSubmitted: (_) => _handleSignUp(),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  hintText: 'At least 6 characters',
+                  prefixIcon: const Icon(Icons.lock_outline,
+                      color: AppColors.secondaryText),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: AppColors.secondaryText,
+                      size: 20,
                     ),
-                    // Page 2: Profile
-                    StepProfile(
-                      initialName: _name,
-                      initialMajor: _major,
-                      initialYear: _year,
-                      initialPassword: _password,
-                      onNext: (name, major, year, password) {
-                        setState(() {
-                          _name     = name;
-                          _major    = major;
-                          _year     = year;
-                          _password = password;
-                        });
-                        _goNext();
-                      },
-                    ),
-                    // Page 3: Interests
-                    StepInterests(
-                      selected: _interests,
-                      onNext: (interests) {
-                        setState(() => _interests = interests);
-                        _goNext();
-                      },
-                      onSkip: _goNext,
-                    ),
-                    // Page 4: Done
-                    StepDone(
-                      name: _name,
-                      onFinish: _handleFinish,
-                    ),
-                  ],
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.card,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        const BorderSide(color: AppColors.divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                        color: AppColors.primaryRed, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _handleSignUp,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                    shadowColor:
+                        AppColors.primaryRed.withValues(alpha: 0.4),
+                  ),
+                  child: const Text('Create Account',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -184,101 +193,48 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
   }
-}
 
-// ── Progress header ───────────────────────────────────────────────────────────
-class _SignupHeader extends StatelessWidget {
-  final int step;
-  final int total;
-  final VoidCallback onBack;
-  final String? rightLabel;
-  final VoidCallback? onRight;
-
-  const _SignupHeader({
-    required this.step,
-    required this.total,
-    required this.onBack,
-    this.rightLabel,
-    this.onRight,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Nav row
-        SizedBox(
-          height: 44,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Back
-                GestureDetector(
-                  onTap: onBack,
-                  behavior: HitTestBehavior.opaque,
-                  child: Row(
-                    children: [
-                      Text('‹',
-                          style: TextStyle(
-                              fontSize: 22,
-                              color: SC.burgundy,
-                              height: 1)),
-                      SizedBox(width: 2),
-                      Text('Back',
-                          style: TextStyle(
-                              fontSize: 17, color: SC.burgundy)),
-                    ],
-                  ),
-                ),
-                // Step counter
-                Text(
-                  '$step / $total',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: SC.muted,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                // Right action / spacer
-                SizedBox(
-                  width: 52,
-                  child: rightLabel != null
-                      ? GestureDetector(
-                          onTap: onRight,
-                          behavior: HitTestBehavior.opaque,
-                          child: Text(
-                            rightLabel!,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                                fontSize: 17,
-                                color: SC.muted),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    String? errorText,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: AppColors.secondaryText),
+        errorText: errorText,
+        filled: true,
+        fillColor: AppColors.card,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
-        // Thin progress bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: step / total,
-              backgroundColor: SC.hair,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(SC.burgundy),
-              minHeight: 3,
-            ),
-          ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.divider),
         ),
-        const SizedBox(height: 4),
-      ],
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              BorderSide(color: AppColors.primaryRed, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: AppColors.primaryRed),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              BorderSide(color: AppColors.primaryRed, width: 2),
+        ),
+      ),
     );
   }
 }
