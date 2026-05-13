@@ -4,7 +4,7 @@ import 'signup_theme.dart';
 class StepEmail extends StatefulWidget {
   final String initialValue;
   final String? externalError;
-  final ValueChanged<String> onNext;
+  final Future<String?> Function(String email) onNext;
 
   const StepEmail({
     super.key,
@@ -20,9 +20,9 @@ class StepEmail extends StatefulWidget {
 class _StepEmailState extends State<StepEmail> {
   late final TextEditingController _controller;
   String? _error;
+  bool _isSubmitting = false;
 
-  static final _emailRegex =
-      RegExp(r'^[a-zA-Z0-9_.+-]+@ku\.edu\.tr$');
+  static final _emailRegex = RegExp(r'^[a-zA-Z0-9_.+-]+@ku\.edu\.tr$');
 
   @override
   void initState() {
@@ -38,7 +38,8 @@ class _StepEmailState extends State<StepEmail> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
     final val = _controller.text.trim();
     if (val.isEmpty) {
       setState(() => _error = 'Please enter your university email.');
@@ -48,8 +49,16 @@ class _StepEmailState extends State<StepEmail> {
       setState(() => _error = 'Only @ku.edu.tr addresses are accepted.');
       return;
     }
-    setState(() => _error = null);
-    widget.onNext(val);
+    setState(() {
+      _error = null;
+      _isSubmitting = true;
+    });
+    final error = await widget.onNext(val);
+    if (!mounted) return;
+    setState(() {
+      _error = error;
+      _isSubmitting = false;
+    });
   }
 
   @override
@@ -99,7 +108,10 @@ class _StepEmailState extends State<StepEmail> {
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   style: TextStyle(
-                      color: SC.ink, fontSize: 16, letterSpacing: -0.1),
+                    color: SC.ink,
+                    fontSize: 16,
+                    letterSpacing: -0.1,
+                  ),
                   decoration: SC.fieldDecoration(
                     label: 'University email',
                     hint: 'you@ku.edu.tr',
@@ -112,7 +124,9 @@ class _StepEmailState extends State<StepEmail> {
                 // Info box — circular "i" icon
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: SC.burgundyTint,
                     borderRadius: BorderRadius.circular(10),
@@ -177,9 +191,18 @@ class _StepEmailState extends State<StepEmail> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: _submit,
+              onPressed: _isSubmitting ? null : _submit,
               style: SC.primaryButtonStyle(),
-              child: Text('Continue'),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text('Continue'),
             ),
           ),
         ),

@@ -25,7 +25,7 @@ class _StepPasswordState extends State<StepPassword> {
     _confirmController = TextEditingController();
   }
 
-  bool get _hasMinLength => _passwordController.text.trim().length >= 8;
+  bool get _hasMinLength => _passwordController.text.trim().length >= 6;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
 
@@ -33,7 +33,7 @@ class _StepPasswordState extends State<StepPassword> {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
     if (!_hasMinLength) {
-      setState(() => _error = 'Password must be at least 8 numbers.');
+      setState(() => _error = 'Password must be at least 6 numbers.');
       return;
     }
     if (!_hasOnlyNumbers) {
@@ -154,7 +154,7 @@ class _StepPasswordState extends State<StepPassword> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _RuleRow(label: 'At least 8 numbers', passed: _hasMinLength),
+                _RuleRow(label: 'At least 6 numbers', passed: _hasMinLength),
                 _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
               ],
             ),

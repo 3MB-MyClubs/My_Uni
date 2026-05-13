@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import '../services/user_state.dart';
+import '../services/signup_service.dart';
 import 'signup_steps/signup_theme.dart';
 import 'signup_steps/step_email.dart';
 import 'signup_steps/step_verify.dart';
 import 'signup_steps/step_password.dart';
 import 'signup_steps/step_profile.dart';
 import 'signup_steps/step_interests.dart';
+
 class SignupFlowScreen extends StatefulWidget {
   final void Function(String email) onSignUp;
   final VoidCallback? onBack;
@@ -27,8 +27,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   String _major = '';
   String _year = '';
   String _password = '';
-  String? _profileImagePath;
-  List<String> _interests = [];
+  List<String> _interestIds = [];
 
   static const int _totalSteps =
       5; // email, verify, password, profile, interests
@@ -50,13 +49,25 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     }
   }
 
-  void _onEmailNext(String email) {
+  Future<String?> _onEmailNext(String email) async {
+    final result = await signupService.sendCode(email);
+    if (!result.success) return result.error;
     _email = email;
     _goTo(1);
+    return null;
   }
 
-  void _onVerifyNext() {
+  Future<String?> _onVerifyNext(String code) async {
+    final result = await signupService.verifyCode(email: _email, code: code);
+    if (!result.success) return result.error;
     _goTo(2);
+    return null;
+  }
+
+  Future<String?> _onResendCode() async {
+    final result = await signupService.sendCode(_email);
+    if (!result.success) return result.error;
+    return null;
   }
 
   void _onPasswordNext(String password) {
@@ -73,44 +84,26 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     _name = name;
     _major = major;
     _year = year;
-    _profileImagePath = imagePath;
     _goTo(4);
   }
 
-  void _saveProfileDetails() {
-    final userId = authService.currentUser?.id;
-    if (userId == null) return;
-    userState.setMajor(userId, _major);
-    userState.setYear(userId, _year);
-    final imagePath = _profileImagePath;
-    if (imagePath != null && imagePath.isNotEmpty) {
-      userState.setProfilePhoto(userId, imagePath);
-    }
-  }
-
-  void _onInterestsNext(List<String> interests) {
-    _interests = interests;
-    final ok = authService.signUp(_name, _email, _password);
-    if (!ok) {
-      setState(() => _currentStep = 0);
-      _pageController.jumpToPage(0);
-      return;
-    }
-    _saveProfileDetails();
-    authService.logout();
+  Future<String?> _onInterestsNext(List<String> interestIds) async {
+    _interestIds = interestIds;
+    final result = await signupService.completeSignup(
+      email: _email,
+      password: _password,
+      fullName: _name,
+      major: _major,
+      year: _year,
+      interestIds: _interestIds,
+    );
+    if (!result.success) return result.error;
     widget.onSignUp(_email);
+    return null;
   }
 
   void _onSkipInterests() {
-    final ok = authService.signUp(_name, _email, _password);
-    if (!ok) {
-      setState(() => _currentStep = 0);
-      _pageController.jumpToPage(0);
-      return;
-    }
-    _saveProfileDetails();
-    authService.logout();
-    widget.onSignUp(_email);
+    // The backend requires at least 3 interests for signup completion.
   }
 
   @override
@@ -184,7 +177,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                     StepVerify(
                       email: _email,
                       onNext: _onVerifyNext,
-                      onResend: () {},
+                      onResend: _onResendCode,
                     ),
                     // 2 — Password
                     StepPassword(
@@ -200,7 +193,8 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                     ),
                     // 4 — Interests
                     StepInterests(
-                      selected: _interests,
+                      selected: _interestIds,
+                      loadInterests: signupService.fetchInterests,
                       onNext: _onInterestsNext,
                       onSkip: _onSkipInterests,
                     ),

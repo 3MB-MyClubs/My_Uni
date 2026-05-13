@@ -1,6 +1,9 @@
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+
 import '../models/user.dart';
 import '../models/app_admin.dart';
 import 'mock_data.dart';
+import 'supabase_config.dart';
 
 // ...existing code...
 
@@ -12,7 +15,7 @@ class AuthService {
   AppAdmin? get currentAdmin => _currentAdmin;
 
   bool isValidNumericPassword(String password) {
-    return password.length >= 8 && RegExp(r'^[0-9]+$').hasMatch(password);
+    return password.length >= 6 && RegExp(r'^[0-9]+$').hasMatch(password);
   }
 
   bool login(String email, [String? password]) {
@@ -44,6 +47,40 @@ class AuthService {
       return true;
     }
     return false;
+  }
+
+  Future<bool> loginStudent(String email, String password) async {
+    if (SupabaseConfig.isConfigured) {
+      try {
+        final response = await Supabase.instance.client.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        final authUser = response.user;
+        if (authUser == null) return false;
+
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('full_name, email, role')
+            .eq('id', authUser.id)
+            .maybeSingle();
+
+        _currentUser = User(
+          id: authUser.id,
+          name: (profile?['full_name'] as String?) ?? email,
+          email: (profile?['email'] as String?) ?? email,
+          password: '',
+          role: (profile?['role'] as String?) ?? 'student',
+          subscribedClubIds: const [],
+        );
+        _currentAdmin = null;
+        return true;
+      } catch (_) {
+        return login(email, password);
+      }
+    }
+
+    return login(email, password);
   }
 
   bool signUp(String name, String email, String password) {

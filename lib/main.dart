@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/auth_choice_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
@@ -19,9 +20,16 @@ import 'services/campus_pulse_service.dart';
 import 'services/theme_service.dart';
 import 'services/heatmap_repository.dart';
 import 'services/location_permission_service.dart';
+import 'services/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
+  if (SupabaseConfig.isConfigured) {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.clientKey,
+    );
+  }
   await messageService.initialize();
   await notificationService.initialize();
   await userPrefsService.initialize();
@@ -128,15 +136,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   ThemeData _buildTheme(bool isDark) {
     // Use raw DarkColors/LightColors (const) — AppColors getters read from
     // themeService.isDark which may differ from the isDark param here.
-    final bg     = isDark ? DarkColors.background    : LightColors.background;
-    final crd    = isDark ? DarkColors.card          : LightColors.card;
-    final txt    = isDark ? DarkColors.text          : LightColors.text;
-    final sub    = isDark ? DarkColors.secondaryText : LightColors.secondaryText;
-    final div    = isDark ? DarkColors.divider       : LightColors.divider;
-    final ltRed  = isDark ? DarkColors.lightRed      : LightColors.lightRed;
-    final lGray  = isDark ? DarkColors.lightGray     : LightColors.lightGray;
-    final bright = isDark ? Brightness.dark          : Brightness.light;
-    const red    = AppColors.primaryRed;
+    final bg = isDark ? DarkColors.background : LightColors.background;
+    final crd = isDark ? DarkColors.card : LightColors.card;
+    final txt = isDark ? DarkColors.text : LightColors.text;
+    final sub = isDark ? DarkColors.secondaryText : LightColors.secondaryText;
+    final div = isDark ? DarkColors.divider : LightColors.divider;
+    final ltRed = isDark ? DarkColors.lightRed : LightColors.lightRed;
+    final lGray = isDark ? DarkColors.lightGray : LightColors.lightGray;
+    final bright = isDark ? Brightness.dark : Brightness.light;
+    const red = AppColors.primaryRed;
 
     return ThemeData(
       brightness: bright,
@@ -179,23 +187,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w600);
+            return TextStyle(
+              color: AppColors.primaryRed,
+              fontWeight: FontWeight.w600,
+            );
           }
           return TextStyle(color: sub);
         }),
       ),
       textTheme: TextTheme(
-        bodyLarge:   TextStyle(color: txt),
-        bodyMedium:  TextStyle(color: txt),
-        bodySmall:   TextStyle(color: sub),
-        titleLarge:  TextStyle(color: txt, fontWeight: FontWeight.bold),
+        bodyLarge: TextStyle(color: txt),
+        bodyMedium: TextStyle(color: txt),
+        bodySmall: TextStyle(color: sub),
+        titleLarge: TextStyle(color: txt, fontWeight: FontWeight.bold),
         titleMedium: TextStyle(color: txt),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: red,
           foregroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
           textStyle: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -262,9 +275,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         } else if (_showLogin) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
-            child: LoginScreen(onLogin: _onLogin, onBack: handleBack, initialEmail: _signupEmail),
+            child: LoginScreen(
+              onLogin: _onLogin,
+              onBack: handleBack,
+              initialEmail: _signupEmail,
+            ),
             transitionBuilder: (child, animation) => SlideTransition(
-              position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
+              position: Tween<Offset>(
+                begin: const Offset(1, 0),
+                end: Offset.zero,
+              ).animate(animation),
               child: child,
             ),
           );
@@ -273,7 +293,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 400),
             child: SignupFlowScreen(onSignUp: _onSignUp, onBack: handleBack),
             transitionBuilder: (child, animation) => SlideTransition(
-              position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
+              position: Tween<Offset>(
+                begin: const Offset(1, 0),
+                end: Offset.zero,
+              ).animate(animation),
               child: child,
             ),
           );
