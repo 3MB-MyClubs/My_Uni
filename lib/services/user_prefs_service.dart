@@ -27,6 +27,7 @@ class UserPrefsService {
       'bio_$userId': s.bios[userId],
       'major_$userId': s.majors[userId],
       'year_$userId': s.years[userId],
+      'interests_$userId': s.interests[userId],
       'followedUserIds_$userId': s.followedUserIds.toList(),
       'followedClubIds_$userId': s.followedClubIds.toList(),
       'likedPostIds_$userId': s.likedPostIds.toList(),
@@ -91,27 +92,47 @@ class UserPrefsService {
     final year = _box.get('year_$userId');
     if (year != null) s.years[userId] = year as String;
 
-    _restoreSet(s.followedUserIds, _box.get('followedUserIds_$userId'),
-        fallback: {'u1', 'u4'});
+    final interests = _box.get('interests_$userId');
+    if (interests != null) {
+      s.interests[userId] = List<String>.from(interests as List);
+    }
 
-    _restoreSet(s.followedClubIds, _box.get('followedClubIds_$userId'),
-        fallback: {'c1'});
+    _restoreSet(
+      s.followedUserIds,
+      _box.get('followedUserIds_$userId'),
+      fallback: {'u1', 'u4'},
+    );
 
-    _restoreSet(s.likedPostIds, _box.get('likedPostIds_$userId'),
-        fallback: {'n1'});
+    _restoreSet(
+      s.followedClubIds,
+      _box.get('followedClubIds_$userId'),
+      fallback: {'c1'},
+    );
+
+    _restoreSet(
+      s.likedPostIds,
+      _box.get('likedPostIds_$userId'),
+      fallback: {'n1'},
+    );
 
     _restoreSet(s.savedPostIds, _box.get('savedPostIds_$userId'));
 
     _restoreSet(
-        s.pendingFollowRequests, _box.get('pendingFollowRequests_$userId'));
+      s.pendingFollowRequests,
+      _box.get('pendingFollowRequests_$userId'),
+    );
 
     _restoreSet(s.shownFollowNotice, _box.get('shownFollowNotice_$userId'));
 
-    _restoreSet(s.acceptedMessageRequests,
-        _box.get('acceptedMessageRequests_$userId'));
+    _restoreSet(
+      s.acceptedMessageRequests,
+      _box.get('acceptedMessageRequests_$userId'),
+    );
 
-    _restoreSet(s.pendingBoardRequests,
-        _box.get('pendingBoardRequests_$userId'));
+    _restoreSet(
+      s.pendingBoardRequests,
+      _box.get('pendingBoardRequests_$userId'),
+    );
 
     final storedUsernames = _box.get('usernames');
     if (storedUsernames != null) {
@@ -147,14 +168,16 @@ class UserPrefsService {
     if (!_initialized) return;
     final key = 'pendingBoardRequests_$userId';
     final raw = _box.get(key);
-    final existing =
-        raw != null ? List<String>.from(raw as List) : <String>[];
+    final existing = raw != null ? List<String>.from(raw as List) : <String>[];
     existing.remove('$userId:$clubId');
     await _box.put(key, existing);
   }
 
-  void _restoreSet(Set<String> target, dynamic raw,
-      {Set<String> fallback = const {}}) {
+  void _restoreSet(
+    Set<String> target,
+    dynamic raw, {
+    Set<String> fallback = const {},
+  }) {
     if (raw == null) {
       if (fallback.isNotEmpty) {
         target

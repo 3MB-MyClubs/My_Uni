@@ -18,6 +18,7 @@ import 'event_detail_screen.dart';
 import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
 import 'settings_screen.dart';
+import 'student_profile_screen.dart';
 import 'user_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -51,21 +52,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ];
 
   Widget _initialAvatar(String name) => Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.primaryRed.withValues(alpha: 0.18),
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: AppColors.primaryRed.withValues(alpha: 0.18),
+    ),
+    child: Center(
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '?',
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          color: AppColors.primaryRed,
         ),
-        child: Center(
-          child: Text(
-            name.isNotEmpty ? name[0].toUpperCase() : '?',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primaryRed,
-            ),
-          ),
-        ),
-      );
+      ),
+    ),
+  );
 
   Future<void> _pickProfilePhoto(String userId, ImageSource source) async {
     final picker = ImagePicker();
@@ -96,8 +97,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceAlt,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Use this photo?',
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+        title: Text(
+          'Use this photo?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
         content: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: Image.file(File(cropped.path), fit: BoxFit.cover),
@@ -106,13 +109,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('Use Photo'),
@@ -128,8 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final ext = cropped.path.contains('.')
           ? cropped.path.substring(cropped.path.lastIndexOf('.'))
           : '.jpg';
-      final permanentPath =
-          '${docsDir.path}/profile_$userId$ext';
+      final permanentPath = '${docsDir.path}/profile_$userId$ext';
       await File(cropped.path).copy(permanentPath);
 
       if (!mounted) return;
@@ -150,7 +157,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: AppColors.surfaceAlt,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Text(
             'Major & Year',
             style: TextStyle(
@@ -177,9 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? selectedYear
                     : null,
                 dropdownColor: AppColors.card,
-                decoration: const InputDecoration(
-                  labelText: 'Year',
-                ),
+                decoration: const InputDecoration(labelText: 'Year'),
                 items: _yearOptions
                     .map(
                       (year) => DropdownMenuItem<String>(
@@ -221,7 +228,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editBio(BuildContext context, String userId) async {
-    final bioController = TextEditingController(text: userState.bios[userId] ?? '');
+    final bioController = TextEditingController(
+      text: userState.bios[userId] ?? '',
+    );
 
     await showDialog<void>(
       context: context,
@@ -230,10 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Bio',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.text,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: TextField(
           controller: bioController,
@@ -270,7 +276,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<User> _followersForUser(String userId) {
     return users
-        .where((user) => user.id != userId && user.followingUserIds.contains(userId))
+        .where(
+          (user) => user.id != userId && user.followingUserIds.contains(userId),
+        )
         .toList();
   }
 
@@ -309,8 +317,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(Icons.people_alt_outlined,
-                      size: 18, color: AppColors.primaryRed),
+                  Icon(
+                    Icons.people_alt_outlined,
+                    size: 18,
+                    color: AppColors.primaryRed,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Followers',
@@ -351,7 +362,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           final follower = followers[index];
                           return ListTile(
                             contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 0, vertical: 4),
+                              horizontal: 0,
+                              vertical: 4,
+                            ),
                             leading: UserAvatar(
                               userId: follower.id,
                               name: follower.name,
@@ -360,7 +373,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             title: Text(
                               userState.displayNameFor(
-                                  follower.id, follower.name),
+                                follower.id,
+                                follower.name,
+                              ),
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.text,
@@ -429,8 +444,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(Icons.person_add_alt_1_outlined,
-                      size: 18, color: AppColors.primaryRed),
+                  Icon(
+                    Icons.person_add_alt_1_outlined,
+                    size: 18,
+                    color: AppColors.primaryRed,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Following',
@@ -471,7 +489,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           final person = following[index];
                           return ListTile(
                             contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 0, vertical: 4),
+                              horizontal: 0,
+                              vertical: 4,
+                            ),
                             leading: UserAvatar(
                               userId: person.id,
                               name: person.name,
@@ -534,7 +554,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Center(
               child: Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
@@ -542,17 +563,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Text('Change Profile Photo',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text)),
+            Text(
+              'Change Profile Photo',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
             const SizedBox(height: 16),
             ListTile(
               leading: Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primaryRed,
+                ),
               ),
-              title: Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
-              subtitle: Text('Use your camera right now', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              title: Text(
+                'Take a Photo',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              subtitle: Text(
+                'Use your camera right now',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickProfilePhoto(userId, ImageSource.camera);
@@ -561,12 +604,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Divider(height: 1, indent: 16, color: AppColors.divider),
             ListTile(
               leading: Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.photo_library_outlined,
+                  color: AppColors.primaryRed,
+                ),
               ),
-              title: Text('Choose from Library', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
-              subtitle: Text('Pick from your photo library', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+              title: Text(
+                'Choose from Library',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              subtitle: Text(
+                'Pick from your photo library',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickProfilePhoto(userId, ImageSource.gallery);
@@ -587,11 +646,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final displayName = userState.displayNameFor(myId, realName);
     final isAdmin = admin != null;
 
+    if (user != null && !isAdmin) {
+      final followedClubs = clubs
+          .where((club) => userState.isFollowing(club.id))
+          .toList();
+      return StudentProfileScreen(
+        onSettings: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SettingsScreen(onLogout: widget.onLogout ?? () {}),
+          ),
+        ),
+        onEditBio: () => _editBio(context, user.id),
+        onEditProfile: () => _editMajorAndYear(context, user.id),
+        followedClubs: followedClubs,
+        onClubTap: (club) => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ClubProfileScreen(
+              club: club,
+              color: _clubColor(clubs.indexOf(club)),
+            ),
+          ),
+        ),
+        vibeTopics: userState.interests[user.id],
+      );
+    }
+
     final myClubs = isAdmin
         ? clubs
-        : clubs
-            .where((c) => userState.isFollowing(c.id))
-            .toList();
+        : clubs.where((c) => userState.isFollowing(c.id)).toList();
 
     final myEventCount = events
         .where((e) => myClubs.any((c) => c.id == e.clubId))
@@ -609,29 +693,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             _buildAppBar(context, displayName),
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListenableBuilder(
-                  listenable: userState,
-                  builder: (context, _) => _buildProfileHeader(
-                    displayName,
-                    realName,
-                    isAdmin,
-                    myClubs.length,
-                    myEventCount,
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListenableBuilder(
+                    listenable: userState,
+                    builder: (context, _) => _buildProfileHeader(
+                      displayName,
+                      realName,
+                      isAdmin,
+                      myClubs.length,
+                      myEventCount,
+                    ),
                   ),
-                ),
-                Divider(height: 1, color: AppColors.divider),
-                _buildMyClubsSection(myClubs),
-                if (isAdmin)
-                  _buildMyContentSection(admin.id),
-                const SizedBox(height: 80),
-              ],
+                  Divider(height: 1, color: AppColors.divider),
+                  _buildMyClubsSection(myClubs),
+                  if (isAdmin) _buildMyContentSection(admin.id),
+                  const SizedBox(height: 80),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -643,14 +726,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       surfaceTintColor: Colors.transparent,
       foregroundColor: AppColors.text,
       pinned: true,
-      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.text)),
+      title: Text(
+        name,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+          color: AppColors.text,
+        ),
+      ),
       actions: [
         IconButton(
           icon: Icon(Icons.settings_outlined),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => SettingsScreen(onLogout: widget.onLogout ?? () {}),
+              builder: (_) =>
+                  SettingsScreen(onLogout: widget.onLogout ?? () {}),
             ),
           ),
         ),
@@ -666,7 +757,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int eventCount,
   ) {
     final name = displayName;
-    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final myId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final isSuperAdmin = isAdmin && authService.currentAdmin?.id == 'admin1';
 
     final followers = !isAdmin ? _followersForUser(myId) : const <User>[];
@@ -675,7 +767,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Stats for club admins: posts, events, board members
     final Club? managedClub = isAdmin
         ? clubs.cast<Club?>().firstWhere(
-            (c) => c!.adminUserIds.contains(myId), orElse: () => null)
+            (c) => c!.adminUserIds.contains(myId),
+            orElse: () => null,
+          )
         : null;
     final int postCount = managedClub != null
         ? newsPosts.where((p) => p.clubId == managedClub.id).length
@@ -733,7 +827,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [AppColors.primaryRed, AppColors.accentGold],
+                            colors: [
+                              AppColors.primaryRed,
+                              AppColors.accentGold,
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -748,7 +845,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           padding: const EdgeInsets.all(2),
                           child: () {
                             final photoPath = userState.profilePhotoPaths[myId];
-                            final file = photoPath != null ? File(photoPath) : null;
+                            final file = photoPath != null
+                                ? File(photoPath)
+                                : null;
                             if (file != null && file.existsSync()) {
                               return ClipOval(
                                 child: Image.file(
@@ -756,7 +855,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fit: BoxFit.cover,
                                   width: 88,
                                   height: 88,
-                                  errorBuilder: (ctx, e, st) => _initialAvatar(name),
+                                  errorBuilder: (ctx, e, st) =>
+                                      _initialAvatar(name),
                                 ),
                               );
                             }
@@ -773,7 +873,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed,
                             shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.background, width: 2.5),
+                            border: Border.all(
+                              color: AppColors.background,
+                              width: 2.5,
+                            ),
                           ),
                           child: Icon(
                             Icons.camera_alt_rounded,
@@ -828,10 +931,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: (isSuperAdmin
-                            ? const Color(0xFF6A1B9A)
-                            : AppColors.primaryRed)
-                        .withValues(alpha: 0.3),
+                    color:
+                        (isSuperAdmin
+                                ? const Color(0xFF6A1B9A)
+                                : AppColors.primaryRed)
+                            .withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -886,6 +990,122 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showEditProfileSheet(BuildContext context, String userId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Edit Profile',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primaryRed,
+                ),
+              ),
+              title: Text(
+                'Change photo',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showProfilePhotoOptions(context, userId);
+              },
+            ),
+            Divider(height: 1, indent: 16, color: AppColors.divider),
+            ListTile(
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.school_outlined,
+                  color: AppColors.primaryRed,
+                ),
+              ),
+              title: Text(
+                'Major & Year',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _editMajorAndYear(context, userId);
+              },
+            ),
+            Divider(height: 1, indent: 16, color: AppColors.divider),
+            ListTile(
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.edit_note_rounded,
+                  color: AppColors.primaryRed,
+                ),
+              ),
+              title: Text(
+                'Bio',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _editBio(context, userId);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStudentProfileHeader({
     required String name,
     required String realName,
@@ -897,205 +1117,341 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final major = (userState.majors[userId] ?? '').trim();
     final year = (userState.years[userId] ?? '').trim();
     final bio = (userState.bios[userId] ?? '').trim();
-    final majorYearText = [if (major.isNotEmpty) major, if (year.isNotEmpty) year].join(' · ');
-    return Container(
-      color: AppColors.background,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => _showProfilePhotoOptions(context, userId),
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(3),
+
+    final photoPath = userState.profilePhotoPaths[userId];
+    final photoFile = photoPath != null ? File(photoPath) : null;
+    final hasPhoto = photoFile != null && photoFile.existsSync();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Hero banner + avatar overlap ─────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Banner
+              Container(
+                height: 96,
+                clipBehavior: Clip.hardEdge,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF8B1A2B), Color(0xFF6E1422)],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: -30,
+                      right: -20,
+                      child: Container(
+                        width: 140,
+                        height: 140,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0x0FFFFFFF),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: -50,
+                      left: 40,
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0x0DFFFFFF),
+                        ),
+                      ),
+                    ),
+                    if (year.isNotEmpty)
+                      Positioned(
+                        top: 14,
+                        right: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.school_outlined,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                year.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Avatar overlapping banner
+              Positioned(
+                left: 20,
+                bottom: -36,
+                child: GestureDetector(
+                  onTap: () => _showProfilePhotoOptions(context, userId),
+                  child: Container(
+                    width: 90,
+                    height: 90,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFF2DDE0),
+                      border: Border.all(color: AppColors.background, width: 4),
+                    ),
+                    child: hasPhoto
+                        ? Image.file(
+                            photoFile,
+                            width: 90,
+                            height: 90,
+                            fit: BoxFit.cover,
+                            errorBuilder: (ctx2, e, st) => _initialAvatar(name),
+                          )
+                        : _initialAvatar(name),
+                  ),
+                ),
+              ),
+              // Online dot
+              Positioned(
+                left: 92,
+                bottom: -32,
+                child: Container(
+                  width: 16,
+                  height: 16,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [AppColors.primaryRed, AppColors.accentGold],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.background,
-                    ),
-                    padding: const EdgeInsets.all(2),
-                    child: () {
-                      final photoPath = userState.profilePhotoPaths[userId];
-                      final file = photoPath != null ? File(photoPath) : null;
-                      if (file != null && file.existsSync()) {
-                        return ClipOval(
-                          child: Image.file(
-                            file,
-                            fit: BoxFit.cover,
-                            width: 96,
-                            height: 96,
-                            errorBuilder: (ctx, e, st) => _initialAvatar(name),
-                          ),
-                        );
-                      }
-                      return _initialAvatar(name);
-                    }(),
+                    color: const Color(0xFF3F6B4E),
+                    border: Border.all(color: AppColors.background, width: 3),
                   ),
                 ),
-                Positioned(
-                  right: 1,
-                  bottom: 1,
+              ),
+            ],
+          ),
+        ),
+
+        // ── Name block ────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 46, 24, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.text,
+                  letterSpacing: -0.6,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => _editMajorAndYear(context, userId),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.school_outlined,
+                      size: 14,
+                      color: AppColors.primaryRed,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        [
+                              if (major.isNotEmpty) major,
+                              if (year.isNotEmpty) year,
+                            ].join(' · ').isNotEmpty
+                            ? [
+                                if (major.isNotEmpty) major,
+                                if (year.isNotEmpty) year,
+                              ].join(' · ')
+                            : 'Add major & year',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.secondaryText,
+                          fontStyle: (major.isEmpty && year.isEmpty)
+                              ? FontStyle.italic
+                              : FontStyle.normal,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Bio ───────────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          child: GestureDetector(
+            onTap: () => _editBio(context, userId),
+            child: bio.isEmpty
+                ? Text(
+                    'Add a bio…',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: AppColors.secondaryText,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  )
+                : Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '“',
+                          style: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        TextSpan(
+                          text: bio,
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontSize: 13.5,
+                            height: 1.5,
+                          ),
+                        ),
+                        TextSpan(
+                          text: '”',
+                          style: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+
+        // ── Stats card ────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _StatsBlock(value: '$clubCount', label: 'Clubs'),
+                  ),
+                  VerticalDivider(width: 1, color: AppColors.divider),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showFollowersSheet(followers),
+                      child: _StatsBlock(
+                        value: '${followers.length}',
+                        label: 'Followers',
+                      ),
+                    ),
+                  ),
+                  VerticalDivider(width: 1, color: AppColors.divider),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showFollowingSheet(following),
+                      child: _StatsBlock(
+                        value: '${following.length}',
+                        label: 'Following',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // ── Edit profile / camera row ──────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showEditProfileSheet(context, userId),
                   child: Container(
-                    width: 28,
-                    height: 28,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: AppColors.primaryRed,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.background, width: 2.5),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryRed.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                    child: Icon(
-                      Icons.camera_alt_rounded,
-                      color: Colors.white,
-                      size: 14,
+                    child: const Center(
+                      child: Text(
+                        'Edit profile',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            name,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 22,
-              color: AppColors.text,
-            ),
-          ),
-          if (name != realName) ...[
-            const SizedBox(height: 2),
-            Text(
-              realName,
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
-            ),
-          ],
-          const SizedBox(height: 10),
-          InkWell(
-            onTap: () => _editMajorAndYear(context, userId),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  Icon(Icons.school_outlined, size: 17, color: AppColors.primaryRed),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      majorYearText.isEmpty ? 'Add major & year' : majorYearText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: majorYearText.isEmpty
-                            ? AppColors.secondaryText
-                            : AppColors.text,
-                        fontStyle: majorYearText.isEmpty
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                      ),
-                    ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => _showProfilePhotoOptions(context, userId),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.card,
+                    border: Border.all(color: AppColors.divider),
                   ),
-                ],
-              ),
-            ),
-          ),
-          InkWell(
-            onTap: () => _editBio(context, userId),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.edit_note_rounded, size: 18, color: AppColors.primaryRed),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      bio.isEmpty ? 'Add a bio…' : bio,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: bio.isEmpty ? AppColors.secondaryText : AppColors.text,
-                        fontStyle: bio.isEmpty ? FontStyle.italic : FontStyle.normal,
-                      ),
-                    ),
+                  child: Icon(
+                    Icons.camera_alt_outlined,
+                    size: 20,
+                    color: AppColors.text,
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _buildStudentStatsCard(
-            clubCount: clubCount,
-            followers: followers,
-            following: following,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStudentStatsCard({
-    required int clubCount,
-    required List<User> followers,
-    required List<User> following,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _BigStatCell(
-              icon: Icons.groups_2_rounded,
-              value: '$clubCount',
-              label: 'Clubs',
-            ),
-          ),
-          Container(width: 1, height: 56, color: AppColors.divider),
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _showFollowersSheet(followers),
-              child: _BigStatCell(
-                icon: Icons.people_alt_outlined,
-                value: '${followers.length}',
-                label: 'Followers',
-              ),
-            ),
-          ),
-          Container(width: 1, height: 56, color: AppColors.divider),
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _showFollowingSheet(following),
-              child: _BigStatCell(
-                icon: Icons.person_add_alt_1_outlined,
-                value: '${following.length}',
-                label: 'Following',
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1104,15 +1460,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final Club? managedClub = adminId.isNotEmpty
         ? clubs.cast<Club?>().firstWhere(
             (c) => c!.adminUserIds.contains(adminId),
-            orElse: () => null)
+            orElse: () => null,
+          )
         : null;
     final boardMembers = managedClub != null
         ? users.where((u) => managedClub.boardMemberIds.contains(u.id)).toList()
         : <dynamic>[];
     final pendingCount = managedClub != null
         ? boardMemberRequests
-            .where((r) => r.clubId == managedClub.id && r.status == 'pending')
-            .length
+              .where((r) => r.clubId == managedClub.id && r.status == 'pending')
+              .length
         : 0;
 
     return Column(
@@ -1128,21 +1485,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Section header
               Row(
                 children: [
-                  Icon(Icons.groups_2_rounded,
-                      size: 18, color: AppColors.primaryRed),
+                  Icon(
+                    Icons.groups_2_rounded,
+                    size: 18,
+                    color: AppColors.primaryRed,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'My Clubs',
                     style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.text),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
                   ),
                   if (myClubs.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(10),
@@ -1150,9 +1513,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Text(
                         '${myClubs.length}',
                         style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryRed),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryRed,
+                        ),
                       ),
                     ),
                   ],
@@ -1163,34 +1527,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          vertical: 20, horizontal: 16),
+                        vertical: 20,
+                        horizontal: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.background,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: AppColors.divider, width: 1),
+                        border: Border.all(color: AppColors.divider, width: 1),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.explore_outlined,
-                              size: 32, color: AppColors.secondaryText),
+                          Icon(
+                            Icons.explore_outlined,
+                            size: 32,
+                            color: AppColors.secondaryText,
+                          ),
                           SizedBox(height: 8),
                           Text(
                             "You haven't followed any clubs yet.",
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                                color: AppColors.secondaryText,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500),
+                              color: AppColors.secondaryText,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                           SizedBox(height: 2),
                           Text(
                             'Explore clubs and follow the ones you like.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                                color: AppColors.secondaryText,
-                                fontSize: 12),
+                              color: AppColors.secondaryText,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1201,8 +1571,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         itemCount: myClubs.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(width: 10),
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
                         itemBuilder: (ctx, i) {
                           final club = myClubs[i];
                           final color = _clubColor(i);
@@ -1210,8 +1579,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             onTap: () => Navigator.push(
                               ctx,
                               MaterialPageRoute(
-                                builder: (_) => ClubProfileScreen(
-                                    club: club, color: color),
+                                builder: (_) =>
+                                    ClubProfileScreen(club: club, color: color),
                               ),
                             ).then((_) => setState(() {})),
                             child: Container(
@@ -1225,10 +1594,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 12, horizontal: 8),
+                                vertical: 12,
+                                horizontal: 8,
+                              ),
                               child: Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   ClubAvatar(
                                     clubId: club.id,
@@ -1279,27 +1649,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ClubProfileScreen(
-                            club: managedClub, color: color),
+                        builder: (_) =>
+                            ClubProfileScreen(club: managedClub, color: color),
                       ),
                     ).then((_) => setState(() {}));
                   },
                   child: Row(
                     children: [
-                      Icon(Icons.shield_rounded,
-                          size: 18, color: Color(0xFF1565C0)),
+                      Icon(
+                        Icons.shield_rounded,
+                        size: 18,
+                        color: Color(0xFF1565C0),
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Board Members',
                         style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.text),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0x1A1565C0),
                           borderRadius: BorderRadius.circular(10),
@@ -1307,16 +1683,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Text(
                           '${managedClub.boardMemberIds.length}',
                           style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1565C0)),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0),
+                          ),
                         ),
                       ),
                       if (pendingCount > 0) ...[
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0x1AF57C00),
                             borderRadius: BorderRadius.circular(10),
@@ -1324,23 +1703,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.pending_actions_outlined,
-                                  size: 12, color: Color(0xFFF57C00)),
+                              Icon(
+                                Icons.pending_actions_outlined,
+                                size: 12,
+                                color: Color(0xFFF57C00),
+                              ),
                               const SizedBox(width: 3),
                               Text(
                                 '$pendingCount pending',
                                 style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFFF57C00)),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFF57C00),
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ],
                       const Spacer(),
-                      Icon(Icons.chevron_right_rounded,
-                          size: 18, color: AppColors.secondaryText),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: AppColors.secondaryText,
+                      ),
                     ],
                   ),
                 ),
@@ -1350,32 +1736,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                        vertical: 18, horizontal: 16),
+                      vertical: 18,
+                      horizontal: 16,
+                    ),
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
                       color: const Color(0x1A1565C0).withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: const Color(0x281565C0), width: 1),
+                        color: const Color(0x281565C0),
+                        width: 1,
+                      ),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.shield_outlined,
-                            size: 28, color: Color(0xFF90CAF9)),
+                        Icon(
+                          Icons.shield_outlined,
+                          size: 28,
+                          color: Color(0xFF90CAF9),
+                        ),
                         SizedBox(height: 6),
                         Text(
                           'No board members yet.',
                           style: TextStyle(
-                              color: Color(0xFF1565C0),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600),
+                            color: Color(0xFF1565C0),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         SizedBox(height: 2),
                         Text(
                           'Approved requests will appear here.',
                           style: TextStyle(
-                              color: Color(0xFF1565C0), fontSize: 11),
+                            color: Color(0xFF1565C0),
+                            fontSize: 11,
+                          ),
                         ),
                       ],
                     ),
@@ -1390,20 +1786,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         if (i > 0)
                           Divider(
-                              height: 1,
-                              indent: 60,
-                              color: AppColors.divider),
+                            height: 1,
+                            indent: 60,
+                            color: AppColors.divider,
+                          ),
                         InkWell(
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) =>
-                                    UserProfileScreen(user: u)),
+                              builder: (_) => UserProfileScreen(user: u),
+                            ),
                           ),
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                vertical: 10, horizontal: 4),
+                              vertical: 10,
+                              horizontal: 4,
+                            ),
                             child: Row(
                               children: [
                                 UserAvatar(
@@ -1411,8 +1810,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   name: u.name,
                                   size: 44,
                                   fontSize: 18,
-                                  backgroundColor: const Color(0xFF1565C0)
-                                      .withValues(alpha: 0.12),
+                                  backgroundColor: const Color(
+                                    0xFF1565C0,
+                                  ).withValues(alpha: 0.12),
                                   textColor: const Color(0xFF1565C0),
                                 ),
                                 const SizedBox(width: 12),
@@ -1421,47 +1821,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(u.name,
-                                          style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.text)),
+                                      Text(
+                                        u.name,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.text,
+                                        ),
+                                      ),
                                       const SizedBox(height: 2),
                                       Text(
                                         hasTitle ? title : u.email,
                                         style: TextStyle(
-                                            fontSize: 12,
-                                            color: hasTitle
-                                                ? const Color(0xFF1565C0)
-                                                : AppColors.secondaryText,
-                                            fontWeight: hasTitle
-                                                ? FontWeight.w600
-                                                : FontWeight.normal),
+                                          fontSize: 12,
+                                          color: hasTitle
+                                              ? const Color(0xFF1565C0)
+                                              : AppColors.secondaryText,
+                                          fontWeight: hasTitle
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 9, vertical: 4),
+                                    horizontal: 9,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: const Color(0x1A1565C0),
-                                    borderRadius:
-                                        BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.shield_rounded,
-                                          size: 11,
-                                          color: Color(0xFF1565C0)),
+                                      Icon(
+                                        Icons.shield_rounded,
+                                        size: 11,
+                                        color: Color(0xFF1565C0),
+                                      ),
                                       SizedBox(width: 4),
                                       Text(
                                         'Board',
                                         style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF1565C0)),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1565C0),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -1486,26 +1894,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildMyContentSection(String adminId) {
     final managedClub = clubs.cast<Club?>().firstWhere(
-        (c) => c!.adminUserIds.contains(adminId),
-        orElse: () => null);
+      (c) => c!.adminUserIds.contains(adminId),
+      orElse: () => null,
+    );
     if (managedClub == null) return const SizedBox.shrink();
 
-    final clubIdx   = clubs.indexOf(managedClub);
+    final clubIdx = clubs.indexOf(managedClub);
     final clubColor = _clubColor(clubIdx < 0 ? 0 : clubIdx);
 
-    final myPosts = newsPosts
-        .where((p) => p.clubId == managedClub.id)
-        .toList()
+    final myPosts = newsPosts.where((p) => p.clubId == managedClub.id).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    final myStories = clubStories
-        .where((s) => s.clubId == managedClub.id)
-        .toList()
-      ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+    final myStories =
+        clubStories.where((s) => s.clubId == managedClub.id).toList()
+          ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
 
-    final myEvents = events
-        .where((e) => e.clubId == managedClub.id)
-        .toList()
+    final myEvents = events.where((e) => e.clubId == managedClub.id).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
     return Column(
@@ -1524,14 +1928,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Icon(Icons.grid_view_rounded, size: 18, color: clubColor),
                     const SizedBox(width: 8),
-                    Text('My Content',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.text)),
+                    Text(
+                      'My Content',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: clubColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
@@ -1539,9 +1949,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Text(
                         managedClub.name,
                         style: TextStyle(
-                            fontSize: 11,
-                            color: clubColor,
-                            fontWeight: FontWeight.w600),
+                          fontSize: 11,
+                          color: clubColor,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -1581,9 +1992,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
 
               // ── Tab content ──
-              if (_contentTab == 0) _buildPostsList(myPosts, clubColor, adminId),
-              if (_contentTab == 1) _buildStoriesList(myStories, clubColor, adminId),
-              if (_contentTab == 2) _buildEventsList(myEvents, clubColor, adminId),
+              if (_contentTab == 0)
+                _buildPostsList(myPosts, clubColor, adminId),
+              if (_contentTab == 1)
+                _buildStoriesList(myStories, clubColor, adminId),
+              if (_contentTab == 2)
+                _buildEventsList(myEvents, clubColor, adminId),
 
               const SizedBox(height: 8),
             ],
@@ -1599,21 +2013,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceAlt,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title,
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: Text(message,
-            style: TextStyle(color: AppColors.secondaryText)),
+        title: Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          message,
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.secondaryText)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('Delete'),
@@ -1638,8 +2060,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) => _confirmDelete('Delete post?',
-              'This post will be permanently removed.'),
+          confirmDismiss: (_) => _confirmDelete(
+            'Delete post?',
+            'This post will be permanently removed.',
+          ),
           onDismissed: (_) {
             final ok = contentStore.deletePost(p.id, adminId);
             if (mounted) {
@@ -1653,7 +2077,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             children: [
               ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1669,38 +2096,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: p.imagePath != null && p.imagePath!.startsWith('http')
-                      ? Image.network(p.imagePath!, fit: BoxFit.cover,
+                      ? Image.network(
+                          p.imagePath!,
+                          fit: BoxFit.cover,
                           errorBuilder: (ctx2, err, stack) => Center(
                             child: Text(
-                              clubs.firstWhere((c) => c.id == p.clubId,
-                                  orElse: () => clubs.first).name[0],
-                              style: TextStyle(fontSize: 22,
-                                  fontWeight: FontWeight.bold, color: color),
-                            ),
-                          ))
-                      : p.imagePath != null
-                          ? Image.file(File(p.imagePath!), fit: BoxFit.cover)
-                          : Center(
-                              child: Text(
-                                clubs.firstWhere((c) => c.id == p.clubId,
-                                    orElse: () => clubs.first).name[0],
-                                style: TextStyle(fontSize: 22,
-                                    fontWeight: FontWeight.bold, color: color),
+                              clubs
+                                  .firstWhere(
+                                    (c) => c.id == p.clubId,
+                                    orElse: () => clubs.first,
+                                  )
+                                  .name[0],
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: color,
                               ),
                             ),
+                          ),
+                        )
+                      : p.imagePath != null
+                      ? Image.file(File(p.imagePath!), fit: BoxFit.cover)
+                      : Center(
+                          child: Text(
+                            clubs
+                                .firstWhere(
+                                  (c) => c.id == p.clubId,
+                                  orElse: () => clubs.first,
+                                )
+                                .name[0],
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ),
                 ),
                 title: Text(
-                  p.content.length > 80 ? '${p.content.substring(0, 80)}…' : p.content,
-                  style: TextStyle(fontSize: 13, color: AppColors.text, height: 1.4),
+                  p.content.length > 80
+                      ? '${p.content.substring(0, 80)}…'
+                      : p.content,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.text,
+                    height: 1.4,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   _timeAgoLabel(p.createdAt),
-                  style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
-                trailing: Icon(Icons.swipe_left_outlined,
-                    size: 16, color: AppColors.secondaryText),
+                trailing: Icon(
+                  Icons.swipe_left_outlined,
+                  size: 16,
+                  color: AppColors.secondaryText,
+                ),
               ),
               Divider(height: 1, indent: 84, color: AppColors.divider),
             ],
@@ -1739,8 +2195,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fit: StackFit.expand,
                       children: [
                         if (hasPhoto && s.imagePath!.startsWith('http'))
-                          Image.network(s.imagePath!, fit: BoxFit.cover,
-                              errorBuilder: (c2, e, st) => _storyGradientBox(color))
+                          Image.network(
+                            s.imagePath!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c2, e, st) =>
+                                _storyGradientBox(color),
+                          )
                         else if (hasPhoto)
                           Image.file(File(s.imagePath!), fit: BoxFit.cover)
                         else
@@ -1762,7 +2222,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   shadows: const [
-                                    Shadow(blurRadius: 4, color: Colors.black87),
+                                    Shadow(
+                                      blurRadius: 4,
+                                      color: Colors.black87,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1777,9 +2240,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: Text(
                               _timeAgoLabel(s.postedAt),
                               style: TextStyle(
-                                  fontSize: 9,
-                                  color: Colors.white70,
-                                  fontWeight: FontWeight.w500),
+                                fontSize: 9,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ),
@@ -1788,34 +2252,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   // Delete button
                   Positioned(
-                      top: 5,
-                      right: 5,
-                      child: GestureDetector(
-                        onTap: () => _confirmDelete(
-                          'Delete story?',
-                          'This story will be permanently removed.',
-                        ).then((confirmed) {
-                          if (confirmed != true || !mounted) return;
-                          final ok = contentStore.deleteStory(s.id, adminId);
-                          if (mounted) {
-                            if (ok) {
-                              setState(() {});
-                            } else {
-                              Navigator.popUntil(context, (r) => r.isFirst);
+                    top: 5,
+                    right: 5,
+                    child: GestureDetector(
+                      onTap: () =>
+                          _confirmDelete(
+                            'Delete story?',
+                            'This story will be permanently removed.',
+                          ).then((confirmed) {
+                            if (confirmed != true || !mounted) return;
+                            final ok = contentStore.deleteStory(s.id, adminId);
+                            if (mounted) {
+                              if (ok) {
+                                setState(() {});
+                              } else {
+                                Navigator.popUntil(context, (r) => r.isFirst);
+                              }
                             }
-                          }
-                        }),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.85),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.delete_outline,
-                              color: Colors.white, size: 14),
+                          }),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.85),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.delete_outline,
+                          color: Colors.white,
+                          size: 14,
                         ),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -1826,17 +2294,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _storyGradientBox(Color color) => Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              color.withValues(alpha: 0.8),
-              color.withValues(alpha: 0.4),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-      );
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [color.withValues(alpha: 0.8), color.withValues(alpha: 0.4)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+  );
 
   void _showStoryPreview(BuildContext context, dynamic story) {
     final hasPhoto = story.imagePath != null;
@@ -1858,8 +2323,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               fit: StackFit.expand,
               children: [
                 if (hasPhoto && (story.imagePath as String).startsWith('http'))
-                  Image.network(story.imagePath as String, fit: BoxFit.cover,
-                      errorBuilder: (c2, e, st) => _storyGradientBox(AppColors.primaryRed))
+                  Image.network(
+                    story.imagePath as String,
+                    fit: BoxFit.cover,
+                    errorBuilder: (c2, e, st) =>
+                        _storyGradientBox(AppColors.primaryRed),
+                  )
                 else if (hasPhoto)
                   Image.file(File(story.imagePath as String), fit: BoxFit.cover)
                 else
@@ -1918,9 +2387,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Text(
                       _timeAgoLabel(story.postedAt as DateTime),
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white60,
-                          fontWeight: FontWeight.w500),
+                        fontSize: 12,
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -1938,13 +2408,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     return Column(
       children: myEvents.map((e) {
-        final now      = DateTime.now();
-        final isLive   = e.dateTime.isBefore(now) && e.endTime.isAfter(now);
-        final isPast   = e.endTime.isBefore(now);
-        final diff     = e.dateTime.difference(now);
+        final now = DateTime.now();
+        final isLive = e.dateTime.isBefore(now) && e.endTime.isAfter(now);
+        final isPast = e.endTime.isBefore(now);
+        final diff = e.dateTime.difference(now);
 
         String statusLabel;
-        Color  statusColor;
+        Color statusColor;
         if (isLive) {
           statusLabel = 'Live';
           statusColor = Colors.green;
@@ -1988,8 +2458,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             children: [
               ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -2009,16 +2481,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         '${e.dateTime.day}',
                         style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: color),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
                       ),
                       Text(
                         _monthAbbr(e.dateTime.month),
                         style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: color),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: color,
+                        ),
                       ),
                     ],
                   ),
@@ -2026,16 +2500,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: Text(
                   e.title,
                   style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   e.location,
                   style: TextStyle(
-                      fontSize: 11, color: AppColors.secondaryText),
+                    fontSize: 11,
+                    color: AppColors.secondaryText,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2044,7 +2521,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
@@ -2052,14 +2531,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Text(
                         statusLabel,
                         style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Icon(Icons.swipe_left_outlined,
-                        size: 14, color: AppColors.secondaryText),
+                    Icon(
+                      Icons.swipe_left_outlined,
+                      size: 14,
+                      color: AppColors.secondaryText,
+                    ),
                   ],
                 ),
               ),
@@ -2080,9 +2563,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         '${e.attendeeUserIds.length} attending · View RSVPs',
                         style: TextStyle(
-                            fontSize: 12,
-                            color: color,
-                            fontWeight: FontWeight.w600),
+                          fontSize: 12,
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(width: 2),
                       Icon(Icons.chevron_right, size: 14, color: color),
@@ -2110,19 +2594,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const m = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${m[dt.month - 1]} ${dt.day}';
   }
 
-  String _monthAbbr(int m) =>
-      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+  String _monthAbbr(int m) => [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m - 1];
 }
 
 class _ContentTabChip extends StatelessWidget {
-  final String   label;
-  final int      count;
-  final bool     selected;
-  final Color    color;
+  final String label;
+  final int count;
+  final bool selected;
+  final Color color;
   final VoidCallback onTap;
 
   const _ContentTabChip({
@@ -2143,9 +2652,7 @@ class _ContentTabChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? color : AppColors.card,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? color : AppColors.divider,
-          ),
+          border: Border.all(color: selected ? color : AppColors.divider),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2210,50 +2717,57 @@ class _StatCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-      ],
-    );
-  }
-}
-
-class _BigStatCell extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _BigStatCell({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18, color: AppColors.primaryRed),
-        const SizedBox(height: 8),
         Text(
           value,
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: AppColors.text,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            color: AppColors.secondaryText,
-          ),
+          style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
         ),
       ],
     );
   }
 }
 
+class _StatsBlock extends StatelessWidget {
+  final String value;
+  final String label;
+  const _StatsBlock({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primaryRed,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

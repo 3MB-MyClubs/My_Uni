@@ -7,7 +7,9 @@ import 'content_store.dart';
 // regardless of which screen triggered the mutation.
 class UserState extends ChangeNotifier {
   final Set<String> likedPostIds = {'n1'}; // pre-seed from mock likes
-  final Set<String> followedClubIds = {'c1'}; // pre-seed from mock subscriptions
+  final Set<String> followedClubIds = {
+    'c1',
+  }; // pre-seed from mock subscriptions
   final Set<String> savedPostIds = {};
   // User-to-user follows — pre-seeded for demo (assumes Bob/u2 is logged in)
   final Set<String> followedUserIds = {'u1', 'u4'};
@@ -27,6 +29,9 @@ class UserState extends ChangeNotifier {
 
   // Student years keyed by user id.
   final Map<String, String> years = {};
+
+  // Student interest topics keyed by user id.
+  final Map<String, List<String>> interests = {};
 
   // Club profile photo paths keyed by club id.
   final Map<String, String> clubPhotoPaths = {};
@@ -93,6 +98,19 @@ class UserState extends ChangeNotifier {
       years.remove(userId);
     } else {
       years[userId] = value;
+    }
+    notifyListeners();
+  }
+
+  /// Sets the student interest topics for [userId] and notifies all listeners.
+  void setInterests(String userId, List<String> topics) {
+    final values = topics.map((topic) => topic.trim()).where((topic) {
+      return topic.isNotEmpty;
+    }).toList();
+    if (values.isEmpty) {
+      interests.remove(userId);
+    } else {
+      interests[userId] = values;
     }
     notifyListeners();
   }
@@ -233,16 +251,19 @@ class UserState extends ChangeNotifier {
   final List<AppNotification> dynamicNotifications = [];
 
   /// Fires whenever a new incoming-message notification is added.
-  final ValueNotifier<AppNotification?> incomingMessageNotifier =
-      ValueNotifier(null);
+  final ValueNotifier<AppNotification?> incomingMessageNotifier = ValueNotifier(
+    null,
+  );
 
   void addMessageNotification(AppNotification n) {
     dynamicNotifications.insert(0, n);
     unreadNotifications++;
     contentStore.saveDynamicNotifications(dynamicNotifications);
     incomingMessageNotifier.value = n;
-    Future.delayed(const Duration(seconds: 4),
-        () => incomingMessageNotifier.value = null);
+    Future.delayed(
+      const Duration(seconds: 4),
+      () => incomingMessageNotifier.value = null,
+    );
   }
 
   // ── Likes / saves ─────────────────────────────────────────────────────────────

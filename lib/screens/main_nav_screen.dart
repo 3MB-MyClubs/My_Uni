@@ -65,12 +65,12 @@ class _MainNavScreenState extends State<MainNavScreen> {
               (u) => u.id == notif.targetId,
               orElse: () => users.first,
             );
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                otherUserId: user.id,
-                otherUserName: user.name,
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ChatScreen(otherUserId: user.id, otherUserName: user.name),
               ),
-            ));
+            );
           }
         },
         onDismiss: () {
@@ -111,11 +111,22 @@ class _MainNavScreenState extends State<MainNavScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             const SizedBox(height: 20),
-            Text('Create', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+            Text(
+              'Create',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -127,10 +138,13 @@ class _MainNavScreenState extends State<MainNavScreen> {
                     color: AppColors.primaryRed,
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.of(context).push(MaterialPageRoute(
-                        fullscreenDialog: true,
-                        builder: (_) => CreatePostScreen(onPosted: () => setState(() {})),
-                      ));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          fullscreenDialog: true,
+                          builder: (_) =>
+                              CreatePostScreen(onPosted: () => setState(() {})),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -143,10 +157,14 @@ class _MainNavScreenState extends State<MainNavScreen> {
                     color: const Color(0xFF1565C0),
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.of(context).push(MaterialPageRoute(
-                        fullscreenDialog: true,
-                        builder: (_) => CreateEventScreen(onCreated: () => setState(() {})),
-                      ));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          fullscreenDialog: true,
+                          builder: (_) => CreateEventScreen(
+                            onCreated: () => setState(() {}),
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -159,10 +177,14 @@ class _MainNavScreenState extends State<MainNavScreen> {
                     color: const Color(0xFF2E7D32),
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.of(context).push(MaterialPageRoute(
-                        fullscreenDialog: true,
-                        builder: (_) => CreateStoryScreen(onPosted: () => setState(() {})),
-                      ));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          fullscreenDialog: true,
+                          builder: (_) => CreateStoryScreen(
+                            onPosted: () => setState(() {}),
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -196,10 +218,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
         return Scaffold(
           extendBody: true,
-          body: IndexedStack(
-            index: _selectedIndex,
-            children: screens,
-          ),
+          body: IndexedStack(index: _selectedIndex, children: screens),
           bottomNavigationBar: _buildBottomNav(context),
         );
       },
@@ -207,23 +226,27 @@ class _MainNavScreenState extends State<MainNavScreen> {
   }
 
   Widget _buildBottomNav(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.45),
-            blurRadius: 28,
-            spreadRadius: 0,
-            offset: const Offset(0, -6),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: AppColors.divider.withValues(alpha: 0.45),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.16),
+                blurRadius: 30,
+                spreadRadius: 0,
+                offset: const Offset(0, 14),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -323,7 +346,9 @@ class _NavItem extends StatelessWidget {
                   children: [
                     Icon(
                       selected ? activeIcon : icon,
-                      color: selected ? AppColors.primaryRed : AppColors.secondaryText,
+                      color: selected
+                          ? AppColors.primaryRed
+                          : AppColors.secondaryText,
                       size: 24,
                     ),
                     if (badge > 0)
@@ -332,7 +357,10 @@ class _NavItem extends StatelessWidget {
                         right: -6,
                         child: Container(
                           padding: const EdgeInsets.all(2),
-                          constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                          constraints: const BoxConstraints(
+                            minWidth: 15,
+                            minHeight: 15,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed,
                             shape: BoxShape.circle,
@@ -356,7 +384,9 @@ class _NavItem extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 style: TextStyle(
                   fontSize: 10,
-                  color: selected ? AppColors.primaryRed : AppColors.secondaryText,
+                  color: selected
+                      ? AppColors.primaryRed
+                      : AppColors.secondaryText,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
                 ),
                 child: Text(label),
@@ -437,8 +467,10 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
     _controller.forward();
   }
 
@@ -472,7 +504,9 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
               decoration: BoxDecoration(
                 color: AppColors.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primaryRed.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: AppColors.primaryRed.withValues(alpha: 0.4),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -492,7 +526,9 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
                     ),
                     child: Center(
                       child: Text(
-                        senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
+                        senderName.isNotEmpty
+                            ? senderName[0].toUpperCase()
+                            : '?',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: AppColors.primaryRed,
@@ -529,7 +565,11 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
                   ),
                   GestureDetector(
                     onTap: widget.onDismiss,
-                    child: Icon(Icons.close, size: 16, color: AppColors.secondaryText),
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
                 ],
               ),
@@ -579,12 +619,20 @@ class _CreateOption extends StatelessWidget {
               child: Icon(icon, color: color, size: 26),
             ),
             const SizedBox(height: 10),
-            Text(label,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
             const SizedBox(height: 3),
-            Text(subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+            ),
           ],
         ),
       ),

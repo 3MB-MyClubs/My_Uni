@@ -25,19 +25,15 @@ class _StepPasswordState extends State<StepPassword> {
     _confirmController = TextEditingController();
   }
 
-  bool get _hasMinLength => _passwordController.text.trim().length >= 8;
+  bool get _isExactlySix => _passwordController.text.trim().length == 6;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
 
   void _submit() {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
-    if (!_hasMinLength) {
-      setState(() => _error = 'Password must be at least 8 numbers.');
-      return;
-    }
-    if (!_hasOnlyNumbers) {
-      setState(() => _error = 'Password must contain numbers only.');
+    if (!_hasOnlyNumbers || !_isExactlySix) {
+      setState(() => _error = 'Password must be exactly 6 digits (numbers only).');
       return;
     }
     if (password != confirm) {
@@ -58,7 +54,7 @@ class _StepPasswordState extends State<StepPassword> {
   @override
   Widget build(BuildContext context) {
     final passedRules = [
-      _hasMinLength,
+      _isExactlySix,
       _hasOnlyNumbers,
     ].where((rule) => rule).length;
 
@@ -82,7 +78,7 @@ class _StepPasswordState extends State<StepPassword> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  "You'll use this with your KU email to sign in.",
+                  "Choose a 6-digit PIN — numbers only, no letters or symbols.",
                   style: TextStyle(
                     fontSize: 15,
                     color: SC.body,
@@ -96,12 +92,14 @@ class _StepPasswordState extends State<StepPassword> {
                   obscureText: _obscurePassword,
                   autofocus: true,
                   keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
                     label: 'Password',
-                    hint: 'Numbers only',
+                    hint: '6-digit PIN',
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -122,13 +120,15 @@ class _StepPasswordState extends State<StepPassword> {
                   controller: _confirmController,
                   obscureText: _obscureConfirm,
                   keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
                     label: 'Confirm password',
-                    hint: 'Re-enter numbers only',
+                    hint: 'Re-enter 6-digit PIN',
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -154,7 +154,7 @@ class _StepPasswordState extends State<StepPassword> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _RuleRow(label: 'At least 8 numbers', passed: _hasMinLength),
+                _RuleRow(label: 'Exactly 6 digits', passed: _isExactlySix),
                 _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
               ],
             ),

@@ -7,6 +7,7 @@ import 'signup_steps/step_verify.dart';
 import 'signup_steps/step_password.dart';
 import 'signup_steps/step_profile.dart';
 import 'signup_steps/step_interests.dart';
+
 class SignupFlowScreen extends StatefulWidget {
   final void Function(String email) onSignUp;
   final VoidCallback? onBack;
@@ -86,6 +87,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     if (imagePath != null && imagePath.isNotEmpty) {
       userState.setProfilePhoto(userId, imagePath);
     }
+    userState.setInterests(userId, _interests);
   }
 
   void _onInterestsNext(List<String> interests) {

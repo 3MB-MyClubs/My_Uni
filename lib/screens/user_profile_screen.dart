@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
@@ -11,9 +12,15 @@ import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 
+// ── Design palette ─────────────────────────────────────────────────────────────
+const _burgundy = Color(0xFF8C1D40);
+const _burgundyDeep = Color(0xFF6E1422);
+const _burgundySoft = Color(0xFFF2DDE0);
+const _inkSubtle = Color(0xFF8F857C);
+const _forest = Color(0xFF3F6B4E);
+
 class UserProfileScreen extends StatefulWidget {
   final User user;
-
   const UserProfileScreen({super.key, required this.user});
 
   @override
@@ -22,8 +29,12 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   static const List<Color> _clubColors = [
-    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    Color(0xFF8C1D40),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
   ];
 
   Color _clubColor(Club club) {
@@ -32,28 +43,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   bool get _isOwnProfile {
-    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final myId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     return widget.user.id == myId;
   }
 
   List<User> get _following => widget.user.followingUserIds
-      .map((id) => users.firstWhere((u) => u.id == id, orElse: () => users.first))
+      .map(
+        (id) => users.firstWhere((u) => u.id == id, orElse: () => users.first),
+      )
       .where((u) => widget.user.followingUserIds.contains(u.id))
       .toList();
 
   List<User> get _followers =>
       users.where((u) => u.followingUserIds.contains(widget.user.id)).toList();
 
-  // People that both the logged-in user and this profile user follow.
-  List<User> get _mutuals {
-    final myFollowing = userState.followedUserIds; // Set<String>
-    final theirFollowing = Set<String>.from(widget.user.followingUserIds);
-    final sharedIds = myFollowing.intersection(theirFollowing);
-    return users.where((u) => sharedIds.contains(u.id)).toList();
-  }
-
   List<Club> get _subscribedClubs => widget.user.subscribedClubIds
-      .map((id) => clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first))
+      .map(
+        (id) => clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first),
+      )
       .where((c) => widget.user.subscribedClubIds.contains(c.id))
       .toList();
 
@@ -66,16 +74,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  String get _myId => authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+  String get _myId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   void _persist() => userPrefsService.save(_myId);
 
   void _tryOpenChat() {
     final otherId = widget.user.id;
     final name = userState.displayNameFor(otherId, widget.user.name);
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
-    ));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
+      ),
+    );
   }
 
   Future<void> _handleFollowTap() async {
@@ -84,14 +96,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isPending = userState.hasPendingRequest(user.id);
     final theyFollowMe = user.followingUserIds.contains(_myId);
 
-    // ── Already following → unfollow ─────────────────────────────────────────
     if (isFollowing && !isPending) {
       setState(() => userState.toggleFollowUser(user.id));
       _persist();
       return;
     }
-
-    // ── Pending request → cancel ──────────────────────────────────────────────
     if (isPending) {
       setState(() {
         userState.pendingFollowRequests.remove(user.id);
@@ -100,34 +109,48 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _persist();
       return;
     }
-
-    // ── They don't follow back → show 1-time notice ─────────────
     if (!theyFollowMe && !userState.shownFollowNotice.contains(user.id)) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Follow',
-              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Follow',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.text,
+            ),
+          ),
           content: Text(
             '${userState.displayNameFor(user.id, user.name)} doesn\'t follow you back yet. You can still follow them — they won\'t need to approve it.',
-            style: TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.5),
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.secondaryText,
+              height: 1.5,
+            ),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Follow'),
+              child: const Text('Follow'),
             ),
           ],
         ),
@@ -141,8 +164,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
       return;
     }
-
-    // ── Default: just follow ──────────────────────────────────────────────────
     setState(() => userState.followedUserIds.add(user.id));
     _persist();
   }
@@ -167,18 +188,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         builder: (_, scrollController) => Container(
           decoration: BoxDecoration(
             color: AppColors.card,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             children: [
-              // Handle + title
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                 child: Column(
                   children: [
                     Center(
                       child: Container(
-                        width: 36, height: 4,
+                        width: 36,
+                        height: 4,
                         decoration: BoxDecoration(
                           color: AppColors.divider,
                           borderRadius: BorderRadius.circular(2),
@@ -186,21 +207,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.text)),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text,
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 8),
-              Divider(height: 1),
+              const Divider(height: 1),
               if (people.isEmpty)
                 Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text('No one here yet.',
-                      style: TextStyle(color: AppColors.secondaryText)),
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'No one here yet.',
+                    style: TextStyle(color: AppColors.secondaryText),
+                  ),
                 )
               else
                 Expanded(
@@ -208,7 +234,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     controller: scrollController,
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: people.length,
-                    separatorBuilder: (_, i) => Divider(height: 1, indent: 72),
+                    separatorBuilder: (_, i) =>
+                        const Divider(height: 1, indent: 72),
                     itemBuilder: (ctx, i) {
                       final u = people[i];
                       return ListTile(
@@ -223,18 +250,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           fontSize: 16,
                         ),
                         title: Text(
-                            userState.displayNameFor(u.id, u.name),
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text)),
+                          userState.displayNameFor(u.id, u.name),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
                         subtitle: userState.usernameFor(u.id) != null
-                            ? Text(u.name,
+                            ? Text(
+                                u.name,
                                 style: TextStyle(
-                                    fontSize: 12, color: AppColors.secondaryText))
+                                  fontSize: 12,
+                                  color: AppColors.secondaryText,
+                                ),
+                              )
                             : null,
-                        trailing: Icon(Icons.chevron_right,
-                            color: AppColors.secondaryText),
+                        trailing: Icon(
+                          Icons.chevron_right,
+                          color: AppColors.secondaryText,
+                        ),
                       );
                     },
                   ),
@@ -246,34 +281,60 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  // ── Build ────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    final user = widget.user;
     final subClubs = _subscribedClubs;
-    final following = _following;
-    final followers = _followers;
+    final followingList = _following;
+    final followersList = _followers;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
+          // ── Slim pinned app bar ──────────────────────────────────────────────
           SliverAppBar(
-            backgroundColor: AppColors.card,
+            pinned: true,
+            backgroundColor: AppColors.background,
             surfaceTintColor: Colors.transparent,
             foregroundColor: AppColors.text,
-            pinned: true,
-            title: Text(
-                userState.displayNameFor(widget.user.id, widget.user.name),
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            elevation: 0,
+            title: ListenableBuilder(
+              listenable: userState,
+              builder: (_, _) => Text(
+                userState.displayNameFor(user.id, user.name),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
+            ),
           ),
 
+          // ── Main content ─────────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(followers, following),
-                Divider(height: 1),
-                if (subClubs.isNotEmpty) _buildClubsSection(subClubs),
-                const SizedBox(height: 80),
+                // 1 ── Hero banner + avatar ─────────────────────────────────────
+                _HeroBanner(user: user),
+
+                // 2 ── Name block ───────────────────────────────────────────────
+                _buildNameBlock(user),
+
+                // 3 ── Bio strip ────────────────────────────────────────────────
+                _buildBioStrip(user),
+
+                // 4 ── Stats card ───────────────────────────────────────────────
+                _buildStatsCard(subClubs, followersList, followingList),
+
+                // 5 ── Interests section ────────────────────────────────────────
+                _buildInterestsSection(_interestsForUser(user)),
+
+                // 6 ── Footer ──────────────────────────────────────────────────
+                _buildFooter(),
               ],
             ),
           ),
@@ -282,335 +343,745 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildHeader(List<User> followers, List<User> following) {
-    final user = widget.user;
-    final isFollowingUser = userState.isFollowingUser(user.id);
-    final mutuals = _mutuals;
+  // ── Name block ───────────────────────────────────────────────────────────────
 
-    return Container(
-      color: AppColors.card,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Avatar + stats ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+  Widget _buildNameBlock(User user) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 46, 24, 0),
+      child: ListenableBuilder(
+        listenable: userState,
+        builder: (_, _) {
+          final isFollowingUser = userState.isFollowingUser(user.id);
+          final isPending = userState.hasPendingRequest(user.id);
+          final major = userState.majors[user.id];
+          final year = userState.years[user.id];
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left: name + sub-line
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [AppColors.primaryRed, AppColors.accentGold],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                    Text(
+                      userState.displayNameFor(user.id, user.name),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                        letterSpacing: -0.6,
                       ),
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                            shape: BoxShape.circle, color: AppColors.card),
-                        child: UserAvatar(
-                          userId: user.id,
-                          name: user.name,
-                          size: 72,
-                          fontSize: 32,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.school_outlined,
+                          size: 14,
+                          color: _burgundy,
+                        ),
+                        const SizedBox(width: 4),
+                        if (major != null) ...[
+                          Text(
+                            major,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _burgundy,
+                            ),
+                          ),
+                          if (year != null) ...[
+                            Text(
+                              '  ·  ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                            Text(
+                              year,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ] else
+                          Text(
+                            year ?? 'Koç University',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Right: action buttons
+              if (_isOwnProfile)
+                Column(
+                  children: [
+                    SizedBox(
+                      height: 34,
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _burgundy,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'Edit profile',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          GestureDetector(
-                            onTap: () => _showPeopleSheet('Followers', followers),
-                            child: _StatCell(
-                                value: '${followers.length}', label: 'Followers'),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 34,
+                      width: 34,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () {},
+                        icon: Icon(
+                          Icons.bookmark_outline,
+                          color: AppColors.text,
+                          size: 20,
+                        ),
+                        style: IconButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                            side: BorderSide(
+                              color: AppColors.divider,
+                              width: 1,
+                            ),
                           ),
-                          GestureDetector(
-                            onTap: () => _showPeopleSheet('Following', following),
-                            child: _StatCell(
-                                value: '${following.length}', label: 'Following'),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  children: [
+                    // Follow button
+                    _FollowButton(
+                      isFollowing: isFollowingUser,
+                      isPending: isPending,
+                      onTap: _handleFollowTap,
+                    ),
+                    const SizedBox(height: 6),
+                    // Message button
+                    SizedBox(
+                      height: 34,
+                      child: OutlinedButton(
+                        onPressed: _tryOpenChat,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.text,
+                          side: BorderSide(color: AppColors.divider, width: 1),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                        ],
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'Message',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                Text(userState.displayNameFor(user.id, user.name),
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppColors.text)),
-                if (userState.usernameFor(user.id) != null) ...[
-                  const SizedBox(height: 2),
-                  Text(user.name,
-                      style: TextStyle(
-                          fontSize: 13, color: AppColors.secondaryText)),
-                ],
+            ],
+          );
+        },
+      ),
+    );
+  }
 
-                // ── Mutuals row ────────────────────────────────────────────
-                if (mutuals.isNotEmpty && !_isOwnProfile) ...[
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () => _showPeopleSheet('Mutual Friends', mutuals),
-                    child: Row(
-                      children: [
-                        // Stacked avatars (up to 3)
-                        SizedBox(
-                          width: (mutuals.length.clamp(1, 3) * 18 + 10).toDouble(),
-                          height: 22,
-                          child: Stack(
-                            children: [
-                              for (int i = mutuals.length.clamp(1, 3) - 1; i >= 0; i--)
-                                Positioned(
-                                  left: (i * 18).toDouble(),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: AppColors.card, width: 1.5),
-                                    ),
-                                    child: UserAvatar(
-                                      userId: mutuals[i].id,
-                                      name: mutuals[i].name,
-                                      size: 22,
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            mutuals.length == 1
-                                ? '${mutuals[0].name.split(' ').first} is a mutual'
-                                : '${mutuals[0].name.split(' ').first} and ${mutuals.length - 1} other${mutuals.length > 2 ? 's' : ''} are mutuals',
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.secondaryText),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.chevron_right,
-                            size: 16, color: AppColors.secondaryText),
-                      ],
-                    ),
+  // ── Bio strip ────────────────────────────────────────────────────────────────
+
+  Widget _buildBioStrip(User user) {
+    return ListenableBuilder(
+      listenable: userState,
+      builder: (_, _) {
+        final bioRaw = userState.bios[user.id];
+        final bioText = (bioRaw == null || bioRaw.trim().isEmpty)
+            ? ''
+            : bioRaw.trim();
+        final isEmpty = bioText.isEmpty;
+        if (isEmpty && !_isOwnProfile) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(
+                  isEmpty ? 'Add a bio…' : bioText,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    height: 1.5,
+                    color: isEmpty ? AppColors.secondaryText : AppColors.text,
                   ),
-                ],
-
-                if (user.role == 'admin') ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.lightRed,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('Club Admin',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.primaryRed,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ],
-
-                // Board role badges — one per club the user is a board member of.
-                Builder(builder: (_) {
-                  final boardClubs = clubs
-                      .where((c) => c.boardMemberIds.contains(user.id))
-                      .toList();
-                  if (boardClubs.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: boardClubs.map((boardClub) {
-                      final title = boardClub.boardMemberTitles[user.id];
-                      final hasTitle = title != null && title.isNotEmpty;
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: GestureDetector(
-                          onTap: () => _openClub(boardClub),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE3F2FD),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.shield_outlined,
-                                        size: 13, color: Color(0xFF1565C0)),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      hasTitle
-                                          ? '$title · ${boardClub.name}'
-                                          : 'Board Member · ${boardClub.name}',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF1565C0),
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(Icons.chevron_right,
-                                  size: 14, color: Color(0xFF1565C0)),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                }),
-
-                // Follow + Message buttons
-                if (!_isOwnProfile) ...[
-                  const SizedBox(height: 14),
-                  Builder(builder: (_) {
-                    final isPending = userState.hasPendingRequest(user.id);
-                    final String followLabel = isPending
-                        ? 'Requested'
-                        : isFollowingUser
-                            ? 'Following'
-                            : 'Follow';
-                    final bool followFilled = !isFollowingUser && !isPending;
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _handleFollowTap,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: followFilled
-                                    ? AppColors.primaryRed
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: followFilled
-                                      ? AppColors.primaryRed
-                                      : AppColors.secondaryText
-                                          .withValues(alpha: 0.5),
-                                ),
-                              ),
-                              child: Text(
-                                followLabel,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: followFilled
-                                      ? Colors.white
-                                      : AppColors.secondaryText,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _tryOpenChat,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: AppColors.secondaryText
-                                      .withValues(alpha: 0.5),
-                                ),
-                              ),
-                              child: Text(
-                                'Message',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: AppColors.text,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }),
-                ],
+                ),
+              ),
+              if (_isOwnProfile) ...[
+                const SizedBox(width: 6),
+                const Icon(Icons.edit_outlined, size: 12, color: _burgundy),
               ],
-            ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Stats card ───────────────────────────────────────────────────────────────
+
+  Widget _buildStatsCard(
+    List<Club> subClubs,
+    List<User> followers,
+    List<User> following,
+  ) {
+    return ListenableBuilder(
+      listenable: userState,
+      builder: (_, _) {
+        // Recompute live from userState
+        final liveFollowers = _followers;
+        final liveFollowing = _following;
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            border: Border.all(color: AppColors.divider, width: 1),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showClubsSheet(subClubs),
+                  child: _StatBlock(
+                    value: '${subClubs.length}',
+                    label: 'Clubs',
+                  ),
+                ),
+              ),
+              _VertDivider(),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showPeopleSheet('Followers', liveFollowers),
+                  child: _StatBlock(
+                    value: '${liveFollowers.length}',
+                    label: 'Followers',
+                  ),
+                ),
+              ),
+              _VertDivider(),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showPeopleSheet('Following', liveFollowing),
+                  child: _StatBlock(
+                    value: '${liveFollowing.length}',
+                    label: 'Following',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  List<String> _interestsForUser(User user) {
+    final saved = userState.interests[user.id];
+    if (saved != null && saved.isNotEmpty) return saved;
+    const fallback = {
+      'u1': ['Robotics', 'Photography', 'Film', 'Coding', 'AI / ML'],
+      'u2': ['Debate', 'Rowing', 'Film', 'Climate', 'Entrepreneur'],
+      'u3': ['Music', 'Theatre', 'Greek life', 'Dance', 'Esports'],
+      'u4': ['Climate', 'Hiking', 'Volunteering', 'Photography'],
+      'u5': ['Coding', 'AI / ML', 'Robotics', 'Entrepreneur', 'Film'],
+    };
+    return fallback[user.id] ??
+        user.subscribedClubIds.take(5).map((id) {
+          final club = clubs.firstWhere(
+            (c) => c.id == id,
+            orElse: () => clubs.first,
+          );
+          final name = club.name.split('(').first.trim();
+          return name.split(' ').take(2).join(' ');
+        }).toList();
+  }
+
+  Widget _buildInterestsSection(List<String> interests) {
+    if (interests.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Interests',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              if (_isOwnProfile)
+                const Text(
+                  'Edit',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _burgundy,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 9,
+            children: interests
+                .map(
+                  (interest) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _burgundy,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      interest,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildClubsSection(List<Club> subClubs) {
-    return Container(
-      color: AppColors.card,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Subscribed Clubs',
-            style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
+  void _showClubsSheet(List<Club> subClubs) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.52,
+        minChildSize: 0.35,
+        maxChildSize: 0.84,
+        expand: false,
+        builder: (sheetContext, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 90,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: subClubs.length,
-              separatorBuilder: (ctx, i) => const SizedBox(width: 16),
-              itemBuilder: (context, i) {
-                final club = subClubs[i];
-                final color = _clubColor(club);
-                return GestureDetector(
-                  onTap: () => _openClub(club),
-                  child: Column(
-                    children: [
-                      ClubAvatar(
-                        clubId: club.id,
-                        clubName: club.name,
-                        color: color,
-                        size: 56,
-                        fontSize: 22,
-                        borderRadius: 16,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Followed clubs',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        width: 60,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _burgundy,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${subClubs.length}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: subClubs.isEmpty
+                    ? Center(
                         child: Text(
-                          club.name.split(' ').first,
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: AppColors.text),
+                          'No followed clubs yet.',
+                          style: TextStyle(color: AppColors.secondaryText),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: subClubs.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final club = subClubs[index];
+                          final color = _clubColor(club);
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              _openClub(club);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceAlt,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.divider),
+                              ),
+                              child: Row(
+                                children: [
+                                  ClubAvatar(
+                                    clubId: club.id,
+                                    clubName: club.name,
+                                    color: color,
+                                    size: 44,
+                                    fontSize: 18,
+                                    borderRadius: 13,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      club.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────────
+
+  Widget _buildFooter() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Center(
+        child: Text(
+          'Koç University · kulife',
+          style: TextStyle(fontSize: 11, color: _inkSubtle, letterSpacing: 0.2),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Hero banner widget ─────────────────────────────────────────────────────────
+
+class _HeroBanner extends StatelessWidget {
+  final User user;
+  const _HeroBanner({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: userState,
+      builder: (_, _) {
+        final year = userState.years[user.id];
+        final badgeLabel = year != null ? "KOÇ '$year" : 'KOÇ';
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: SizedBox(
+            height: 96,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Banner gradient container
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [_burgundy, _burgundyDeep],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Stack(
+                        children: [
+                          // Decorative blob 1
+                          Positioned(
+                            top: -30,
+                            right: -20,
+                            child: Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.06),
+                              ),
+                            ),
+                          ),
+                          // Decorative blob 2
+                          Positioned(
+                            bottom: -40,
+                            right: 60,
+                            child: Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.05),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Year badge top-right
+                Positioned(
+                  top: 10,
+                  right: 12,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.school_outlined,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              badgeLabel,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Avatar (overlapping banner bottom)
+                Positioned(
+                  left: 20,
+                  bottom: -36,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _burgundySoft,
+                          border: Border.all(
+                            color: AppColors.background,
+                            width: 4,
+                          ),
+                        ),
+                        child: ClipOval(
+                          child: UserAvatar(
+                            userId: user.id,
+                            name: user.name,
+                            size: 90,
+                            fontSize: 34,
+                          ),
+                        ),
+                      ),
+                      // Online dot
+                      Positioned(
+                        right: -4,
+                        bottom: 4,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _forest,
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Follow button ──────────────────────────────────────────────────────────────
+
+class _FollowButton extends StatelessWidget {
+  final bool isFollowing;
+  final bool isPending;
+  final VoidCallback onTap;
+
+  const _FollowButton({
+    required this.isFollowing,
+    required this.isPending,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = !isFollowing && !isPending;
+    final label = isPending
+        ? 'Requested'
+        : isFollowing
+        ? 'Following'
+        : 'Follow';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: filled ? _burgundy : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: filled ? _burgundy : AppColors.divider,
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: filled ? Colors.white : AppColors.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Stat block ─────────────────────────────────────────────────────────────────
+
+class _StatBlock extends StatelessWidget {
+  final String value;
+  final String label;
+  const _StatBlock({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _burgundy,
+              letterSpacing: 0.6,
             ),
           ),
         ],
@@ -619,24 +1090,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 }
 
-class _StatCell extends StatelessWidget {
-  final String value;
-  final String label;
-  const _StatCell({required this.value, required this.label});
+// ── Vertical divider helper ────────────────────────────────────────────────────
 
+class _VertDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value,
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
-      ],
+    return Container(
+      width: 1,
+      height: 40,
+      margin: const EdgeInsets.symmetric(vertical: 14),
+      color: AppColors.divider,
     );
   }
 }

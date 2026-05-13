@@ -15,10 +15,12 @@
       "Bash(cp \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/82e79fdf-2a6f-4641-9ecd-65491f09c403/tool-results/webfetch-1778671035799-tpsn5p.bin\" /tmp/design.gz)",
       "Bash(gunzip -f /tmp/design.gz)",
       "Bash(tar -xf /tmp/design -C /tmp/)",
-      "Bash(dart analyze *)"
+      "Bash(dart analyze *)",
+      "Bash(cp \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/4d49ed4f-c330-4832-a039-808e9f0f7c30/tool-results/webfetch-1778683432602-2ayn1e.bin\" /tmp/design.gz && gunzip -f /tmp/design.gz && file /tmp/design && head -c 5000 /tmp/design)"
     ],
     "additionalDirectories": [
-      "/tmp"
+      "/tmp",
+      "/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/4d49ed4f-c330-4832-a039-808e9f0f7c30/tool-results"
     ]
   }
 }
