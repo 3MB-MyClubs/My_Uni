@@ -10,7 +10,8 @@
       "Bash(gunzip)",
       "Bash(tar xf:*)",
       "Bash(curl -L --compressed \"https://api.anthropic.com/v1/design/h/icZ52KMUZ-8yPxtReT2OZQ?open_file=Club+Profile.html\" -o /tmp/Club_Profile.html)",
-      "Bash(python3 -c ':*)"
+      "Bash(python3 -c ':*)",
+      "WebFetch(domain:api.anthropic.com)"
     ],
     "additionalDirectories": [
       "/tmp"

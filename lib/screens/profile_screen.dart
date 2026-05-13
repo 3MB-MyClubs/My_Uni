@@ -140,134 +140,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _pickCoverPhoto(String userId, ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 88);
-    if (picked == null || !mounted) return;
-
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Cover',
-          aspectRatioLockEnabled: true,
-          resetAspectRatioEnabled: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Cover',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: true,
-        ),
-      ],
-    );
-    if (cropped == null || !mounted) return;
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    final ext = cropped.path.contains('.')
-        ? cropped.path.substring(cropped.path.lastIndexOf('.'))
-        : '.jpg';
-    final permanentPath = '${docsDir.path}/profile_cover_$userId$ext';
-    await File(cropped.path).copy(permanentPath);
-
-    if (!mounted) return;
-    userState.setCoverPhoto(userId, permanentPath);
-    await userPrefsService.save(userId);
-  }
-
-  void _showCoverPhotoOptions(BuildContext context, String userId) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Cover Photo',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.camera_alt_outlined, color: AppColors.primaryRed),
-              ),
-              title: Text(
-                'Take a Photo',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              subtitle: Text(
-                'Capture a new cover image',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickCoverPhoto(userId, ImageSource.camera);
-              },
-            ),
-            Divider(height: 1, indent: 16, color: AppColors.divider),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.photo_library_outlined, color: AppColors.primaryRed),
-              ),
-              title: Text(
-                'Choose from Library',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              subtitle: Text(
-                'Pick an image from your photo library',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _pickCoverPhoto(userId, ImageSource.gallery);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _editMajorAndYear(BuildContext context, String userId) async {
     final majorController = TextEditingController(
       text: userState.majors[userId] ?? '',
@@ -1285,129 +1157,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required List<User> followers,
     required List<User> following,
   }) {
-    final coverPath = userState.coverPhotoPaths[userId];
-    final coverFile = coverPath != null ? File(coverPath) : null;
-    final hasCover = coverFile != null && coverFile.existsSync();
     final major = (userState.majors[userId] ?? '').trim();
     final year = (userState.years[userId] ?? '').trim();
     final bio = (userState.bios[userId] ?? '').trim();
     final majorYearText = [if (major.isNotEmpty) major, if (year.isNotEmpty) year].join(' · ');
     return Container(
       color: AppColors.background,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 188,
+          GestureDetector(
+            onTap: () => _showProfilePhotoOptions(context, userId),
             child: Stack(
-              clipBehavior: Clip.none,
               children: [
-                GestureDetector(
-                  onTap: () => _showCoverPhotoOptions(context, userId),
-                  child: Container(
-                    height: 130,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF8B0000), Color(0xFF1a1a2e)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      image: hasCover
-                          ? DecorationImage(
-                              image: FileImage(coverFile),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [AppColors.primaryRed, AppColors.accentGold],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    child: hasCover
-                        ? DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.35),
-                                ],
-                              ),
-                            ),
-                          )
-                        : null,
+                  ),
+                  child: Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.background,
+                    ),
+                    padding: const EdgeInsets.all(2),
+                    child: () {
+                      final photoPath = userState.profilePhotoPaths[userId];
+                      final file = photoPath != null ? File(photoPath) : null;
+                      if (file != null && file.existsSync()) {
+                        return ClipOval(
+                          child: Image.file(
+                            file,
+                            fit: BoxFit.cover,
+                            width: 96,
+                            height: 96,
+                            errorBuilder: (ctx, e, st) => _initialAvatar(name),
+                          ),
+                        );
+                      }
+                      return _initialAvatar(name);
+                    }(),
                   ),
                 ),
                 Positioned(
-                  bottom: -50,
-                  left: 16,
-                  child: GestureDetector(
-                    onTap: () => _showProfilePhotoOptions(context, userId),
-                    child: Stack(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [AppColors.primaryRed, AppColors.accentGold],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: Container(
-                            width: 96,
-                            height: 96,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.background,
-                            ),
-                            padding: const EdgeInsets.all(2),
-                            child: () {
-                              final photoPath = userState.profilePhotoPaths[userId];
-                              final file = photoPath != null ? File(photoPath) : null;
-                              if (file != null && file.existsSync()) {
-                                return ClipOval(
-                                  child: Image.file(
-                                    file,
-                                    fit: BoxFit.cover,
-                                    width: 96,
-                                    height: 96,
-                                    errorBuilder: (ctx, e, st) => _initialAvatar(name),
-                                  ),
-                                );
-                              }
-                              return _initialAvatar(name);
-                            }(),
-                          ),
-                        ),
-                        Positioned(
-                          right: 1,
-                          bottom: 1,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryRed,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.background, width: 2.5),
-                            ),
-                            child: Icon(
-                              Icons.camera_alt_rounded,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                          ),
-                        ),
-                      ],
+                  right: 1,
+                  bottom: 1,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.background, width: 2.5),
+                    ),
+                    child: Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.white,
+                      size: 14,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 58),
+          const SizedBox(height: 16),
           Text(
             name,
             style: TextStyle(

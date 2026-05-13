@@ -7,7 +7,7 @@ import 'signup_steps/step_profile.dart';
 import 'signup_steps/step_interests.dart';
 import 'signup_steps/step_done.dart';
 
-/// 6-screen signup flow: Welcome → Email → Verify → Profile → Interests → Done.
+/// 5-screen signup flow: Email → Verify → Profile → Interests → Done.
 /// Drop-in replacement — same class name, same constructor signature.
 class SignUpScreen extends StatefulWidget {
   final VoidCallback onSignUp;
@@ -22,9 +22,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
 
-  // Pages: 0=Welcome, 1=Email, 2=Verify, 3=Profile, 4=Interests, 5=Done
-  static const int _totalPages = 6;
-  // Steps with visible progress header: pages 1-4
+  // Pages: 0=Email, 1=Verify, 2=Profile, 3=Interests, 4=Done
+  static const int _totalPages = 5;
+  // Steps with visible progress header: pages 0-3
   static const int _totalVisibleSteps = 4;
 
   // ── Shared form state ─────────────────────────────────────────
@@ -67,10 +67,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
     } else {
       setState(() {
         _signUpError = 'An account with this email already exists.';
-        _currentStep = 1; // back to email step
+        _currentStep = 0; // back to email step
       });
       _pageController.animateToPage(
-        1,
+        0,
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOutCubic,
       );
@@ -84,20 +84,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   // ── Header logic ──────────────────────────────────────────────
-  // Only pages 1-4 show the progress header
-  bool get _showHeader =>
-      _currentStep >= 1 && _currentStep <= _totalVisibleSteps;
+  // Only pages 0-3 show the progress header
+  bool get _showHeader => _currentStep < _totalVisibleSteps;
 
-  int get _visibleStep => _currentStep; // 1=Email(1/4) … 4=Interests(4/4)
+  int get _visibleStep => _currentStep + 1; // 1=Email(1/4) … 4=Interests(4/4)
 
   String? get _rightLabel {
-    if (_currentStep == 1) return 'Help';
-    if (_currentStep == 4) return 'Skip';
+    if (_currentStep == 0) return 'Help';
+    if (_currentStep == 3) return 'Skip';
     return null;
   }
 
   VoidCallback? get _onRight {
-    if (_currentStep == 4) return () => _handleFinish(); // skip interests
+    if (_currentStep == 3) return () => _handleFinish(); // skip interests
     return null;
   }
 
@@ -110,7 +109,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // ── Progress header (pages 1-4 only) ─────────────
+              // ── Progress header (pages 0-3 only) ─────────────
               AnimatedSize(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeInOut,
@@ -131,12 +130,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   controller: _pageController,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
-                    // Page 0: Welcome
-                    _WelcomePage(
-                      onCreateAccount: _goNext,
-                      onHaveAccount: () => widget.onBack?.call(),
-                    ),
-                    // Page 1: Email
+                    // Page 0: Email
                     StepEmail(
                       initialValue: _email,
                       externalError: _signUpError,
@@ -145,13 +139,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         _goNext();
                       },
                     ),
-                    // Page 2: Verify
+                    // Page 1: Verify
                     StepVerify(
                       email: _email,
                       onNext: _goNext,
                       onResend: () {/* wire to real email service */},
                     ),
-                    // Page 3: Profile
+                    // Page 2: Profile
                     StepProfile(
                       initialName: _name,
                       initialMajor: _major,
@@ -167,7 +161,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         _goNext();
                       },
                     ),
-                    // Page 4: Interests
+                    // Page 3: Interests
                     StepInterests(
                       selected: _interests,
                       onNext: (interests) {
@@ -176,7 +170,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       },
                       onSkip: _goNext,
                     ),
-                    // Page 5: Done
+                    // Page 4: Done
                     StepDone(
                       name: _name,
                       onFinish: _handleFinish,
@@ -190,189 +184,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
     );
   }
-}
-
-// ── Welcome page ──────────────────────────────────────────────────────────────
-class _WelcomePage extends StatelessWidget {
-  final VoidCallback onCreateAccount;
-  final VoidCallback onHaveAccount;
-
-  const _WelcomePage({
-    required this.onCreateAccount,
-    required this.onHaveAccount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ── Hero area ─────────────────────────────────────────
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 32, 28, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // KU shield badge + name
-                Row(
-                  children: [
-                    _KuShield(),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'EST. 1993',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: SC.muted,
-                            letterSpacing: 1.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Koç University',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: SC.ink,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                const Spacer(),
-
-                // Hero text
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.w700,
-                      color: SC.ink,
-                      height: 1.05,
-                      letterSpacing: -1.4,
-                    ),
-                    children: [
-                      TextSpan(text: 'Your campus,\n'),
-                      TextSpan(
-                        text: 'in your pocket.',
-                        style: TextStyle(color: SC.burgundy),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Class schedules, dining, events, and the\npeople who make Koç University home.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: SC.body,
-                    height: 1.45,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const SizedBox(height: 40),
-              ],
-            ),
-          ),
-        ),
-
-        // ── CTA area ─────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-          child: Column(
-            children: [
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: onCreateAccount,
-                  style: SC.primaryButtonStyle(),
-                  child: Text('Create account'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: onHaveAccount,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: SC.ink,
-                    side: BorderSide(color: SC.hairStrong, width: 1),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    textStyle: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: -0.1),
-                  ),
-                  child: Text('I already have one'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'By continuing you agree to our Terms\nand acknowledge the Privacy Policy.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 11, color: SC.muted, height: 1.5),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── KU shield badge ───────────────────────────────────────────────────────────
-class _KuShield extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: _ShieldClipper(),
-      child: Container(
-        width: 44,
-        height: 50,
-        color: SC.burgundy,
-        alignment: const Alignment(0, 0.15),
-        child: Text(
-          'KU',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ShieldClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size s) {
-    final path = Path();
-    const r = 5.0;
-    path.moveTo(r, 0);
-    path.lineTo(s.width - r, 0);
-    path.quadraticBezierTo(s.width, 0, s.width, r);
-    path.lineTo(s.width, s.height * 0.55);
-    path.quadraticBezierTo(s.width * 0.5, s.height, 0, s.height * 0.55);
-    path.lineTo(0, r);
-    path.quadraticBezierTo(0, 0, r, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(_) => false;
 }
 
 // ── Progress header ───────────────────────────────────────────────────────────
