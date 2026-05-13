@@ -5,8 +5,8 @@ import 'signup_theme.dart';
 
 class StepVerify extends StatefulWidget {
   final String email;
-  final VoidCallback onNext;
-  final VoidCallback onResend;
+  final Future<String?> Function(String code) onNext;
+  final Future<String?> Function() onResend;
 
   const StepVerify({
     super.key,
@@ -21,11 +21,18 @@ class StepVerify extends StatefulWidget {
 
 class _StepVerifyState extends State<StepVerify> {
   static const int _codeLength = 6;
-  final List<TextEditingController> _controllers =
-      List.generate(_codeLength, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes =
-      List.generate(_codeLength, (_) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(
+    _codeLength,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _focusNodes = List.generate(
+    _codeLength,
+    (_) => FocusNode(),
+  );
   String? _error;
+  String? _message;
+  bool _isVerifying = false;
+  bool _isResending = false;
 
   // Resend countdown
   Timer? _timer;
@@ -66,28 +73,63 @@ class _StepVerifyState extends State<StepVerify> {
     }
   }
 
-  void _verify() {
+  Future<void> _verify() async {
+    if (_isVerifying) return;
     final code = _controllers.map((c) => c.text).join();
     if (code.length < _codeLength) {
-      setState(() => _error = 'Enter the full 6-digit code.');
+      setState(() {
+        _message = null;
+        _error = 'Enter the full 6-digit code.';
+      });
       return;
     }
-    // Mock: any 6-digit code is accepted.
-    setState(() => _error = null);
-    widget.onNext();
+    setState(() {
+      _error = null;
+      _message = null;
+      _isVerifying = true;
+    });
+    final error = await widget.onNext(code);
+    if (!mounted) return;
+    setState(() {
+      _error = error;
+      _isVerifying = false;
+    });
   }
 
-  void _resend() {
-    if (_secondsLeft > 0) return;
-    widget.onResend();
-    _startTimer();
+  Future<void> _resend() async {
+    if (_secondsLeft > 0 || _isResending) return;
+    setState(() {
+      _error = null;
+      _message = null;
+      _isResending = true;
+    });
+    final error = await widget.onResend();
+    if (!mounted) return;
+    if (error == null) {
+      for (final controller in _controllers) {
+        controller.clear();
+      }
+      _focusNodes.first.requestFocus();
+    }
+    setState(() {
+      _error = error;
+      _message = error == null ? 'New code sent.' : null;
+      _isResending = false;
+    });
+    if (error == null) {
+      _startTimer();
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    for (final c in _controllers) { c.dispose(); }
-    for (final f in _focusNodes) { f.dispose(); }
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -99,8 +141,7 @@ class _StepVerifyState extends State<StepVerify> {
 
   @override
   Widget build(BuildContext context) {
-    final displayEmail =
-        widget.email.isNotEmpty ? widget.email : 'your email';
+    final displayEmail = widget.email.isNotEmpty ? widget.email : 'your email';
     return Column(
       children: [
         Expanded(
@@ -123,16 +164,19 @@ class _StepVerifyState extends State<StepVerify> {
                 RichText(
                   text: TextSpan(
                     style: TextStyle(
-                        fontSize: 15,
-                        color: SC.body,
-                        height: 1.45,
-                        letterSpacing: -0.1),
+                      fontSize: 15,
+                      color: SC.body,
+                      height: 1.45,
+                      letterSpacing: -0.1,
+                    ),
                     children: [
                       TextSpan(text: 'We sent a 6-digit code to\n'),
                       TextSpan(
                         text: displayEmail,
                         style: TextStyle(
-                            color: SC.ink, fontWeight: FontWeight.w600),
+                          color: SC.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -145,7 +189,8 @@ class _StepVerifyState extends State<StepVerify> {
                     return Expanded(
                       child: Padding(
                         padding: EdgeInsets.only(
-                            right: i < _codeLength - 1 ? 8 : 0),
+                          right: i < _codeLength - 1 ? 8 : 0,
+                        ),
                         child: _OtpBox(
                           controller: _controllers[i],
                           focusNode: _focusNodes[i],
@@ -159,28 +204,43 @@ class _StepVerifyState extends State<StepVerify> {
 
                 if (_error != null) ...[
                   const SizedBox(height: 10),
-                  Text(_error!,
-                      style: TextStyle(
-                          color: SC.burgundy, fontSize: 13)),
+                  Text(
+                    _error!,
+                    style: TextStyle(color: SC.burgundy, fontSize: 13),
+                  ),
+                ],
+                if (_message != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _message!,
+                    style: TextStyle(
+                      color: SC.burgundyDeep,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
 
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("Didn't get it?",
-                        style: TextStyle(
-                            fontSize: 14, color: SC.muted)),
+                    Text(
+                      "Didn't get it?",
+                      style: TextStyle(fontSize: 14, color: SC.muted),
+                    ),
                     GestureDetector(
                       onTap: _resend,
                       child: Text(
-                        _secondsLeft > 0
+                        _isResending
+                            ? 'Sending...'
+                            : _secondsLeft > 0
                             ? 'Resend in $_timerLabel'
                             : 'Resend code',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: _secondsLeft > 0
+                          color: _secondsLeft > 0 || _isResending
                               ? SC.muted
                               : SC.burgundy,
                         ),
@@ -200,9 +260,18 @@ class _StepVerifyState extends State<StepVerify> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: _verify,
+              onPressed: _isVerifying ? null : _verify,
               style: SC.primaryButtonStyle(),
-              child: Text('Verify'),
+              child: _isVerifying
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text('Verify'),
             ),
           ),
         ),
@@ -273,7 +342,7 @@ class _OtpBoxState extends State<_OtpBox> {
                     color: SC.burgundyTint,
                     spreadRadius: 3,
                     blurRadius: 0,
-                  )
+                  ),
                 ]
               : null,
         ),

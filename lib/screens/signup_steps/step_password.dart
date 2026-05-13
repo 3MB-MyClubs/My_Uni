@@ -33,7 +33,9 @@ class _StepPasswordState extends State<StepPassword> {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
     if (!_hasOnlyNumbers || !_isExactlySix) {
-      setState(() => _error = 'Password must be exactly 6 digits (numbers only).');
+      setState(
+        () => _error = 'Password must be exactly 6 digits (numbers only).',
+      );
       return;
     }
     if (password != confirm) {
@@ -93,7 +95,13 @@ class _StepPasswordState extends State<StepPassword> {
                   autofocus: true,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
-                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                  buildCounter:
+                      (
+                        _, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) => null,
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
@@ -121,7 +129,13 @@ class _StepPasswordState extends State<StepPassword> {
                   obscureText: _obscureConfirm,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
-                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                  buildCounter:
+                      (
+                        _, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) => null,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   onChanged: (_) => setState(() => _error = null),

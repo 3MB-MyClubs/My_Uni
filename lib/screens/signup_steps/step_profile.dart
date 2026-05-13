@@ -2,46 +2,23 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../services/signup_service.dart';
 import 'signup_theme.dart';
-
-const List<String> kMajors = [
-  'Business Administration',
-  'Economics',
-  'International Relations',
-  'Computer Engineering',
-  'Electrical & Electronics Engineering',
-  'Industrial Engineering',
-  'Mechanical Engineering',
-  'Chemical & Biological Engineering',
-  'Mathematics',
-  'Physics',
-  'Chemistry',
-  'Molecular Biology and Genetics',
-  'Psychology',
-  'Sociology',
-  'History',
-  'Philosophy',
-  'Comparative Literature',
-  'Archaeology and History of Art',
-  'Media and Visual Arts',
-  'Law',
-  'Medicine',
-  'Nursing',
-];
-
-const List<String> kYears = [
-  '1st Year',
-  '2nd Year',
-  '3rd Year',
-  '4th Year',
-  'Grad',
-];
 
 class StepProfile extends StatefulWidget {
   final String initialName;
   final String initialMajor;
   final String initialYear;
-  final void Function(String name, String major, String year, String? imagePath)
+  final Future<List<SignupLookupItem>> Function() loadMajors;
+  final Future<List<SignupLookupItem>> Function() loadAcademicYears;
+  final void Function(
+    String name,
+    String majorId,
+    String majorName,
+    String academicYearId,
+    String academicYearName,
+    String? imagePath,
+  )
   onNext;
 
   const StepProfile({
@@ -49,6 +26,8 @@ class StepProfile extends StatefulWidget {
     this.initialName = '',
     this.initialMajor = '',
     this.initialYear = '',
+    required this.loadMajors,
+    required this.loadAcademicYears,
     required this.onNext,
   });
 
@@ -62,10 +41,16 @@ class _StepProfileState extends State<StepProfile> {
   String? _nameError;
   String? _majorError;
   String? _yearError;
-  String _selectedYear = '';
+  String _selectedMajorId = '';
+  String _selectedYearId = '';
+  String _selectedYearName = '';
   String? _imagePath;
+  bool _isLoadingLookups = true;
+  String? _lookupError;
 
-  List<String> _suggestions = [];
+  List<SignupLookupItem> _majors = const [];
+  List<SignupLookupItem> _years = const [];
+  List<SignupLookupItem> _suggestions = [];
   bool _showSuggestions = false;
   final FocusNode _majorFocus = FocusNode();
 
@@ -74,29 +59,72 @@ class _StepProfileState extends State<StepProfile> {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName);
     _majorController = TextEditingController(text: widget.initialMajor);
-    _selectedYear = widget.initialYear;
+    _selectedYearName = widget.initialYear;
 
     _majorFocus.addListener(() {
       if (!_majorFocus.hasFocus) {
         setState(() => _showSuggestions = false);
       }
     });
+
+    _loadLookups();
+  }
+
+  Future<void> _loadLookups() async {
+    try {
+      final results = await Future.wait([
+        widget.loadMajors(),
+        widget.loadAcademicYears(),
+      ]);
+      if (!mounted) return;
+      final majors = results[0];
+      final years = results[1];
+      final initialMajor = widget.initialMajor;
+      final initialYear = widget.initialYear;
+      final matchedMajor = _firstByName(majors, initialMajor);
+      final matchedYear = _firstByName(years, initialYear);
+
+      setState(() {
+        _majors = majors;
+        _years = years;
+        _selectedMajorId = matchedMajor?.id ?? '';
+        _selectedYearId = matchedYear?.id ?? '';
+        _selectedYearName = matchedYear?.name ?? initialYear;
+        _isLoadingLookups = false;
+        if (majors.isEmpty || years.isEmpty) {
+          _lookupError = 'Could not load profile options. Please try again.';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingLookups = false;
+        _lookupError = 'Could not load profile options. Please try again.';
+      });
+    }
+  }
+
+  SignupLookupItem? _firstByName(List<SignupLookupItem> items, String name) {
+    for (final item in items) {
+      if (item.name == name) return item;
+    }
+    return null;
   }
 
   // ── Major autocomplete ─────────────────────────────────────────
   void _onMajorChanged(String query) {
     if (query.isEmpty) {
       setState(() {
-        _suggestions = kMajors;
+        _suggestions = _majors;
         _showSuggestions = true;
       });
       return;
     }
     final q = query.toLowerCase();
     final scored =
-        kMajors
+        _majors
             .map((m) {
-              final ml = m.toLowerCase();
+              final ml = m.name.toLowerCase();
               int score = 0;
               if (ml.startsWith(q)) {
                 score = 3;
@@ -113,12 +141,14 @@ class _StepProfileState extends State<StepProfile> {
     setState(() {
       _suggestions = scored.map((e) => e.key).toList();
       _showSuggestions = _suggestions.isNotEmpty;
+      _selectedMajorId = '';
     });
   }
 
-  void _selectMajor(String major) {
-    _majorController.text = major;
+  void _selectMajor(SignupLookupItem major) {
+    _majorController.text = major.name;
     setState(() {
+      _selectedMajorId = major.id;
       _showSuggestions = false;
       _majorError = null;
     });
@@ -154,6 +184,14 @@ class _StepProfileState extends State<StepProfile> {
     final major = _majorController.text.trim();
     bool hasError = false;
 
+    if (_isLoadingLookups || _lookupError != null) {
+      setState(
+        () =>
+            _lookupError = 'Could not load profile options. Please try again.',
+      );
+      return;
+    }
+
     if (name.isEmpty) {
       setState(() => _nameError = 'Please enter your full name.');
       hasError = true;
@@ -164,14 +202,14 @@ class _StepProfileState extends State<StepProfile> {
     if (major.isEmpty) {
       setState(() => _majorError = 'Please select your major.');
       hasError = true;
-    } else if (!kMajors.contains(major)) {
+    } else if (_selectedMajorId.isEmpty) {
       setState(() => _majorError = 'Please pick a major from the list.');
       hasError = true;
     } else {
       setState(() => _majorError = null);
     }
 
-    if (_selectedYear.isEmpty) {
+    if (_selectedYearId.isEmpty) {
       setState(() => _yearError = 'Please select your year.');
       hasError = true;
     } else {
@@ -179,7 +217,14 @@ class _StepProfileState extends State<StepProfile> {
     }
 
     if (!hasError) {
-      widget.onNext(name, major, _selectedYear, _imagePath);
+      widget.onNext(
+        name,
+        _selectedMajorId,
+        major,
+        _selectedYearId,
+        _selectedYearName,
+        _imagePath,
+      );
     }
   }
 
@@ -230,6 +275,21 @@ class _StepProfileState extends State<StepProfile> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                if (_lookupError != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: SC.burgundyTint,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _lookupError!,
+                      style: TextStyle(color: SC.burgundyDeep, fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
 
                 // ── Avatar ─────────────────────────────────────
                 Center(
@@ -292,19 +352,25 @@ class _StepProfileState extends State<StepProfile> {
                   focusNode: _majorFocus,
                   suggestions: _suggestions,
                   showSuggestions: _showSuggestions,
+                  isLoading: _isLoadingLookups,
                   errorText: _majorError,
                   onChanged: _onMajorChanged,
                   onSelect: _selectMajor,
-                  onTap: () => _onMajorChanged(_majorController.text),
+                  onTap: _isLoadingLookups
+                      ? null
+                      : () => _onMajorChanged(_majorController.text),
                 ),
                 const SizedBox(height: 14),
 
                 // Year
                 _YearSelector(
-                  selected: _selectedYear,
+                  years: _years,
+                  selectedId: _selectedYearId,
+                  isLoading: _isLoadingLookups,
                   errorText: _yearError,
                   onSelect: (y) => setState(() {
-                    _selectedYear = y;
+                    _selectedYearId = y.id;
+                    _selectedYearName = y.name;
                     _yearError = null;
                   }),
                 ),
@@ -320,9 +386,18 @@ class _StepProfileState extends State<StepProfile> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: _submit,
+              onPressed: _isLoadingLookups ? null : _submit,
               style: SC.primaryButtonStyle(),
-              child: Text('Continue'),
+              child: _isLoadingLookups
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text('Continue'),
             ),
           ),
         ),
@@ -395,12 +470,16 @@ class _DashedCirclePainter extends CustomPainter {
 
 // ── Year chip selector ────────────────────────────────────────────────────────
 class _YearSelector extends StatelessWidget {
-  final String selected;
+  final List<SignupLookupItem> years;
+  final String selectedId;
+  final bool isLoading;
   final String? errorText;
-  final ValueChanged<String> onSelect;
+  final ValueChanged<SignupLookupItem> onSelect;
 
   const _YearSelector({
-    required this.selected,
+    required this.years,
+    required this.selectedId,
+    required this.isLoading,
     required this.onSelect,
     this.errorText,
   });
@@ -420,51 +499,70 @@ class _YearSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Row(
-          children: kYears.map((y) {
-            final sel = selected == y;
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: y != kYears.last ? 6 : 0),
-                child: GestureDetector(
-                  onTap: () => onSelect(y),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: sel ? SC.burgundy : SC.card,
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(
-                        color: sel ? SC.burgundy : SC.hair,
-                        width: sel ? 1.5 : 1,
+        if (isLoading)
+          Container(
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: SC.card,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: SC.hair),
+            ),
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: SC.burgundy,
+              ),
+            ),
+          )
+        else
+          Row(
+            children: years.map((y) {
+              final sel = selectedId == y.id;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: y != years.last ? 6 : 0),
+                  child: GestureDetector(
+                    onTap: () => onSelect(y),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: sel ? SC.burgundy : SC.card,
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: sel ? SC.burgundy : SC.hair,
+                          width: sel ? 1.5 : 1,
+                        ),
+                        boxShadow: sel
+                            ? [
+                                BoxShadow(
+                                  color: SC.burgundyTint,
+                                  spreadRadius: 3,
+                                  blurRadius: 0,
+                                ),
+                              ]
+                            : null,
                       ),
-                      boxShadow: sel
-                          ? [
-                              BoxShadow(
-                                color: SC.burgundyTint,
-                                spreadRadius: 3,
-                                blurRadius: 0,
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Center(
-                      child: Text(
-                        y,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: sel ? Colors.white : SC.ink,
+                      child: Center(
+                        child: Text(
+                          y.name,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: sel ? Colors.white : SC.ink,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
-        ),
+              );
+            }).toList(),
+          ),
         if (errorText != null) ...[
           const SizedBox(height: 6),
           Text(errorText!, style: TextStyle(color: SC.burgundy, fontSize: 12)),
@@ -478,18 +576,20 @@ class _YearSelector extends StatelessWidget {
 class _MajorField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
-  final List<String> suggestions;
+  final List<SignupLookupItem> suggestions;
   final bool showSuggestions;
+  final bool isLoading;
   final String? errorText;
   final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSelect;
-  final VoidCallback onTap;
+  final ValueChanged<SignupLookupItem> onSelect;
+  final VoidCallback? onTap;
 
   const _MajorField({
     required this.controller,
     required this.focusNode,
     required this.suggestions,
     required this.showSuggestions,
+    required this.isLoading,
     required this.onChanged,
     required this.onSelect,
     required this.onTap,
@@ -547,7 +647,7 @@ class _MajorField extends StatelessWidget {
           onTap: onTap,
           decoration: SC.fieldDecoration(
             label: 'Major',
-            hint: 'Search your major…',
+            hint: isLoading ? 'Loading majors...' : 'Search your major...',
             radiusTop: showSuggestions,
             suffixIcon: controller.text.isNotEmpty
                 ? GestureDetector(
@@ -603,7 +703,7 @@ class _MajorField extends StatelessWidget {
                     ),
                     child: RichText(
                       text: TextSpan(
-                        children: _highlight(m, controller.text),
+                        children: _highlight(m.name, controller.text),
                         style: TextStyle(fontSize: 15),
                       ),
                     ),

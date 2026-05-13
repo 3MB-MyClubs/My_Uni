@@ -1,8 +1,6 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
-import '../services/auth_service.dart';
+import '../services/password_reset_service.dart';
 
 enum _ResetStep { email, code, password, done }
 
@@ -22,8 +20,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _confirmPasswordController = TextEditingController();
   _ResetStep _step = _ResetStep.email;
   String _email = '';
-  String _code = '';
   String? _error;
+  String? _message;
+  bool _isSubmitting = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
@@ -44,11 +43,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  bool get _hasMinLength => _passwordController.text.trim().length >= 8;
+  bool get _hasMinLength => _passwordController.text.trim().length >= 6;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
 
-  void _sendCode() {
+  Future<void> _sendCode() async {
+    if (_isSubmitting) return;
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       setState(() => _error = 'Please enter your KU email.');
@@ -58,55 +58,134 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _error = 'Use your @ku.edu.tr email address.');
       return;
     }
-    if (!authService.hasAccountEmail(email)) {
-      setState(() => _error = 'No account found for this email.');
+    setState(() {
+      _email = email;
+      _error = null;
+      _message = null;
+      _isSubmitting = true;
+    });
+    final result = await passwordResetService.sendCode(email);
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() {
+        _error = result.error;
+        _isSubmitting = false;
+      });
       return;
     }
-    _email = email;
-    _code = (100000 + Random().nextInt(900000)).toString();
     setState(() {
       _error = null;
+      _message = null;
       _step = _ResetStep.code;
+      _isSubmitting = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Password reset code for $_email: $_code')),
-    );
   }
 
-  void _verifyCode() {
-    if (_codeController.text.trim() != _code) {
-      setState(() => _error = 'That code is not correct.');
+  Future<void> _resendCode() async {
+    if (_isSubmitting) return;
+    setState(() {
+      _error = null;
+      _message = null;
+      _isSubmitting = true;
+    });
+    final result = await passwordResetService.sendCode(_email);
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() {
+        _error = result.error;
+        _isSubmitting = false;
+      });
+      return;
+    }
+    _codeController.clear();
+    setState(() {
+      _message = 'New code sent.';
+      _isSubmitting = false;
+    });
+  }
+
+  Future<void> _verifyCode() async {
+    if (_isSubmitting) return;
+    final code = _codeController.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() {
+        _message = null;
+        _error = 'Enter the 6-digit code.';
+      });
       return;
     }
     setState(() {
       _error = null;
+      _message = null;
+      _isSubmitting = true;
+    });
+    final result = await passwordResetService.verifyCode(
+      email: _email,
+      code: code,
+    );
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() {
+        _error = result.error;
+        _isSubmitting = false;
+      });
+      return;
+    }
+    setState(() {
+      _error = null;
+      _message = null;
       _step = _ResetStep.password;
+      _isSubmitting = false;
     });
   }
 
-  void _updatePassword() {
+  Future<void> _updatePassword() async {
+    if (_isSubmitting) return;
     final password = _passwordController.text.trim();
     final confirm = _confirmPasswordController.text.trim();
     if (!_hasMinLength) {
-      setState(() => _error = 'Password must be at least 8 numbers.');
+      setState(() {
+        _message = null;
+        _error = 'Password must be at least 6 numbers.';
+      });
       return;
     }
     if (!_hasOnlyNumbers) {
-      setState(() => _error = 'Password must contain numbers only.');
+      setState(() {
+        _message = null;
+        _error = 'Password must contain numbers only.';
+      });
       return;
     }
     if (password != confirm) {
-      setState(() => _error = 'Passwords do not match.');
-      return;
-    }
-    final ok = authService.resetAccountPassword(_email, password);
-    if (!ok) {
-      setState(() => _error = 'Could not update this account.');
+      setState(() {
+        _message = null;
+        _error = 'Passwords do not match.';
+      });
       return;
     }
     setState(() {
       _error = null;
+      _message = null;
+      _isSubmitting = true;
+    });
+    final result = await passwordResetService.updatePassword(
+      email: _email,
+      password: password,
+    );
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() {
+        _error = result.error;
+        _isSubmitting = false;
+      });
+      return;
+    }
+    setState(() {
+      _error = null;
+      _message = null;
       _step = _ResetStep.done;
+      _isSubmitting = false;
     });
   }
 
@@ -156,7 +235,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _buttonAction,
+                  onPressed: _isSubmitting ? null : _buttonAction,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
@@ -165,10 +244,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: Text(
-                    _buttonText,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          _buttonText,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -264,12 +355,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 10),
             TextButton(
-              onPressed: _sendCode,
+              onPressed: _isSubmitting ? null : _resendCode,
               child: Text(
-                'Send a new code',
+                _isSubmitting ? 'Sending...' : 'Send a new code',
                 style: TextStyle(color: AppColors.primaryRed),
               ),
             ),
+            if (_message != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _message!,
+                style: TextStyle(
+                  color: AppColors.primaryRed,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         );
       case _ResetStep.password:
@@ -311,7 +413,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            _RuleRow(label: 'At least 8 numbers', passed: _hasMinLength),
+            _RuleRow(label: 'At least 6 numbers', passed: _hasMinLength),
             _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
           ],
         );

@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _emailController;
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isSubmitting = false;
   String? _error;
 
   @override
@@ -30,14 +31,22 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController = TextEditingController(text: widget.initialEmail);
   }
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
+    if (_isSubmitting) return;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = 'Please enter your email and password');
       return;
     }
-    if (authService.login(email, password)) {
+    setState(() {
+      _error = null;
+      _isSubmitting = true;
+    });
+    final success = await authService.loginStudent(email, password);
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    if (success) {
       widget.onLogin();
     } else {
       setState(() => _error = 'Incorrect email or password');
@@ -286,7 +295,7 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _handleLogin,
+                  onPressed: _isSubmitting ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
@@ -297,10 +306,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     elevation: 2,
                     shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: Text(
-                    'Continue',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'Continue',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
