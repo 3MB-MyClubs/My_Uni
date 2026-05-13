@@ -26,7 +26,6 @@ import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
-import '../services/personalization_service.dart';
 import '../widgets/rsvp_button.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
@@ -184,7 +183,6 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildFeedTabs(),
             _buildStoriesRow(),
             _buildContextBar(),
-            _buildScheduleStrip(),
             if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -571,173 +569,6 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  // ── Schedule Strip (today's classes) ──────────────────────────────────────
-  bool _scheduleExpanded = false;
-
-  // days: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri — defined in personalization_service.dart
-  List<Map<String, dynamic>> get _allCourses => kCourseSchedule;
-
-  SliverToBoxAdapter _buildScheduleStrip() {
-    final now = DateTime.now();
-    final todayWeekday = now.weekday; // 1=Mon … 5=Fri
-    final todayMinutes = now.hour * 60 + now.minute;
-
-    // Filter to today's courses, sorted by start time
-    final todayAll = _allCourses
-        .where((c) => (c['days'] as List).contains(todayWeekday))
-        .toList()
-      ..sort((a, b) {
-        final aM = (a['startH'] as int) * 60 + (a['startM'] as int);
-        final bM = (b['startH'] as int) * 60 + (b['startM'] as int);
-        return aM.compareTo(bM);
-      });
-
-    // Compute status for each
-    List<Map<String, dynamic>> schedule = [];
-    bool nextAssigned = false;
-    for (final c in todayAll) {
-      final startMin = (c['startH'] as int) * 60 + (c['startM'] as int);
-      final endMin   = (c['endH']   as int) * 60 + (c['endM']   as int);
-      final String status;
-      if (todayMinutes >= startMin && todayMinutes < endMin) {
-        status = 'now';
-      } else if (todayMinutes < startMin && !nextAssigned) {
-        status = 'next';
-        nextAssigned = true;
-      } else {
-        status = todayMinutes >= endMin ? 'done' : 'later';
-      }
-      final sh = (c['startH'] as int).toString().padLeft(2, '0');
-      final sm = (c['startM'] as int).toString().padLeft(2, '0');
-      final eh = (c['endH']   as int).toString().padLeft(2, '0');
-      final em = (c['endM']   as int).toString().padLeft(2, '0');
-      final dur = (endMin - startMin);
-      schedule.add({
-        'title': c['title'],
-        'room':  c['room'],
-        'time':  '$sh:$sm – $eh:$em',
-        'dur':   '${dur ~/ 60}h ${dur % 60 == 0 ? '' : '${dur % 60}m'}'.trim(),
-        'status': status,
-        'color':  c['color'],
-      });
-    }
-
-    if (schedule.isEmpty) return SliverToBoxAdapter(child: SizedBox.shrink());
-
-    final visible = _scheduleExpanded ? schedule : schedule.take(2).toList();
-
-    return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryRed.withValues(alpha: 0.07),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
-                children: [
-                  Text('📋', style: TextStyle(fontSize: 14)),
-                  const SizedBox(width: 7),
-                  Text('Today\'s Schedule',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text, letterSpacing: -0.3)),
-                  const Spacer(),
-                  if (schedule.length > 2)
-                  GestureDetector(
-                    onTap: () => setState(() => _scheduleExpanded = !_scheduleExpanded),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _scheduleExpanded ? 'Less' : 'All ${schedule.length}',
-                        style: TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Schedule items
-            ...visible.map((item) {
-              final status = item['status'] as String;
-              final color = Color(item['color'] as int);
-              final isNow = status == 'now';
-              final statusLabel = isNow ? 'NOW' : status == 'next' ? 'NEXT' : null;
-
-              return Container(
-                margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                decoration: BoxDecoration(
-                  color: isNow
-                      ? color.withValues(alpha: 0.08)
-                      : AppColors.surfaceAlt.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(10),
-                  border: isNow
-                      ? Border.all(color: color.withValues(alpha: 0.25))
-                      : Border.all(color: AppColors.divider.withValues(alpha: 0.5)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 3, height: 38,
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(2),
-                        boxShadow: [
-                          BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 6),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(item['title'] as String,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: isNow ? AppColors.text : AppColors.text.withValues(alpha: 0.85),
-                                letterSpacing: -0.2,
-                              ),
-                              overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${item['room']} · ${item['time']}  ${item['dur']}',
-                            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (statusLabel != null)
-                      _ScheduleBadge(label: statusLabel, color: color),
-                  ],
-                ),
-              );
-            }),
-            const SizedBox(height: 4),
-          ],
-        ),
-      ),
-    );
-  }
-
   // Returns clubs that have at least one story posted within the last 24 hours,
   // sorted: unseen (newest story first) → seen / oldest.
   List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> _activeStoryClubs() {
@@ -833,29 +664,6 @@ class _FeedScreenState extends State<FeedScreen> {
 
 // ─── Story Bubble ─────────────────────────────────────────────────────────────
 
-// ─── Schedule Badge ───────────────────────────────────────────────────────────
-
-class _ScheduleBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _ScheduleBadge({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
-      ),
-    );
-  }
-}
 
 // ─── People You Might Know ────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/auth_choice_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/signup_screen.dart';
+import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
@@ -269,7 +269,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         } else if (_showSignUp) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
-            child: SignUpScreen(onSignUp: _onSignUp, onBack: handleBack),
+            child: SignupFlowScreen(onSignUp: _onSignUp, onBack: handleBack),
             transitionBuilder: (child, animation) => SlideTransition(
               position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
               child: child,

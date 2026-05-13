@@ -16,9 +16,9 @@ import '../models/board_member_request.dart';
 final users = [
   User(id: 'u1',  name: 'Alice Yılmaz',   email: 'alice@ku.edu.tr',      password: 'alice123',  role: 'student', subscribedClubIds: ['c4', 'c13', 'c35'],                    followingUserIds: ['u2', 'u4', 'u5']),
   User(id: 'u2',  name: 'Can Serbester',  email: 'can@ku.edu.tr',        password: 'can123',    role: 'student', subscribedClubIds: ['c4', 'c28', 'c15', 'c36'],              followingUserIds: ['u1', 'u4']),
-  User(id: 'u3',  name: 'Emir Karaarslan',email: 'emir@ku.edu.tr',       password: 'emir123',  role: 'student', subscribedClubIds: ['c27', 'c28', 'c29'],                    followingUserIds: ['u1', 'u2', 'u7']),
+  User(id: 'u3',  name: 'Emir Karaarslan',email: 'emir@ku.edu.tr',       password: 'emir123',   role: 'student', subscribedClubIds: ['c27', 'c28', 'c29'],                    followingUserIds: ['u1', 'u2', 'u7']),
   User(id: 'u4',  name: 'Deniz Kaya',     email: 'deniz@ku.edu.tr',      password: 'deniz123',  role: 'student', subscribedClubIds: ['c13', 'c15', 'c34'],                    followingUserIds: ['u1', 'u3', 'u8']),
-  User(id: 'u5',  name: 'Hakan Tuncay',   email: 'htuncay23@ku.edu.tr',  password: '',          role: 'student', subscribedClubIds: ['c4', 'c22'],                            followingUserIds: ['u1', 'u2', 'u3', 'u4']),
+  User(id: 'u5',  name: 'Hakan Tuncay',   email: 'htuncay23@ku.edu.tr',  password: '111111',    role: 'student', subscribedClubIds: ['c4', 'c22'],                            followingUserIds: ['u1', 'u2', 'u3', 'u4']),
   User(id: 'u6',  name: 'Elif Şahin',     email: 'esahin@ku.edu.tr',     password: 'elif123',   role: 'student', subscribedClubIds: ['c1', 'c3', 'c9', 'c10', 'c34'],         followingUserIds: ['u10', 'u12']),
   User(id: 'u7',  name: 'Murat Özdemir',  email: 'mozdemir@ku.edu.tr',   password: 'murat123',  role: 'student', subscribedClubIds: ['c2', 'c3', 'c25', 'c37', 'c40'],        followingUserIds: ['u3', 'u9', 'u13']),
   User(id: 'u8',  name: 'Selin Yıldız',   email: 'syildiz@ku.edu.tr',    password: 'selin123',  role: 'student', subscribedClubIds: ['c6', 'c12', 'c29', 'c39', 'c41'],       followingUserIds: ['u4', 'u6', 'u14']),

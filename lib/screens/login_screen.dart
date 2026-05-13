@@ -13,24 +13,28 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
   String? _error;
 
   void _handleLogin() {
     final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Please enter your email');
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please enter your email and password');
       return;
     }
-    if (authService.login(email)) {
+    if (authService.login(email, password)) {
       widget.onLogin();
     } else {
-      setState(() => _error = 'No account found for this email');
+      setState(() => _error = 'Incorrect email or password');
     }
   }
 
   @override
   void dispose() {
     _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -85,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter your Koç University email to continue.',
+                'Enter your Koç University email and password to continue.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.secondaryText,
@@ -136,10 +140,60 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 14),
 
+              // Password field
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                onSubmitted: (_) => _handleLogin(),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  hintText: 'Enter your password',
+                  prefixIcon: Icon(Icons.lock_outline,
+                      color: AppColors.secondaryText),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: AppColors.secondaryText,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.card,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: AppColors.divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        BorderSide(color: AppColors.primaryRed, width: 2),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: AppColors.primaryRed),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        BorderSide(color: AppColors.primaryRed, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
               // Quick-fill chip
               GestureDetector(
                 onTap: () {
                   _emailController.text = 'htuncay23@ku.edu.tr';
+                  _passwordController.text = 'password123';
                   setState(() => _error = null);
                 },
                 child: Container(
