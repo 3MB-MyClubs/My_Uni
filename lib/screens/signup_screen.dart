@@ -135,7 +135,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 decoration: InputDecoration(
                   labelText: 'Password',
                   hintText: 'At least 6 characters',
-                  prefixIcon: const Icon(Icons.lock_outline,
+                  prefixIcon: Icon(Icons.lock_outline,
                       color: AppColors.secondaryText),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -157,7 +157,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide:
-                        const BorderSide(color: AppColors.divider),
+                        BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -218,7 +218,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.divider),
+          borderSide: BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
