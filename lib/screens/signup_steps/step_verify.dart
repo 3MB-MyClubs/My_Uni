@@ -30,6 +30,7 @@ class _StepVerifyState extends State<StepVerify> {
     (_) => FocusNode(),
   );
   String? _error;
+  String? _message;
   bool _isVerifying = false;
   bool _isResending = false;
 
@@ -76,11 +77,15 @@ class _StepVerifyState extends State<StepVerify> {
     if (_isVerifying) return;
     final code = _controllers.map((c) => c.text).join();
     if (code.length < _codeLength) {
-      setState(() => _error = 'Enter the full 6-digit code.');
+      setState(() {
+        _message = null;
+        _error = 'Enter the full 6-digit code.';
+      });
       return;
     }
     setState(() {
       _error = null;
+      _message = null;
       _isVerifying = true;
     });
     final error = await widget.onNext(code);
@@ -95,12 +100,20 @@ class _StepVerifyState extends State<StepVerify> {
     if (_secondsLeft > 0 || _isResending) return;
     setState(() {
       _error = null;
+      _message = null;
       _isResending = true;
     });
     final error = await widget.onResend();
     if (!mounted) return;
+    if (error == null) {
+      for (final controller in _controllers) {
+        controller.clear();
+      }
+      _focusNodes.first.requestFocus();
+    }
     setState(() {
       _error = error;
+      _message = error == null ? 'New code sent.' : null;
       _isResending = false;
     });
     if (error == null) {
@@ -194,6 +207,17 @@ class _StepVerifyState extends State<StepVerify> {
                   Text(
                     _error!,
                     style: TextStyle(color: SC.burgundy, fontSize: 13),
+                  ),
+                ],
+                if (_message != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _message!,
+                    style: TextStyle(
+                      color: SC.burgundyDeep,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
 

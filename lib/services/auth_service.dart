@@ -50,33 +50,52 @@ class AuthService {
   }
 
   Future<bool> loginStudent(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+
+    final isMockAdmin =
+        appAdmin.email.toLowerCase() == normalizedEmail ||
+        clubAdmins.any((a) => a.email.toLowerCase() == normalizedEmail);
+    if (isMockAdmin) {
+      return login(email, password);
+    }
+
     if (SupabaseConfig.isConfigured) {
       try {
         final response = await Supabase.instance.client.auth.signInWithPassword(
-          email: email,
+          email: normalizedEmail,
           password: password,
         );
         final authUser = response.user;
         if (authUser == null) return false;
 
-        final profile = await Supabase.instance.client
-            .from('profiles')
-            .select('full_name, email, role')
-            .eq('id', authUser.id)
-            .maybeSingle();
+        Map<String, dynamic>? profile;
+        try {
+          profile = await Supabase.instance.client
+              .from('profiles')
+              .select('full_name, email, role')
+              .eq('id', authUser.id)
+              .maybeSingle();
+        } catch (_) {
+          profile = null;
+        }
 
         _currentUser = User(
           id: authUser.id,
-          name: (profile?['full_name'] as String?) ?? email,
-          email: (profile?['email'] as String?) ?? email,
+          name:
+              (profile?['full_name'] as String?) ??
+              (authUser.userMetadata?['full_name'] as String?) ??
+              normalizedEmail,
+          email: (profile?['email'] as String?) ?? normalizedEmail,
           password: '',
           role: (profile?['role'] as String?) ?? 'student',
           subscribedClubIds: const [],
         );
         _currentAdmin = null;
         return true;
+      } on AuthException {
+        return false;
       } catch (_) {
-        return login(email, password);
+        return false;
       }
     }
 

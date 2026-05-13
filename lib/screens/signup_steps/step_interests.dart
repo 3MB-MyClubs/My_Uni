@@ -6,7 +6,7 @@ const int kMinInterests = 3;
 
 class StepInterests extends StatefulWidget {
   final List<String> selected;
-  final Future<List<SignupInterest>> Function() loadInterests;
+  final Future<List<SignupLookupItem>> Function() loadInterests;
   final Future<String?> Function(List<String> interestIds) onNext;
   final VoidCallback onSkip;
 
@@ -24,7 +24,7 @@ class StepInterests extends StatefulWidget {
 
 class _StepInterestsState extends State<StepInterests> {
   late Set<String> _selected;
-  List<SignupInterest> _interests = const [];
+  List<SignupLookupItem> _interests = const [];
   String? _error;
   bool _isLoading = true;
   bool _isSubmitting = false;

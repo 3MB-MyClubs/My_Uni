@@ -10,11 +10,11 @@ class SignupResult {
   const SignupResult.failure(this.error) : success = false;
 }
 
-class SignupInterest {
+class SignupLookupItem {
   final String id;
   final String name;
 
-  const SignupInterest({required this.id, required this.name});
+  const SignupLookupItem({required this.id, required this.name});
 }
 
 class SignupService {
@@ -23,23 +23,36 @@ class SignupService {
     return Supabase.instance.client;
   }
 
-  Future<List<SignupInterest>> fetchInterests() async {
+  Future<List<SignupLookupItem>> fetchInterests() async {
+    return _fetchLookupItems('interests');
+  }
+
+  Future<List<SignupLookupItem>> fetchMajors() async {
+    return _fetchLookupItems('majors');
+  }
+
+  Future<List<SignupLookupItem>> fetchAcademicYears() async {
+    return _fetchLookupItems('academic_years');
+  }
+
+  Future<List<SignupLookupItem>> _fetchLookupItems(String tableName) async {
     final client = _client;
     if (client == null) return const [];
 
     final rows = await client
-        .from('interests')
+        .from(tableName)
         .select('id, name')
-        .order('name', ascending: true);
+        .eq('is_active', true)
+        .order('sort_order', ascending: true);
 
     return rows
         .map(
-          (row) => SignupInterest(
+          (row) => SignupLookupItem(
             id: row['id'].toString(),
             name: row['name'].toString(),
           ),
         )
-        .where((interest) => interest.id.isNotEmpty && interest.name.isNotEmpty)
+        .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
         .toList();
   }
 
@@ -58,16 +71,16 @@ class SignupService {
     required String email,
     required String password,
     required String fullName,
-    required String major,
-    required String year,
+    required String majorId,
+    required String academicYearId,
     required List<String> interestIds,
   }) async {
     return _invoke('complete-signup', {
       'email': email,
       'password': password,
       'full_name': fullName,
-      'major': major,
-      'year': year,
+      'major_id': majorId,
+      'academic_year_id': academicYearId,
       'interest_ids': interestIds,
     });
   }
