@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import '../services/app_colors.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';

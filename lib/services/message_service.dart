@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/message.dart';
 import '../models/notification.dart';
@@ -18,8 +19,12 @@ class MessageService {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    final appDir = await getApplicationDocumentsDirectory();
-    Hive.init(appDir.path);
+    if (kIsWeb) {
+      Hive.init(null);
+    } else {
+      final appDir = await getApplicationDocumentsDirectory();
+      Hive.init(appDir.path);
+    }
 
     if (!Hive.isAdapterRegistered(0)) {
       Hive.registerAdapter(MessageAdapter());
@@ -77,9 +82,11 @@ class MessageService {
   List<Message> getConversation(String userId1, String userId2) {
     final allMessages = _messagesBox.values.toList();
     return allMessages
-        .where((m) =>
-            (m.senderId == userId1 && m.receiverId == userId2) ||
-            (m.senderId == userId2 && m.receiverId == userId1))
+        .where(
+          (m) =>
+              (m.senderId == userId1 && m.receiverId == userId2) ||
+              (m.senderId == userId2 && m.receiverId == userId1),
+        )
         .toList()
       ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
   }
@@ -96,31 +103,45 @@ class MessageService {
   }
 
   /// Returns true if there are unread messages from [senderId] for [receiverId].
-  bool hasUnread(String receiverId, String senderId, List<Message> allMessages) {
+  bool hasUnread(
+    String receiverId,
+    String senderId,
+    List<Message> allMessages,
+  ) {
     final key = '${receiverId}_$senderId';
     final lastReadMs = _readBox.get(key);
     final lastRead = lastReadMs != null
         ? DateTime.fromMillisecondsSinceEpoch(lastReadMs)
         : null;
 
-    return allMessages.any((m) =>
-        m.senderId == senderId &&
-        m.receiverId == receiverId &&
-        (lastRead == null || m.sentAt.isAfter(lastRead)));
+    return allMessages.any(
+      (m) =>
+          m.senderId == senderId &&
+          m.receiverId == receiverId &&
+          (lastRead == null || m.sentAt.isAfter(lastRead)),
+    );
   }
 
   /// Count of unread messages from [senderId] for [receiverId].
-  int unreadCount(String receiverId, String senderId, List<Message> allMessages) {
+  int unreadCount(
+    String receiverId,
+    String senderId,
+    List<Message> allMessages,
+  ) {
     final key = '${receiverId}_$senderId';
     final lastReadMs = _readBox.get(key);
     final lastRead = lastReadMs != null
         ? DateTime.fromMillisecondsSinceEpoch(lastReadMs)
         : null;
 
-    return allMessages.where((m) =>
-        m.senderId == senderId &&
-        m.receiverId == receiverId &&
-        (lastRead == null || m.sentAt.isAfter(lastRead))).length;
+    return allMessages
+        .where(
+          (m) =>
+              m.senderId == senderId &&
+              m.receiverId == receiverId &&
+              (lastRead == null || m.sentAt.isAfter(lastRead)),
+        )
+        .length;
   }
 
   /// Close the database (call on app shutdown)
@@ -136,4 +157,3 @@ class MessageService {
 
 // Global instance
 final messageService = MessageService();
-

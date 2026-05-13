@@ -26,7 +26,14 @@ class AuthService {
     }
     final user = users.firstWhere(
       (u) => u.email == email && (password == null || u.password == password),
-      orElse: () => User(id: '', name: '', email: '', password: '', role: '', subscribedClubIds: []),
+      orElse: () => User(
+        id: '',
+        name: '',
+        email: '',
+        password: '',
+        role: '',
+        subscribedClubIds: [],
+      ),
     );
     if (user.id.isNotEmpty) {
       _currentUser = user;
@@ -48,9 +55,10 @@ class AuthService {
       subscribedClubIds: [],
     );
     users.add(newUser);
+    _currentUser = newUser;
+    _currentAdmin = null;
     return true;
   }
-
 
   void logout() {
     _currentUser = null;

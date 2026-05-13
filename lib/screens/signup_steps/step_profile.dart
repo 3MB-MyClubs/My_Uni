@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'signup_theme.dart';
 
 const List<String> kMajors = [
@@ -38,16 +41,14 @@ class StepProfile extends StatefulWidget {
   final String initialName;
   final String initialMajor;
   final String initialYear;
-  final String initialPassword;
-  final void Function(String name, String major, String year, String password)
-      onNext;
+  final void Function(String name, String major, String year, String? imagePath)
+  onNext;
 
   const StepProfile({
     super.key,
     this.initialName = '',
     this.initialMajor = '',
     this.initialYear = '',
-    this.initialPassword = '',
     required this.onNext,
   });
 
@@ -58,13 +59,11 @@ class StepProfile extends StatefulWidget {
 class _StepProfileState extends State<StepProfile> {
   late final TextEditingController _nameController;
   late final TextEditingController _majorController;
-  late final TextEditingController _passwordController;
-  bool _obscurePassword = true;
   String? _nameError;
   String? _majorError;
   String? _yearError;
-  String? _passwordError;
   String _selectedYear = '';
+  String? _imagePath;
 
   List<String> _suggestions = [];
   bool _showSuggestions = false;
@@ -73,9 +72,8 @@ class _StepProfileState extends State<StepProfile> {
   @override
   void initState() {
     super.initState();
-    _nameController  = TextEditingController(text: widget.initialName);
+    _nameController = TextEditingController(text: widget.initialName);
     _majorController = TextEditingController(text: widget.initialMajor);
-    _passwordController = TextEditingController(text: widget.initialPassword);
     _selectedYear = widget.initialYear;
 
     _majorFocus.addListener(() {
@@ -88,19 +86,30 @@ class _StepProfileState extends State<StepProfile> {
   // ── Major autocomplete ─────────────────────────────────────────
   void _onMajorChanged(String query) {
     if (query.isEmpty) {
-      setState(() { _suggestions = kMajors; _showSuggestions = true; });
+      setState(() {
+        _suggestions = kMajors;
+        _showSuggestions = true;
+      });
       return;
     }
     final q = query.toLowerCase();
-    final scored = kMajors.map((m) {
-      final ml = m.toLowerCase();
-      int score = 0;
-      if (ml.startsWith(q))                         { score = 3; }
-      else if (ml.split(' ').any((w) => w.startsWith(q))) { score = 2; }
-      else if (ml.contains(q))                      { score = 1; }
-      return MapEntry(m, score);
-    }).where((e) => e.value > 0).toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final scored =
+        kMajors
+            .map((m) {
+              final ml = m.toLowerCase();
+              int score = 0;
+              if (ml.startsWith(q)) {
+                score = 3;
+              } else if (ml.split(' ').any((w) => w.startsWith(q))) {
+                score = 2;
+              } else if (ml.contains(q)) {
+                score = 1;
+              }
+              return MapEntry(m, score);
+            })
+            .where((e) => e.value > 0)
+            .toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     setState(() {
       _suggestions = scored.map((e) => e.key).toList();
       _showSuggestions = _suggestions.isNotEmpty;
@@ -109,14 +118,31 @@ class _StepProfileState extends State<StepProfile> {
 
   void _selectMajor(String major) {
     _majorController.text = major;
-    setState(() { _showSuggestions = false; _majorError = null; });
+    setState(() {
+      _showSuggestions = false;
+      _majorError = null;
+    });
     _majorFocus.unfocus();
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked != null) {
+      setState(() => _imagePath = picked.path);
+    }
   }
 
   // ── Initials from name ─────────────────────────────────────────
   String get _initials {
-    final parts = _nameController.text.trim().split(' ')
-        .where((w) => w.isNotEmpty).toList();
+    final parts = _nameController.text
+        .trim()
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '';
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -124,15 +150,16 @@ class _StepProfileState extends State<StepProfile> {
 
   // ── Submit ─────────────────────────────────────────────────────
   void _submit() {
-    final name     = _nameController.text.trim();
-    final major    = _majorController.text.trim();
-    final password = _passwordController.text.trim();
-    bool hasError  = false;
+    final name = _nameController.text.trim();
+    final major = _majorController.text.trim();
+    bool hasError = false;
 
     if (name.isEmpty) {
       setState(() => _nameError = 'Please enter your full name.');
       hasError = true;
-    } else { setState(() => _nameError = null); }
+    } else {
+      setState(() => _nameError = null);
+    }
 
     if (major.isEmpty) {
       setState(() => _majorError = 'Please select your major.');
@@ -140,28 +167,35 @@ class _StepProfileState extends State<StepProfile> {
     } else if (!kMajors.contains(major)) {
       setState(() => _majorError = 'Please pick a major from the list.');
       hasError = true;
-    } else { setState(() => _majorError = null); }
+    } else {
+      setState(() => _majorError = null);
+    }
 
     if (_selectedYear.isEmpty) {
       setState(() => _yearError = 'Please select your year.');
       hasError = true;
-    } else { setState(() => _yearError = null); }
+    } else {
+      setState(() => _yearError = null);
+    }
 
-    if (password.length < 6) {
-      setState(() => _passwordError = 'Password must be at least 6 characters.');
-      hasError = true;
-    } else { setState(() => _passwordError = null); }
-
-    if (!hasError) widget.onNext(name, major, _selectedYear, password);
+    if (!hasError) {
+      widget.onNext(name, major, _selectedYear, _imagePath);
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _majorController.dispose();
-    _passwordController.dispose();
     _majorFocus.dispose();
     super.dispose();
+  }
+
+  Widget _selectedAvatarImage(String path) {
+    if (kIsWeb) {
+      return Image.network(path, width: 92, height: 92, fit: BoxFit.cover);
+    }
+    return Image.file(File(path), width: 92, height: 92, fit: BoxFit.cover);
   }
 
   @override
@@ -189,36 +223,47 @@ class _StepProfileState extends State<StepProfile> {
                 Text(
                   'This shows up on your campus profile.',
                   style: TextStyle(
-                      fontSize: 15,
-                      color: SC.body,
-                      height: 1.45,
-                      letterSpacing: -0.1),
+                    fontSize: 15,
+                    color: SC.body,
+                    height: 1.45,
+                    letterSpacing: -0.1,
+                  ),
                 ),
                 const SizedBox(height: 24),
 
                 // ── Avatar ─────────────────────────────────────
                 Center(
-                  child: AnimatedBuilder(
-                    animation: _nameController,
-                    builder: (_, _) => Stack(
-                      children: [
-                        _DashedCircleAvatar(initials: _initials),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: SC.ink,
-                              border: Border.all(color: SC.bg, width: 3),
+                  child: GestureDetector(
+                    onTap: _pickImage,
+                    child: AnimatedBuilder(
+                      animation: _nameController,
+                      builder: (_, _) => Stack(
+                        children: [
+                          _imagePath != null
+                              ? ClipOval(
+                                  child: _selectedAvatarImage(_imagePath!),
+                                )
+                              : _DashedCircleAvatar(initials: _initials),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: SC.ink,
+                                border: Border.all(color: SC.bg, width: 3),
+                              ),
+                              child: Icon(
+                                _imagePath != null ? Icons.edit : Icons.add,
+                                color: Colors.white,
+                                size: 15,
+                              ),
                             ),
-                            child: Icon(Icons.add,
-                                color: Colors.white, size: 15),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -229,7 +274,10 @@ class _StepProfileState extends State<StepProfile> {
                   controller: _nameController,
                   textInputAction: TextInputAction.next,
                   style: TextStyle(
-                      color: SC.ink, fontSize: 16, letterSpacing: -0.1),
+                    color: SC.ink,
+                    fontSize: 16,
+                    letterSpacing: -0.1,
+                  ),
                   decoration: SC.fieldDecoration(
                     label: 'Full name',
                     hint: 'e.g. Ali Yılmaz',
@@ -255,35 +303,10 @@ class _StepProfileState extends State<StepProfile> {
                 _YearSelector(
                   selected: _selectedYear,
                   errorText: _yearError,
-                  onSelect: (y) =>
-                      setState(() { _selectedYear = y; _yearError = null; }),
-                ),
-                const SizedBox(height: 14),
-
-                // Password
-                TextField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _submit(),
-                  style: TextStyle(
-                      color: SC.ink, fontSize: 16, letterSpacing: -0.1),
-                  decoration: SC.fieldDecoration(
-                    label: 'Password',
-                    hint: 'At least 6 characters',
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        color: SC.muted,
-                        size: 20,
-                      ),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                    errorText: _passwordError,
-                  ),
+                  onSelect: (y) => setState(() {
+                    _selectedYear = y;
+                    _yearError = null;
+                  }),
                 ),
               ],
             ),
@@ -326,8 +349,7 @@ class _DashedCircleAvatar extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: initials.isEmpty
-            ? Icon(Icons.person_outline_rounded,
-                color: SC.burgundy, size: 32)
+            ? Icon(Icons.person_outline_rounded, color: SC.burgundy, size: 32)
             : Text(
                 initials,
                 style: TextStyle(
@@ -391,10 +413,11 @@ class _YearSelector extends StatelessWidget {
         Text(
           'Year',
           style: TextStyle(
-              fontSize: 13,
-              color: SC.body,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.1),
+            fontSize: 13,
+            color: SC.body,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.1,
+          ),
         ),
         const SizedBox(height: 6),
         Row(
@@ -416,10 +439,13 @@ class _YearSelector extends StatelessWidget {
                         width: sel ? 1.5 : 1,
                       ),
                       boxShadow: sel
-                          ? [BoxShadow(
-                              color: SC.burgundyTint,
-                              spreadRadius: 3,
-                              blurRadius: 0)]
+                          ? [
+                              BoxShadow(
+                                color: SC.burgundyTint,
+                                spreadRadius: 3,
+                                blurRadius: 0,
+                              ),
+                            ]
                           : null,
                     ),
                     child: Center(
@@ -441,8 +467,7 @@ class _YearSelector extends StatelessWidget {
         ),
         if (errorText != null) ...[
           const SizedBox(height: 6),
-          Text(errorText!,
-              style: TextStyle(color: SC.burgundy, fontSize: 12)),
+          Text(errorText!, style: TextStyle(color: SC.burgundy, fontSize: 12)),
         ],
       ],
     );
@@ -473,24 +498,38 @@ class _MajorField extends StatelessWidget {
 
   List<TextSpan> _highlight(String text, String query) {
     if (query.isEmpty) {
-      return [TextSpan(text: text, style: TextStyle(color: SC.ink))];
+      return [
+        TextSpan(
+          text: text,
+          style: TextStyle(color: SC.ink),
+        ),
+      ];
     }
     final lower = text.toLowerCase();
-    final idx   = lower.indexOf(query.toLowerCase());
+    final idx = lower.indexOf(query.toLowerCase());
     if (idx < 0) {
-      return [TextSpan(text: text, style: TextStyle(color: SC.ink))];
+      return [
+        TextSpan(
+          text: text,
+          style: TextStyle(color: SC.ink),
+        ),
+      ];
     }
     return [
       if (idx > 0)
-        TextSpan(text: text.substring(0, idx),
-            style: TextStyle(color: SC.ink)),
+        TextSpan(
+          text: text.substring(0, idx),
+          style: TextStyle(color: SC.ink),
+        ),
       TextSpan(
-          text: text.substring(idx, idx + query.length),
-          style: TextStyle(
-              color: SC.burgundy, fontWeight: FontWeight.w700)),
+        text: text.substring(idx, idx + query.length),
+        style: TextStyle(color: SC.burgundy, fontWeight: FontWeight.w700),
+      ),
       if (idx + query.length < text.length)
-        TextSpan(text: text.substring(idx + query.length),
-            style: TextStyle(color: SC.ink)),
+        TextSpan(
+          text: text.substring(idx + query.length),
+          style: TextStyle(color: SC.ink),
+        ),
     ];
   }
 
@@ -503,8 +542,7 @@ class _MajorField extends StatelessWidget {
           controller: controller,
           focusNode: focusNode,
           textInputAction: TextInputAction.next,
-          style: TextStyle(
-              color: SC.ink, fontSize: 16, letterSpacing: -0.1),
+          style: TextStyle(color: SC.ink, fontSize: 16, letterSpacing: -0.1),
           onChanged: onChanged,
           onTap: onTap,
           decoration: SC.fieldDecoration(
@@ -525,8 +563,7 @@ class _MajorField extends StatelessWidget {
                         shape: BoxShape.circle,
                         color: SC.muted,
                       ),
-                      child: Icon(Icons.close,
-                          color: Colors.white, size: 12),
+                      child: Icon(Icons.close, color: Colors.white, size: 12),
                     ),
                   )
                 : null,
@@ -539,7 +576,8 @@ class _MajorField extends StatelessWidget {
             decoration: BoxDecoration(
               color: SC.card,
               borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(12)),
+                bottom: Radius.circular(12),
+              ),
               border: Border.all(color: SC.burgundy, width: 1.5),
               boxShadow: [
                 BoxShadow(
@@ -553,15 +591,16 @@ class _MajorField extends StatelessWidget {
               padding: EdgeInsets.zero,
               shrinkWrap: true,
               itemCount: suggestions.length,
-              separatorBuilder: (_, _) =>
-                  Divider(height: 1, color: SC.hair),
+              separatorBuilder: (_, _) => Divider(height: 1, color: SC.hair),
               itemBuilder: (_, i) {
                 final m = suggestions[i];
                 return InkWell(
                   onTap: () => onSelect(m),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     child: RichText(
                       text: TextSpan(
                         children: _highlight(m, controller.text),

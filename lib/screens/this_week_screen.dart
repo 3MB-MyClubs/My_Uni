@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
@@ -31,10 +32,18 @@ bool _isLive(Event e) {
 
 Color _clubColor(String clubId) {
   const colors = [
-    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-    Color(0xFF558B2F), Color(0xFF283593), Color(0xFF6D4C41),
-    Color(0xFF00695C), Color(0xFF4527A0), Color(0xFFC62828),
+    Color(0xFFB41C18),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
+    Color(0xFF558B2F),
+    Color(0xFF283593),
+    Color(0xFF6D4C41),
+    Color(0xFF00695C),
+    Color(0xFF4527A0),
+    Color(0xFFC62828),
   ];
   final idx = clubs.indexWhere((c) => c.id == clubId);
   return colors[(idx < 0 ? 0 : idx) % colors.length];
@@ -44,12 +53,30 @@ String _fmt2(int n) => n.toString().padLeft(2, '0');
 String _timeStr(DateTime dt) => '${_fmt2(dt.hour)}:${_fmt2(dt.minute)}';
 
 const _kMonths = [
-  '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  '',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 const _kWeekdays = [
-  '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+  '',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,15 +113,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   List<Event> _eventsForDay(DateTime day) {
     final followed = userState.followedClubIds;
-    return events
-        .where((e) {
-          final d = DateTime(e.dateTime.year, e.dateTime.month, e.dateTime.day);
-          if (d != day) return false;
-          if (_followedOnly && !followed.contains(e.clubId)) return false;
-          return true;
-        })
-        .toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return events.where((e) {
+      final d = DateTime(e.dateTime.year, e.dateTime.month, e.dateTime.day);
+      if (d != day) return false;
+      if (_followedOnly && !followed.contains(e.clubId)) return false;
+      return true;
+    }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
   // Build the per-day sliver pairs and collect them into a flat list.
@@ -109,8 +133,8 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       final dayLabel = isToday
           ? 'Today'
           : _isDateTomorrow(day)
-              ? 'Tomorrow'
-              : _kWeekdays[day.weekday];
+          ? 'Tomorrow'
+          : _kWeekdays[day.weekday];
       final dateLabel = isToday
           ? '${_kMonths[day.month]} ${day.day} · this week'
           : '${_kMonths[day.month]} ${day.day}';
@@ -134,29 +158,27 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) {
-                final ev = dayEvts[i];
-                return Padding(
-                  padding:
-                      EdgeInsets.only(bottom: i < dayEvts.length - 1 ? 10 : 0),
-                  child: _EventCardFull(
-                    event: ev,
-                    color: _clubColor(ev.clubId),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EventDetailScreen(
-                          event: ev,
-                          color: _clubColor(ev.clubId),
-                        ),
+            delegate: SliverChildBuilderDelegate((ctx, i) {
+              final ev = dayEvts[i];
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: i < dayEvts.length - 1 ? 10 : 0,
+                ),
+                child: _EventCardFull(
+                  event: ev,
+                  color: _clubColor(ev.clubId),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EventDetailScreen(
+                        event: ev,
+                        color: _clubColor(ev.clubId),
                       ),
-                    ).then((_) => setState(() {})),
-                  ),
-                );
-              },
-              childCount: dayEvts.length,
-            ),
+                    ),
+                  ).then((_) => setState(() {})),
+                ),
+              );
+            }, childCount: dayEvts.length),
           ),
         ),
       );
@@ -248,8 +270,11 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.divider),
                       ),
-                      child: Icon(Icons.calendar_today_rounded,
-                          size: 24, color: AppColors.secondaryText),
+                      child: Icon(
+                        Icons.calendar_today_rounded,
+                        size: 24,
+                        color: AppColors.secondaryText,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     Text(
@@ -266,7 +291,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           ? 'No events from clubs you follow.'
                           : 'Nothing scheduled this week.',
                       style: TextStyle(
-                          fontSize: 13, color: AppColors.secondaryText),
+                        fontSize: 13,
+                        color: AppColors.secondaryText,
+                      ),
                     ),
                   ],
                 ),
@@ -274,8 +301,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             ),
 
           SliverToBoxAdapter(
-            child: SizedBox(
-                height: MediaQuery.of(context).padding.bottom + 80),
+            child: SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
           ),
         ],
       ),
@@ -317,7 +343,10 @@ class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(
       height: _h,
       decoration: BoxDecoration(
@@ -414,10 +443,43 @@ class _EventCardFull extends StatelessWidget {
     required this.onTap,
   });
 
+  Widget _fallbackPhoto() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.60),
+            color.withValues(alpha: 0.28),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _eventPhoto(String path) {
+    final isRemote = path.startsWith('http') || path.startsWith('blob:');
+    if (kIsWeb || isRemote) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _fallbackPhoto(),
+      );
+    }
+    return Image.file(
+      File(path),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => _fallbackPhoto(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final club =
-        clubs.firstWhere((c) => c.id == event.clubId, orElse: () => clubs.first);
+    final club = clubs.firstWhere(
+      (c) => c.id == event.clubId,
+      orElse: () => clubs.first,
+    );
     final live = _isLive(event);
     final timeStr = _timeStr(event.dateTime);
     final attendees = event.attendeeUserIds.length;
@@ -446,35 +508,9 @@ class _EventCardFull extends StatelessWidget {
                 children: [
                   // Event photo if available, otherwise club-colour gradient
                   if (event.imagePath != null && event.imagePath!.isNotEmpty)
-                    Image.file(
-                      File(event.imagePath!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, err, stack) => Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              color.withValues(alpha: 0.60),
-                              color.withValues(alpha: 0.28),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
+                    _eventPhoto(event.imagePath!)
                   else
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            color.withValues(alpha: 0.60),
-                            color.withValues(alpha: 0.28),
-                          ],
-                        ),
-                      ),
-                    ),
+                    _fallbackPhoto(),
                   // Bottom-up dark gradient for text readability
                   Container(
                     decoration: BoxDecoration(
@@ -591,9 +627,11 @@ class _EventCardFull extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                Icon(Icons.location_on_outlined,
-                                    size: 11,
-                                    color: AppColors.secondaryText),
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 11,
+                                  color: AppColors.secondaryText,
+                                ),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
@@ -610,9 +648,11 @@ class _EventCardFull extends StatelessWidget {
                             const SizedBox(height: 3),
                             Row(
                               children: [
-                                Icon(Icons.people_outline,
-                                    size: 11,
-                                    color: AppColors.secondaryText),
+                                Icon(
+                                  Icons.people_outline,
+                                  size: 11,
+                                  color: AppColors.secondaryText,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '$attendees going',
@@ -675,9 +715,7 @@ class _InlineRsvpBtn extends StatelessWidget {
           color: attending ? Colors.transparent : AppColors.primaryRed,
           borderRadius: BorderRadius.circular(9),
           border: Border.all(
-            color: attending
-                ? AppColors.divider
-                : AppColors.primaryRed,
+            color: attending ? AppColors.divider : AppColors.primaryRed,
             width: 1.5,
           ),
         ),
@@ -690,14 +728,16 @@ class _InlineRsvpBtn extends StatelessWidget {
                 height: 12,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
-                  color:
-                      attending ? AppColors.secondaryText : Colors.white,
+                  color: attending ? AppColors.secondaryText : Colors.white,
                 ),
               )
             else ...[
               if (attending) ...[
-                Icon(Icons.check_rounded,
-                    size: 11, color: AppColors.secondaryText),
+                Icon(
+                  Icons.check_rounded,
+                  size: 11,
+                  color: AppColors.secondaryText,
+                ),
                 const SizedBox(width: 4),
               ],
               Text(
@@ -705,8 +745,7 @@ class _InlineRsvpBtn extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color:
-                      attending ? AppColors.secondaryText : Colors.white,
+                  color: attending ? AppColors.secondaryText : Colors.white,
                 ),
               ),
             ],
@@ -737,10 +776,13 @@ class _LivePipState extends State<_LivePip>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -766,8 +808,7 @@ class _LivePipState extends State<_LivePip>
               width: 5,
               height: 5,
               decoration: BoxDecoration(
-                color:
-                    AppColors.primaryRed.withValues(alpha: _anim.value),
+                color: AppColors.primaryRed.withValues(alpha: _anim.value),
                 shape: BoxShape.circle,
               ),
             ),
@@ -821,8 +862,11 @@ class _SegTab extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _SegTab(
-      {required this.label, required this.active, required this.onTap});
+  const _SegTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -908,15 +952,22 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
       return (text: 'Starts in ${mins}m', color: col);
     }
     const ls = [
-      'today', 'tomorrow', 'in 2 days', 'in 3 days',
-      'in 4 days', 'in 5 days', 'in 6 days'
+      'today',
+      'tomorrow',
+      'in 2 days',
+      'in 3 days',
+      'in 4 days',
+      'in 5 days',
+      'in 6 days',
     ];
     final today = DateTime(now.year, now.month, now.day);
-    final daysFromToday =
-        widget.selectedDay.difference(today).inDays.clamp(0, 6);
+    final daysFromToday = widget.selectedDay
+        .difference(today)
+        .inDays
+        .clamp(0, 6);
     return (
       text: 'Starts ${ls[daysFromToday]}',
-      color: AppColors.secondaryText
+      color: AppColors.secondaryText,
     );
   }
 
@@ -925,8 +976,10 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
     final e = widget.event;
     final col = widget.color;
     final live = _isLive(e);
-    final club =
-        clubs.firstWhere((c) => c.id == e.clubId, orElse: () => clubs.first);
+    final club = clubs.firstWhere(
+      (c) => c.id == e.clubId,
+      orElse: () => clubs.first,
+    );
     final cd = _countdown();
     final dateStr =
         '${_kWeekdays[e.dateTime.weekday]}, ${_kMonths[e.dateTime.month]} ${e.dateTime.day}';
@@ -957,24 +1010,33 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppColors.divider),
                         ),
-                        child: Icon(Icons.chevron_left_rounded,
-                            size: 22, color: AppColors.secondaryText),
+                        child: Icon(
+                          Icons.chevron_left_rounded,
+                          size: 22,
+                          color: AppColors.secondaryText,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Text('Event',
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText)),
+                    Text(
+                      'Event',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
                     if (live) ...[
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEF5350)
-                              .withValues(alpha: 0.12),
+                          color: const Color(
+                            0xFFEF5350,
+                          ).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -982,13 +1044,15 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                           children: [
                             _PulseDot(color: const Color(0xFFEF5350)),
                             const SizedBox(width: 5),
-                            const Text('LIVE',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFEF5350),
-                                  letterSpacing: 0.5,
-                                )),
+                            const Text(
+                              'LIVE',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFEF5350),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1000,10 +1064,11 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                    16,
-                    0,
-                    16,
-                    MediaQuery.of(context).padding.bottom + 32),
+                  16,
+                  0,
+                  16,
+                  MediaQuery.of(context).padding.bottom + 32,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1012,8 +1077,7 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                       decoration: BoxDecoration(
                         color: col.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: col.withValues(alpha: 0.18)),
+                        border: Border.all(color: col.withValues(alpha: 0.18)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1038,26 +1102,34 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(club.name,
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: col)),
+                          Text(
+                            club.name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: col,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Text(e.title,
-                        style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.text,
-                            letterSpacing: -0.8,
-                            height: 1.15)),
+                    Text(
+                      e.title,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.text,
+                        letterSpacing: -0.8,
+                        height: 1.15,
+                      ),
+                    ),
                     const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 7),
+                        horizontal: 14,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
                         color: live
                             ? const Color(0xFFEF5350).withValues(alpha: 0.10)
@@ -1065,8 +1137,7 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: live
-                              ? const Color(0xFFEF5350)
-                                  .withValues(alpha: 0.30)
+                              ? const Color(0xFFEF5350).withValues(alpha: 0.30)
                               : col.withValues(alpha: 0.18),
                         ),
                       ),
@@ -1077,11 +1148,14 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                             _PulseDot(color: const Color(0xFFEF5350)),
                             const SizedBox(width: 6),
                           ],
-                          Text(cd.text,
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: cd.color)),
+                          Text(
+                            cd.text,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: cd.color,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1096,9 +1170,10 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                             value: '$dateStr · $timeStr',
                           ),
                           Divider(
-                              color: AppColors.divider,
-                              height: 24,
-                              thickness: 1),
+                            color: AppColors.divider,
+                            height: 24,
+                            thickness: 1,
+                          ),
                           _DetailRow(
                             icon: Icons.location_on_outlined,
                             label: 'Location',
@@ -1109,39 +1184,52 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (_) => const CampusMapScreen()),
+                                builder: (_) => const CampusMapScreen(),
+                              ),
                             ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: col.withValues(alpha: 0.07),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                    color: col.withValues(alpha: 0.25)),
+                                  color: col.withValues(alpha: 0.25),
+                                ),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.map_outlined,
-                                      color: col, size: 16),
+                                  Icon(
+                                    Icons.map_outlined,
+                                    color: col,
+                                    size: 16,
+                                  ),
                                   const SizedBox(width: 8),
-                                  Text('View on Campus Map',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: col)),
+                                  Text(
+                                    'View on Campus Map',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: col,
+                                    ),
+                                  ),
                                   const Spacer(),
-                                  Icon(Icons.arrow_forward_ios_rounded,
-                                      size: 12,
-                                      color: col.withValues(alpha: 0.6)),
+                                  Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 12,
+                                    color: col.withValues(alpha: 0.6),
+                                  ),
                                 ],
                               ),
                             ),
                           ),
                           Divider(
-                              color: AppColors.divider,
-                              height: 24,
-                              thickness: 1),
+                            color: AppColors.divider,
+                            height: 24,
+                            thickness: 1,
+                          ),
                           _DetailRow(
                             icon: Icons.people_outline_rounded,
                             label: 'Attending',
@@ -1176,8 +1264,9 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                               color: col.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                  color: col.withValues(alpha: 0.20),
-                                  width: 1.5),
+                                color: col.withValues(alpha: 0.20),
+                                width: 1.5,
+                              ),
                             ),
                             alignment: Alignment.center,
                             child: Text(
@@ -1185,29 +1274,36 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                                   ? club.name[0].toUpperCase()
                                   : '?',
                               style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: col),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: col,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(club.name,
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.text)),
+                            child: Text(
+                              club.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.text,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Text('RSVP',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.secondaryText,
-                            letterSpacing: 1.0)),
+                    Text(
+                      'RSVP',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     RsvpButton(eventId: e.id, color: col),
                   ],
@@ -1246,10 +1342,11 @@ class _DetailCard extends StatelessWidget {
           Text(
             title.toUpperCase(),
             style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppColors.secondaryText,
-                letterSpacing: 1.0),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.secondaryText,
+              letterSpacing: 1.0,
+            ),
           ),
           const SizedBox(height: 12),
           child,
@@ -1263,8 +1360,11 @@ class _DetailRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _DetailRow(
-      {required this.icon, required this.label, required this.value});
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1286,19 +1386,25 @@ class _DetailRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label.toUpperCase(),
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondaryText,
-                      letterSpacing: 1.0)),
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.secondaryText,
+                  letterSpacing: 1.0,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(value,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                      height: 1.4)),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                  height: 1.4,
+                ),
+              ),
             ],
           ),
         ),
@@ -1328,10 +1434,13 @@ class _PulseDotState extends State<_PulseDot>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
