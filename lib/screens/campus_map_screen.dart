@@ -22,14 +22,14 @@ import 'event_detail_screen.dart';
 const _kMapCenter = LatLng(41.205314, 29.073231);
 
 // ── Building pin coordinates ─────────────────────────────────────────────────
-const _kSCI        = LatLng(41.206352, 29.075228); // Science Building
-const _kENG        = LatLng(41.207009, 29.075530); // Engineering Building
-const _kSNA        = LatLng(41.208207, 29.075522); // SNA
-const _kHenry      = LatLng(41.204730, 29.072518); // Henry Ford Çimleri
-const _kKurucular  = LatLng(41.205044, 29.073767); // Kurucular Salonu
-const _kSOS        = LatLng(41.205891, 29.074844); // SOS Building
-const _kOdeon      = LatLng(41.205670, 29.074322); // Odeon
-const _kCASE       = LatLng(41.2030,   29.0742);   // CASE Building — update when known
+const _kSCI = LatLng(41.206352, 29.075228); // Science Building
+const _kENG = LatLng(41.207009, 29.075530); // Engineering Building
+const _kSNA = LatLng(41.208207, 29.075522); // SNA
+const _kHenry = LatLng(41.204730, 29.072518); // Henry Ford Çimleri
+const _kKurucular = LatLng(41.205044, 29.073767); // Kurucular Salonu
+const _kSOS = LatLng(41.205891, 29.074844); // SOS Building
+const _kOdeon = LatLng(41.205670, 29.074322); // Odeon
+const _kCASE = LatLng(41.2030, 29.0742); // CASE Building — update when known
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -111,7 +111,9 @@ const _zones = [
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 class CampusMapScreen extends StatefulWidget {
-  const CampusMapScreen({super.key});
+  final DateTime? initialSelectedDay;
+
+  const CampusMapScreen({super.key, this.initialSelectedDay});
 
   @override
   State<CampusMapScreen> createState() => _CampusMapScreenState();
@@ -133,15 +135,14 @@ class _CampusMapScreenState extends State<CampusMapScreen>
         _selectedDay.day == now.day;
   }
 
-  static DateTime _startOfDay(DateTime d) =>
-      DateTime(d.year, d.month, d.day);
+  static DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static const _center = _kMapCenter;
 
   @override
   void initState() {
     super.initState();
-    _selectedDay = _startOfDay(DateTime.now());
+    _selectedDay = _startOfDay(widget.initialSelectedDay ?? DateTime.now());
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -199,25 +200,24 @@ class _CampusMapScreenState extends State<CampusMapScreen>
 
   bool _isLive(_Zone zone) {
     final now = DateTime.now();
-    return events.any((e) =>
-        zone.locationKeywords.any(
-          (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
-        ) &&
-        !e.dateTime.isAfter(now) &&
-        e.endTime.isAfter(now) &&
-        _onSelectedDay(e));
+    return events.any(
+      (e) =>
+          zone.locationKeywords.any(
+            (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
+          ) &&
+          !e.dateTime.isAfter(now) &&
+          e.endTime.isAfter(now) &&
+          _onSelectedDay(e),
+    );
   }
 
   List<Event> _zoneEvents(_Zone zone) {
-    return events
-        .where((e) {
-          final ok = zone.locationKeywords.any(
-            (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
-          );
-          return ok && _onSelectedDay(e);
-        })
-        .toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return events.where((e) {
+      final ok = zone.locationKeywords.any(
+        (kw) => e.location.toLowerCase().contains(kw.toLowerCase()),
+      );
+      return ok && _onSelectedDay(e);
+    }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
     if (count >= 4) return const Color(0xFFD32F2F); // deep red
     if (count == 3) return const Color(0xFFE64A19); // red-orange
     if (count == 2) return const Color(0xFFF57C00); // orange
-    return const Color(0xFFFFA000);                  // amber
+    return const Color(0xFFFFA000); // amber
   }
 
   Color _circleColor(double score, bool live) {
@@ -247,28 +247,36 @@ class _CampusMapScreenState extends State<CampusMapScreen>
       final live = _isLive(z);
       final selected = z == _selectedZone;
       if (live) {
-        markers.add(CircleMarker(
-          point: z.position,
-          radius: _circleRadius(score) + 8 + pulseValue * 6,
-          useRadiusInMeter: false,
-          color: Colors.red.withValues(alpha: 0.05 * pulseValue),
-          borderStrokeWidth: 0,
-          borderColor: Colors.transparent,
-        ));
+        markers.add(
+          CircleMarker(
+            point: z.position,
+            radius: _circleRadius(score) + 8 + pulseValue * 6,
+            useRadiusInMeter: false,
+            color: Colors.red.withValues(alpha: 0.05 * pulseValue),
+            borderStrokeWidth: 0,
+            borderColor: Colors.transparent,
+          ),
+        );
       }
       if (score > 0 || selected) {
-        markers.add(CircleMarker(
-          point: z.position,
-          radius: _circleRadius(score),
-          useRadiusInMeter: false,
-          color: _circleColor(score, live),
-          borderStrokeWidth: selected ? 2.5 : live ? 1.5 : 0,
-          borderColor: selected
-              ? Colors.white
-              : live
-              ? Colors.red.withValues(alpha: 0.8)
-              : Colors.transparent,
-        ));
+        markers.add(
+          CircleMarker(
+            point: z.position,
+            radius: _circleRadius(score),
+            useRadiusInMeter: false,
+            color: _circleColor(score, live),
+            borderStrokeWidth: selected
+                ? 2.5
+                : live
+                ? 1.5
+                : 0,
+            borderColor: selected
+                ? Colors.white
+                : live
+                ? Colors.red.withValues(alpha: 0.8)
+                : Colors.transparent,
+          ),
+        );
       }
     }
     return markers;
@@ -277,7 +285,20 @@ class _CampusMapScreenState extends State<CampusMapScreen>
   // ── Day picker ────────────────────────────────────────────────────────────
 
   static const _dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  static const _monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  static const _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   Widget _buildDayPicker() {
     final today = _startOfDay(DateTime.now());
@@ -302,7 +323,10 @@ class _CampusMapScreenState extends State<CampusMapScreen>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primaryRed : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
@@ -320,7 +344,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: isSelected ? Colors.white70 : AppColors.secondaryText,
+                        color: isSelected
+                            ? Colors.white70
+                            : AppColors.secondaryText,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -328,7 +354,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                       '${day.day} ${_monthNames[day.month - 1]}',
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: isSelected ? Colors.white : AppColors.text,
                       ),
                     ),
@@ -370,7 +398,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.12 + _pulseAnim.value * 0.08),
+                      color: Colors.red.withValues(
+                        alpha: 0.12 + _pulseAnim.value * 0.08,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -417,7 +447,8 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                     initialZoom: 15.6,
                     minZoom: 14.5,
                     maxZoom: 18.0,
-                    onTap: (tapPos, point) => setState(() => _selectedZone = null),
+                    onTap: (tapPos, point) =>
+                        setState(() => _selectedZone = null),
                   ),
                   children: [
                     // Dark CartoDB tiles
@@ -430,9 +461,7 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                     ),
 
                     // Heatmap circles
-                    CircleLayer(
-                      circles: _buildCircles(_pulseAnim.value),
-                    ),
+                    CircleLayer(circles: _buildCircles(_pulseAnim.value)),
 
                     // Zone label markers
                     MarkerLayer(
@@ -447,8 +476,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                           height: 44,
                           child: GestureDetector(
                             onTap: () => setState(
-                              () => _selectedZone =
-                                  (z == _selectedZone) ? null : z,
+                              () => _selectedZone = (z == _selectedZone)
+                                  ? null
+                                  : z,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -456,17 +486,18 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                 // Count badge above the pill
                                 if (dayCount > 0)
                                   Container(
-                                    margin:
-                                        const EdgeInsets.only(bottom: 2),
+                                    margin: const EdgeInsets.only(bottom: 2),
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 1),
+                                      horizontal: 6,
+                                      vertical: 1,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: live
                                           ? Colors.red
-                                          : _heatColor(dayCount)
-                                              .withValues(alpha: 0.9),
-                                      borderRadius:
-                                          BorderRadius.circular(10),
+                                          : _heatColor(
+                                              dayCount,
+                                            ).withValues(alpha: 0.9),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -480,9 +511,10 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                           ),
                                         ),
                                         const SizedBox(width: 2),
-                                        Text('🔥',
-                                            style:
-                                                TextStyle(fontSize: 8)),
+                                        Text(
+                                          '🔥',
+                                          style: TextStyle(fontSize: 8),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -496,23 +528,25 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                     color: live
                                         ? Colors.red
                                         : selected
-                                            ? AppColors.primaryRed
-                                            : score > 0
-                                                ? AppColors.card
-                                                    .withValues(alpha: 0.92)
-                                                : AppColors.card
-                                                    .withValues(alpha: 0.65),
+                                        ? AppColors.primaryRed
+                                        : score > 0
+                                        ? AppColors.card.withValues(alpha: 0.92)
+                                        : AppColors.card.withValues(
+                                            alpha: 0.65,
+                                          ),
                                     borderRadius: BorderRadius.circular(7),
                                     border: Border.all(
                                       color: live
                                           ? Colors.red
                                           : selected
-                                              ? Colors.white
-                                              : score > 0
-                                                  ? AppColors.primaryRed
-                                                      .withValues(alpha: 0.5)
-                                                  : AppColors.divider
-                                                      .withValues(alpha: 0.5),
+                                          ? Colors.white
+                                          : score > 0
+                                          ? AppColors.primaryRed.withValues(
+                                              alpha: 0.5,
+                                            )
+                                          : AppColors.divider.withValues(
+                                              alpha: 0.5,
+                                            ),
                                       width: selected ? 1.5 : 1,
                                     ),
                                   ),
@@ -525,8 +559,8 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                                       color: live || selected
                                           ? Colors.white
                                           : score > 0
-                                              ? AppColors.text
-                                              : AppColors.secondaryText,
+                                          ? AppColors.text
+                                          : AppColors.secondaryText,
                                     ),
                                   ),
                                 ),
@@ -558,7 +592,10 @@ class _CampusMapScreenState extends State<CampusMapScreen>
               children: [
                 Text(
                   'Quiet',
-                  style: TextStyle(fontSize: 10, color: AppColors.secondaryText),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
                 const SizedBox(width: 4),
                 ...List.generate(5, (i) {
@@ -567,7 +604,9 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                     height: 10,
                     margin: const EdgeInsets.only(right: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryRed.withValues(alpha: 0.18 + i * 0.17),
+                      color: AppColors.primaryRed.withValues(
+                        alpha: 0.18 + i * 0.17,
+                      ),
                       borderRadius: BorderRadius.circular(3),
                     ),
                   );
@@ -575,7 +614,10 @@ class _CampusMapScreenState extends State<CampusMapScreen>
                 const SizedBox(width: 4),
                 Text(
                   'Busy',
-                  style: TextStyle(fontSize: 10, color: AppColors.secondaryText),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
                 const Spacer(),
                 Row(
@@ -610,14 +652,14 @@ class _CampusMapScreenState extends State<CampusMapScreen>
               dayCount: _weekEventCount(_selectedZone!),
               isLive: _isLive(_selectedZone!),
               heatColor: _heatColor(_weekEventCount(_selectedZone!)),
-              dayLabel: _isToday ? 'today' : '${_dayNames[_selectedDay.weekday % 7]} ${_selectedDay.day} ${_monthNames[_selectedDay.month - 1]}',
+              dayLabel: _isToday
+                  ? 'today'
+                  : '${_dayNames[_selectedDay.weekday % 7]} ${_selectedDay.day} ${_monthNames[_selectedDay.month - 1]}',
               onEventTap: (e) => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => EventDetailScreen(
-                    event: e,
-                    color: AppColors.primaryRed,
-                  ),
+                  builder: (_) =>
+                      EventDetailScreen(event: e, color: AppColors.primaryRed),
                 ),
               ),
             ),
@@ -726,8 +768,8 @@ class _ZonePanel extends StatelessWidget {
                 dayCount == 0
                     ? 'No events $dayLabel'
                     : dayCount == 1
-                        ? '1 event $dayLabel'
-                        : '$dayCount events $dayLabel',
+                    ? '1 event $dayLabel'
+                    : '$dayCount events $dayLabel',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -740,16 +782,21 @@ class _ZonePanel extends StatelessWidget {
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 7, vertical: 2),
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.red.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text('Live now',
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Live now',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ],
@@ -787,8 +834,12 @@ class _ZonePanel extends StatelessWidget {
                           '${_fmtDate(e.dateTime)} · ${e.title}',
                           style: TextStyle(
                             fontSize: 12,
-                            color: live ? AppColors.text : AppColors.secondaryText,
-                            fontWeight: live ? FontWeight.w500 : FontWeight.normal,
+                            color: live
+                                ? AppColors.text
+                                : AppColors.secondaryText,
+                            fontWeight: live
+                                ? FontWeight.w500
+                                : FontWeight.normal,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback? onBack;
   final String initialEmail;
-  const LoginScreen({super.key, required this.onLogin, this.onBack, this.initialEmail = ''});
+  const LoginScreen({
+    super.key,
+    required this.onLogin,
+    this.onBack,
+    this.initialEmail = '',
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -38,6 +44,20 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _openForgotPassword() async {
+    final resetEmail = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) =>
+            ForgotPasswordScreen(initialEmail: _emailController.text.trim()),
+      ),
+    );
+    if (resetEmail != null && resetEmail.isNotEmpty) {
+      _emailController.text = resetEmail;
+      _passwordController.clear();
+      setState(() => _error = null);
+    }
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -54,8 +74,8 @@ class _LoginScreenState extends State<LoginScreen> {
         elevation: 0,
         foregroundColor: AppColors.text,
         leading: BackButton(
-            onPressed:
-                widget.onBack ?? () => Navigator.of(context).maybePop()),
+          onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -114,8 +134,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   labelText: 'KU Email',
                   hintText: 'you@ku.edu.tr',
-                  prefixIcon: Icon(Icons.email_outlined,
-                      color: AppColors.secondaryText),
+                  prefixIcon: Icon(
+                    Icons.email_outlined,
+                    color: AppColors.secondaryText,
+                  ),
                   errorText: _error,
                   filled: true,
                   fillColor: AppColors.card,
@@ -125,23 +147,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide:
-                        BorderSide(color: AppColors.divider),
+                    borderSide: BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(
-                        color: AppColors.primaryRed, width: 2),
+                      color: AppColors.primaryRed,
+                      width: 2,
+                    ),
                   ),
                   errorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide:
-                        BorderSide(color: AppColors.primaryRed),
+                    borderSide: BorderSide(color: AppColors.primaryRed),
                   ),
                   focusedErrorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(
-                        color: AppColors.primaryRed, width: 2),
+                      color: AppColors.primaryRed,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -151,12 +175,15 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                keyboardType: TextInputType.number,
                 onSubmitted: (_) => _handleLogin(),
                 decoration: InputDecoration(
                   labelText: 'Password',
                   hintText: 'Enter your password',
-                  prefixIcon: Icon(Icons.lock_outline,
-                      color: AppColors.secondaryText),
+                  prefixIcon: Icon(
+                    Icons.lock_outline,
+                    color: AppColors.secondaryText,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -180,8 +207,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide:
-                        BorderSide(color: AppColors.primaryRed, width: 2),
+                    borderSide: BorderSide(
+                      color: AppColors.primaryRed,
+                      width: 2,
+                    ),
                   ),
                   errorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -189,34 +218,55 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   focusedErrorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide:
-                        BorderSide(color: AppColors.primaryRed, width: 2),
+                    borderSide: BorderSide(
+                      color: AppColors.primaryRed,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _openForgotPassword,
+                  child: Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
 
               // Quick-fill chip
               GestureDetector(
                 onTap: () {
                   _emailController.text = 'htuncay23@ku.edu.tr';
-                  _passwordController.text = 'password123';
+                  _passwordController.text = '11111111';
                   setState(() => _error = null);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: AppColors.primaryRed.withValues(alpha: 0.2)),
+                      color: AppColors.primaryRed.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.bolt_rounded,
-                          size: 14, color: AppColors.primaryRed),
+                      Icon(
+                        Icons.bolt_rounded,
+                        size: 14,
+                        color: AppColors.primaryRed,
+                      ),
                       SizedBox(width: 5),
                       Text(
                         'htuncay23@ku.edu.tr',
@@ -242,14 +292,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 2,
-                    shadowColor:
-                        AppColors.primaryRed.withValues(alpha: 0.4),
+                    shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: Text('Continue',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Continue',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],

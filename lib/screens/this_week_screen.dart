@@ -92,216 +92,406 @@ class ThisWeekScreen extends StatefulWidget {
 
 class _ThisWeekScreenState extends State<ThisWeekScreen> {
   bool _followedOnly = false;
-  late List<DateTime> _weekDays;
+  late DateTime _selectedDay;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    _selectedDay = today;
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
     for (final e in events.where((e) => e.endTime.isAfter(now))) {
       rsvpStore.seed(e.id, e.attendeeUserIds.contains(userId));
     }
+  }
 
-    // Monday → Sunday of the current week
-    final monday = today.subtract(Duration(days: today.weekday - 1));
-    _weekDays = List.generate(7, (i) => monday.add(Duration(days: i)));
+  static DateTime _startOfDay(DateTime day) {
+    return DateTime(day.year, day.month, day.day);
+  }
+
+  DateTime get _today => _startOfDay(DateTime.now());
+
+  List<DateTime> get _visibleDays {
+    final today = _today;
+    return List.generate(7, (i) => today.add(Duration(days: i)));
+  }
+
+  void _syncSelectedDayToRollingWindow() {
+    final today = _today;
+    if (_selectedDay.isBefore(today)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _selectedDay = today);
+        }
+      });
+    }
+  }
+
+  bool _sameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  void _selectDay(DateTime day) {
+    final value = _startOfDay(day);
+    if (_sameDay(value, _selectedDay)) return;
+    setState(() => _selectedDay = value);
+  }
+
+  void _shiftSelectedDay(int delta) {
+    final days = _visibleDays;
+    final idx = days.indexWhere((d) => _sameDay(d, _selectedDay));
+    final base = idx < 0 ? 0 : idx;
+    final next = (base + delta).clamp(0, days.length - 1);
+    _selectDay(days[next]);
   }
 
   List<Event> _eventsForDay(DateTime day) {
     final followed = userState.followedClubIds;
     return events.where((e) {
       final d = DateTime(e.dateTime.year, e.dateTime.month, e.dateTime.day);
-      if (d != day) return false;
+      if (!_sameDay(d, day)) return false;
       if (_followedOnly && !followed.contains(e.clubId)) return false;
       return true;
     }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
-  // Build the per-day sliver pairs and collect them into a flat list.
-  List<Widget> _buildAgendaSlivers(BuildContext context) {
-    final slivers = <Widget>[];
+  List<Event> _selectedEvents() => _eventsForDay(_selectedDay);
 
-    for (final day in _weekDays) {
-      final dayEvts = _eventsForDay(day);
-      if (dayEvts.isEmpty) continue;
+  int _selectedAttendeeCount(List<Event> selectedEvents) {
+    return selectedEvents.fold<int>(
+      0,
+      (sum, event) => sum + event.attendeeUserIds.length,
+    );
+  }
 
-      final isToday = _isDateToday(day);
-      final dayLabel = isToday
-          ? 'Today'
-          : _isDateTomorrow(day)
-          ? 'Tomorrow'
-          : _kWeekdays[day.weekday];
-      final dateLabel = isToday
-          ? '${_kMonths[day.month]} ${day.day} · this week'
-          : '${_kMonths[day.month]} ${day.day}';
+  List<Event> _rsvpedEventsForDay(DateTime day) {
+    return _eventsForDay(
+      day,
+    ).where((event) => rsvpStore.isAttending(event.id)).toList();
+  }
 
-      // Sticky day header
-      slivers.add(
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _DayHeaderDelegate(
-            dateNum: day.day,
-            dayLabel: dayLabel,
-            dateLabel: dateLabel,
-            isToday: isToday,
-            eventCount: dayEvts.length,
-          ),
-        ),
-      );
-
-      // Event cards
-      slivers.add(
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((ctx, i) {
-              final ev = dayEvts[i];
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: i < dayEvts.length - 1 ? 10 : 0,
-                ),
-                child: _EventCardFull(
-                  event: ev,
-                  color: _clubColor(ev.clubId),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EventDetailScreen(
-                        event: ev,
-                        color: _clubColor(ev.clubId),
-                      ),
-                    ),
-                  ).then((_) => setState(() {})),
-                ),
-              );
-            }, childCount: dayEvts.length),
-          ),
-        ),
-      );
+  Map<String, int> _activityByLocation(List<Event> selectedEvents) {
+    final buckets = <String, int>{};
+    for (final event in selectedEvents) {
+      final location = event.location.trim().isEmpty
+          ? 'Campus'
+          : event.location.trim();
+      buckets[location] =
+          (buckets[location] ?? 0) + event.attendeeUserIds.length + 1;
     }
-
-    return slivers;
+    return Map.fromEntries(
+      buckets.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    _syncSelectedDayToRollingWindow();
     final topPad = MediaQuery.of(context).padding.top;
-    final agendaSlivers = _buildAgendaSlivers(context);
-    final isEmpty = agendaSlivers.isEmpty;
+    final days = _visibleDays;
+    final selectedEvents = _selectedEvents();
+    final dayCounts = {for (final day in days) day: _eventsForDay(day).length};
+    final isEmpty = selectedEvents.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          // ── Header ─────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, topPad + 14, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'This Week',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.text,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                  const Spacer(),
-                  _HeaderIconBtn(icon: Icons.search_rounded),
-                  const SizedBox(width: 6),
-                  _HeaderIconBtn(icon: Icons.notifications_outlined),
-                ],
-              ),
-            ),
-          ),
-
-          // ── All Clubs / Following toggle ───────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-              child: Container(
-                height: 42,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: AppColors.divider),
-                ),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity < -240) {
+            _shiftSelectedDay(1);
+          } else if (velocity > 240) {
+            _shiftSelectedDay(-1);
+          }
+        },
+        child: CustomScrollView(
+          slivers: [
+            // ── Header ─────────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, topPad + 14, 16, 8),
                 child: Row(
                   children: [
-                    _SegTab(
-                      label: 'All Clubs',
-                      active: !_followedOnly,
-                      onTap: () => setState(() => _followedOnly = false),
+                    Text(
+                      'This Week',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.text,
+                        letterSpacing: -0.9,
+                      ),
                     ),
-                    _SegTab(
-                      label: 'Following',
-                      active: _followedOnly,
-                      onTap: () => setState(() => _followedOnly = true),
-                    ),
+                    const Spacer(),
+                    _HeaderIconBtn(icon: Icons.search_rounded),
+                    const SizedBox(width: 6),
+                    _HeaderIconBtn(icon: Icons.notifications_outlined),
                   ],
                 ),
               ),
+            ),
+
+            // ── All Clubs / Following toggle ───────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Row(
+                    children: [
+                      _SegTab(
+                        label: 'All Clubs',
+                        active: !_followedOnly,
+                        onTap: () => setState(() => _followedOnly = false),
+                      ),
+                      _SegTab(
+                        label: 'Following',
+                        active: _followedOnly,
+                        onTap: () => setState(() => _followedOnly = true),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _CalendarHeaderDelegate(
+                days: days,
+                selectedDay: _selectedDay,
+                eventCounts: dayCounts,
+                onSelect: _selectDay,
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.03, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: _DayOverview(
+                  key: ValueKey(
+                    '${_selectedDay.toIso8601String()}$_followedOnly',
+                  ),
+                  selectedDay: _selectedDay,
+                  eventCount: selectedEvents.length,
+                  attendeeCount: _selectedAttendeeCount(selectedEvents),
+                  activityByLocation: _activityByLocation(selectedEvents),
+                  rsvpsBuilder: () => _rsvpedEventsForDay(_selectedDay),
+                  onOpenMap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          CampusMapScreen(initialSelectedDay: _selectedDay),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            if (!isEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((ctx, i) {
+                    final ev = selectedEvents[i];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: i < selectedEvents.length - 1 ? 10 : 0,
+                      ),
+                      child: _EventCardFull(
+                        key: ValueKey(ev.id),
+                        event: ev,
+                        color: _clubColor(ev.clubId),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EventDetailScreen(
+                              event: ev,
+                              color: _clubColor(ev.clubId),
+                            ),
+                          ),
+                        ).then((_) => setState(() {})),
+                      ),
+                    );
+                  }, childCount: selectedEvents.length),
+                ),
+              ),
+
+            if (isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _EmptyDayState(
+                  selectedDay: _selectedDay,
+                  followedOnly: _followedOnly,
+                  onShowAll: _followedOnly
+                      ? () => setState(() => _followedOnly = false)
+                      : null,
+                ),
+              ),
+
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: MediaQuery.of(context).padding.bottom + 80,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DayOverview extends StatelessWidget {
+  final DateTime selectedDay;
+  final int eventCount;
+  final int attendeeCount;
+  final Map<String, int> activityByLocation;
+  final List<Event> Function() rsvpsBuilder;
+  final VoidCallback onOpenMap;
+
+  const _DayOverview({
+    super.key,
+    required this.selectedDay,
+    required this.eventCount,
+    required this.attendeeCount,
+    required this.activityByLocation,
+    required this.rsvpsBuilder,
+    required this.onOpenMap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dateLabel = _isDateToday(selectedDay)
+        ? 'Today'
+        : _isDateTomorrow(selectedDay)
+        ? 'Tomorrow'
+        : '${_kWeekdays[selectedDay.weekday]}, ${_kMonths[selectedDay.month]} ${selectedDay.day}';
+    final peak = activityByLocation.values.isEmpty
+        ? 1
+        : activityByLocation.values.reduce((a, b) => a > b ? a : b);
+    final locationEntries = activityByLocation.entries.take(4).toList();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dateLabel,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.6,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '$eventCount event${eventCount == 1 ? '' : 's'} · $attendeeCount students going',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: onOpenMap,
+                      child: Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryRed.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(11),
+                          border: Border.all(
+                            color: AppColors.primaryRed.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.map_outlined,
+                              size: 16,
+                              color: AppColors.primaryRed,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Heat map',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (locationEntries.isEmpty)
+                  _QuietActivityState()
+                else
+                  Column(
+                    children: locationEntries
+                        .map(
+                          (entry) => _ActivityBar(
+                            label: entry.key,
+                            value: entry.value,
+                            maxValue: peak,
+                          ),
+                        )
+                        .toList(),
+                  ),
+              ],
             ),
           ),
-
-          // ── Agenda (day header + cards per day) ───────────────────────
-          if (!isEmpty) ...agendaSlivers,
-
-          // ── Empty state ────────────────────────────────────────────────
-          if (isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: Icon(
-                        Icons.calendar_today_rounded,
-                        size: 24,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'No events this week',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _followedOnly
-                          ? 'No events from clubs you follow.'
-                          : 'Nothing scheduled this week.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          SliverToBoxAdapter(
-            child: SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
+          const SizedBox(height: 10),
+          ListenableBuilder(
+            listenable: rsvpStore,
+            builder: (context, _) {
+              final rsvps = rsvpsBuilder();
+              if (rsvps.isEmpty) return const SizedBox.shrink();
+              return _RsvpStrip(events: rsvps);
+            },
           ),
         ],
       ),
@@ -310,36 +500,36 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sticky day header delegate
+// Sticky calendar navigation
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final int dateNum;
-  final String dayLabel;
-  final String dateLabel;
-  final bool isToday;
-  final int eventCount;
+class _CalendarHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final List<DateTime> days;
+  final DateTime selectedDay;
+  final Map<DateTime, int> eventCounts;
+  final ValueChanged<DateTime> onSelect;
 
-  const _DayHeaderDelegate({
-    required this.dateNum,
-    required this.dayLabel,
-    required this.dateLabel,
-    required this.isToday,
-    required this.eventCount,
+  const _CalendarHeaderDelegate({
+    required this.days,
+    required this.selectedDay,
+    required this.eventCounts,
+    required this.onSelect,
   });
 
-  static const double _h = 52.0;
+  static const double _height = 92.0;
 
   @override
-  double get minExtent => _h;
-  @override
-  double get maxExtent => _h;
+  double get minExtent => _height;
 
   @override
-  bool shouldRebuild(_DayHeaderDelegate old) =>
-      old.dateNum != dateNum ||
-      old.isToday != isToday ||
-      old.eventCount != eventCount;
+  double get maxExtent => _height;
+
+  @override
+  bool shouldRebuild(_CalendarHeaderDelegate old) {
+    return old.selectedDay != selectedDay ||
+        old.days != days ||
+        old.eventCounts != eventCounts;
+  }
 
   @override
   Widget build(
@@ -347,82 +537,421 @@ class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
+    final elevation = (shrinkOffset / 20).clamp(0.0, 1.0);
     return Container(
-      height: _h,
+      height: _height,
       decoration: BoxDecoration(
-        color: isToday
-            ? AppColors.primaryRed.withValues(alpha: 0.10)
-            : AppColors.background,
+        color: AppColors.background.withValues(alpha: 0.96),
         border: Border(
-          top: BorderSide(
-            color: isToday
-                ? AppColors.primaryRed.withValues(alpha: 0.44)
+          bottom: BorderSide(color: AppColors.divider.withValues(alpha: 0.7)),
+        ),
+        boxShadow: [
+          if (overlapsContent || elevation > 0)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05 * elevation),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+        ],
+      ),
+      child: _HorizontalDateSelector(
+        days: days,
+        selectedDay: selectedDay,
+        eventCounts: eventCounts,
+        onSelect: onSelect,
+      ),
+    );
+  }
+}
+
+class _HorizontalDateSelector extends StatelessWidget {
+  final List<DateTime> days;
+  final DateTime selectedDay;
+  final Map<DateTime, int> eventCounts;
+  final ValueChanged<DateTime> onSelect;
+
+  const _HorizontalDateSelector({
+    required this.days,
+    required this.selectedDay,
+    required this.eventCounts,
+    required this.onSelect,
+  });
+
+  bool _sameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      itemCount: days.length,
+      separatorBuilder: (_, _) => const SizedBox(width: 8),
+      itemBuilder: (context, index) {
+        final day = days[index];
+        return _DateChip(
+          day: day,
+          selected: _sameDay(day, selectedDay),
+          isToday: _isDateToday(day),
+          eventCount: eventCounts[day] ?? 0,
+          onTap: () => onSelect(day),
+        );
+      },
+    );
+  }
+}
+
+class _DateChip extends StatelessWidget {
+  final DateTime day;
+  final bool selected;
+  final bool isToday;
+  final int eventCount;
+  final VoidCallback onTap;
+
+  const _DateChip({
+    required this.day,
+    required this.selected,
+    required this.isToday,
+    required this.eventCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = isToday
+        ? 'Today'
+        : _isDateTomorrow(day)
+        ? 'Tmrw'
+        : _kWeekdays[day.weekday].substring(0, 3);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        width: 72,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryRed : AppColors.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected
+                ? AppColors.primaryRed
+                : isToday
+                ? AppColors.primaryRed.withValues(alpha: 0.36)
                 : AppColors.divider,
+            width: isToday || selected ? 1.5 : 1,
           ),
-          bottom: BorderSide(
-            color: isToday
-                ? AppColors.primaryRed.withValues(alpha: 0.28)
-                : AppColors.divider,
-          ),
+          boxShadow: [
+            if (selected)
+              BoxShadow(
+                color: AppColors.primaryRed.withValues(alpha: 0.20),
+                blurRadius: 16,
+                offset: const Offset(0, 7),
+              ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white70 : AppColors.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              day.day.toString(),
+              style: TextStyle(
+                fontSize: 20,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.7,
+                color: selected ? Colors.white : AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 5),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              height: 5,
+              width: eventCount > 0 ? 18 : 5,
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withValues(
+                        alpha: eventCount > 0 ? 0.95 : 0.36,
+                      )
+                    : eventCount > 0
+                    ? AppColors.primaryRed
+                    : AppColors.divider,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ],
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Selected day overview
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ActivityBar extends StatelessWidget {
+  final String label;
+  final int value;
+  final int maxValue;
+
+  const _ActivityBar({
+    required this.label,
+    required this.value,
+    required this.maxValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = maxValue == 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
       child: Row(
         children: [
-          // Date badge
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: isToday ? AppColors.primaryRed : AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
+          SizedBox(
+            width: 92,
             child: Text(
-              dateNum.toString(),
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
-                color: isToday ? Colors.white : AppColors.secondaryText,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.secondaryText,
               ),
             ),
           ),
           const SizedBox(width: 10),
-          // Day name + date string
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  dayLabel,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isToday ? AppColors.text : AppColors.secondaryText,
-                    letterSpacing: -0.3,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: percent),
+                duration: const Duration(milliseconds: 360),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) => LinearProgressIndicator(
+                  value: value,
+                  minHeight: 8,
+                  backgroundColor: AppColors.surfaceAlt,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryRed.withValues(alpha: 0.86),
                   ),
                 ),
-                Text(
-                  dateLabel,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-          // Event count
+          const SizedBox(width: 8),
           Text(
-            '$eventCount event${eventCount > 1 ? 's' : ''}',
+            value.toString(),
             style: TextStyle(
-              fontSize: 10,
-              color: AppColors.secondaryText,
-              fontWeight: FontWeight.w500,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: AppColors.text,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuietActivityState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.nights_stay_outlined,
+            size: 16,
+            color: AppColors.secondaryText,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Campus looks quiet on this day.',
+              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RsvpStrip extends StatelessWidget {
+  final List<Event> events;
+
+  const _RsvpStrip({required this.events});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.verified_rounded,
+                size: 15,
+                color: AppColors.primaryRed,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Your RSVPs',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.text,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 34,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: events.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final event = events[index];
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: AppColors.primaryRed.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${_timeStr(event.dateTime)} · ${event.title}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryRed,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyDayState extends StatelessWidget {
+  final DateTime selectedDay;
+  final bool followedOnly;
+  final VoidCallback? onShowAll;
+
+  const _EmptyDayState({
+    required this.selectedDay,
+    required this.followedOnly,
+    this.onShowAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _isDateToday(selectedDay)
+        ? 'today'
+        : '${_kMonths[selectedDay.month]} ${selectedDay.day}';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.divider),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.event_available_outlined,
+                size: 32,
+                color: AppColors.primaryRed,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No events on $label',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.4,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              followedOnly
+                  ? 'Try all clubs or swipe to another day.'
+                  : 'Swipe across the calendar to discover another campus moment.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.secondaryText,
+                height: 1.4,
+              ),
+            ),
+            if (onShowAll != null) ...[
+              const SizedBox(height: 18),
+              TextButton(
+                onPressed: onShowAll,
+                child: Text(
+                  'Show all clubs',
+                  style: TextStyle(
+                    color: AppColors.primaryRed,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -438,6 +967,7 @@ class _EventCardFull extends StatelessWidget {
   final VoidCallback onTap;
 
   const _EventCardFull({
+    super.key,
     required this.event,
     required this.color,
     required this.onTap,

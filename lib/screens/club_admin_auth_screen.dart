@@ -28,7 +28,8 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
     }
     final allAdmins = [appAdmin, ...clubAdmins];
     final matched = allAdmins.any(
-      (a) => a.name == clubName && a.email == clubEmail && a.password == password,
+      (a) =>
+          a.name == clubName && a.email == clubEmail && a.password == password,
     );
     if (matched) {
       authService.login(clubEmail, password);
@@ -72,8 +73,11 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Center(
-                  child: Icon(Icons.admin_panel_settings,
-                      color: AppColors.primaryRed, size: 28),
+                  child: Icon(
+                    Icons.admin_panel_settings,
+                    color: AppColors.primaryRed,
+                    size: 28,
+                  ),
                 ),
               ),
               const SizedBox(height: 28),
@@ -117,11 +121,14 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                keyboardType: TextInputType.number,
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock_outline,
-                      color: AppColors.secondaryText),
+                  prefixIcon: Icon(
+                    Icons.lock_outline,
+                    color: AppColors.secondaryText,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -130,8 +137,8 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                       color: AppColors.secondaryText,
                       size: 20,
                     ),
-                    onPressed: () => setState(
-                        () => _obscurePassword = !_obscurePassword),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   filled: true,
                   fillColor: AppColors.card,
@@ -141,13 +148,14 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide:
-                        BorderSide(color: AppColors.divider),
+                    borderSide: BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(
-                        color: AppColors.primaryRed, width: 2),
+                      color: AppColors.primaryRed,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -162,14 +170,15 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 2,
-                    shadowColor:
-                        AppColors.primaryRed.withValues(alpha: 0.4),
+                    shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: Text('Sign In as Admin',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Sign In as Admin',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -207,8 +216,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: AppColors.primaryRed, width: 2),
+          borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -216,8 +224,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: AppColors.primaryRed, width: 2),
+          borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
         ),
       ),
     );

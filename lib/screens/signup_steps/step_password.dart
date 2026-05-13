@@ -26,17 +26,18 @@ class _StepPasswordState extends State<StepPassword> {
   }
 
   bool get _hasMinLength => _passwordController.text.trim().length >= 8;
-  bool get _hasUppercase => RegExp(r'[A-Z]').hasMatch(_passwordController.text);
-  bool get _hasNumber => RegExp(r'\d').hasMatch(_passwordController.text);
-  bool get _hasSymbol => RegExp(
-    r'[!@#\$%^&*(),.?":{}|<>_\-+=\[\];/\\]',
-  ).hasMatch(_passwordController.text);
+  bool get _hasOnlyNumbers =>
+      RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
 
   void _submit() {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
     if (!_hasMinLength) {
-      setState(() => _error = 'Password must be at least 8 characters.');
+      setState(() => _error = 'Password must be at least 8 numbers.');
+      return;
+    }
+    if (!_hasOnlyNumbers) {
+      setState(() => _error = 'Password must contain numbers only.');
       return;
     }
     if (password != confirm) {
@@ -58,9 +59,7 @@ class _StepPasswordState extends State<StepPassword> {
   Widget build(BuildContext context) {
     final passedRules = [
       _hasMinLength,
-      _hasUppercase,
-      _hasNumber,
-      _hasSymbol,
+      _hasOnlyNumbers,
     ].where((rule) => rule).length;
 
     return Column(
@@ -96,12 +95,13 @@ class _StepPasswordState extends State<StepPassword> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   autofocus: true,
+                  keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
                     label: 'Password',
-                    hint: 'At least 8 characters',
+                    hint: 'Numbers only',
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -121,13 +121,14 @@ class _StepPasswordState extends State<StepPassword> {
                 TextField(
                   controller: _confirmController,
                   obscureText: _obscureConfirm,
+                  keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
                     label: 'Confirm password',
-                    hint: 'Re-enter your password',
+                    hint: 'Re-enter numbers only',
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -146,17 +147,15 @@ class _StepPasswordState extends State<StepPassword> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
-                    value: passedRules / 4,
+                    value: passedRules / 2,
                     minHeight: 4,
                     backgroundColor: SC.hairStrong,
                     valueColor: AlwaysStoppedAnimation<Color>(SC.burgundy),
                   ),
                 ),
                 const SizedBox(height: 18),
-                _RuleRow(label: 'At least 8 characters', passed: _hasMinLength),
-                _RuleRow(label: 'One uppercase letter', passed: _hasUppercase),
-                _RuleRow(label: 'One number', passed: _hasNumber),
-                _RuleRow(label: 'One symbol', passed: _hasSymbol),
+                _RuleRow(label: 'At least 8 numbers', passed: _hasMinLength),
+                _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
               ],
             ),
           ),

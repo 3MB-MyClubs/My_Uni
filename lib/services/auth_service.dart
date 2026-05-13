@@ -11,6 +11,10 @@ class AuthService {
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
 
+  bool isValidNumericPassword(String password) {
+    return password.length >= 8 && RegExp(r'^[0-9]+$').hasMatch(password);
+  }
+
   bool login(String email, [String? password]) {
     if (email == appAdmin.email) {
       _currentAdmin = appAdmin;
@@ -46,6 +50,9 @@ class AuthService {
     if (users.any((u) => u.email == email)) {
       return false;
     }
+    if (!isValidNumericPassword(password)) {
+      return false;
+    }
     final newUser = User(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
@@ -58,6 +65,69 @@ class AuthService {
     _currentUser = newUser;
     _currentAdmin = null;
     return true;
+  }
+
+  bool hasAccountEmail(String email) {
+    final normalized = email.toLowerCase();
+    return users.any((u) => u.email.toLowerCase() == normalized) ||
+        appAdmin.email.toLowerCase() == normalized ||
+        clubAdmins.any((a) => a.email.toLowerCase() == normalized);
+  }
+
+  bool resetAccountPassword(String email, String newPassword) {
+    if (!isValidNumericPassword(newPassword)) {
+      return false;
+    }
+    final normalized = email.toLowerCase();
+    final index = users.indexWhere((u) => u.email.toLowerCase() == normalized);
+    if (index >= 0) {
+      final user = users[index];
+      users[index] = User(
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        password: newPassword,
+        role: user.role,
+        subscribedClubIds: user.subscribedClubIds,
+        followingUserIds: user.followingUserIds,
+      );
+      if (_currentUser?.id == user.id) {
+        _currentUser = users[index];
+      }
+      return true;
+    }
+
+    if (appAdmin.email.toLowerCase() == normalized) {
+      appAdmin = AppAdmin(
+        id: appAdmin.id,
+        name: appAdmin.name,
+        email: appAdmin.email,
+        password: newPassword,
+      );
+      if (_currentAdmin?.id == appAdmin.id) {
+        _currentAdmin = appAdmin;
+      }
+      return true;
+    }
+
+    final adminIndex = clubAdmins.indexWhere(
+      (a) => a.email.toLowerCase() == normalized,
+    );
+    if (adminIndex >= 0) {
+      final admin = clubAdmins[adminIndex];
+      clubAdmins[adminIndex] = AppAdmin(
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        password: newPassword,
+      );
+      if (_currentAdmin?.id == admin.id) {
+        _currentAdmin = clubAdmins[adminIndex];
+      }
+      return true;
+    }
+
+    return false;
   }
 
   void logout() {

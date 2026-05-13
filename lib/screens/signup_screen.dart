@@ -31,6 +31,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
       setState(() => _error = 'Please use your @ku.edu.tr email');
       return;
     }
+    if (!authService.isValidNumericPassword(password)) {
+      setState(() => _error = 'Password must be at least 8 numbers.');
+      return;
+    }
     final success = authService.signUp(name, email, password);
     if (success) {
       widget.onSignUp();
@@ -56,8 +60,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         elevation: 0,
         foregroundColor: AppColors.text,
         leading: BackButton(
-            onPressed:
-                widget.onBack ?? () => Navigator.of(context).maybePop()),
+          onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -90,20 +94,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
               const SizedBox(height: 28),
               const Text(
                 'Create your account',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  
-                ),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Use your @ku.edu.tr email to join the Koç University community.',
-                style: TextStyle(
-                  fontSize: 14,
-                  
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 14, height: 1.5),
               ),
               const SizedBox(height: 32),
 
@@ -131,12 +127,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                keyboardType: TextInputType.number,
                 onSubmitted: (_) => _handleSignUp(),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  hintText: 'At least 6 characters',
-                  prefixIcon: Icon(Icons.lock_outline,
-                      color: AppColors.secondaryText),
+                  hintText: 'At least 8 numbers',
+                  prefixIcon: Icon(
+                    Icons.lock_outline,
+                    color: AppColors.secondaryText,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -156,13 +155,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide:
-                        BorderSide(color: AppColors.divider),
+                    borderSide: BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: const BorderSide(
-                        color: AppColors.primaryRed, width: 2),
+                      color: AppColors.primaryRed,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -177,14 +177,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 2,
-                    shadowColor:
-                        AppColors.primaryRed.withValues(alpha: 0.4),
+                    shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: const Text('Create Account',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Create Account',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -222,8 +223,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: AppColors.primaryRed, width: 2),
+          borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -231,8 +231,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: AppColors.primaryRed, width: 2),
+          borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
         ),
       ),
     );
