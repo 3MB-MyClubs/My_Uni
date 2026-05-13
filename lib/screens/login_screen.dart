@@ -5,17 +5,24 @@ import '../services/auth_service.dart';
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback? onBack;
-  const LoginScreen({super.key, required this.onLogin, this.onBack});
+  final String initialEmail;
+  const LoginScreen({super.key, required this.onLogin, this.onBack, this.initialEmail = ''});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
+  late final TextEditingController _emailController;
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
 
   void _handleLogin() {
     final email = _emailController.text.trim();

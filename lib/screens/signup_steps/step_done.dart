@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'signup_theme.dart';
 
@@ -6,11 +5,7 @@ class StepDone extends StatefulWidget {
   final String name;
   final VoidCallback onFinish;
 
-  const StepDone({
-    super.key,
-    required this.name,
-    required this.onFinish,
-  });
+  const StepDone({super.key, required this.name, required this.onFinish});
 
   @override
   State<StepDone> createState() => _StepDoneState();
@@ -26,13 +21,20 @@ class _StepDoneState extends State<StepDone>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 700));
-    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
     _slide = Tween<Offset>(
       begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
     _ctrl.forward();
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (mounted) {
+        widget.onFinish();
+      }
+    });
   }
 
   @override
@@ -43,9 +45,7 @@ class _StepDoneState extends State<StepDone>
 
   String get _firstName {
     final parts = widget.name.trim().split(' ');
-    return parts.isNotEmpty && parts.first.isNotEmpty
-        ? parts.first
-        : 'there';
+    return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : 'there';
   }
 
   @override
@@ -57,9 +57,7 @@ class _StepDoneState extends State<StepDone>
         child: Stack(
           children: [
             // ── Dark base ───────────────────────────────────────
-            Positioned.fill(
-              child: Container(color: const Color(0xFF0B0B0C)),
-            ),
+            Positioned.fill(child: Container(color: const Color(0xFF0B0B0C))),
 
             // ── Radial burgundy wash from top ───────────────────
             Positioned.fill(
@@ -116,7 +114,7 @@ class _StepDoneState extends State<StepDone>
                           const SizedBox(height: 16),
 
                           Text(
-                            'Your schedule, dining hours, and\n12 nearby events are ready.',
+                            'Your account is ready.\nRedirecting you to sign in.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 15,
@@ -126,111 +124,17 @@ class _StepDoneState extends State<StepDone>
                             ),
                           ),
                           const SizedBox(height: 36),
-
-                          // ── Frosted glass preview card ──────────
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(
-                                  sigmaX: 20, sigmaY: 20),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0x0FFFFFFF), // ~6% white
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: const Color(0x1AFFFFFF),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'NEXT UP · TODAY',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        letterSpacing: 1.5,
-                                        color: Color(0x80FFFFFF),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'CS 240 · Algorithms',
-                                      style: TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Hadley Hall 105 · 11:00 AM',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0x99FFFFFF)),
-                                    ),
-                                    Divider(
-                                      height: 24,
-                                      color: Color(0x1AFFFFFF),
-                                    ),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Robotics Club · Tonight 7pm',
-                                          style: TextStyle(
-                                              fontSize: 13,
-                                              color: Color(0xB3FFFFFF)),
-                                        ),
-                                        Container(
-                                          padding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                  vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                const Color(0x24FFFFFF),
-                                            borderRadius:
-                                                BorderRadius.circular(100),
-                                          ),
-                                          child: Text(
-                                            'RSVP',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                          SizedBox(
+                            width: 26,
+                            height: 26,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
                               ),
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-
-                  // ── "Take me to campus" — white button ──────────
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: widget.onFinish,
-                        style: SC.primaryButtonStyle(
-                          bg: Colors.white,
-                          fg: const Color(0xFF0B0B0C),
-                        ),
-                        child: Text('Take me to campus'),
                       ),
                     ),
                   ),

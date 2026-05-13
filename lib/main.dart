@@ -58,6 +58,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _showLogin = false;
   bool _showSignUp = false;
   bool _loggedIn = false;
+  String _signupEmail = '';
 
   @override
   void initState() {
@@ -105,8 +106,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  void _onSignUp() {
+  void _onSignUp(String email) {
     setState(() {
+      _signupEmail = email;
       _showSignUp = false;
       _showLogin = true;
     });
@@ -260,7 +262,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         } else if (_showLogin) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
-            child: LoginScreen(onLogin: _onLogin, onBack: handleBack),
+            child: LoginScreen(onLogin: _onLogin, onBack: handleBack, initialEmail: _signupEmail),
             transitionBuilder: (child, animation) => SlideTransition(
               position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(animation),
               child: child,

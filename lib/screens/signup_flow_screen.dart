@@ -7,10 +7,8 @@ import 'signup_steps/step_verify.dart';
 import 'signup_steps/step_password.dart';
 import 'signup_steps/step_profile.dart';
 import 'signup_steps/step_interests.dart';
-import 'signup_steps/step_done.dart';
-
 class SignupFlowScreen extends StatefulWidget {
-  final VoidCallback onSignUp;
+  final void Function(String email) onSignUp;
   final VoidCallback? onBack;
 
   const SignupFlowScreen({super.key, required this.onSignUp, this.onBack});
@@ -99,7 +97,8 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
       return;
     }
     _saveProfileDetails();
-    _goTo(5);
+    authService.logout();
+    widget.onSignUp(_email);
   }
 
   void _onSkipInterests() {
@@ -110,7 +109,8 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
       return;
     }
     _saveProfileDetails();
-    _goTo(5);
+    authService.logout();
+    widget.onSignUp(_email);
   }
 
   @override
@@ -121,8 +121,6 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDoneStep = _currentStep == 5;
-
     return Theme(
       data: SC.lightTheme(),
       child: Scaffold(
@@ -130,7 +128,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              if (!isDoneStep) ...[
+              ...[
                 // ── Nav bar ──────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
@@ -206,8 +204,6 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                       onNext: _onInterestsNext,
                       onSkip: _onSkipInterests,
                     ),
-                    // 5 — Done
-                    StepDone(name: _name, onFinish: widget.onSignUp),
                   ],
                 ),
               ),
