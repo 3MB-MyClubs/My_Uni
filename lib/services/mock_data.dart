@@ -14,96 +14,107 @@ import '../models/board_member_request.dart';
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 final users = [
+  // u1 — Alice: social hub, 8 followers, follows 5, 7 clubs
   User(
     id: 'u1',
     name: 'Alice Yılmaz',
     email: 'alice@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c4', 'c13', 'c35'],
-    followingUserIds: ['u2', 'u4', 'u5'],
+    subscribedClubIds: ['c1', 'c4', 'c10', 'c13', 'c22', 'c35', 'c38'],
+    followingUserIds: ['u2', 'u3', 'u4', 'u6', 'u11'],
   ),
+  // u2 — Can: tech person, 3 followers, follows 4, 5 clubs
   User(
     id: 'u2',
     name: 'Can Serbester',
     email: 'can@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c4', 'c28', 'c15', 'c36'],
-    followingUserIds: ['u1', 'u4'],
+    subscribedClubIds: ['c4', 'c7', 'c15', 'c28', 'c36'],
+    followingUserIds: ['u1', 'u4', 'u5', 'u9'],
   ),
+  // u3 — Emir: sports & outdoor, 3 followers, follows 5, 4 clubs
   User(
     id: 'u3',
     name: 'Emir Karaarslan',
     email: 'emir@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c27', 'c28', 'c29'],
-    followingUserIds: ['u1', 'u2', 'u7'],
+    subscribedClubIds: ['c5', 'c6', 'c27', 'c29'],
+    followingUserIds: ['u1', 'u2', 'u7', 'u9', 'u14'],
   ),
+  // u4 — Deniz: arts & culture, 4 followers, follows 4, 6 clubs
   User(
     id: 'u4',
     name: 'Deniz Kaya',
     email: 'deniz@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c13', 'c15', 'c34'],
-    followingUserIds: ['u1', 'u3', 'u8'],
+    subscribedClubIds: ['c3', 'c13', 'c15', 'c17', 'c34', 'c40'],
+    followingUserIds: ['u1', 'u6', 'u8', 'u10'],
   ),
+  // u5 — Hakan: CS enthusiast, 3 followers, follows 6, 4 clubs
   User(
     id: 'u5',
     name: 'Hakan Tuncay',
     email: 'htuncay23@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c4', 'c22'],
-    followingUserIds: ['u1', 'u2', 'u3', 'u4'],
+    subscribedClubIds: ['c4', 'c9', 'c11', 'c22'],
+    followingUserIds: ['u1', 'u2', 'u3', 'u4', 'u6', 'u7'],
   ),
+  // u6 — Elif: humanities & academics, 6 followers, follows 4, 6 clubs
   User(
     id: 'u6',
     name: 'Elif Şahin',
     email: 'esahin@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c1', 'c3', 'c9', 'c10', 'c34'],
-    followingUserIds: ['u10', 'u12'],
+    subscribedClubIds: ['c1', 'c3', 'c9', 'c10', 'c34', 'c38'],
+    followingUserIds: ['u4', 'u10', 'u12', 'u13'],
   ),
+  // u7 — Murat: business & debate, 4 followers, follows 5, 5 clubs
   User(
     id: 'u7',
     name: 'Murat Özdemir',
     email: 'mozdemir@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c2', 'c3', 'c25', 'c37', 'c40'],
-    followingUserIds: ['u3', 'u9', 'u13'],
+    subscribedClubIds: ['c2', 'c3', 'c24', 'c25', 'c37'],
+    followingUserIds: ['u1', 'u3', 'u9', 'u13', 'u15'],
   ),
+  // u8 — Selin: dance & performing arts, 3 followers, follows 5, 6 clubs
   User(
     id: 'u8',
     name: 'Selin Yıldız',
     email: 'syildiz@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c6', 'c12', 'c29', 'c39', 'c41'],
-    followingUserIds: ['u4', 'u6', 'u14'],
+    subscribedClubIds: ['c6', 'c12', 'c20', 'c29', 'c39', 'c41'],
+    followingUserIds: ['u1', 'u4', 'u6', 'u12', 'u14'],
   ),
+  // u9 — Ahmet: engineering & science, 5 followers, follows 3, 4 clubs
   User(
     id: 'u9',
     name: 'Ahmet Korkmaz',
     email: 'akorkmaz@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c7', 'c8', 'c15', 'c18', 'c32'],
-    followingUserIds: ['u7', 'u15'],
+    subscribedClubIds: ['c7', 'c8', 'c18', 'c32'],
+    followingUserIds: ['u5', 'u7', 'u15'],
   ),
+  // u10 — Zeynep: environment & social sciences, 2 followers, follows 4, 6 clubs
   User(
     id: 'u10',
     name: 'Zeynep Aktaş',
     email: 'zaktas@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c3', 'c10', 'c14', 'c17', 'c33'],
-    followingUserIds: ['u6', 'u11'],
+    subscribedClubIds: ['c3', 'c10', 'c14', 'c17', 'c33', 'c35'],
+    followingUserIds: ['u1', 'u6', 'u11', 'u13'],
   ),
+  // u11 — Yunuscan: music & culture, 2 followers, follows 6, 5 clubs
   User(
     id: 'u11',
     name: 'Yunuscan Doğan',
@@ -111,8 +122,9 @@ final users = [
     password: '11111111',
     role: 'student',
     subscribedClubIds: ['c5', 'c11', 'c22', 'c23', 'c36'],
-    followingUserIds: ['u5', 'u9', 'u15'],
+    followingUserIds: ['u1', 'u5', 'u8', 'u9', 'u13', 'u15'],
   ),
+  // u12 — Ayşe: finance & business, 3 followers, follows 4, 6 clubs
   User(
     id: 'u12',
     name: 'Ayşe Çelik',
@@ -120,17 +132,19 @@ final users = [
     password: '11111111',
     role: 'student',
     subscribedClubIds: ['c16', 'c19', 'c20', 'c21', 'c30', 'c38'],
-    followingUserIds: ['u6', 'u8', 'u13'],
+    followingUserIds: ['u6', 'u8', 'u13', 'u14'],
   ),
+  // u13 — Emre: photography & film, 5 followers, follows 4, 4 clubs
   User(
     id: 'u13',
     name: 'Emre Doğan',
     email: 'edogan@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c22', 'c24', 'c26', 'c28', 'c33'],
-    followingUserIds: ['u7', 'u12', 'u14'],
+    subscribedClubIds: ['c22', 'c24', 'c26', 'c28'],
+    followingUserIds: ['u7', 'u12', 'u14', 'u15'],
   ),
+  // u14 — Leyla: debate & politics, 4 followers, follows 4, 5 clubs
   User(
     id: 'u14',
     name: 'Leyla Kaplan',
@@ -138,16 +152,17 @@ final users = [
     password: '11111111',
     role: 'student',
     subscribedClubIds: ['c6', 'c8', 'c27', 'c31', 'c41'],
-    followingUserIds: ['u8', 'u13'],
+    followingUserIds: ['u8', 'u9', 'u13', 'u15'],
   ),
+  // u15 — Serkan: sports & outdoor, 5 followers, follows 4, 5 clubs
   User(
     id: 'u15',
     name: 'Serkan Yılmaz',
     email: 'syilmaz@ku.edu.tr',
     password: '11111111',
     role: 'student',
-    subscribedClubIds: ['c4', 'c7', 'c11', 'c21', 'c26'],
-    followingUserIds: ['u9', 'u11'],
+    subscribedClubIds: ['c4', 'c5', 'c7', 'c21', 'c26'],
+    followingUserIds: ['u7', 'u9', 'u11', 'u13'],
   ),
 ];
 

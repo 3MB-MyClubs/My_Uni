@@ -10,7 +10,6 @@ import '../services/rsvp_store.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/rsvp_button.dart';
-import 'campus_map_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -18,7 +17,11 @@ class EventDetailScreen extends StatefulWidget {
   final Event event;
   final Color color;
 
-  const EventDetailScreen({super.key, required this.event, required this.color});
+  const EventDetailScreen({
+    super.key,
+    required this.event,
+    required this.color,
+  });
 
   @override
   State<EventDetailScreen> createState() => _EventDetailScreenState();
@@ -56,7 +59,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     super.initState();
     final userId = authService.currentUser?.id ?? '';
     rsvpStore.seed(
-        widget.event.id, widget.event.attendeeUserIds.contains(userId));
+      widget.event.id,
+      widget.event.attendeeUserIds.contains(userId),
+    );
   }
 
   void _confirmDelete() {
@@ -64,25 +69,30 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete event?',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: Text('This event will be permanently removed.',
-            style: TextStyle(color: AppColors.secondaryText)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete event?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          'This event will be permanently removed.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.secondaryText)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
@@ -117,8 +127,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final color = event.accentColorHex != null
         ? Color(int.parse('FF${event.accentColorHex}', radix: 16))
         : widget.color;
-    final club = clubs.firstWhere((c) => c.id == event.clubId,
-        orElse: () => clubs.first);
+    final club = clubs.firstWhere(
+      (c) => c.id == event.clubId,
+      orElse: () => clubs.first,
+    );
     final isPast = event.endTime.isBefore(DateTime.now());
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
 
@@ -141,8 +153,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     color: Colors.black.withValues(alpha: 0.28),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.arrow_back_ios_new,
-                      color: Colors.white, size: 18),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
             ),
@@ -160,8 +175,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         color: Colors.black.withValues(alpha: 0.28),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.delete_outline,
-                          color: Colors.white, size: 18),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ),
@@ -176,8 +194,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     Image.file(
                       File(event.imagePath!),
                       fit: BoxFit.cover,
-                      errorBuilder: (ctx, e, s) =>
-                          _GradientHero(color: color),
+                      errorBuilder: (ctx, e, s) => _GradientHero(color: color),
                     )
                   else
                     _GradientHero(color: color),
@@ -221,10 +238,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                             if (event.tags.isNotEmpty) ...[
                               const SizedBox(width: 6),
-                              ...event.tags.take(2).map((t) => Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: _HeroTagPill(label: t),
-                                  )),
+                              ...event.tags
+                                  .take(2)
+                                  .map(
+                                    (t) => Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: _HeroTagPill(label: t),
+                                    ),
+                                  ),
                             ],
                           ],
                         ),
@@ -240,9 +261,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             height: 1.15,
                             shadows: [
                               Shadow(
-                                  color: Colors.black45,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2))
+                                color: Colors.black45,
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
                             ],
                           ),
                         ),
@@ -263,8 +285,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               child: Text(
                                 club.name,
                                 style: TextStyle(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.9),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -294,47 +315,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                   const SizedBox(height: 10),
 
-                  // ── Campus map button ────────────────────────────────────
-                  GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const CampusMapScreen()),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: color.withValues(alpha: 0.30),
-                            width: 1.2),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.map_outlined,
-                              color: color, size: 18),
-                          const SizedBox(width: 10),
-                          Text(
-                            'View on Campus Map',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: color,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.arrow_forward_ios_rounded,
-                              size: 13,
-                              color: color.withValues(alpha: 0.7)),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
                   // ── About ────────────────────────────────────────────────
                   _SectionLabel('About this event'),
                   const SizedBox(height: 8),
@@ -344,8 +324,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: BorderRadius.circular(14),
-                      border:
-                          Border.all(color: AppColors.divider, width: 0.5),
+                      border: Border.all(color: AppColors.divider, width: 0.5),
                     ),
                     child: Text(
                       event.description,
@@ -364,26 +343,30 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: event.tags
-                            .map((tag) => Container(
-                                  margin: const EdgeInsets.only(right: 8),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.10),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                        color:
-                                            color.withValues(alpha: 0.22)),
+                            .map(
+                              (tag) => Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: color.withValues(alpha: 0.22),
                                   ),
-                                  child: Text(
-                                    tag,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: color,
-                                    ),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: color,
                                   ),
-                                ))
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
                     ),
@@ -400,7 +383,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                            color: AppColors.accentGold.withValues(alpha: 0.3)),
+                          color: AppColors.accentGold.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -408,11 +392,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             width: 46,
                             height: 46,
                             decoration: BoxDecoration(
-                              color: AppColors.accentGold.withValues(alpha: 0.12),
+                              color: AppColors.accentGold.withValues(
+                                alpha: 0.12,
+                              ),
                               borderRadius: BorderRadius.circular(14),
                             ),
-                            child: Icon(Icons.mic_rounded,
-                                color: AppColors.accentGold, size: 22),
+                            child: Icon(
+                              Icons.mic_rounded,
+                              color: AppColors.accentGold,
+                              size: 22,
+                            ),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
@@ -440,16 +429,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               ],
                             ),
                           ),
-                          Icon(Icons.star_rounded,
-                              color: AppColors.accentGold, size: 20),
+                          Icon(
+                            Icons.star_rounded,
+                            color: AppColors.accentGold,
+                            size: 20,
+                          ),
                         ],
                       ),
                     ),
                   ],
 
                   // ── Programme ─────────────────────────────────────────────
-                  if (event.schedule != null &&
-                      event.schedule!.isNotEmpty) ...[
+                  if (event.schedule != null && event.schedule!.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     _SectionLabel('Programme'),
                     const SizedBox(height: 8),
@@ -458,7 +449,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       color: color,
                       expanded: _programmeExpanded,
                       onToggle: () => setState(
-                          () => _programmeExpanded = !_programmeExpanded),
+                        () => _programmeExpanded = !_programmeExpanded,
+                      ),
                     ),
                   ],
 
@@ -471,8 +463,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: BorderRadius.circular(14),
-                      border:
-                          Border.all(color: AppColors.divider, width: 0.5),
+                      border: Border.all(color: AppColors.divider, width: 0.5),
                     ),
                     child: Row(
                       children: [
@@ -512,10 +503,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        ClubFollowButton(
-                          clubId: club.id,
-                          size: 'small',
-                        ),
+                        ClubFollowButton(clubId: club.id, size: 'small'),
                       ],
                     ),
                   ),
@@ -526,7 +514,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ListenableBuilder(
                       listenable: rsvpStore,
                       builder: (_, child) => _AttendeeBar(
-                          count: event.attendeeUserIds.length, color: color),
+                        count: event.attendeeUserIds.length,
+                        color: color,
+                      ),
                     ),
                   ],
 
@@ -535,28 +525,37 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     const SizedBox(height: 10),
                     GestureDetector(
                       onTap: () {
-                        cal.Add2Calendar.addEvent2Cal(cal.Event(
-                          title: event.title,
-                          description: event.description,
-                          location: event.location,
-                          startDate: event.dateTime,
-                          endDate: event.endTime,
-                          allDay: false,
-                        ));
+                        cal.Add2Calendar.addEvent2Cal(
+                          cal.Event(
+                            title: event.title,
+                            description: event.description,
+                            location: event.location,
+                            startDate: event.dateTime,
+                            endDate: event.endTime,
+                            allDay: false,
+                          ),
+                        );
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.card,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                              color: AppColors.divider, width: 0.5),
+                            color: AppColors.divider,
+                            width: 0.5,
+                          ),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.calendar_month_outlined,
-                                color: AppColors.secondaryText, size: 18),
+                            Icon(
+                              Icons.calendar_month_outlined,
+                              color: AppColors.secondaryText,
+                              size: 18,
+                            ),
                             const SizedBox(width: 10),
                             Text(
                               'Add to Calendar',
@@ -567,10 +566,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               ),
                             ),
                             const Spacer(),
-                            Icon(Icons.arrow_forward_ios_rounded,
-                                size: 13,
-                                color: AppColors.secondaryText
-                                    .withValues(alpha: 0.6)),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 13,
+                              color: AppColors.secondaryText.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -608,10 +610,7 @@ class _GradientHero extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            color,
-            Color.lerp(color, Colors.black, 0.35)!,
-          ],
+          colors: [color, Color.lerp(color, Colors.black, 0.35)!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -669,8 +668,11 @@ class _HeroChip extends StatelessWidget {
   final String label;
   final bool isLive;
   final Color color;
-  const _HeroChip(
-      {required this.label, required this.isLive, required this.color});
+  const _HeroChip({
+    required this.label,
+    required this.isLive,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -746,19 +748,27 @@ class _QuickInfoCard extends StatelessWidget {
   String _fmtTime(DateTime dt) => '${_pad(dt.hour)}:${_pad(dt.minute)}';
 
   static const _months = [
-    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
-  static const _wdays = [
-    '', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-  ];
+  static const _wdays = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   Widget build(BuildContext context) {
     final dateStr =
         '${_wdays[event.dateTime.weekday]}, ${_months[event.dateTime.month]} ${event.dateTime.day}';
-    final timeStr =
-        '${_fmtTime(event.dateTime)} – ${_fmtTime(event.endTime)}';
+    final timeStr = '${_fmtTime(event.dateTime)} – ${_fmtTime(event.endTime)}';
     final attendeeCount = event.attendeeUserIds.toSet().length;
 
     return Container(
@@ -776,10 +786,11 @@ class _QuickInfoCard extends StatelessWidget {
             color: color,
           ),
           Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: AppColors.divider),
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+            color: AppColors.divider,
+          ),
           _InfoRow(
             icon: Icons.schedule_rounded,
             label: 'Time',
@@ -787,10 +798,11 @@ class _QuickInfoCard extends StatelessWidget {
             color: color,
           ),
           Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: AppColors.divider),
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+            color: AppColors.divider,
+          ),
           _InfoRow(
             icon: Icons.location_on_rounded,
             label: 'Location',
@@ -798,10 +810,11 @@ class _QuickInfoCard extends StatelessWidget {
             color: color,
           ),
           Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: AppColors.divider),
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+            color: AppColors.divider,
+          ),
           _InfoRow(
             icon: Icons.people_outline_rounded,
             label: 'Attending',
@@ -820,11 +833,12 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _InfoRow(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -889,8 +903,7 @@ class _AttendeeBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(14),
-        border:
-            Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -941,8 +954,11 @@ class _RsvpPanel extends StatelessWidget {
   final Color color;
   final bool isPast;
 
-  const _RsvpPanel(
-      {required this.event, required this.color, required this.isPast});
+  const _RsvpPanel({
+    required this.event,
+    required this.color,
+    required this.isPast,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -977,12 +993,10 @@ class _RsvpPanel extends StatelessWidget {
                     Row(
                       children: [
                         SizedBox(
-                          width:
-                              (count.clamp(1, 4) * 20 + 12).toDouble(),
+                          width: (count.clamp(1, 4) * 20 + 12).toDouble(),
                           height: 26,
                           child: Stack(
-                            children: List.generate(count.clamp(1, 4),
-                                (i) {
+                            children: List.generate(count.clamp(1, 4), (i) {
                               final hue = (i * 60.0) % 360;
                               return Positioned(
                                 left: i * 20.0,
@@ -992,18 +1006,24 @@ class _RsvpPanel extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: HSLColor.fromAHSL(
-                                            1, hue, 0.55, 0.42)
-                                        .toColor(),
+                                      1,
+                                      hue,
+                                      0.55,
+                                      0.42,
+                                    ).toColor(),
                                     border: Border.all(
-                                        color: AppColors.card, width: 2),
+                                      color: AppColors.card,
+                                      width: 2,
+                                    ),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
                                     String.fromCharCode(65 + i),
                                     style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold),
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               );
@@ -1029,11 +1049,7 @@ class _RsvpPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                   ],
-                  RsvpButton(
-                    eventId: event.id,
-                    color: color,
-                    isPast: isPast,
-                  ),
+                  RsvpButton(eventId: event.id, color: color, isPast: isPast),
                 ],
               ),
             ),
@@ -1084,16 +1100,19 @@ class _ProgrammeCard extends StatelessWidget {
                 child: locked
                     ? Row(
                         children: [
-                          Icon(Icons.lock_outline_rounded,
-                              size: 18,
-                              color: AppColors.secondaryText),
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            size: 18,
+                            color: AppColors.secondaryText,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'RSVP to unlock the full programme',
                               style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.secondaryText),
+                                fontSize: 13,
+                                color: AppColors.secondaryText,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1109,26 +1128,34 @@ class _ProgrammeCard extends StatelessWidget {
                     : Row(
                         children: [
                           Icon(
-                              Icons.format_list_bulleted_rounded,
-                              size: 16,
-                              color: color),
+                            Icons.format_list_bulleted_rounded,
+                            size: 16,
+                            color: color,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             '${schedule.length} sessions',
                             style: TextStyle(
-                                fontSize: 13,
-                                color: color,
-                                fontWeight: FontWeight.w600),
+                              fontSize: 13,
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const Spacer(),
-                          Text('Show programme',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: color,
-                                  fontWeight: FontWeight.w500)),
+                          Text(
+                            'Show programme',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: color,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                           const SizedBox(width: 4),
-                          Icon(Icons.keyboard_arrow_down_rounded,
-                              size: 18, color: color),
+                          Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 18,
+                            color: color,
+                          ),
                         ],
                       ),
               ),
@@ -1137,27 +1164,38 @@ class _ProgrammeCard extends StatelessWidget {
             GestureDetector(
               onTap: onToggle,
               child: Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
                 child: Row(
                   children: [
-                    Icon(Icons.format_list_bulleted_rounded,
-                        size: 16, color: color),
+                    Icon(
+                      Icons.format_list_bulleted_rounded,
+                      size: 16,
+                      color: color,
+                    ),
                     const SizedBox(width: 8),
-                    Text('${schedule.length} sessions',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: color,
-                            fontWeight: FontWeight.w600)),
+                    Text(
+                      '${schedule.length} sessions',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const Spacer(),
-                    Text('Hide',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: color,
-                            fontWeight: FontWeight.w500)),
+                    Text(
+                      'Hide',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: color,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(width: 4),
-                    Icon(Icons.keyboard_arrow_up_rounded,
-                        size: 18, color: color),
+                    Icon(
+                      Icons.keyboard_arrow_up_rounded,
+                      size: 18,
+                      color: color,
+                    ),
                   ],
                 ),
               ),
@@ -1165,10 +1203,11 @@ class _ProgrammeCard extends StatelessWidget {
             for (int i = 0; i < schedule.length; i++) ...[
               if (i > 0)
                 Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: AppColors.divider),
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: AppColors.divider,
+                ),
               _SlotRow(slot: schedule[i], color: color),
             ],
             const SizedBox(height: 10),
@@ -1193,8 +1232,7 @@ class _SlotRow extends StatelessWidget {
       color: slot.isHighlighted
           ? color.withValues(alpha: 0.06)
           : Colors.transparent,
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1205,9 +1243,7 @@ class _SlotRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: slot.isHighlighted
-                    ? color
-                    : AppColors.secondaryText,
+                color: slot.isHighlighted ? color : AppColors.secondaryText,
               ),
             ),
           ),
@@ -1216,9 +1252,7 @@ class _SlotRow extends StatelessWidget {
             height: slot.subtitle != null ? 36 : 18,
             margin: const EdgeInsets.only(right: 12, top: 2),
             decoration: BoxDecoration(
-              color: slot.isHighlighted
-                  ? color
-                  : color.withValues(alpha: 0.35),
+              color: slot.isHighlighted ? color : color.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1263,8 +1297,7 @@ class _SlotRow extends StatelessWidget {
 class _InlineRsvpButton extends StatelessWidget {
   final String eventId;
   final Color color;
-  const _InlineRsvpButton(
-      {required this.eventId, required this.color});
+  const _InlineRsvpButton({required this.eventId, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1276,13 +1309,12 @@ class _InlineRsvpButton extends StatelessWidget {
           onTap: () {
             final userId =
                 authService.currentUser?.id ??
-                    authService.currentAdmin?.id ??
-                    '';
+                authService.currentAdmin?.id ??
+                '';
             rsvpStore.toggle(eventId, userId);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
               color: attending ? Colors.transparent : color,
               borderRadius: BorderRadius.circular(20),
@@ -1297,9 +1329,7 @@ class _InlineRsvpButton extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: attending
-                    ? AppColors.secondaryText
-                    : Colors.white,
+                color: attending ? AppColors.secondaryText : Colors.white,
               ),
             ),
           ),
@@ -1330,11 +1360,13 @@ class _PulseDotState extends State<_PulseDot>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override

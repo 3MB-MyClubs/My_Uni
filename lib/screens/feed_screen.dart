@@ -19,7 +19,6 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../services/message_service.dart';
 import 'messages_screen.dart';
-import 'campus_map_screen.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -31,8 +30,8 @@ import '../widgets/rsvp_button.dart';
 
 class _FeedItem {
   final String id;
-  final bool isEvent;        // true = Event, false = NewsPost
-  final dynamic data;        // NewsPost | Event
+  final bool isEvent; // true = Event, false = NewsPost
+  final dynamic data; // NewsPost | Event
   final double score;
   final DateTime postedAt;
 
@@ -79,33 +78,35 @@ class _FeedScreenState extends State<FeedScreen> {
   List<_FeedItem> _buildFeed() {
     final items = newsPosts
         .where((post) => _clubVisible(post.clubId))
-        .map((post) => _FeedItem(
-          id: post.id,
-          isEvent: false,
-          data: post,
-          score: postScore(post.id),
-          postedAt: post.createdAt,
-        )).toList();
+        .map(
+          (post) => _FeedItem(
+            id: post.id,
+            isEvent: false,
+            data: post,
+            score: postScore(post.id),
+            postedAt: post.createdAt,
+          ),
+        )
+        .toList();
     items.sort((a, b) => b.postedAt.compareTo(a.postedAt));
     return items;
   }
 
   // Users the logged-in person doesn't follow yet, sorted by shared club overlap.
   List<User> _suggestedUsers() {
-    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final myId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final myFollowing = userState.followedUserIds;
     final myClubs = userState.followedClubIds;
 
     return users
-        .where((u) =>
-            u.id != myId &&
-            !myFollowing.contains(u.id))
+        .where((u) => u.id != myId && !myFollowing.contains(u.id))
         .toList()
       ..sort((a, b) {
-          final aOverlap = a.subscribedClubIds.where(myClubs.contains).length;
-          final bOverlap = b.subscribedClubIds.where(myClubs.contains).length;
-          return bOverlap.compareTo(aOverlap);
-        });
+        final aOverlap = a.subscribedClubIds.where(myClubs.contains).length;
+        final bOverlap = b.subscribedClubIds.where(myClubs.contains).length;
+        return bOverlap.compareTo(aOverlap);
+      });
   }
 
   // Clubs the user doesn't follow, sorted by popularity.
@@ -149,7 +150,9 @@ class _FeedScreenState extends State<FeedScreen> {
         if (trendingEv != null) result.add(_EventSuggestion(trendingEv));
       }
       if ((i + 1) % 15 == 0 && clubSuggestions.isNotEmpty) {
-        result.add(_ClubSuggestion(clubSuggestions[clubIdx % clubSuggestions.length]));
+        result.add(
+          _ClubSuggestion(clubSuggestions[clubIdx % clubSuggestions.length]),
+        );
         clubIdx++;
       }
     }
@@ -191,28 +194,56 @@ class _FeedScreenState extends State<FeedScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.explore_outlined, size: 64,
-                            color: AppColors.secondaryText.withValues(alpha: 0.35)),
+                        Icon(
+                          Icons.explore_outlined,
+                          size: 64,
+                          color: AppColors.secondaryText.withValues(
+                            alpha: 0.35,
+                          ),
+                        ),
                         const SizedBox(height: 18),
-                        Text('Nothing here yet',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                        Text(
+                          'Nothing here yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text,
+                          ),
+                        ),
                         const SizedBox(height: 8),
-                        Text('Follow clubs to see their posts\nand events in your feed',
-                            style: TextStyle(fontSize: 14, color: AppColors.secondaryText, height: 1.4),
-                            textAlign: TextAlign.center),
+                        Text(
+                          'Follow clubs to see their posts\nand events in your feed',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.secondaryText,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
-                          onPressed: () => setState(() => _followedOnly = false),
+                          onPressed: () =>
+                              setState(() => _followedOnly = false),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             elevation: 0,
                           ),
                           icon: Icon(Icons.explore_rounded, size: 18),
-                          label: Text('Explore All Clubs',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          label: Text(
+                            'Explore All Clubs',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -225,43 +256,49 @@ class _FeedScreenState extends State<FeedScreen> {
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
                   child: Row(
                     children: [
-                      Text('Latest',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text)),
+                      Text(
+                        'Latest',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
+                        ),
+                      ),
                       const Spacer(),
                       Text(
                         _followedOnly ? 'From followed clubs' : 'All clubs',
-                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) {
-                    final item = mixed[i];
-                    if (item is List<User>) {
-                      return _PeopleSuggestionCard(
-                        suggestions: item,
-                        onFollowed: () => setState(() {}),
-                      );
-                    }
-                    if (item is _EventSuggestion) {
-                      return _TrendingEventCard(
-                        event: item.event,
-                        onUpdate: () => setState(() {}),
-                      );
-                    }
-                    if (item is _ClubSuggestion) {
-                      return _ClubSuggestionCard(
-                        club: item.club,
-                        onUpdate: () => setState(() {}),
-                      );
-                    }
-                    return _buildFeedCard(item as _FeedItem, i);
-                  },
-                  childCount: mixed.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, i) {
+                  final item = mixed[i];
+                  if (item is List<User>) {
+                    return _PeopleSuggestionCard(
+                      suggestions: item,
+                      onFollowed: () => setState(() {}),
+                    );
+                  }
+                  if (item is _EventSuggestion) {
+                    return _TrendingEventCard(
+                      event: item.event,
+                      onUpdate: () => setState(() {}),
+                    );
+                  }
+                  if (item is _ClubSuggestion) {
+                    return _ClubSuggestionCard(
+                      club: item.club,
+                      onUpdate: () => setState(() {}),
+                    );
+                  }
+                  return _buildFeedCard(item as _FeedItem, i);
+                }, childCount: mixed.length),
               ),
               SliverToBoxAdapter(child: SizedBox(height: 16)),
             ],
@@ -279,7 +316,8 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   String get _firstName {
-    final name = authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
+    final name =
+        authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
     return name.split(' ').first;
   }
 
@@ -354,14 +392,6 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       actions: [
         IconButton(
-          icon: Icon(Icons.map_outlined),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CampusMapScreen()),
-          ),
-          tooltip: 'Campus Map',
-        ),
-        IconButton(
           icon: Icon(Icons.send_outlined),
           onPressed: () => Navigator.push(
             context,
@@ -402,11 +432,17 @@ class _FeedScreenState extends State<FeedScreen> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         gradient: active
                             ? LinearGradient(
-                                colors: [AppColors.primaryRed, Color(0xFF6A1530)],
+                                colors: [
+                                  AppColors.primaryRed,
+                                  Color(0xFF6A1530),
+                                ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               )
@@ -414,8 +450,8 @@ class _FeedScreenState extends State<FeedScreen> {
                         color: active
                             ? null
                             : isDark
-                                ? Colors.white.withValues(alpha: 0.05)
-                                : AppColors.surfaceAlt,
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : AppColors.surfaceAlt,
                         borderRadius: BorderRadius.circular(22),
                         border: Border.all(
                           color: active
@@ -426,7 +462,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         boxShadow: active
                             ? [
                                 BoxShadow(
-                                  color: AppColors.primaryRed.withValues(alpha: 0.35),
+                                  color: AppColors.primaryRed.withValues(
+                                    alpha: 0.35,
+                                  ),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -437,8 +475,12 @@ class _FeedScreenState extends State<FeedScreen> {
                         labels[i],
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                          color: active ? Colors.white : AppColors.secondaryText,
+                          fontWeight: active
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color: active
+                              ? Colors.white
+                              : AppColors.secondaryText,
                           letterSpacing: active ? 0.2 : 0,
                         ),
                       ),
@@ -461,108 +503,147 @@ class _FeedScreenState extends State<FeedScreen> {
     final now = DateTime.now();
     // Approximate academic week (spring semester starts early Feb)
     final semesterStart = DateTime(now.year, 2, 3);
-    final weekNum = ((now.difference(semesterStart).inDays) / 7).ceil().clamp(1, 16);
+    final weekNum = ((now.difference(semesterStart).inDays) / 7).ceil().clamp(
+      1,
+      16,
+    );
     final finalsWeek = DateTime(now.year, 5, 26);
     final weeksToFinals = ((finalsWeek.difference(now).inDays) / 7).ceil();
     final weekLabel = weekNum <= 16 ? 'Week $weekNum of 16' : 'Finals Week';
-    final finalsLabel = weeksToFinals > 0 ? 'Finals in $weeksToFinals wks' : 'Finals now';
+    final finalsLabel = weeksToFinals > 0
+        ? 'Finals in $weeksToFinals wks'
+        : 'Finals now';
 
     return SliverToBoxAdapter(
       child: Builder(
         builder: (ctx) {
           final isDark = Theme.of(ctx).brightness == Brightness.dark;
           return Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-        child: Row(
-          children: [
-            // Weather card
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: isDark
-                      ? LinearGradient(
-                          colors: [Color(0xFF1A1226), Color(0xFF140818)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
-                  color: isDark ? null : AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: isDark ? AppColors.glassEdge : AppColors.divider),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : AppColors.primaryRed.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: Row(
+              children: [
+                // Weather card
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Text(weatherIcon, style: TextStyle(fontSize: 22)),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(weather,
-                            style: TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text, letterSpacing: -0.2)),
-                        Text('Istanbul · Campus',
-                            style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                    decoration: BoxDecoration(
+                      gradient: isDark
+                          ? LinearGradient(
+                              colors: [Color(0xFF1A1226), Color(0xFF140818)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: isDark ? null : AppColors.surfaceAlt,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark ? AppColors.glassEdge : AppColors.divider,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : AppColors.primaryRed.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Academic week card
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primaryRed.withValues(alpha: 0.18),
-                      AppColors.card,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                    child: Row(
+                      children: [
+                        Text(weatherIcon, style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              weather,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            Text(
+                              'Istanbul · Campus',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.primaryRed.withValues(alpha: 0.2)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryRed.withValues(alpha: 0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
-                child: Row(
-                  children: [
-                    Text('📅', style: TextStyle(fontSize: 22)),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(weekLabel,
-                            style: TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text, letterSpacing: -0.2)),
-                        Text(finalsLabel,
-                            style: TextStyle(fontSize: 11, color: AppColors.primaryRed.withValues(alpha: 0.8))),
+                const SizedBox(width: 10),
+                // Academic week card
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primaryRed.withValues(alpha: 0.18),
+                          AppColors.card,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: AppColors.primaryRed.withValues(alpha: 0.2),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryRed.withValues(alpha: 0.08),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
                       ],
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        Text('📅', style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              weekLabel,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            Text(
+                              finalsLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.primaryRed.withValues(
+                                  alpha: 0.8,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      );
+          );
         },
       ),
     );
@@ -570,21 +651,28 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // Returns clubs that have at least one story posted within the last 24 hours,
   // sorted: unseen (newest story first) → seen / oldest.
-  List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> _activeStoryClubs() {
+  List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
+  _activeStoryClubs() {
     const colors = [
-      Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+      Color(0xFF8C1D40),
+      Color(0xFF1565C0),
+      Color(0xFF2E7D32),
+      Color(0xFF6A1B9A),
+      Color(0xFFE65100),
+      Color(0xFF00838F),
     ];
     final cutoff = DateTime.now().subtract(const Duration(hours: 24));
 
-    final result = <({dynamic club, List<ClubStory> stories, bool seen, Color color})>[];
+    final result =
+        <({dynamic club, List<ClubStory> stories, bool seen, Color color})>[];
     for (int i = 0; i < clubs.length; i++) {
       final club = clubs[i];
       if (!_clubVisible(club.id)) continue;
-      final recent = clubStories
-          .where((s) => s.clubId == club.id && s.postedAt.isAfter(cutoff))
-          .toList()
-        ..sort((a, b) => b.postedAt.compareTo(a.postedAt)); // newest first
+      final recent =
+          clubStories
+              .where((s) => s.clubId == club.id && s.postedAt.isAfter(cutoff))
+              .toList()
+            ..sort((a, b) => b.postedAt.compareTo(a.postedAt)); // newest first
       if (recent.isEmpty) continue;
       result.add((
         club: club,
@@ -598,7 +686,9 @@ class _FeedScreenState extends State<FeedScreen> {
     // Unseen always precede seen regardless of recency.
     result.sort((a, b) {
       if (a.seen != b.seen) return a.seen ? 1 : -1; // unseen before seen
-      return b.stories.first.postedAt.compareTo(a.stories.first.postedAt); // newest leftmost in both groups
+      return b.stories.first.postedAt.compareTo(
+        a.stories.first.postedAt,
+      ); // newest leftmost in both groups
     });
 
     return result;
@@ -618,7 +708,10 @@ class _FeedScreenState extends State<FeedScreen> {
               height: 106,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 itemCount: active.length,
                 itemBuilder: (context, i) {
                   final entry = active[i];
@@ -629,7 +722,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     color: entry.color,
                     allClubs: active,
                     startClubIndex: i,
-                    onViewed: () => setState(() => _viewedClubIds.add(entry.club.id)),
+                    onViewed: () =>
+                        setState(() => _viewedClubIds.add(entry.club.id)),
                     onDeleted: () => setState(() {}),
                   );
                 },
@@ -641,7 +735,6 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
     );
   }
-
 
   Widget _buildFeedCard(_FeedItem item, int rank) {
     if (item.isEvent) {
@@ -663,13 +756,15 @@ class _FeedScreenState extends State<FeedScreen> {
 
 // ─── Story Bubble ─────────────────────────────────────────────────────────────
 
-
 // ─── People You Might Know ────────────────────────────────────────────────────
 
 class _PeopleSuggestionCard extends StatefulWidget {
   final List<User> suggestions;
   final VoidCallback onFollowed;
-  const _PeopleSuggestionCard({required this.suggestions, required this.onFollowed});
+  const _PeopleSuggestionCard({
+    required this.suggestions,
+    required this.onFollowed,
+  });
 
   @override
   State<_PeopleSuggestionCard> createState() => _PeopleSuggestionCardState();
@@ -677,8 +772,12 @@ class _PeopleSuggestionCard extends StatefulWidget {
 
 class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
   static const List<Color> _avatarColors = [
-    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    Color(0xFF8C1D40),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
   ];
 
   @override
@@ -696,11 +795,19 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Icon(Icons.people_outline, size: 18, color: AppColors.primaryRed),
+                Icon(
+                  Icons.people_outline,
+                  size: 18,
+                  color: AppColors.primaryRed,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   'People You Might Know',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.text,
+                  ),
                 ),
               ],
             ),
@@ -765,17 +872,25 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                   color: AppColors.text,
                                 ),
                               ),
-                              Builder(builder: (ctx) {
-                                final mutualCount = userState.followedUserIds
-                                    .intersection(Set<String>.from(u.followingUserIds))
-                                    .length;
-                                if (mutualCount == 0) return const SizedBox.shrink();
-                                return Text(
-                                  '$mutualCount mutual',
-                                  style: TextStyle(
-                                      fontSize: 10, color: AppColors.secondaryText),
-                                );
-                              }),
+                              Builder(
+                                builder: (ctx) {
+                                  final mutualCount = userState.followedUserIds
+                                      .intersection(
+                                        Set<String>.from(u.followingUserIds),
+                                      )
+                                      .length;
+                                  if (mutualCount == 0) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Text(
+                                    '$mutualCount mutual',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -786,7 +901,11 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                         size: 'small',
                         onTap: () {
                           userState.toggleFollowUser(u.id);
-                          userPrefsService.save(authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
+                          userPrefsService.save(
+                            authService.currentUser?.id ??
+                                authService.currentAdmin?.id ??
+                                '',
+                          );
                           widget.onFollowed();
                         },
                       ),
@@ -811,25 +930,44 @@ class _TrendingEventCard extends StatelessWidget {
   final VoidCallback onUpdate;
 
   static const List<Color> _colors = [
-    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    Color(0xFFB41C18),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
   ];
 
   const _TrendingEventCard({required this.event, required this.onUpdate});
 
   void _showDetail(BuildContext context, Color color) {
-    final club = clubs.firstWhere((c) => c.id == event.clubId,
-        orElse: () => clubs.first);
+    final club = clubs.firstWhere(
+      (c) => c.id == event.clubId,
+      orElse: () => clubs.first,
+    );
     final DateTime start = event.dateTime;
     final DateTime end = event.endTime;
     final userId = authService.currentUser?.id ?? '';
     rsvpStore.seed(event.id, event.attendeeUserIds.contains(userId));
 
     String fmt(DateTime dt) {
-      const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const mo = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
       final m = dt.minute.toString().padLeft(2, '0');
-      return '${mo[dt.month-1]} ${dt.day}  ·  $h:$m ${dt.hour < 12 ? "AM" : "PM"}';
+      return '${mo[dt.month - 1]} ${dt.day}  ·  $h:$m ${dt.hour < 12 ? "AM" : "PM"}';
     }
 
     showModalBottomSheet(
@@ -847,43 +985,93 @@ class _TrendingEventCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Container(width: 36, height: 4,
-                  decoration: BoxDecoration(color: AppColors.divider,
-                      borderRadius: BorderRadius.circular(2))),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Text(club.name.split(' ').first,
-                  style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                club.name.split(' ').first,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
-            Text(event.title,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.text)),
+            Text(
+              event.title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
             const SizedBox(height: 14),
-            Row(children: [
-              Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryRed),
-              const SizedBox(width: 6),
-              Expanded(child: Text(event.location,
-                  style: TextStyle(fontSize: 14, color: AppColors.text))),
-            ]),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: AppColors.primaryRed,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    event.location,
+                    style: TextStyle(fontSize: 14, color: AppColors.text),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
-            Row(children: [
-              Icon(Icons.play_circle_outline, size: 16, color: AppColors.secondaryText),
-              const SizedBox(width: 6),
-              Text('Starts  ${fmt(start)}',
-                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-            ]),
+            Row(
+              children: [
+                Icon(
+                  Icons.play_circle_outline,
+                  size: 16,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Starts  ${fmt(start)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Row(children: [
-              Icon(Icons.stop_circle_outlined, size: 16, color: AppColors.secondaryText),
-              const SizedBox(width: 6),
-              Text('Ends  ${fmt(end)}',
-                  style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-            ]),
+            Row(
+              children: [
+                Icon(
+                  Icons.stop_circle_outlined,
+                  size: 16,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Ends  ${fmt(end)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -901,15 +1089,32 @@ class _TrendingEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere((c) => c.id == event.clubId,
-        orElse: () => clubs.first);
+    final club = clubs.firstWhere(
+      (c) => c.id == event.clubId,
+      orElse: () => clubs.first,
+    );
     final idx = clubs.indexOf(club);
     final color = _colors[idx % _colors.length];
     final dt = event.dateTime;
-    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mo = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final daysAway = dt.difference(DateTime.now()).inDays;
-    final timeLabel = daysAway == 0 ? 'Today'
-        : daysAway == 1 ? 'Tomorrow'
+    final timeLabel = daysAway == 0
+        ? 'Today'
+        : daysAway == 1
+        ? 'Tomorrow'
         : '${mo[dt.month - 1]} ${dt.day}';
     final views = viewTracker.viewCount(event.id);
     final attendees = event.attendeeUserIds.length;
@@ -927,21 +1132,38 @@ class _TrendingEventCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Row(
                 children: [
-                  Icon(Icons.local_fire_department_rounded,
-                      size: 18, color: Colors.deepOrange),
+                  Icon(
+                    Icons.local_fire_department_rounded,
+                    size: 18,
+                    color: Colors.deepOrange,
+                  ),
                   const SizedBox(width: 6),
-                  Text('Trending This Week',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
-                          color: AppColors.text)),
+                  Text(
+                    'Trending This Week',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Text(club.name.split(' ').first,
-                        style: TextStyle(fontSize: 11, color: color,
-                            fontWeight: FontWeight.w600)),
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      club.name.split(' ').first,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -962,27 +1184,47 @@ class _TrendingEventCard extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        width: 4, height: 40,
+                        width: 4,
+                        height: 40,
                         decoration: BoxDecoration(
-                            color: color, borderRadius: BorderRadius.circular(4)),
+                          color: color,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(event.title,
-                                style: TextStyle(fontSize: 15,
-                                    fontWeight: FontWeight.bold, color: AppColors.text),
-                                maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(
+                              event.title,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.text,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             const SizedBox(height: 2),
-                            Row(children: [
-                              Icon(Icons.event_rounded, size: 13, color: color),
-                              const SizedBox(width: 4),
-                              Text(timeLabel,
-                                  style: TextStyle(fontSize: 12, color: color,
-                                      fontWeight: FontWeight.w600)),
-                            ]),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.event_rounded,
+                                  size: 13,
+                                  color: color,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  timeLabel,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: color,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -990,39 +1232,69 @@ class _TrendingEventCard extends StatelessWidget {
                   ),
                   if (event.location.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    Row(children: [
-                      Icon(Icons.location_on_outlined, size: 14,
-                          color: AppColors.secondaryText),
-                      const SizedBox(width: 4),
-                      Text(event.location,
-                          style: TextStyle(fontSize: 12,
-                              color: AppColors.secondaryText)),
-                    ]),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: AppColors.secondaryText,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          event.location,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                   const SizedBox(height: 10),
-                  Row(children: [
-                    Icon(Icons.people_outline, size: 14,
-                        color: AppColors.secondaryText),
-                    const SizedBox(width: 4),
-                    Text('$attendees attending',
-                        style: TextStyle(fontSize: 12,
-                            color: AppColors.secondaryText)),
-                    if (views > 0) ...[
-                      const SizedBox(width: 14),
-                      Icon(Icons.visibility_outlined, size: 14,
-                          color: AppColors.secondaryText),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.people_outline,
+                        size: 14,
+                        color: AppColors.secondaryText,
+                      ),
                       const SizedBox(width: 4),
-                      Text('$views views',
-                          style: TextStyle(fontSize: 12,
-                              color: AppColors.secondaryText)),
+                      Text(
+                        '$attendees attending',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                      if (views > 0) ...[
+                        const SizedBox(width: 14),
+                        Icon(
+                          Icons.visibility_outlined,
+                          size: 14,
+                          color: AppColors.secondaryText,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$views views',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                      const Spacer(),
+                      Text(
+                        'Tap for details',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: color,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded, size: 14, color: color),
                     ],
-                    const Spacer(),
-                    Text('Tap for details',
-                        style: TextStyle(fontSize: 11,
-                            color: color, fontWeight: FontWeight.w500)),
-                    const SizedBox(width: 2),
-                    Icon(Icons.chevron_right_rounded, size: 14, color: color),
-                  ]),
+                  ),
                 ],
               ),
             ),
@@ -1048,8 +1320,12 @@ class _ClubSuggestionCard extends StatefulWidget {
 
 class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
   static const List<Color> _colors = [
-    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    Color(0xFF8C1D40),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
   ];
 
   @override
@@ -1075,9 +1351,14 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
               children: [
                 Icon(Icons.explore_rounded, size: 18, color: color),
                 const SizedBox(width: 6),
-                Text('Club You Might Like',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
-                        color: AppColors.text)),
+                Text(
+                  'Club You Might Like',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.text,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1107,24 +1388,42 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(c.name as String,
-                            style: TextStyle(fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.text),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          c.name as String,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const SizedBox(height: 2),
-                        Text(desc,
-                            style: TextStyle(fontSize: 12,
-                                color: AppColors.secondaryText, height: 1.3),
-                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(
+                          desc,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const SizedBox(height: 6),
-                        Row(children: [
-                          Icon(Icons.people_outline, size: 13, color: color),
-                          const SizedBox(width: 4),
-                          Text('$memberCount members',
-                              style: TextStyle(fontSize: 11, color: color,
-                                  fontWeight: FontWeight.w500)),
-                        ]),
+                        Row(
+                          children: [
+                            Icon(Icons.people_outline, size: 13, color: color),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$memberCount members',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: color,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1149,7 +1448,8 @@ class _StoryBubble extends StatelessWidget {
   final List<ClubStory> stories;
   final bool seen;
   final Color color;
-  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> allClubs;
+  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
+  allClubs;
   final int startClubIndex;
   final VoidCallback onViewed;
   final VoidCallback onDeleted;
@@ -1186,7 +1486,10 @@ class _StoryBubble extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: seen
                       ? LinearGradient(
-                          colors: [AppColors.secondaryText, AppColors.secondaryText],
+                          colors: [
+                            AppColors.secondaryText,
+                            AppColors.secondaryText,
+                          ],
                         )
                       : LinearGradient(
                           colors: [AppColors.primaryRed, AppColors.accentGold],
@@ -1196,7 +1499,10 @@ class _StoryBubble extends StatelessWidget {
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.card),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.card,
+                  ),
                   child: ClubAvatar(
                     clubId: club.id,
                     clubName: club.name,
@@ -1228,28 +1534,32 @@ class _StoryBubble extends StatelessWidget {
 
   void _openStoryViewer(
     BuildContext context,
-    List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> allClubs,
+    List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
+    allClubs,
     int startClubIndex,
   ) {
-    Navigator.of(context).push(PageRouteBuilder(
-      opaque: false,
-      barrierColor: Colors.transparent,
-      pageBuilder: (_, a1, a2) => _StoryViewer(
-        allClubs: allClubs,
-        startClubIndex: startClubIndex,
-        onDeleted: onDeleted,
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        pageBuilder: (_, a1, a2) => _StoryViewer(
+          allClubs: allClubs,
+          startClubIndex: startClubIndex,
+          onDeleted: onDeleted,
+        ),
+        transitionsBuilder: (_, animation, a2, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 200),
       ),
-      transitionsBuilder: (_, animation, a2, child) =>
-          FadeTransition(opacity: animation, child: child),
-      transitionDuration: const Duration(milliseconds: 200),
-    ));
+    );
   }
 }
 
 // ─── Story Viewer ─────────────────────────────────────────────────────────────
 
 class _StoryViewer extends StatefulWidget {
-  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})> allClubs;
+  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
+  allClubs;
   final int startClubIndex;
   final VoidCallback? onDeleted;
 
@@ -1263,7 +1573,8 @@ class _StoryViewer extends StatefulWidget {
   State<_StoryViewer> createState() => _StoryViewerState();
 }
 
-class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixin {
+class _StoryViewerState extends State<_StoryViewer>
+    with TickerProviderStateMixin {
   late int _clubIndex;
   late List<ClubStory> _stories;
   int _index = 0;
@@ -1294,9 +1605,11 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
   void _loadClub(int clubIndex) {
     _clubIndex = clubIndex;
     _stories = List.of(widget.allClubs[clubIndex].stories);
-    final uid = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final uid =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final firstUnseen = _stories.indexWhere(
-        (s) => !viewTracker.viewerIds(s.id).contains(uid));
+      (s) => !viewTracker.viewerIds(s.id).contains(uid),
+    );
     _index = firstUnseen == -1 ? 0 : firstUnseen;
   }
 
@@ -1305,12 +1618,11 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
     super.initState();
     _loadClub(widget.startClubIndex);
 
-    _progressController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 5),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) _nextStory();
-      });
+    _progressController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 5))
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) _nextStory();
+          });
 
     _fadeController = AnimationController(
       vsync: this,
@@ -1324,7 +1636,8 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
   }
 
   void _recordCurrentView() {
-    final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final userId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     if (_index < _stories.length) {
       viewTracker.recordView(_stories[_index].id, userId);
     }
@@ -1378,8 +1691,10 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
     final end = size.height;
     // Use AnimationController for the exit slide
     final exitCtrl = AnimationController(vsync: this, duration: dur);
-    final exitAnim = Tween<double>(begin: start, end: end)
-        .animate(CurvedAnimation(parent: exitCtrl, curve: Curves.easeInCubic));
+    final exitAnim = Tween<double>(
+      begin: start,
+      end: end,
+    ).animate(CurvedAnimation(parent: exitCtrl, curve: Curves.easeInCubic));
     exitAnim.addListener(() {
       if (mounted) setState(() => _dragOffset = exitAnim.value);
     });
@@ -1397,20 +1712,29 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete story?',
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: Text('This story will be permanently removed.',
-            style: TextStyle(color: AppColors.secondaryText)),
+        title: Text(
+          'Delete story?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          'This story will be permanently removed.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('Delete'),
@@ -1436,7 +1760,11 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
     });
   }
 
-  Future<void> _showViewersSheet(BuildContext context, String contentId, String title) {
+  Future<void> _showViewersSheet(
+    BuildContext context,
+    String contentId,
+    String title,
+  ) {
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1478,12 +1806,16 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
             setState(() => _dragOffset += details.delta.dy);
           } else if (_dragOffset > 0) {
             setState(() {
-              _dragOffset = (_dragOffset + details.delta.dy).clamp(0.0, double.infinity);
+              _dragOffset = (_dragOffset + details.delta.dy).clamp(
+                0.0,
+                double.infinity,
+              );
             });
           }
         },
         onVerticalDragEnd: (details) {
-          if (_dragOffset > 120 || (details.velocity.pixelsPerSecond.dy > 600)) {
+          if (_dragOffset > 120 ||
+              (details.velocity.pixelsPerSecond.dy > 600)) {
             _animatedPop();
           } else {
             setState(() => _dragOffset = 0);
@@ -1494,229 +1826,342 @@ class _StoryViewerState extends State<_StoryViewer> with TickerProviderStateMixi
           child: SafeArea(
             child: Center(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(
-                    20 + dismissProgress * 10),
+                borderRadius: BorderRadius.circular(20 + dismissProgress * 10),
                 child: FadeTransition(
                   opacity: _fadeAnim,
                   child: SizedBox(
-                  width: size.width,
-                  height: size.height * 0.88,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                  // Background: photo or gradient
-                  if (hasPhoto && story.imagePath!.startsWith('https://'))
-                    Image.network(
-                      story.imagePath!,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (_, child, progress) => progress == null
-                          ? child
-                          : Container(
-                              color: _color.withValues(alpha: 0.18),
-                              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
-                            ),
-                      errorBuilder: (_, err, trace) => Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [_color, _color.withValues(alpha: 0.75), Colors.black],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (hasPhoto)
-                    Image.file(File(story.imagePath!), fit: BoxFit.cover)
-                  else
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [_color, _color.withValues(alpha: 0.75), Colors.black],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                    ),
-                  // Dark overlay for readability when photo is shown
-                  if (hasPhoto)
-                    Container(color: Colors.black.withValues(alpha: 0.35)),
-
-                  // Progress bars
-                  Positioned(
-                    top: 12, left: 12, right: 12,
-                    child: Row(
-                      children: List.generate(_stories.length, (i) {
-                        return Expanded(
-                          child: Container(
-                            height: 2.5,
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.35),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                            child: i < _index
-                                ? Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2)))
-                                : i == _index
-                                    ? AnimatedBuilder(
-                                        animation: _progressController,
-                                        builder: (_, child) => FractionallySizedBox(
-                                          alignment: Alignment.centerLeft,
-                                          widthFactor: _progressController.value,
-                                          child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(2))),
-                                        ),
-                                      )
-                                    : const SizedBox(),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-
-                  // Header: club name + delete (admin) + close
-                  Positioned(
-                    top: 28, left: 16, right: 16,
-                    child: Row(
+                    width: size.width,
+                    height: size.height * 0.88,
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        ClubAvatar(
-                          clubId: _club.id,
-                          clubName: _club.name,
-                          color: Colors.white,
-                          size: 40,
-                          fontSize: 16,
-                          shape: 'circle',
+                        // Background: photo or gradient
+                        if (hasPhoto && story.imagePath!.startsWith('https://'))
+                          Image.network(
+                            story.imagePath!,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (_, child, progress) =>
+                                progress == null
+                                ? child
+                                : Container(
+                                    color: _color.withValues(alpha: 0.18),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ),
+                            errorBuilder: (_, err, trace) => Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    _color,
+                                    _color.withValues(alpha: 0.75),
+                                    Colors.black,
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
+                          )
+                        else if (hasPhoto)
+                          Image.file(File(story.imagePath!), fit: BoxFit.cover)
+                        else
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  _color,
+                                  _color.withValues(alpha: 0.75),
+                                  Colors.black,
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+                        // Dark overlay for readability when photo is shown
+                        if (hasPhoto)
+                          Container(
+                            color: Colors.black.withValues(alpha: 0.35),
+                          ),
+
+                        // Progress bars
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          right: 12,
+                          child: Row(
+                            children: List.generate(_stories.length, (i) {
+                              return Expanded(
+                                child: Container(
+                                  height: 2.5,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.35),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                  child: i < _index
+                                      ? Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              2,
+                                            ),
+                                          ),
+                                        )
+                                      : i == _index
+                                      ? AnimatedBuilder(
+                                          animation: _progressController,
+                                          builder: (_, child) =>
+                                              FractionallySizedBox(
+                                                alignment: Alignment.centerLeft,
+                                                widthFactor:
+                                                    _progressController.value,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          2,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                        )
+                                      : const SizedBox(),
+                                ),
+                              );
+                            }),
+                          ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+
+                        // Header: club name + delete (admin) + close
+                        Positioned(
+                          top: 28,
+                          left: 16,
+                          right: 16,
+                          child: Row(
                             children: [
-                              Text(_club.name,
-                                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text(_timeAgoStory(story.postedAt),
-                                  style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              ClubAvatar(
+                                clubId: _club.id,
+                                clubName: _club.name,
+                                color: Colors.white,
+                                size: 40,
+                                fontSize: 16,
+                                shape: 'circle',
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _club.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Text(
+                                      _timeAgoStory(story.postedAt),
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (_isOwner)
+                                GestureDetector(
+                                  onTap: _deleteCurrentStory,
+                                  child: Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withValues(alpha: 0.25),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              GestureDetector(
+                                onTap: _animatedPop,
+                                child: Icon(
+                                  Icons.close,
+                                  color: Colors.white,
+                                  size: 26,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        if (_isOwner)
-                          GestureDetector(
-                            onTap: _deleteCurrentStory,
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha: 0.25),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(Icons.delete_outline, color: Colors.white, size: 20),
+
+                        // Emoji (bottom-left, only if set)
+                        if (story.emoji != null)
+                          Positioned(
+                            left: 28,
+                            bottom: 80,
+                            child: Text(
+                              story.emoji!,
+                              style: TextStyle(fontSize: 52),
                             ),
                           ),
-                        GestureDetector(
-                          onTap: _animatedPop,
-                          child: Icon(Icons.close, color: Colors.white, size: 26),
+
+                        // Overlay text at saved position + color
+                        if (story.text.isNotEmpty)
+                          LayoutBuilder(
+                            builder: (ctx, constraints) {
+                              const maxW = 300.0;
+                              final sw = constraints.maxWidth;
+                              final sh = constraints.maxHeight;
+                              final left = (story.textOffsetX * sw - maxW / 2)
+                                  .clamp(0.0, sw - maxW);
+                              final top = (story.textOffsetY * sh - 22).clamp(
+                                40.0,
+                                sh - 80,
+                              );
+                              return Stack(
+                                children: [
+                                  Positioned(
+                                    left: left,
+                                    top: top,
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: maxW,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        story.text,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Color(story.textColorValue),
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: const [
+                                            Shadow(
+                                              blurRadius: 6,
+                                              color: Colors.black87,
+                                            ),
+                                            Shadow(
+                                              blurRadius: 14,
+                                              color: Colors.black54,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+
+                        // Viewers bar (admin only — bottom of story)
+                        if (_isOwner)
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () {
+                                _progressController.stop();
+                                _showViewersSheet(
+                                  context,
+                                  _stories[_index].id,
+                                  _stories[_index].text.isNotEmpty
+                                      ? _stories[_index].text
+                                      : 'Story',
+                                ).then((_) => _progressController.forward());
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withValues(alpha: 0.7),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.remove_red_eye_outlined,
+                                      color: Colors.white70,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '${viewTracker.viewCount(_stories[_index].id)} viewer${viewTracker.viewCount(_stories[_index].id) == 1 ? '' : 's'}',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white54,
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        // Tap left / right navigation
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: _prevStory,
+                                behavior: HitTestBehavior.translucent,
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: _nextStory,
+                                behavior: HitTestBehavior.translucent,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-
-                  // Emoji (bottom-left, only if set)
-                  if (story.emoji != null)
-                    Positioned(
-                      left: 28, bottom: 80,
-                      child: Text(story.emoji!, style: TextStyle(fontSize: 52)),
-                    ),
-
-                  // Overlay text at saved position + color
-                  if (story.text.isNotEmpty)
-                    LayoutBuilder(
-                      builder: (ctx, constraints) {
-                        const maxW = 300.0;
-                        final sw = constraints.maxWidth;
-                        final sh = constraints.maxHeight;
-                        final left = (story.textOffsetX * sw - maxW / 2)
-                            .clamp(0.0, sw - maxW);
-                        final top = (story.textOffsetY * sh - 22)
-                            .clamp(40.0, sh - 80);
-                        return Stack(
-                          children: [
-                            Positioned(
-                              left: left, top: top,
-                              child: Container(
-                                constraints: const BoxConstraints(maxWidth: maxW),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.3),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  story.text,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Color(story.textColorValue),
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    shadows: const [
-                                      Shadow(blurRadius: 6, color: Colors.black87),
-                                      Shadow(blurRadius: 14, color: Colors.black54),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-
-                  // Viewers bar (admin only — bottom of story)
-                  if (_isOwner)
-                    Positioned(
-                      bottom: 0, left: 0, right: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          _progressController.stop();
-                          _showViewersSheet(context, _stories[_index].id, _stories[_index].text.isNotEmpty ? _stories[_index].text : 'Story')
-                              .then((_) => _progressController.forward());
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.remove_red_eye_outlined, color: Colors.white70, size: 18),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${viewTracker.viewCount(_stories[_index].id)} viewer${viewTracker.viewCount(_stories[_index].id) == 1 ? '' : 's'}',
-                                style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(Icons.chevron_right, color: Colors.white54, size: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  // Tap left / right navigation
-                  Row(
-                    children: [
-                      Expanded(child: GestureDetector(onTap: _prevStory, behavior: HitTestBehavior.translucent)),
-                      Expanded(child: GestureDetector(onTap: _nextStory, behavior: HitTestBehavior.translucent)),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-        ),
         ),
       ),
     );
@@ -1750,8 +2195,12 @@ class _ViewersSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 10, bottom: 6),
               child: Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             // Header
@@ -1759,17 +2208,29 @@ class _ViewersSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: Row(
                 children: [
-                  Icon(Icons.remove_red_eye_outlined, color: AppColors.primaryRed, size: 20),
+                  Icon(
+                    Icons.remove_red_eye_outlined,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '${viewerList.length} viewer${viewerList.length == 1 ? '' : 's'}',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.text),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.text,
+                      ),
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: Icon(Icons.close, color: AppColors.secondaryText, size: 22),
+                    child: Icon(
+                      Icons.close,
+                      color: AppColors.secondaryText,
+                      size: 22,
+                    ),
                   ),
                 ],
               ),
@@ -1782,9 +2243,19 @@ class _ViewersSheet extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.visibility_off_outlined, color: AppColors.secondaryText, size: 40),
+                          Icon(
+                            Icons.visibility_off_outlined,
+                            color: AppColors.secondaryText,
+                            size: 40,
+                          ),
                           SizedBox(height: 12),
-                          Text('No views yet', style: TextStyle(color: AppColors.secondaryText, fontSize: 14)),
+                          Text(
+                            'No views yet',
+                            style: TextStyle(
+                              color: AppColors.secondaryText,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     )
@@ -1792,20 +2263,39 @@ class _ViewersSheet extends StatelessWidget {
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: viewerList.length,
-                      separatorBuilder: (_, s) => Divider(height: 1, indent: 60),
+                      separatorBuilder: (_, s) =>
+                          Divider(height: 1, indent: 60),
                       itemBuilder: (_, i) {
                         final user = viewerList[i];
                         return ListTile(
                           leading: CircleAvatar(
                             radius: 20,
-                            backgroundColor: AppColors.primaryRed.withValues(alpha: 0.12),
+                            backgroundColor: AppColors.primaryRed.withValues(
+                              alpha: 0.12,
+                            ),
                             child: Text(
                               user.name.isNotEmpty ? user.name[0] : '?',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryRed,
+                              ),
                             ),
                           ),
-                          title: Text(user.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.text)),
-                          subtitle: Text(user.email, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                          title: Text(
+                            user.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            user.email,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -1820,8 +2310,12 @@ class _ViewersSheet extends StatelessWidget {
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 const List<Color> _clubColors = [
-  Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-  Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  Color(0xFFB41C18),
+  Color(0xFF1565C0),
+  Color(0xFF2E7D32),
+  Color(0xFF6A1B9A),
+  Color(0xFFE65100),
+  Color(0xFF00838F),
 ];
 
 Color _colorForClub(String clubId) {
@@ -1843,7 +2337,9 @@ Widget? _trendingBadge(double score) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: score >= 12 ? const Color(0xFFFF6B35).withValues(alpha: 0.12) : AppColors.lightRed,
+      color: score >= 12
+          ? const Color(0xFFFF6B35).withValues(alpha: 0.12)
+          : AppColors.lightRed,
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(
@@ -1884,7 +2380,10 @@ void _openShareSheet(
 bool _isOwnerOfClub(String clubId) {
   final admin = authService.currentAdmin;
   if (admin == null) return false;
-  final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
+  final club = clubs.firstWhere(
+    (c) => c.id == clubId,
+    orElse: () => clubs.first,
+  );
   return (club.adminUserIds as List).contains(admin.id);
 }
 
@@ -1896,28 +2395,38 @@ class _PostCard extends StatefulWidget {
   final int rank;
   final VoidCallback onUpdate;
 
-  const _PostCard({required this.post, required this.score, required this.rank, required this.onUpdate});
+  const _PostCard({
+    required this.post,
+    required this.score,
+    required this.rank,
+    required this.onUpdate,
+  });
 
   @override
   State<_PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixin {
+class _PostCardState extends State<_PostCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _heartController;
   bool _showHeart = false;
 
   @override
   void initState() {
     super.initState();
-    _heartController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
-      ..addStatusListener((s) {
-        if (s == AnimationStatus.completed) {
-          setState(() => _showHeart = false);
-          _heartController.reset();
-        }
-      });
+    _heartController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 700),
+        )..addStatusListener((s) {
+          if (s == AnimationStatus.completed) {
+            setState(() => _showHeart = false);
+            _heartController.reset();
+          }
+        });
     // Record this user as having seen the post
-    final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final userId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     viewTracker.recordView(widget.post.id, userId);
   }
 
@@ -1930,7 +2439,13 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
   void _doubleTapLike() {
     if (!userState.isLiked(widget.post.id)) {
       userState.toggleLike(widget.post.id);
-      likes.add(Like(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: widget.post.id, userId: authService.currentUser?.id ?? 'guest'));
+      likes.add(
+        Like(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          postId: widget.post.id,
+          userId: authService.currentUser?.id ?? 'guest',
+        ),
+      );
       contentStore.saveLikes();
     }
     setState(() => _showHeart = true);
@@ -1946,7 +2461,13 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
       likes.removeWhere((l) => l.postId == postId && l.userId == userId);
     } else {
       userState.toggleLike(postId);
-      likes.add(Like(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: postId, userId: userId));
+      likes.add(
+        Like(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          postId: postId,
+          userId: userId,
+        ),
+      );
     }
     contentStore.saveLikes();
     setState(() {});
@@ -1959,8 +2480,14 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
     final clubColor = _colorForClub(club.id);
     final likeCount = postLikeCount(widget.post.id);
     final shareCount = postShareCount(widget.post.id);
-    final uniqueCommenters = comments.where((c) => c.postId == widget.post.id).map((c) => c.userId).toSet().length;
-    final postComments = comments.where((c) => c.postId == widget.post.id).toList();
+    final uniqueCommenters = comments
+        .where((c) => c.postId == widget.post.id)
+        .map((c) => c.userId)
+        .toSet()
+        .length;
+    final postComments = comments
+        .where((c) => c.postId == widget.post.id)
+        .toList();
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
     final badge = _trendingBadge(widget.score);
@@ -1978,9 +2505,13 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => ClubProfileScreen(club: club, color: clubColor),
-                  )),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ClubProfileScreen(club: club, color: clubColor),
+                    ),
+                  ),
                   child: ClubAvatar(
                     clubId: club.id,
                     clubName: club.name,
@@ -2000,12 +2531,24 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                           Flexible(
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => ClubProfileScreen(club: club, color: clubColor),
-                              )),
-                              child: Text(club.name,
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text),
-                                  overflow: TextOverflow.ellipsis),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ClubProfileScreen(
+                                    club: club,
+                                    color: clubColor,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                club.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.text,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -2014,45 +2557,60 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                         ],
                       ),
                       const SizedBox(height: 1),
-                      Builder(builder: (ctx) {
-                        final author = users.firstWhere(
-                          (u) => u.id == widget.post.authorId,
-                          orElse: () => users.first,
-                        );
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => Navigator.push(
-                            ctx,
-                            MaterialPageRoute(builder: (_) => UserProfileScreen(user: author)),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 2, bottom: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  author.name,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.primaryRed,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _timeAgo(widget.post.createdAt),
-                                  style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                                ),
-                              ],
+                      Builder(
+                        builder: (ctx) {
+                          final author = users.firstWhere(
+                            (u) => u.id == widget.post.authorId,
+                            orElse: () => users.first,
+                          );
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => Navigator.push(
+                              ctx,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(user: author),
+                              ),
                             ),
-                          ),
-                        );
-                      }),
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2, bottom: 2),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    author.name,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.primaryRed,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _timeAgo(widget.post.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
                 ClubFollowButton(clubId: club.id, size: 'small'),
-                IconButton(icon: Icon(Icons.more_horiz, color: AppColors.secondaryText), onPressed: () {}, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+                IconButton(
+                  icon: Icon(Icons.more_horiz, color: AppColors.secondaryText),
+                  onPressed: () {},
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2071,7 +2629,12 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                 ),
                 if (_showHeart)
                   ScaleTransition(
-                    scale: Tween(begin: 0.5, end: 1.4).animate(CurvedAnimation(parent: _heartController, curve: Curves.elasticOut)),
+                    scale: Tween(begin: 0.5, end: 1.4).animate(
+                      CurvedAnimation(
+                        parent: _heartController,
+                        curve: Curves.elasticOut,
+                      ),
+                    ),
                     child: Icon(Icons.favorite, color: Colors.white, size: 80),
                   ),
               ],
@@ -2083,17 +2646,33 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Row(
               children: [
-                _ActionBtn(icon: isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.pink : AppColors.text, onTap: _toggleLike),
-                _ActionBtn(icon: Icons.chat_bubble_outline, color: AppColors.text, onTap: () => _openComments(context)),
+                _ActionBtn(
+                  icon: isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: isLiked ? Colors.pink : AppColors.text,
+                  onTap: _toggleLike,
+                ),
+                _ActionBtn(
+                  icon: Icons.chat_bubble_outline,
+                  color: AppColors.text,
+                  onTap: () => _openComments(context),
+                ),
                 _ActionBtn(
                   icon: Icons.send_outlined,
                   color: AppColors.text,
                   onTap: () => _openShareSheet(
                     context,
                     widget.post.id,
-                    () { setState(() {}); widget.onUpdate(); },
+                    () {
+                      setState(() {});
+                      widget.onUpdate();
+                    },
                     caption: widget.post.content,
-                    clubName: clubs.firstWhere((c) => c.id == widget.post.clubId, orElse: () => clubs.first).name,
+                    clubName: clubs
+                        .firstWhere(
+                          (c) => c.id == widget.post.clubId,
+                          orElse: () => clubs.first,
+                        )
+                        .name,
                   ),
                 ),
                 const Spacer(),
@@ -2102,7 +2681,11 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                   color: isSaved ? AppColors.primaryRed : AppColors.text,
                   onTap: () {
                     setState(() => userState.toggleSave(widget.post.id));
-                    userPrefsService.save(authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
+                    userPrefsService.save(
+                      authService.currentUser?.id ??
+                          authService.currentAdmin?.id ??
+                          '',
+                    );
                   },
                 ),
               ],
@@ -2123,7 +2706,10 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                   context: context,
                   backgroundColor: Colors.transparent,
                   isScrollControlled: true,
-                  builder: (_) => _ViewersSheet(contentId: widget.post.id, title: 'Post Viewers'),
+                  builder: (_) => _ViewersSheet(
+                    contentId: widget.post.id,
+                    title: 'Post Viewers',
+                  ),
                 ),
               ),
             ),
@@ -2134,10 +2720,22 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: RichText(
-              text: TextSpan(children: [
-                TextSpan(text: '${club.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
-                TextSpan(text: widget.post.content, style: TextStyle(color: AppColors.text, fontSize: 13)),
-              ]),
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${club.name}  ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                      fontSize: 13,
+                    ),
+                  ),
+                  TextSpan(
+                    text: widget.post.content,
+                    style: TextStyle(color: AppColors.text, fontSize: 13),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -2152,23 +2750,43 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
                   _isOwnerOfClub(widget.post.clubId)
                       ? 'View all ${postComments.length} comment${postComments.length == 1 ? '' : 's'}'
                       : 'View comments',
-                  style: TextStyle(color: AppColors.secondaryText, fontSize: 12),
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 2),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Builder(builder: (_) {
-                final last = postComments.last;
-                final commenter = users.firstWhere((u) => u.id == last.userId, orElse: () => users.first);
-                return RichText(
-                  text: TextSpan(children: [
-                    TextSpan(text: '${commenter.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 12)),
-                    TextSpan(text: last.content, style: TextStyle(color: AppColors.text, fontSize: 12)),
-                  ]),
-                );
-              }),
+              child: Builder(
+                builder: (_) {
+                  final last = postComments.last;
+                  final commenter = users.firstWhere(
+                    (u) => u.id == last.userId,
+                    orElse: () => users.first,
+                  );
+                  return RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${commenter.name}  ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text,
+                            fontSize: 12,
+                          ),
+                        ),
+                        TextSpan(
+                          text: last.content,
+                          style: TextStyle(color: AppColors.text, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
           const SizedBox(height: 10),
@@ -2182,7 +2800,8 @@ class _PostCardState extends State<_PostCard> with SingleTickerProviderStateMixi
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CommentsSheet(postId: widget.post.id, clubId: widget.post.clubId),
+      builder: (_) =>
+          _CommentsSheet(postId: widget.post.id, clubId: widget.post.clubId),
     ).then((_) => setState(() {}));
   }
 }
@@ -2195,7 +2814,12 @@ class _EventCard extends StatefulWidget {
   final int rank;
   final VoidCallback onUpdate;
 
-  const _EventCard({required this.event, required this.score, required this.rank, required this.onUpdate});
+  const _EventCard({
+    required this.event,
+    required this.score,
+    required this.rank,
+    required this.onUpdate,
+  });
 
   @override
   State<_EventCard> createState() => _EventCardState();
@@ -2207,7 +2831,8 @@ class _EventCardState extends State<_EventCard> {
   @override
   void initState() {
     super.initState();
-    final userId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final userId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     rsvpStore.seed(
       widget.event.id,
       widget.event.attendeeUserIds.contains(userId),
@@ -2243,7 +2868,11 @@ class _EventCardState extends State<_EventCard> {
     final badge = _trendingBadge(widget.score);
 
     final daysAway = dt.difference(DateTime.now()).inDays;
-    final daysLabel = daysAway == 0 ? 'Today' : daysAway == 1 ? 'Tomorrow' : 'In $daysAway days';
+    final daysLabel = daysAway == 0
+        ? 'Today'
+        : daysAway == 1
+        ? 'Tomorrow'
+        : 'In $daysAway days';
 
     return Container(
       color: AppColors.card,
@@ -2258,9 +2887,13 @@ class _EventCardState extends State<_EventCard> {
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => ClubProfileScreen(club: club, color: clubColor),
-                  )),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ClubProfileScreen(club: club, color: clubColor),
+                    ),
+                  ),
                   child: ClubAvatar(
                     clubId: club.id,
                     clubName: club.name,
@@ -2280,22 +2913,61 @@ class _EventCardState extends State<_EventCard> {
                           Flexible(
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => ClubProfileScreen(club: club, color: clubColor),
-                              )),
-                              child: Text(club.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text), overflow: TextOverflow.ellipsis),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ClubProfileScreen(
+                                    club: club,
+                                    color: clubColor,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                club.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.text,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(color: AppColors.accentGold.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                            child: Text('Event', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFB8860B))),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentGold.withValues(
+                                alpha: 0.2,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              'Event',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFB8860B),
+                              ),
+                            ),
                           ),
-                          if (badge != null) ...[const SizedBox(width: 4), badge],
+                          if (badge != null) ...[
+                            const SizedBox(width: 4),
+                            badge,
+                          ],
                         ],
                       ),
-                      Text(daysLabel, style: TextStyle(fontSize: 11, color: AppColors.primaryRed, fontWeight: FontWeight.w500)),
+                      Text(
+                        daysLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -2310,7 +2982,10 @@ class _EventCardState extends State<_EventCard> {
             height: 160,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [clubColor.withValues(alpha: 0.8), clubColor.withValues(alpha: 0.3)],
+                colors: [
+                  clubColor.withValues(alpha: 0.8),
+                  clubColor.withValues(alpha: 0.3),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -2319,10 +2994,15 @@ class _EventCardState extends State<_EventCard> {
               children: [
                 // Big date in background
                 Positioned(
-                  right: 16, top: 12,
+                  right: 16,
+                  top: 12,
                   child: Text(
                     '${dt.day}',
-                    style: TextStyle(fontSize: 80, fontWeight: FontWeight.w900, color: Colors.white.withValues(alpha: 0.15)),
+                    style: TextStyle(
+                      fontSize: 80,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
                   ),
                 ),
                 Padding(
@@ -2333,18 +3013,35 @@ class _EventCardState extends State<_EventCard> {
                     children: [
                       // Date chip
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(widget.event.title, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 4, color: Colors.black45)])),
+                      Text(
+                        widget.event.title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(blurRadius: 4, color: Colors.black45),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -2373,18 +3070,34 @@ class _EventCardState extends State<_EventCard> {
                   onTap: () => _openShareSheet(
                     context,
                     widget.event.id,
-                    () { setState(() {}); widget.onUpdate(); },
+                    () {
+                      setState(() {});
+                      widget.onUpdate();
+                    },
                     caption: widget.event.title,
-                    clubName: clubs.firstWhere((c) => c.id == widget.event.clubId, orElse: () => clubs.first).name,
+                    clubName: clubs
+                        .firstWhere(
+                          (c) => c.id == widget.event.clubId,
+                          orElse: () => clubs.first,
+                        )
+                        .name,
                   ),
                 ),
                 const Spacer(),
                 _ActionBtn(
-                  icon: userState.isSaved(widget.event.id) ? Icons.bookmark : Icons.bookmark_border,
-                  color: userState.isSaved(widget.event.id) ? AppColors.primaryRed : AppColors.text,
+                  icon: userState.isSaved(widget.event.id)
+                      ? Icons.bookmark
+                      : Icons.bookmark_border,
+                  color: userState.isSaved(widget.event.id)
+                      ? AppColors.primaryRed
+                      : AppColors.text,
                   onTap: () {
                     setState(() => userState.toggleSave(widget.event.id));
-                    userPrefsService.save(authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
+                    userPrefsService.save(
+                      authService.currentUser?.id ??
+                          authService.currentAdmin?.id ??
+                          '',
+                    );
                   },
                 ),
               ],
@@ -2406,7 +3119,10 @@ class _EventCardState extends State<_EventCard> {
                   context: context,
                   backgroundColor: Colors.transparent,
                   isScrollControlled: true,
-                  builder: (_) => _ViewersSheet(contentId: widget.event.id, title: 'Event Viewers'),
+                  builder: (_) => _ViewersSheet(
+                    contentId: widget.event.id,
+                    title: 'Event Viewers',
+                  ),
                 ),
               ),
             ),
@@ -2417,10 +3133,22 @@ class _EventCardState extends State<_EventCard> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: RichText(
-              text: TextSpan(children: [
-                TextSpan(text: '${club.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
-                TextSpan(text: widget.event.description, style: TextStyle(color: AppColors.text, fontSize: 13)),
-              ]),
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${club.name}  ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                      fontSize: 13,
+                    ),
+                  ),
+                  TextSpan(
+                    text: widget.event.description,
+                    style: TextStyle(color: AppColors.text, fontSize: 13),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -2429,7 +3157,20 @@ class _EventCardState extends State<_EventCard> {
     );
   }
 
-  String _monthAbbr(int m) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1];
+  String _monthAbbr(int m) => [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m - 1];
 
   String _fmt12(DateTime dt) {
     final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
@@ -2470,11 +3211,20 @@ class _EngagementBar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.remove_red_eye_outlined, size: 13, color: AppColors.secondaryText),
+                Icon(
+                  Icons.remove_red_eye_outlined,
+                  size: 13,
+                  color: AppColors.secondaryText,
+                ),
                 const SizedBox(width: 3),
-                Text('$views view${views == 1 ? '' : 's'}',
-                    style: TextStyle(fontSize: 12, color: AppColors.secondaryText,
-                        decoration: TextDecoration.underline)),
+                Text(
+                  '$views view${views == 1 ? '' : 's'}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2483,19 +3233,32 @@ class _EngagementBar extends StatelessWidget {
           if (views > 0) const SizedBox(width: 10),
           Icon(Icons.favorite, size: 13, color: Colors.pink),
           const SizedBox(width: 3),
-          Text('$likes $likesLabel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
+          Text(
+            '$likes $likesLabel',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.text,
+            ),
+          ),
         ],
         if (commenters > 0) ...[
           const SizedBox(width: 10),
           Icon(Icons.chat_bubble, size: 13, color: Color(0xFF1565C0)),
           const SizedBox(width: 3),
-          Text('$commenters ${commenters == 1 ? 'person' : 'people'} commented', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+          Text(
+            '$commenters ${commenters == 1 ? 'person' : 'people'} commented',
+            style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+          ),
         ],
         if (shares > 0) ...[
           const SizedBox(width: 10),
           Icon(Icons.send, size: 13, color: Color(0xFF2E7D32)),
           const SizedBox(width: 3),
-          Text('$shares share${shares == 1 ? '' : 's'}', style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+          Text(
+            '$shares share${shares == 1 ? '' : 's'}',
+            style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+          ),
         ],
       ],
     );
@@ -2509,7 +3272,11 @@ class _ActionBtn extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _ActionBtn({required this.icon, required this.color, required this.onTap});
+  const _ActionBtn({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2564,14 +3331,17 @@ class _ShareSheetState extends State<_ShareSheet> {
 
   void _recordShare() {
     final alreadyShared = shares.any(
-        (s) => s.targetId == widget.targetId && s.userId == widget.userId);
+      (s) => s.targetId == widget.targetId && s.userId == widget.userId,
+    );
     if (!alreadyShared) {
-      shares.add(Share(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        targetId: widget.targetId,
-        userId: widget.userId,
-        createdAt: DateTime.now(),
-      ));
+      shares.add(
+        Share(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          targetId: widget.targetId,
+          userId: widget.userId,
+          createdAt: DateTime.now(),
+        ),
+      );
       contentStore.saveShares();
       widget.onShared();
     }
@@ -2582,18 +3352,21 @@ class _ShareSheetState extends State<_ShareSheet> {
     final admin = authService.currentAdmin;
     if (admin != null) {
       try {
-        final myClub =
-            clubs.firstWhere((c) => c.adminUserIds.contains(admin.id));
+        final myClub = clubs.firstWhere(
+          (c) => c.adminUserIds.contains(admin.id),
+        );
         final preview = widget.caption.length > 120
             ? '${widget.caption.substring(0, 120)}…'
             : widget.caption;
-        clubStories.add(ClubStory(
-          id: 'repost_${DateTime.now().millisecondsSinceEpoch}',
-          clubId: myClub.id,
-          emoji: '🔁',
-          text: 'Reposted from ${widget.clubName}\n\n$preview',
-          postedAt: DateTime.now(),
-        ));
+        clubStories.add(
+          ClubStory(
+            id: 'repost_${DateTime.now().millisecondsSinceEpoch}',
+            clubId: myClub.id,
+            emoji: '🔁',
+            text: 'Reposted from ${widget.clubName}\n\n$preview',
+            postedAt: DateTime.now(),
+          ),
+        );
       } catch (_) {
         // no club found — success feedback still shown
       }
@@ -2603,13 +3376,15 @@ class _ShareSheetState extends State<_ShareSheet> {
 
   Future<void> _sendToFriend(String friendId) async {
     _recordShare();
-    await messageService.saveMessage(Message(
-      id: 'share_${DateTime.now().millisecondsSinceEpoch}_$friendId',
-      senderId: _myId,
-      receiverId: friendId,
-      content: 'kupost:${widget.targetId}',
-      sentAt: DateTime.now(),
-    ));
+    await messageService.saveMessage(
+      Message(
+        id: 'share_${DateTime.now().millisecondsSinceEpoch}_$friendId',
+        senderId: _myId,
+        receiverId: friendId,
+        content: 'kupost:${widget.targetId}',
+        sentAt: DateTime.now(),
+      ),
+    );
     setState(() => _sentToIds.add(friendId));
   }
 
@@ -2641,18 +3416,25 @@ class _ShareSheetState extends State<_ShareSheet> {
               child: Column(
                 children: [
                   Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: AppColors.lightGray,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text('Share', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  Text(
+                    'Share',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Choose how you\'d like to share this',
-                    style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -2674,7 +3456,10 @@ class _ShareSheetState extends State<_ShareSheet> {
                     subtitle: 'Repost this to your club\'s story',
                     trailing: _storyPosted
                         ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.green.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
@@ -2682,13 +3467,27 @@ class _ShareSheetState extends State<_ShareSheet> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
+                                Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 14,
+                                  color: Colors.green,
+                                ),
                                 SizedBox(width: 4),
-                                Text('Added', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
+                                Text(
+                                  'Added',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           )
-                        : Icon(Icons.chevron_right_rounded, color: AppColors.secondaryText),
+                        : Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
                     onTap: _storyPosted ? null : _addToStory,
                   ),
 
@@ -2702,7 +3501,12 @@ class _ShareSheetState extends State<_ShareSheet> {
                     padding: EdgeInsets.fromLTRB(16, 6, 16, 8),
                     child: Text(
                       'SEND TO A FRIEND',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondaryText, letterSpacing: 0.8),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
 
@@ -2721,8 +3525,15 @@ class _ShareSheetState extends State<_ShareSheet> {
                         style: TextStyle(fontSize: 14),
                         decoration: InputDecoration(
                           hintText: 'Search friends',
-                          hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 14),
-                          prefixIcon: Icon(Icons.search, size: 18, color: AppColors.secondaryText),
+                          hintStyle: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            size: 18,
+                            color: AppColors.secondaryText,
+                          ),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(vertical: 10),
                         ),
@@ -2737,16 +3548,23 @@ class _ShareSheetState extends State<_ShareSheet> {
                       child: Center(
                         child: Text(
                           'Follow people to send them posts',
-                          style: TextStyle(color: AppColors.secondaryText, fontSize: 14),
+                          style: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     )
                   else
-                    ...filtered.map((u) => _FriendSendRow(
-                          user: u,
-                          sent: _sentToIds.contains(u.id),
-                          onSend: _sentToIds.contains(u.id) ? null : () => _sendToFriend(u.id),
-                        )),
+                    ...filtered.map(
+                      (u) => _FriendSendRow(
+                        user: u,
+                        sent: _sentToIds.contains(u.id),
+                        onSend: _sentToIds.contains(u.id)
+                            ? null
+                            : () => _sendToFriend(u.id),
+                      ),
+                    ),
 
                   const SizedBox(height: 24),
                 ],
@@ -2787,8 +3605,12 @@ class _ShareOptionTile extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(13)),
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(13),
+              ),
               child: Icon(icon, color: iconColor, size: 22),
             ),
             const SizedBox(width: 12),
@@ -2796,9 +3618,18 @@ class _ShareOptionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2816,7 +3647,11 @@ class _FriendSendRow extends StatelessWidget {
   final bool sent;
   final VoidCallback? onSend;
 
-  const _FriendSendRow({required this.user, required this.sent, required this.onSend});
+  const _FriendSendRow({
+    required this.user,
+    required this.sent,
+    required this.onSend,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2830,8 +3665,17 @@ class _FriendSendRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                Text(user.email, style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                Text(
+                  user.name,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  user.email,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2841,20 +3685,42 @@ class _FriendSendRow extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               decoration: BoxDecoration(
-                color: sent ? Colors.green.withValues(alpha: 0.1) : AppColors.primaryRed,
+                color: sent
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : AppColors.primaryRed,
                 borderRadius: BorderRadius.circular(20),
-                border: sent ? Border.all(color: Colors.green.withValues(alpha: 0.35)) : null,
+                border: sent
+                    ? Border.all(color: Colors.green.withValues(alpha: 0.35))
+                    : null,
               ),
               child: sent
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_rounded, size: 13, color: Colors.green),
+                        Icon(
+                          Icons.check_rounded,
+                          size: 13,
+                          color: Colors.green,
+                        ),
                         SizedBox(width: 4),
-                        Text('Sent', style: TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.w600)),
+                        Text(
+                          'Sent',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     )
-                  : Text('Send', style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
+                  : Text(
+                      'Send',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -2888,7 +3754,15 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     if (user == null) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    comments.add(Comment(id: DateTime.now().millisecondsSinceEpoch.toString(), postId: widget.postId, userId: user.id, content: text, createdAt: DateTime.now()));
+    comments.add(
+      Comment(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        postId: widget.postId,
+        userId: user.id,
+        content: text,
+        createdAt: DateTime.now(),
+      ),
+    );
     contentStore.saveComments();
     _controller.clear();
     setState(() {});
@@ -2896,47 +3770,110 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final postComments = comments.where((c) => c.postId == widget.postId).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final postComments =
+        comments.where((c) => c.postId == widget.postId).toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.65,
       minChildSize: 0.4,
       maxChildSize: 0.92,
       builder: (context, scrollController) => Container(
-        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         child: Column(
           children: [
-            Container(margin: const EdgeInsets.only(top: 10, bottom: 6), width: 40, height: 4, decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2))),
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.lightGray,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             Text(
-              _isOwnerOfClub(widget.clubId) ? 'Comments (${postComments.length})' : 'Comments',
+              _isOwnerOfClub(widget.clubId)
+                  ? 'Comments (${postComments.length})'
+                  : 'Comments',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             Divider(),
             Expanded(
               child: postComments.isEmpty
-                  ? Center(child: Text('No comments yet. Be the first!', style: TextStyle(color: AppColors.secondaryText)))
+                  ? Center(
+                      child: Text(
+                        'No comments yet. Be the first!',
+                        style: TextStyle(color: AppColors.secondaryText),
+                      ),
+                    )
                   : ListView.builder(
                       controller: scrollController,
                       itemCount: postComments.length,
                       itemBuilder: (context, i) {
                         final c = postComments[i];
-                        final commenter = users.firstWhere((u) => u.id == c.userId, orElse: () => users.first);
+                        final commenter = users.firstWhere(
+                          (u) => u.id == c.userId,
+                          orElse: () => users.first,
+                        );
                         return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CircleAvatar(radius: 16, backgroundColor: AppColors.lightRed, child: Text(commenter.name[0], style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13))),
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: AppColors.lightRed,
+                                child: Text(
+                                  commenter.name[0],
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryRed,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  RichText(text: TextSpan(children: [
-                                    TextSpan(text: '${commenter.name}  ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text, fontSize: 13)),
-                                    TextSpan(text: c.content, style: TextStyle(color: AppColors.text, fontSize: 13)),
-                                  ])),
-                                  const SizedBox(height: 2),
-                                  Text(_timeAgo(c.createdAt), style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                                ]),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    RichText(
+                                      text: TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: '${commenter.name}  ',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.text,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: c.content,
+                                            style: TextStyle(
+                                              color: AppColors.text,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _timeAgo(c.createdAt),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.secondaryText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               // Admin-only delete button (own club only)
                               if (_isOwnerOfClub(widget.clubId))
@@ -2947,8 +3884,15 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                     setState(() {});
                                   },
                                   child: Padding(
-                                    padding: const EdgeInsets.only(left: 8, top: 2),
-                                    child: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade300),
+                                    padding: const EdgeInsets.only(
+                                      left: 8,
+                                      top: 2,
+                                    ),
+                                    child: Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Colors.red.shade300,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -2958,13 +3902,25 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     ),
             ),
             Padding(
-              padding: EdgeInsets.only(left: 12, right: 12, bottom: MediaQuery.of(context).viewInsets.bottom + 12, top: 8),
+              padding: EdgeInsets.only(
+                left: 12,
+                right: 12,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+                top: 8,
+              ),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 16,
                     backgroundColor: AppColors.lightRed,
-                    child: Text((authService.currentUser?.name[0] ?? 'U').toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryRed, fontSize: 13)),
+                    child: Text(
+                      (authService.currentUser?.name[0] ?? 'U').toUpperCase(),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryRed,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -2972,16 +3928,36 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       controller: _controller,
                       decoration: InputDecoration(
                         hintText: 'Add a comment...',
-                        hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-                        filled: true, fillColor: AppColors.lightGray,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                        hintStyle: TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 13,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.lightGray,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
                       onSubmitted: (_) => _post(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  GestureDetector(onTap: _post, child: Text('Post', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 14))),
+                  GestureDetector(
+                    onTap: _post,
+                    child: Text(
+                      'Post',
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

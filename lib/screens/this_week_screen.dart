@@ -8,7 +8,6 @@ import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../widgets/rsvp_button.dart';
-import 'campus_map_screen.dart';
 import 'event_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -173,20 +172,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     ).where((event) => rsvpStore.isAttending(event.id)).toList();
   }
 
-  Map<String, int> _activityByLocation(List<Event> selectedEvents) {
-    final buckets = <String, int>{};
-    for (final event in selectedEvents) {
-      final location = event.location.trim().isEmpty
-          ? 'Campus'
-          : event.location.trim();
-      buckets[location] =
-          (buckets[location] ?? 0) + event.attendeeUserIds.length + 1;
-    }
-    return Map.fromEntries(
-      buckets.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     _syncSelectedDayToRollingWindow();
@@ -296,15 +281,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   selectedDay: _selectedDay,
                   eventCount: selectedEvents.length,
                   attendeeCount: _selectedAttendeeCount(selectedEvents),
-                  activityByLocation: _activityByLocation(selectedEvents),
                   rsvpsBuilder: () => _rsvpedEventsForDay(_selectedDay),
-                  onOpenMap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          CampusMapScreen(initialSelectedDay: _selectedDay),
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -366,18 +343,14 @@ class _DayOverview extends StatelessWidget {
   final DateTime selectedDay;
   final int eventCount;
   final int attendeeCount;
-  final Map<String, int> activityByLocation;
   final List<Event> Function() rsvpsBuilder;
-  final VoidCallback onOpenMap;
 
   const _DayOverview({
     super.key,
     required this.selectedDay,
     required this.eventCount,
     required this.attendeeCount,
-    required this.activityByLocation,
     required this.rsvpsBuilder,
-    required this.onOpenMap,
   });
 
   @override
@@ -387,10 +360,6 @@ class _DayOverview extends StatelessWidget {
         : _isDateTomorrow(selectedDay)
         ? 'Tomorrow'
         : '${_kWeekdays[selectedDay.weekday]}, ${_kMonths[selectedDay.month]} ${selectedDay.day}';
-    final peak = activityByLocation.values.isEmpty
-        ? 1
-        : activityByLocation.values.reduce((a, b) => a > b ? a : b);
-    final locationEntries = activityByLocation.entries.take(4).toList();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
@@ -406,6 +375,7 @@ class _DayOverview extends StatelessWidget {
             child: Column(
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
@@ -432,55 +402,40 @@ class _DayOverview extends StatelessWidget {
                         ],
                       ),
                     ),
-                    GestureDetector(
-                      onTap: onOpenMap,
-                      child: Container(
-                        height: 36,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryRed.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(
-                            color: AppColors.primaryRed.withValues(alpha: 0.24),
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: AppColors.primaryRed.withValues(alpha: 0.18),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.map_outlined,
-                              size: 16,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.event_available_rounded,
+                            size: 15,
+                            color: AppColors.primaryRed,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _isDateToday(selectedDay) ? 'Live today' : 'Agenda',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
                               color: AppColors.primaryRed,
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Heat map',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primaryRed,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                if (locationEntries.isEmpty)
-                  _QuietActivityState()
-                else
-                  Column(
-                    children: locationEntries
-                        .map(
-                          (entry) => _ActivityBar(
-                            label: entry.key,
-                            value: entry.value,
-                            maxValue: peak,
-                          ),
-                        )
-                        .toList(),
-                  ),
               ],
             ),
           ),
@@ -692,105 +647,6 @@ class _DateChip extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Selected day overview
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ActivityBar extends StatelessWidget {
-  final String label;
-  final int value;
-  final int maxValue;
-
-  const _ActivityBar({
-    required this.label,
-    required this.value,
-    required this.maxValue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final percent = maxValue == 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.secondaryText,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: percent),
-                duration: const Duration(milliseconds: 360),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, _) => LinearProgressIndicator(
-                  value: value,
-                  minHeight: 8,
-                  backgroundColor: AppColors.surfaceAlt,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColors.primaryRed.withValues(alpha: 0.86),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            value.toString(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: AppColors.text,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuietActivityState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.nights_stay_outlined,
-            size: 16,
-            color: AppColors.secondaryText,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Campus looks quiet on this day.',
-              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1708,52 +1564,6 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                             icon: Icons.location_on_outlined,
                             label: 'Location',
                             value: e.location,
-                          ),
-                          const SizedBox(height: 10),
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CampusMapScreen(),
-                              ),
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: col.withValues(alpha: 0.07),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: col.withValues(alpha: 0.25),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.map_outlined,
-                                    color: col,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'View on Campus Map',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: col,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Icon(
-                                    Icons.arrow_forward_ios_rounded,
-                                    size: 12,
-                                    color: col.withValues(alpha: 0.6),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
                           Divider(
                             color: AppColors.divider,

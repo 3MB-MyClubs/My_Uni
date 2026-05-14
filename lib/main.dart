@@ -16,10 +16,7 @@ import 'services/content_store.dart';
 import 'services/user_state.dart';
 import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
-import 'services/campus_pulse_service.dart';
 import 'services/theme_service.dart';
-import 'services/heatmap_repository.dart';
-import 'services/location_permission_service.dart';
 import 'services/supabase_config.dart';
 
 void main() async {
@@ -38,9 +35,6 @@ void main() async {
   await viewTracker.initialize();
   await personalizationService.initialize();
   await themeService.initialize();
-  await localHeatmapRepository.initialize();
-  await campusPulseService.initialize();
-  await locationPermissionService.initialize();
   contentStore.applyToLists();
   contentStore.loadBoardMemberRequests();
   contentStore.loadBoardMemberIds();
@@ -93,7 +87,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (uid != null) {
       userPrefsService.save(uid);
       personalizationService.save(uid);
-      campusPulseService.save(uid);
     }
     contentStore.saveAll(userState.dynamicNotifications);
   }
@@ -110,7 +103,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       messageService.setCurrentUserId(currentUserId);
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
-      campusPulseService.load(currentUserId);
     }
   }
 
@@ -259,7 +251,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             messageService.setCurrentUserId(currentUserId);
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
-            campusPulseService.load(currentUserId);
           }
           homeWidget = MainNavScreen(
             isAdmin: isAdmin,
