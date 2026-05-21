@@ -253,7 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
               GestureDetector(
                 onTap: () {
                   _emailController.text = 'htuncay23@ku.edu.tr';
-                  _passwordController.text = '11111111';
+                  _passwordController.clear();
                   setState(() => _error = null);
                 },
                 child: Container(

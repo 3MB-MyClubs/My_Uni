@@ -16,7 +16,8 @@
       "Bash(gunzip -f /tmp/design.gz)",
       "Bash(tar -xf /tmp/design -C /tmp/)",
       "Bash(dart analyze *)",
-      "Bash(cp \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/4d49ed4f-c330-4832-a039-808e9f0f7c30/tool-results/webfetch-1778683432602-2ayn1e.bin\" /tmp/design.gz && gunzip -f /tmp/design.gz && file /tmp/design && head -c 5000 /tmp/design)"
+      "Bash(cp \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/4d49ed4f-c330-4832-a039-808e9f0f7c30/tool-results/webfetch-1778683432602-2ayn1e.bin\" /tmp/design.gz && gunzip -f /tmp/design.gz && file /tmp/design && head -c 5000 /tmp/design)",
+      "Bash(~/.fvm/default/bin/flutter analyze *)"
     ],
     "additionalDirectories": [
       "/tmp",

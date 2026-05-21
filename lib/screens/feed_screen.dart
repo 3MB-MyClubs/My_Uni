@@ -19,6 +19,7 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../services/message_service.dart';
 import 'messages_screen.dart';
+import 'my_calendar_screen.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -391,6 +392,14 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
       actions: [
+        IconButton(
+          icon: Icon(Icons.calendar_month_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
+          ),
+          tooltip: 'My Calendar',
+        ),
         IconButton(
           icon: Icon(Icons.send_outlined),
           onPressed: () => Navigator.push(
@@ -1117,7 +1126,6 @@ class _TrendingEventCard extends StatelessWidget {
         ? 'Tomorrow'
         : '${mo[dt.month - 1]} ${dt.day}';
     final views = viewTracker.viewCount(event.id);
-    final attendees = event.attendeeUserIds.length;
 
     return GestureDetector(
       onTap: () => _showDetail(context, color),
@@ -1253,21 +1261,7 @@ class _TrendingEventCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Icon(
-                        Icons.people_outline,
-                        size: 14,
-                        color: AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$attendees attending',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
                       if (views > 0) ...[
-                        const SizedBox(width: 14),
                         Icon(
                           Icons.visibility_outlined,
                           size: 14,
@@ -2853,7 +2847,7 @@ class _EventCardState extends State<_EventCard> {
     if (current == _lastAttending) return; // different event changed, skip
     _lastAttending = current;
     if (mounted) {
-      setState(() {}); // refresh uniqueAttendees / engagement bar
+      setState(() {});
       widget.onUpdate();
     }
   }
@@ -2864,7 +2858,6 @@ class _EventCardState extends State<_EventCard> {
     final clubColor = _colorForClub(club.id);
     final dt = widget.event.dateTime;
     final shareCount = postShareCount(widget.event.id);
-    final uniqueAttendees = widget.event.attendeeUserIds.toSet().length;
     final badge = _trendingBadge(widget.score);
 
     final daysAway = dt.difference(DateTime.now()).inDays;
@@ -3109,8 +3102,7 @@ class _EventCardState extends State<_EventCard> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: _EngagementBar(
-                likes: uniqueAttendees,
-                likesLabel: 'attending',
+                likes: 0,
                 commenters: 0,
                 shares: shareCount,
                 score: widget.score,

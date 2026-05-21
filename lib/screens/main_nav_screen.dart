@@ -8,6 +8,7 @@ import '../services/theme_service.dart';
 import 'chat_screen.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
+// my_calendar_screen is used from feed_screen, not nav;
 import 'explore_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
@@ -208,12 +209,12 @@ class _MainNavScreenState extends State<MainNavScreen> {
         // Non-const instances so Flutter creates new widget objects each rebuild,
         // which triggers element.update() → markNeedsBuild() on each screen state.
         final screens = <Widget>[
-          FeedScreen(),
-          ThisWeekScreen(),
-          ExploreScreen(),
-          NotificationsScreen(),
-          ProfileScreen(onLogout: widget.onLogout),
-          if (widget.isAdmin) AdminDashboard(),
+          FeedScreen(),        // 0
+          ThisWeekScreen(),    // 1
+          ExploreScreen(),     // 2
+          NotificationsScreen(), // 3
+          ProfileScreen(onLogout: widget.onLogout), // 4
+          if (widget.isAdmin) AdminDashboard(),     // 5
         ];
 
         return Scaffold(
@@ -260,7 +261,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
               _NavItem(
                 icon: Icons.calendar_today_outlined,
                 activeIcon: Icons.calendar_today_rounded,
-                label: 'This Week',
+                label: 'Events',
                 selected: _selectedIndex == 1,
                 onTap: () => setState(() => _selectedIndex = 1),
               ),

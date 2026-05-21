@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
+import '../services/view_tracker.dart';
 import '../widgets/rsvp_button.dart';
 import 'event_detail_screen.dart';
 
@@ -92,6 +93,9 @@ class ThisWeekScreen extends StatefulWidget {
 class _ThisWeekScreenState extends State<ThisWeekScreen> {
   bool _followedOnly = false;
   late DateTime _selectedDay;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -105,6 +109,51 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     for (final e in events.where((e) => e.endTime.isAfter(now))) {
       rsvpStore.seed(e.id, e.attendeeUserIds.contains(userId));
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _openSearch() {
+    setState(() {
+      _isSearching = true;
+      _searchQuery = '';
+      _searchController.clear();
+    });
+  }
+
+  void _closeSearch() {
+    setState(() {
+      _isSearching = false;
+      _searchQuery = '';
+      _searchController.clear();
+    });
+  }
+
+  bool _matchesSearch(Event e, String query) {
+    final q = query.toLowerCase();
+    if (e.title.toLowerCase().contains(q)) return true;
+    if (e.description.toLowerCase().contains(q)) return true;
+    final club = clubs.firstWhere(
+      (c) => c.id == e.clubId,
+      orElse: () => clubs.first,
+    );
+    if (club.name.toLowerCase().contains(q)) return true;
+    if (club.description.toLowerCase().contains(q)) return true;
+    return false;
+  }
+
+  List<Event> _searchResults() {
+    final q = _searchQuery.trim();
+    if (q.isEmpty) return [];
+    final followed = userState.followedClubIds;
+    return events.where((e) {
+      if (_followedOnly && !followed.contains(e.clubId)) return false;
+      return _matchesSearch(e, q);
+    }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
   static DateTime _startOfDay(DateTime day) {
@@ -159,17 +208,64 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   List<Event> _selectedEvents() => _eventsForDay(_selectedDay);
 
-  int _selectedAttendeeCount(List<Event> selectedEvents) {
-    return selectedEvents.fold<int>(
-      0,
-      (sum, event) => sum + event.attendeeUserIds.length,
-    );
-  }
 
   List<Event> _rsvpedEventsForDay(DateTime day) {
     return _eventsForDay(
       day,
     ).where((event) => rsvpStore.isAttending(event.id)).toList();
+  }
+
+  String get _viewerId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  DateTime _createdAtForEvent(Event event) {
+    if (event.id.startsWith('ev_')) {
+      final millis = int.tryParse(event.id.substring(3));
+      if (millis != null) return DateTime.fromMillisecondsSinceEpoch(millis);
+    }
+    return event.dateTime;
+  }
+
+  bool _isCreatedInApp(Event event) {
+    return event.createdByUserId != null || event.id.startsWith('ev_');
+  }
+
+  List<Event> _newUnopenedEvents() {
+    final viewerId = _viewerId;
+    if (viewerId.isEmpty) return [];
+    final now = DateTime.now();
+    return events.where((event) {
+        if (!_isCreatedInApp(event)) return false;
+        if (!event.endTime.isAfter(now)) return false;
+        return !viewTracker.viewerIds(event.id).contains(viewerId);
+      }).toList()
+      ..sort((a, b) => _createdAtForEvent(b).compareTo(_createdAtForEvent(a)));
+  }
+
+  Future<void> _openNewEventNotifications() async {
+    final newEvents = _newUnopenedEvents();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _NewEventsSheet(
+        events: newEvents,
+        createdAtForEvent: _createdAtForEvent,
+        onEventTap: (event) {
+          Navigator.pop(sheetContext);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EventDetailScreen(
+                event: event,
+                color: _clubColor(event.clubId),
+              ),
+            ),
+          ).then((_) => setState(() {}));
+        },
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   @override
@@ -180,6 +276,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     final selectedEvents = _selectedEvents();
     final dayCounts = {for (final day in days) day: _eventsForDay(day).length};
     final isEmpty = selectedEvents.isEmpty;
+    final newEventCount = _newUnopenedEvents().length;
+    final isSearchActive = _isSearching && _searchQuery.trim().isNotEmpty;
+    final searchResults = isSearchActive ? _searchResults() : <Event>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -199,23 +298,84 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, topPad + 14, 16, 8),
-                child: Row(
-                  children: [
-                    Text(
-                      'This Week',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.text,
-                        letterSpacing: -0.9,
+                child: _isSearching
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.divider),
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                autofocus: true,
+                                cursorColor: AppColors.text,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                decoration: const InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.transparent,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  focusedErrorBorder: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                onChanged: (v) =>
+                                    setState(() => _searchQuery = v),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: _closeSearch,
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Text(
+                            'This Week',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.text,
+                              letterSpacing: -0.9,
+                            ),
+                          ),
+                          const Spacer(),
+                          _HeaderIconBtn(
+                            icon: Icons.search_rounded,
+                            onTap: _openSearch,
+                          ),
+                          const SizedBox(width: 6),
+                          _HeaderIconBtn(
+                            icon: Icons.notifications_outlined,
+                            badgeCount: newEventCount,
+                            onTap: _openNewEventNotifications,
+                          ),
+                        ],
                       ),
-                    ),
-                    const Spacer(),
-                    _HeaderIconBtn(icon: Icons.search_rounded),
-                    const SizedBox(width: 6),
-                    _HeaderIconBtn(icon: Icons.notifications_outlined),
-                  ],
-                ),
               ),
             ),
 
@@ -280,13 +440,60 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   ),
                   selectedDay: _selectedDay,
                   eventCount: selectedEvents.length,
-                  attendeeCount: _selectedAttendeeCount(selectedEvents),
                   rsvpsBuilder: () => _rsvpedEventsForDay(_selectedDay),
                 ),
               ),
             ),
 
-            if (!isEmpty)
+            // ── Search results ──────────────────────────────────────────────
+            if (isSearchActive) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+                  child: Text(
+                    searchResults.isEmpty
+                        ? 'No results for "${_searchQuery.trim()}"'
+                        : '${searchResults.length} result${searchResults.length == 1 ? '' : 's'} for "${_searchQuery.trim()}"',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ),
+              ),
+              if (searchResults.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((ctx, i) {
+                      final ev = searchResults[i];
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: i < searchResults.length - 1 ? 10 : 0,
+                        ),
+                        child: _EventCardFull(
+                          key: ValueKey(ev.id),
+                          event: ev,
+                          color: _clubColor(ev.clubId),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EventDetailScreen(
+                                event: ev,
+                                color: _clubColor(ev.clubId),
+                              ),
+                            ),
+                          ).then((_) => setState(() {})),
+                        ),
+                      );
+                    }, childCount: searchResults.length),
+                  ),
+                ),
+            ],
+
+            // ── Day events (hidden while searching) ─────────────────────────
+            if (!isSearchActive && !isEmpty)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
                 sliver: SliverList(
@@ -315,7 +522,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                 ),
               ),
 
-            if (isEmpty)
+            if (!isSearchActive && isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _EmptyDayState(
@@ -342,14 +549,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 class _DayOverview extends StatelessWidget {
   final DateTime selectedDay;
   final int eventCount;
-  final int attendeeCount;
   final List<Event> Function() rsvpsBuilder;
 
   const _DayOverview({
     super.key,
     required this.selectedDay,
     required this.eventCount,
-    required this.attendeeCount,
     required this.rsvpsBuilder,
   });
 
@@ -392,7 +597,7 @@ class _DayOverview extends StatelessWidget {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            '$eventCount event${eventCount == 1 ? '' : 's'} · $attendeeCount students going',
+                            '$eventCount ${eventCount == 1 ? "event" : "events"}',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText,
@@ -868,7 +1073,6 @@ class _EventCardFull extends StatelessWidget {
     );
     final live = _isLive(event);
     final timeStr = _timeStr(event.dateTime);
-    final attendees = event.attendeeUserIds.length;
 
     return GestureDetector(
       onTap: onTap,
@@ -1027,24 +1231,6 @@ class _EventCardFull extends StatelessWidget {
                                       color: AppColors.secondaryText,
                                     ),
                                     overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.people_outline,
-                                  size: 11,
-                                  color: AppColors.secondaryText,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$attendees going',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.secondaryText,
                                   ),
                                 ),
                               ],
@@ -1221,21 +1407,361 @@ class _LivePipState extends State<_LivePip>
 
 class _HeaderIconBtn extends StatelessWidget {
   final IconData icon;
+  final int badgeCount;
+  final VoidCallback? onTap;
 
-  const _HeaderIconBtn({required this.icon});
+  const _HeaderIconBtn({required this.icon, this.badgeCount = 0, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.divider),
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Icon(icon, size: 17, color: AppColors.secondaryText),
+              ),
+            ),
+            if (badgeCount > 0)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 17),
+                  height: 17,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.background, width: 2),
+                  ),
+                  child: Text(
+                    badgeCount > 9 ? '9+' : '$badgeCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
-      child: Icon(icon, size: 17, color: AppColors.secondaryText),
     );
+  }
+}
+
+class _NewEventsSheet extends StatelessWidget {
+  final List<Event> events;
+  final DateTime Function(Event event) createdAtForEvent;
+  final ValueChanged<Event> onEventTap;
+
+  const _NewEventsSheet({
+    required this.events,
+    required this.createdAtForEvent,
+    required this.onEventTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.74,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 30,
+            offset: const Offset(0, -12),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 42,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.divider,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    Icons.notifications_active_outlined,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'New events',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.text,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      Text(
+                        '${events.length} unopened ${events.length == 1 ? 'event' : 'events'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: events.isEmpty
+                ? const _NoNewEventsState()
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.fromLTRB(16, 6, 16, bottom + 18),
+                    itemCount: events.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final event = events[index];
+                      return _NewEventNotificationCard(
+                        event: event,
+                        createdAt: createdAtForEvent(event),
+                        onTap: () => onEventTap(event),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoNewEventsState extends StatelessWidget {
+  const _NoNewEventsState();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(28, 26, 28, bottom + 30),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 66,
+            height: 66,
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Icon(
+              Icons.done_all_rounded,
+              color: AppColors.primaryRed,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'All caught up',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: AppColors.text,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Newly created events will appear here until you open their details.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewEventNotificationCard extends StatelessWidget {
+  final Event event;
+  final DateTime createdAt;
+  final VoidCallback onTap;
+
+  const _NewEventNotificationCard({
+    required this.event,
+    required this.createdAt,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere(
+      (c) => c.id == event.clubId,
+      orElse: () => clubs.first,
+    );
+    final color = _clubColor(event.clubId);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.divider),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 54,
+              height: 58,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _kMonths[event.dateTime.month].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.7,
+                    ),
+                  ),
+                  Text(
+                    '${event.dateTime.day}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryRed,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _createdLabel(createdAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    event.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      height: 1.18,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${club.name} · ${_kWeekdays[event.dateTime.weekday].substring(0, 3)} · ${_timeStr(event.dateTime)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.secondaryText,
+              size: 22,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _createdLabel(DateTime createdAt) {
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return 'New';
   }
 }
 
@@ -1370,7 +1896,6 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
     final dateStr =
         '${_kWeekdays[e.dateTime.weekday]}, ${_kMonths[e.dateTime.month]} ${e.dateTime.day}';
     final timeStr = '${_timeStr(e.dateTime)} – ${_timeStr(e.endTime)}';
-    final attendingCount = e.attendeeUserIds.toSet().length;
 
     return AnimatedSlide(
       offset: _visible ? Offset.zero : const Offset(1, 0),
@@ -1564,17 +2089,6 @@ class _WeekEventDetailState extends State<_WeekEventDetail> {
                             icon: Icons.location_on_outlined,
                             label: 'Location',
                             value: e.location,
-                          ),
-                          Divider(
-                            color: AppColors.divider,
-                            height: 24,
-                            thickness: 1,
-                          ),
-                          _DetailRow(
-                            icon: Icons.people_outline_rounded,
-                            label: 'Attending',
-                            value:
-                                '$attendingCount ${attendingCount == 1 ? 'person' : 'people'} going',
                           ),
                         ],
                       ),

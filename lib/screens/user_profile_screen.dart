@@ -94,7 +94,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final user = widget.user;
     final isFollowing = userState.isFollowingUser(user.id);
     final isPending = userState.hasPendingRequest(user.id);
-    final theyFollowMe = user.followingUserIds.contains(_myId);
 
     if (isFollowing && !isPending) {
       setState(() => userState.toggleFollowUser(user.id));
@@ -107,61 +106,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         userState.followedUserIds.remove(user.id);
       });
       _persist();
-      return;
-    }
-    if (!theyFollowMe && !userState.shownFollowNotice.contains(user.id)) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            'Follow',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.text,
-            ),
-          ),
-          content: Text(
-            '${userState.displayNameFor(user.id, user.name)} doesn\'t follow you back yet. You can still follow them — they won\'t need to approve it.',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.secondaryText,
-              height: 1.5,
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(
-                'Cancel',
-                style: TextStyle(color: AppColors.secondaryText),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Follow'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true && mounted) {
-        setState(() {
-          userState.followedUserIds.add(user.id);
-          userState.shownFollowNotice.add(user.id);
-        });
-        _persist();
-      }
       return;
     }
     setState(() => userState.followedUserIds.add(user.id));

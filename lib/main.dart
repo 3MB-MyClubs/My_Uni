@@ -17,6 +17,7 @@ import 'services/user_state.dart';
 import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
 import 'services/theme_service.dart';
+import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 
 void main() async {
@@ -35,6 +36,7 @@ void main() async {
   await viewTracker.initialize();
   await personalizationService.initialize();
   await themeService.initialize();
+  await calendarSyncService.initialize();
   contentStore.applyToLists();
   contentStore.loadBoardMemberRequests();
   contentStore.loadBoardMemberIds();

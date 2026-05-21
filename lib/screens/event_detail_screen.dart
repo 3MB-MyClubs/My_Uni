@@ -1,12 +1,13 @@
 import 'dart:io';
-import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import 'package:flutter/material.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/calendar_sync_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
+import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/rsvp_button.dart';
@@ -62,6 +63,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       widget.event.id,
       widget.event.attendeeUserIds.contains(userId),
     );
+    final viewerId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    viewTracker.recordView(widget.event.id, viewerId);
   }
 
   void _confirmDelete() {
@@ -524,15 +528,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   if (!isPast) ...[
                     const SizedBox(height: 10),
                     GestureDetector(
-                      onTap: () {
-                        cal.Add2Calendar.addEvent2Cal(
-                          cal.Event(
-                            title: event.title,
-                            description: event.description,
-                            location: event.location,
-                            startDate: event.dateTime,
-                            endDate: event.endTime,
-                            allDay: false,
+                      onTap: () async {
+                        final alreadySynced = calendarSyncService.isSynced(
+                          _loggedInId,
+                          event.id,
+                        );
+                        final synced = await calendarSyncService
+                            .addToDeviceCalendar(event, _loggedInId);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              alreadySynced || synced
+                                  ? 'Added to your phone calendar.'
+                                  : 'Could not open your phone calendar.',
+                            ),
                           ),
                         );
                       },

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/event.dart';
+import 'calendar_sync_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
 
@@ -44,9 +46,9 @@ class RsvpStore extends ChangeNotifier {
   /// Optimistically flips attending state then persists to the data model.
   /// No-ops if [userId] is empty or a request is already in flight for this
   /// event (prevents duplicate taps).
-  void toggle(String eventId, String userId) {
-    if (userId.isEmpty) return;
-    if (_map[eventId]?.pending == true) return;
+  bool? toggle(String eventId, String userId) {
+    if (userId.isEmpty) return null;
+    if (_map[eventId]?.pending == true) return null;
 
     final wasAttending = _map[eventId]?.attending ?? false;
 
@@ -60,7 +62,7 @@ class RsvpStore extends ChangeNotifier {
       // Event not found — revert
       _map[eventId] = _Entry(attending: wasAttending);
       notifyListeners();
-      return;
+      return null;
     }
 
     final event = events[idx];
@@ -76,10 +78,14 @@ class RsvpStore extends ChangeNotifier {
 
     // 3. Persist asynchronously (fire-and-forget, same as existing pattern)
     contentStore.saveEvents();
+    if (!wasAttending) {
+      unawaited(calendarSyncService.addToDeviceCalendar(event, userId));
+    }
 
     // 4. Clear pending — another notifyListeners so isPending consumers update
     _map[eventId] = _Entry(attending: !wasAttending);
     notifyListeners();
+    return !wasAttending;
   }
 
   // ── Clear (logout) ────────────────────────────────────────────────────────
