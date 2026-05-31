@@ -16,6 +16,7 @@ class PersonalCalendarScreen extends StatefulWidget {
 
 class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
   late DateTime _selectedDay;
+  bool _syncingAppleCalendar = false;
 
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -52,16 +53,18 @@ class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
     }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
-  List<Event> _eventsForDay(DateTime day, List<Event> source) {
-    return source.where((event) => _sameDay(event.dateTime, day)).toList();
+  Future<void> _syncAppleCalendar(List<Event> eventList) async {
+    if (_syncingAppleCalendar || _userId.isEmpty || eventList.isEmpty) return;
+    _syncingAppleCalendar = true;
+    try {
+      await calendarSyncService.syncEventsToDeviceCalendar(eventList, _userId);
+    } finally {
+      _syncingAppleCalendar = false;
+    }
   }
 
-  int _syncedCount(List<Event> source) {
-    final userId = _userId;
-    if (userId.isEmpty) return 0;
-    return source
-        .where((event) => calendarSyncService.isSynced(userId, event.id))
-        .length;
+  List<Event> _eventsForDay(DateTime day, List<Event> source) {
+    return source.where((event) => _sameDay(event.dateTime, day)).toList();
   }
 
   Color _clubColor(String clubId) {
@@ -79,24 +82,6 @@ class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
     return colors[(idx < 0 ? 0 : idx) % colors.length];
   }
 
-  Future<void> _syncEvent(Event event) async {
-    final synced = await calendarSyncService.addToDeviceCalendar(
-      event,
-      _userId,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          synced
-              ? 'Added to your phone calendar.'
-              : 'Could not open your phone calendar.',
-        ),
-      ),
-    );
-    setState(() {});
-  }
-
   void _openEvent(Event event) {
     Navigator.push(
       context,
@@ -110,9 +95,12 @@ class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([rsvpStore, calendarSyncService]),
+      listenable: rsvpStore,
       builder: (context, _) {
         final allEvents = _personalEvents();
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _syncAppleCalendar(allEvents),
+        );
         final selectedEvents = _eventsForDay(_selectedDay, allEvents);
         final counts = {
           for (final day in _visibleDays)
@@ -128,10 +116,7 @@ class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-                    child: _CalendarHeader(
-                      eventCount: allEvents.length,
-                      syncedCount: _syncedCount(allEvents),
-                    ),
+                    child: _CalendarHeader(eventCount: allEvents.length),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -169,12 +154,7 @@ class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
                         return _CalendarEventCard(
                           event: event,
                           color: _clubColor(event.clubId),
-                          synced: calendarSyncService.isSynced(
-                            _userId,
-                            event.id,
-                          ),
                           onTap: () => _openEvent(event),
-                          onSync: () => _syncEvent(event),
                         );
                       },
                     ),
@@ -190,9 +170,8 @@ class _PersonalCalendarScreenState extends State<PersonalCalendarScreen> {
 
 class _CalendarHeader extends StatelessWidget {
   final int eventCount;
-  final int syncedCount;
 
-  const _CalendarHeader({required this.eventCount, required this.syncedCount});
+  const _CalendarHeader({required this.eventCount});
 
   @override
   Widget build(BuildContext context) {
@@ -210,7 +189,7 @@ class _CalendarHeader extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Your RSVP events appear here and get sent to your phone calendar.',
+          'Your RSVP events appear here automatically.',
           style: TextStyle(
             fontSize: 13,
             height: 1.35,
@@ -263,7 +242,7 @@ class _CalendarHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$syncedCount synced with your phone calendar',
+                      'Updated from your RSVPs',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.secondaryText,
@@ -437,16 +416,12 @@ class _SelectedDayTitle extends StatelessWidget {
 class _CalendarEventCard extends StatelessWidget {
   final Event event;
   final Color color;
-  final bool synced;
   final VoidCallback onTap;
-  final VoidCallback onSync;
 
   const _CalendarEventCard({
     required this.event,
     required this.color,
-    required this.synced,
     required this.onTap,
-    required this.onSync,
   });
 
   @override
@@ -551,26 +526,10 @@ class _CalendarEventCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: synced ? null : onSync,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: synced ? AppColors.lightRed : AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Icon(
-                  synced
-                      ? Icons.event_available_rounded
-                      : Icons.calendar_month_outlined,
-                  size: 18,
-                  color: synced
-                      ? AppColors.primaryRed
-                      : AppColors.secondaryText,
-                ),
-              ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: AppColors.secondaryText,
             ),
           ],
         ),

@@ -46,7 +46,8 @@ extension CalEventTypeX on CalEventType {
 
 class CalEvent {
   final String id;
-  final String? sourceEventId; // set for CalEventType.event — links to app Event.id
+  final String?
+  sourceEventId; // set for CalEventType.event — links to app Event.id
   final int day;
   final int month; // 0-indexed (0=Jan)
   final int year;
@@ -109,16 +110,20 @@ List<CalEvent> buildMonthEvents(int year, int month) {
     if (!rsvpStore.isAttending(e.id)) continue;
     final dt = e.dateTime;
     if (dt.year == year && dt.month == month + 1) {
-      result.add(CalEvent(
-        id: 'appev_${e.id}',
-        sourceEventId: e.id,
-        day: dt.day, month: month, year: year,
-        type: CalEventType.event,
-        title: e.title,
-        time: '${_fmt(dt.hour)}:${_fmt(dt.minute)}',
-        endTime: '${_fmt(e.endTime.hour)}:${_fmt(e.endTime.minute)}',
-        location: e.location,
-      ));
+      result.add(
+        CalEvent(
+          id: 'appev_${e.id}',
+          sourceEventId: e.id,
+          day: dt.day,
+          month: month,
+          year: year,
+          type: CalEventType.event,
+          title: e.title,
+          time: '${_fmt(dt.hour)}:${_fmt(dt.minute)}',
+          endTime: '${_fmt(e.endTime.hour)}:${_fmt(e.endTime.minute)}',
+          location: e.location,
+        ),
+      );
     }
   }
 
@@ -144,8 +149,18 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
   List<CalEvent> _userEvents = [];
 
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   static const _dowShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -184,8 +199,13 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
     setState(() {
       var m = _month + delta;
       var y = _year;
-      if (m < 0) { m = 11; y--; }
-      else if (m > 11) { m = 0; y++; }
+      if (m < 0) {
+        m = 11;
+        y--;
+      } else if (m > 11) {
+        m = 0;
+        y++;
+      }
       _month = m;
       _year = y;
       _selDay = 1;
@@ -231,7 +251,8 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
           setState(() {
             if (existing != null) {
               _userEvents = [
-                for (final u in _userEvents) if (u.id == e.id) e else u,
+                for (final u in _userEvents)
+                  if (u.id == e.id) e else u,
               ];
             } else {
               _userEvents = [..._userEvents, e];
@@ -246,7 +267,8 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
             : (id) {
                 setState(() {
                   _userEvents = [
-                    for (final u in _userEvents) if (u.id != id) u,
+                    for (final u in _userEvents)
+                      if (u.id != id) u,
                   ];
                 });
               },
@@ -379,7 +401,11 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                 color: AppColors.primaryRed,
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
         ],
@@ -452,8 +478,16 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
   Widget _buildFilterChips() {
     final filters = [
       (type: null as CalEventType?, label: 'All', color: AppColors.primaryRed),
-      (type: CalEventType.event, label: 'RSVP\'d', color: CalEventType.event.color),
-      (type: CalEventType.personal, label: 'Personal', color: CalEventType.personal.color),
+      (
+        type: CalEventType.event,
+        label: 'RSVP\'d',
+        color: CalEventType.event.color,
+      ),
+      (
+        type: CalEventType.personal,
+        label: 'Personal',
+        color: CalEventType.personal.color,
+      ),
     ];
 
     return SizedBox(
@@ -476,9 +510,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                     ? f.color.withValues(alpha: 0.15)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: active ? f.color : AppColors.divider,
-                ),
+                border: Border.all(color: active ? f.color : AppColors.divider),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -672,9 +704,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Expanded(
-              child: Container(height: 1, color: AppColors.divider),
-            ),
+            Expanded(child: Container(height: 1, color: AppColors.divider)),
             const SizedBox(width: 10),
             Text(
               '${selected.length} item${selected.length == 1 ? '' : 's'}',
@@ -795,9 +825,159 @@ class _AgendaItemState extends State<_AgendaItem> {
     return calendarSyncService.isSynced(_userId, sid);
   }
 
-  Future<void> _sync() async {
+  Future<void> _handleAddToPhone() async {
+    if (_syncing || _isSynced) return;
     final src = _sourceEvent;
-    if (src == null || _syncing) return;
+    if (src == null) return;
+
+    // Check current permission status
+    final status = await calendarSyncService.checkPermission();
+
+    if (!mounted) return;
+
+    if (status == 'authorized') {
+      _doSync(src);
+      return;
+    }
+
+    if (status == 'denied' || status == 'restricted') {
+      _showDeniedDialog();
+      return;
+    }
+
+    // notDetermined — show explanation dialog first, then trigger native prompt
+    await _showPrePermissionDialog();
+    if (!mounted) return;
+    final granted = await calendarSyncService.requestPermission();
+    if (!mounted) return;
+    if (granted) {
+      _doSync(src);
+    } else {
+      _showDeniedDialog();
+    }
+  }
+
+  Future<void> _showPrePermissionDialog() {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60, height: 60,
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.calendar_month_rounded,
+                  size: 30, color: AppColors.primaryRed),
+            ),
+            const SizedBox(height: 16),
+            Text('Allow Calendar Access',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.text),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 10),
+            Text(
+              'To save this event to your phone\'s Calendar app, we need permission to access your calendar.\n\nYour calendar data is only used to add events you choose.',
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+          ],
+        ),
+        actions: [
+          Row(children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.secondaryText,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppColors.divider),
+                  ),
+                ),
+                child: const Text('Not Now', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.primaryRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Allow Access', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  void _showDeniedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60, height: 60,
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline_rounded, size: 30, color: Colors.orange),
+            ),
+            const SizedBox(height: 16),
+            Text('Calendar Access Denied',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.text),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 10),
+            Text(
+              'To sync events to your phone, please allow calendar access in:\n\nSettings → Privacy & Security → Calendars',
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doSync(app_event.Event src) async {
     setState(() => _syncing = true);
     await calendarSyncService.addToDeviceCalendar(src, _userId);
     if (mounted) setState(() => _syncing = false);
@@ -807,8 +987,8 @@ class _AgendaItemState extends State<_AgendaItem> {
   Widget build(BuildContext context) {
     final meta = widget.event.type;
     final color = meta.color;
-    final isAppEvent = widget.event.type == CalEventType.event &&
-        widget.event.sourceEventId != null;
+    final isAppEvent =
+        widget.event.type == CalEventType.event && widget.event.sourceEventId != null;
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -895,7 +1075,9 @@ class _AgendaItemState extends State<_AgendaItem> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1B5E20).withValues(alpha: 0.15),
+                            color: const Color(
+                              0xFF1B5E20,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
@@ -959,21 +1141,19 @@ class _AgendaItemState extends State<_AgendaItem> {
                   if (isAppEvent) ...[
                     const SizedBox(height: 8),
                     GestureDetector(
-                      onTap: _isSynced ? null : _sync,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
+                      onTap: (_isSynced || _syncing) ? null : _handleAddToPhone,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
                           color: _isSynced
-                              ? AppColors.background
-                              : AppColors.primaryRed.withValues(alpha: 0.1),
+                              ? const Color(0xFF1B5E20).withValues(alpha: 0.12)
+                              : AppColors.primaryRed.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: _isSynced
-                                ? AppColors.divider
-                                : AppColors.primaryRed.withValues(alpha: 0.4),
+                                ? const Color(0xFF4CAF50).withValues(alpha: 0.4)
+                                : AppColors.primaryRed.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
@@ -981,8 +1161,8 @@ class _AgendaItemState extends State<_AgendaItem> {
                           children: [
                             if (_syncing)
                               SizedBox(
-                                width: 10,
-                                height: 10,
+                                width: 11,
+                                height: 11,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 1.5,
                                   color: AppColors.primaryRed,
@@ -991,21 +1171,25 @@ class _AgendaItemState extends State<_AgendaItem> {
                             else
                               Icon(
                                 _isSynced
-                                    ? Icons.check_circle_outline
-                                    : Icons.calendar_today_outlined,
+                                    ? Icons.check_circle_rounded
+                                    : Icons.calendar_today_rounded,
                                 size: 11,
                                 color: _isSynced
-                                    ? AppColors.secondaryText
+                                    ? const Color(0xFF4CAF50)
                                     : AppColors.primaryRed,
                               ),
                             const SizedBox(width: 5),
                             Text(
-                              _isSynced ? 'Added to phone' : 'Add to phone',
+                              _syncing
+                                  ? 'Adding…'
+                                  : _isSynced
+                                      ? 'Added to phone'
+                                      : 'Add to phone',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: _isSynced
-                                    ? AppColors.secondaryText
+                                    ? const Color(0xFF4CAF50)
                                     : AppColors.primaryRed,
                                 letterSpacing: 0.2,
                               ),
@@ -1092,8 +1276,18 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
   bool get _canSave => _titleCtrl.text.trim().isNotEmpty;
 
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   @override
@@ -1120,19 +1314,23 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
 
   void _save() {
     if (!_canSave) return;
-    final id = _isEdit ? widget.existing!.id : 'u${DateTime.now().millisecondsSinceEpoch}';
-    widget.onSave(CalEvent(
-      id: id,
-      day: _day,
-      month: _month,
-      year: _year,
-      type: _type,
-      title: _titleCtrl.text.trim(),
-      time: _startTime,
-      endTime: _endTime,
-      location: _locCtrl.text.trim(),
-      isUserAdded: true,
-    ));
+    final id = _isEdit
+        ? widget.existing!.id
+        : 'u${DateTime.now().millisecondsSinceEpoch}';
+    widget.onSave(
+      CalEvent(
+        id: id,
+        day: _day,
+        month: _month,
+        year: _year,
+        type: _type,
+        title: _titleCtrl.text.trim(),
+        time: _startTime,
+        endTime: _endTime,
+        location: _locCtrl.text.trim(),
+        isUserAdded: true,
+      ),
+    );
     Navigator.pop(context);
   }
 
@@ -1162,7 +1360,10 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
   }
 
   Future<void> _pickTime(bool isStart) async {
-    final parts = (isStart ? _startTime : _endTime).split(':').map(int.parse).toList();
+    final parts = (isStart ? _startTime : _endTime)
+        .split(':')
+        .map(int.parse)
+        .toList();
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: parts[0], minute: parts[1]),
@@ -1177,7 +1378,8 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
       ),
     );
     if (picked != null) {
-      final str = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      final str =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
       setState(() => isStart ? _startTime = str : _endTime = str);
     }
   }
@@ -1272,8 +1474,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                                 : AppColors.background,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color:
-                                  _type == t ? t.color : AppColors.divider,
+                              color: _type == t ? t.color : AppColors.divider,
                               width: _type == t ? 1.5 : 1,
                             ),
                           ),
@@ -1312,7 +1513,11 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
               // Title
               _SectionLabel('Title'),
               const SizedBox(height: 8),
-              _Field(controller: _titleCtrl, hint: "What's happening?", autofocus: true),
+              _Field(
+                controller: _titleCtrl,
+                hint: "What's happening?",
+                autofocus: true,
+              ),
               const SizedBox(height: 14),
 
               // Date
@@ -1322,7 +1527,10 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                 onTap: _pickDate,
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     border: Border.all(color: AppColors.divider),
@@ -1385,7 +1593,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                 padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
                 decoration: BoxDecoration(
                   color: _type.color.withValues(alpha: 0.10),
-                  border: Border.all(color: _type.color.withValues(alpha: 0.30)),
+                  border: Border.all(
+                    color: _type.color.withValues(alpha: 0.30),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1414,7 +1624,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            _titleCtrl.text.isEmpty ? 'Untitled' : _titleCtrl.text,
+                            _titleCtrl.text.isEmpty
+                                ? 'Untitled'
+                                : _titleCtrl.text,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -1493,18 +1705,29 @@ class _Field extends StatelessWidget {
   final String hint;
   final bool autofocus;
 
-  const _Field({required this.controller, required this.hint, this.autofocus = false});
+  const _Field({
+    required this.controller,
+    required this.hint,
+    this.autofocus = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       autofocus: autofocus,
-      style: TextStyle(fontSize: 14, color: AppColors.text, fontWeight: FontWeight.w500),
+      style: TextStyle(
+        fontSize: 14,
+        color: AppColors.text,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: AppColors.secondaryText),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: 12,
+        ),
         filled: true,
         fillColor: AppColors.background,
         border: OutlineInputBorder(

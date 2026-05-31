@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:add_2_calendar/add_2_calendar.dart' as cal;
 import '../models/recommendation.dart';
 import '../models/event.dart';
 import '../models/club.dart';
@@ -146,7 +145,6 @@ class _KuDaySectionState extends State<KuDaySection> {
         // ── Digest strip ────────────────────────────────────────────────────
         _DigestStrip(onRefresh: _refresh),
         const SizedBox(height: 10),
-
 
         // ── Recommendation cards ─────────────────────────────────────────────
         if (recs.isEmpty)
@@ -562,7 +560,9 @@ class _EventBody extends StatelessWidget {
                   ListenableBuilder(
                     listenable: rsvpStore,
                     builder: (context, _) {
-                      if (event.attendeeUserIds.isEmpty) return const SizedBox.shrink();
+                      if (event.attendeeUserIds.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
                       return Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
@@ -800,18 +800,6 @@ class _EventActionsState extends State<_EventActions> {
     setState(() => _reminded = !_reminded);
   }
 
-  void _addToCalendar() {
-    final calEvent = cal.Event(
-      title: widget.event.title,
-      description: widget.event.description,
-      location: widget.event.location,
-      startDate: widget.event.dateTime,
-      endDate: widget.event.endTime,
-      allDay: false,
-    );
-    cal.Add2Calendar.addEvent2Cal(calEvent);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Wrap(
@@ -823,13 +811,6 @@ class _EventActionsState extends State<_EventActions> {
           eventId: widget.event.id,
           color: widget.color,
           compact: true,
-        ),
-        _ActionChip(
-          label: 'Calendar',
-          icon: Icons.calendar_month_outlined,
-          color: widget.color,
-          filled: false,
-          onTap: _addToCalendar,
         ),
         _ActionChip(
           label: _reminded ? 'Remind ✓' : 'Remind me',

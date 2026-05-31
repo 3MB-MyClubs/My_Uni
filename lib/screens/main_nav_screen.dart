@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../features/calendar/providers/calendar_provider.dart';
+import '../features/calendar/providers/calendar_state.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -17,16 +20,16 @@ import 'create_post_screen.dart';
 import 'create_event_screen.dart';
 import 'create_story_screen.dart';
 
-class MainNavScreen extends StatefulWidget {
+class MainNavScreen extends ConsumerStatefulWidget {
   final bool isAdmin;
   final VoidCallback? onLogout;
   const MainNavScreen({super.key, required this.isAdmin, this.onLogout});
 
   @override
-  State<MainNavScreen> createState() => _MainNavScreenState();
+  ConsumerState<MainNavScreen> createState() => _MainNavScreenState();
 }
 
-class _MainNavScreenState extends State<MainNavScreen> {
+class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   int _selectedIndex = 0;
   OverlayEntry? _bannerEntry;
 
@@ -34,6 +37,98 @@ class _MainNavScreenState extends State<MainNavScreen> {
   void initState() {
     super.initState();
     userState.incomingMessageNotifier.addListener(_onIncomingMessage);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _requestCalendarIfNeeded());
+  }
+
+  Future<void> _requestCalendarIfNeeded() async {
+    final service = ref.read(calendarServiceProvider);
+    final permission = await service.checkPermission();
+    if (!mounted) return;
+    if (permission == CalendarPermissionState.granted ||
+        permission == CalendarPermissionState.permanentlyDenied ||
+        permission == CalendarPermissionState.restricted) { return; }
+    await _showCalendarExplanationDialog();
+    if (!mounted) return;
+    await service.requestPermission();
+  }
+
+  Future<void> _showCalendarExplanationDialog() {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.calendar_month_rounded,
+                  size: 32, color: AppColors.primaryRed),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Connect Your Calendar',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.text),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'My Clubs can add events you RSVP to directly into your phone\'s Calendar app, so you never miss anything.\n\nYour calendar data is only used to add events you choose.',
+              style: TextStyle(
+                  fontSize: 13, color: AppColors.secondaryText, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+        actions: [
+          Row(children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.secondaryText,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppColors.divider),
+                  ),
+                ),
+                child: const Text('Not Now',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.primaryRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Continue',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
   }
 
   @override

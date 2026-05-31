@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
@@ -26,6 +29,8 @@ import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
+import '../services/group_chat_service.dart';
+import 'group_chat_screen.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -56,6 +61,22 @@ class _ClubSuggestion {
   const _ClubSuggestion(this.club);
 }
 
+class _CampusWeather {
+  final int temperature;
+  final String condition;
+  final String icon;
+  final DateTime updatedAt;
+
+  const _CampusWeather({
+    required this.temperature,
+    required this.condition,
+    required this.icon,
+    required this.updatedAt,
+  });
+
+  String get label => '$temperature°C · $condition';
+}
+
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
 class FeedScreen extends StatefulWidget {
@@ -66,7 +87,14 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  static const _nativeChannel = MethodChannel('ku_app/native_weather');
+  static const _campusWeatherUrl =
+      'https://api.open-meteo.com/v1/forecast?latitude=41.2050&longitude=29.0720&current=temperature_2m,weather_code&timezone=Europe%2FIstanbul';
+
   final Set<String> _viewedClubIds = {};
+  Timer? _weatherRefreshTimer;
+  _CampusWeather? _campusWeather;
+  bool _isWeatherLoading = false;
 
   // true = show only followed clubs, false = show all clubs
   bool _followedOnly = true;
@@ -160,9 +188,130 @@ class _FeedScreenState extends State<FeedScreen> {
     return result;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _refreshCampusWeather();
+    _weatherRefreshTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _refreshCampusWeather(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _weatherRefreshTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _onRefresh() async {
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.wait([
+      Future.delayed(const Duration(milliseconds: 600)),
+      _refreshCampusWeather(),
+    ]);
     setState(() {});
+  }
+
+  Future<void> _refreshCampusWeather() async {
+    if (_isWeatherLoading) return;
+    _isWeatherLoading = true;
+    try {
+      final client = HttpClient();
+      try {
+        final request = await client.getUrl(Uri.parse(_campusWeatherUrl));
+        final response = await request.close();
+        if (response.statusCode != HttpStatus.ok) return;
+
+        final body = await response.transform(utf8.decoder).join();
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        final current = json['current'] as Map<String, dynamic>?;
+        if (current == null) return;
+
+        final temp = (current['temperature_2m'] as num).round();
+        final code = (current['weather_code'] as num).toInt();
+        final weather = _weatherFromCode(code, temp);
+
+        if (!mounted) return;
+        setState(() => _campusWeather = weather);
+      } finally {
+        client.close(force: true);
+      }
+    } catch (_) {
+      // Keep the last successful reading visible if the network is unavailable.
+    } finally {
+      _isWeatherLoading = false;
+    }
+  }
+
+  _CampusWeather _weatherFromCode(int code, int temperature) {
+    final now = DateTime.now();
+    if (code == 0) {
+      return _CampusWeather(
+        temperature: temperature,
+        condition: 'Clear',
+        icon: '☀️',
+        updatedAt: now,
+      );
+    }
+    if (code == 1 || code == 2) {
+      return _CampusWeather(
+        temperature: temperature,
+        condition: 'Partly cloudy',
+        icon: '⛅',
+        updatedAt: now,
+      );
+    }
+    if (code == 3 || code == 45 || code == 48) {
+      return _CampusWeather(
+        temperature: temperature,
+        condition: code == 3 ? 'Cloudy' : 'Foggy',
+        icon: code == 3 ? '☁️' : '🌫️',
+        updatedAt: now,
+      );
+    }
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+      return _CampusWeather(
+        temperature: temperature,
+        condition: 'Rainy',
+        icon: '🌧️',
+        updatedAt: now,
+      );
+    }
+    if (code >= 71 && code <= 77) {
+      return _CampusWeather(
+        temperature: temperature,
+        condition: 'Snowy',
+        icon: '❄️',
+        updatedAt: now,
+      );
+    }
+    if (code >= 95) {
+      return _CampusWeather(
+        temperature: temperature,
+        condition: 'Stormy',
+        icon: '⛈️',
+        updatedAt: now,
+      );
+    }
+    return _CampusWeather(
+      temperature: temperature,
+      condition: 'Updated',
+      icon: '🌡️',
+      updatedAt: now,
+    );
+  }
+
+  Future<void> _openNativeWeatherApp() async {
+    try {
+      final opened = await _nativeChannel.invokeMethod<bool>('openWeatherApp');
+      if (opened == true || !mounted) return;
+    } catch (_) {
+      if (!mounted) return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Weather app is not available')),
+    );
   }
 
   // ── Feed tab state ─────────────────────────────────────────────────────────
@@ -322,70 +471,75 @@ class _FeedScreenState extends State<FeedScreen> {
     return name.split(' ').first;
   }
 
+  String get _greetingEmoji {
+    final h = DateTime.now().hour;
+    if (h < 6) return '🌙';
+    if (h < 12) return '☀️';
+    if (h < 17) return '👋';
+    if (h < 21) return '🌆';
+    return '🌙';
+  }
+
   SliverAppBar _buildAppBar() {
     return SliverAppBar(
-      backgroundColor: AppColors.card,
+      backgroundColor: Colors.transparent,
       foregroundColor: AppColors.text,
       surfaceTintColor: Colors.transparent,
+      elevation: 0,
       floating: true,
       snap: true,
-      expandedHeight: 76,
-      collapsedHeight: 56,
+      expandedHeight: 96,
+      collapsedHeight: 60,
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.fromLTRB(18, 0, 56, 12),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$_greeting, $_firstName',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.secondaryText.withValues(alpha: 0.8),
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0.1,
-              ),
-            ),
-            const SizedBox(height: 1),
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Uni',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                      color: AppColors.primaryRed,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                  TextSpan(
-                    text: 'Hub',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w200,
-                      fontSize: 22,
-                      color: AppColors.text,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        background: Builder(
+        titlePadding: EdgeInsets.zero,
+        collapseMode: CollapseMode.pin,
+        title: Builder(
           builder: (ctx) {
             final isDark = Theme.of(ctx).brightness == Brightness.dark;
             return Container(
               decoration: BoxDecoration(
-                gradient: isDark
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1E0A22), AppColors.card],
-                      )
-                    : null,
-                color: isDark ? null : AppColors.card,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: isDark
+                      ? [Color(0xFF180820), Color(0xFF1A0A1E)]
+                      : [AppColors.card, AppColors.card],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.fromLTRB(18, 0, 56, 12),
+              alignment: Alignment.bottomLeft,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$_greeting $_greetingEmoji',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _firstName,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.text,
+                      letterSpacing: -0.8,
+                      height: 1,
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -506,9 +660,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── Context Bar (weather + academic week) ─────────────────────────────────
   SliverToBoxAdapter _buildContextBar() {
-    // Static mock data — matches design
-    const weather = '18°C · Cloudy';
-    const weatherIcon = '⛅';
+    final weather = _campusWeather;
+    final weatherLabel = weather?.label ?? 'Loading weather';
+    final weatherIcon = weather?.icon ?? '🌡️';
     final now = DateTime.now();
     // Approximate academic week (spring semester starts early Feb)
     final semesterStart = DateTime(now.year, 2, 3);
@@ -533,120 +687,167 @@ class _FeedScreenState extends State<FeedScreen> {
               children: [
                 // Weather card
                 Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: isDark
-                          ? LinearGradient(
-                              colors: [Color(0xFF1A1226), Color(0xFF140818)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : null,
-                      color: isDark ? null : AppColors.surfaceAlt,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _openNativeWeatherApp,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isDark ? AppColors.glassEdge : AppColors.divider,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark
-                              ? Colors.black.withValues(alpha: 0.3)
-                              : AppColors.primaryRed.withValues(alpha: 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Text(weatherIcon, style: TextStyle(fontSize: 22)),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              weather,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                                letterSpacing: -0.2,
-                              ),
+                        decoration: BoxDecoration(
+                          gradient: isDark
+                              ? LinearGradient(
+                                  colors: [
+                                    Color(0xFF1A1226),
+                                    Color(0xFF140818),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : null,
+                          color: isDark ? null : AppColors.surfaceAlt,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark
+                                ? AppColors.glassEdge
+                                : AppColors.divider,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark
+                                  ? Colors.black.withValues(alpha: 0.3)
+                                  : AppColors.primaryRed.withValues(
+                                      alpha: 0.05,
+                                    ),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
                             ),
-                            Text(
-                              'Istanbul · Campus',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.secondaryText,
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Text(weatherIcon, style: TextStyle(fontSize: 22)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    weatherLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.text,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Istanbul · Campus',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 // Academic week card
                 Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primaryRed.withValues(alpha: 0.18),
-                          AppColors.card,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.push(
+                        ctx,
+                        MaterialPageRoute(
+                          builder: (_) => const MyCalendarScreen(),
+                        ),
                       ),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: AppColors.primaryRed.withValues(alpha: 0.2),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryRed.withValues(alpha: 0.08),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Text('📅', style: TextStyle(fontSize: 22)),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primaryRed.withValues(alpha: 0.18),
+                              AppColors.card,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppColors.primaryRed.withValues(alpha: 0.2),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primaryRed.withValues(
+                                alpha: 0.08,
+                              ),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              weekLabel,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                                letterSpacing: -0.2,
+                            Text('📅', style: TextStyle(fontSize: 22)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    weekLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.text,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  Text(
+                                    finalsLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.primaryRed.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              finalsLabel,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.primaryRed.withValues(
-                                  alpha: 0.8,
-                                ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: AppColors.primaryRed.withValues(
+                                alpha: 0.75,
                               ),
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -2353,6 +2554,7 @@ void _openShareSheet(
   VoidCallback onShared, {
   String caption = '',
   String clubName = '',
+  bool isEvent = false,
 }) {
   final currentUser = authService.currentUser;
   showModalBottomSheet(
@@ -2361,6 +2563,7 @@ void _openShareSheet(
     isScrollControlled: true,
     builder: (_) => _ShareSheet(
       targetId: targetId,
+      contentPrefix: isEvent ? 'kuevent' : 'kupost',
       userId: currentUser?.id ?? authService.currentAdmin?.id ?? 'guest',
       onShared: onShared,
       caption: caption,
@@ -3074,6 +3277,7 @@ class _EventCardState extends State<_EventCard> {
                           orElse: () => clubs.first,
                         )
                         .name,
+                    isEvent: true,
                   ),
                 ),
                 const Spacer(),
@@ -3176,7 +3380,6 @@ class _EventCardState extends State<_EventCard> {
 
 class _EngagementBar extends StatelessWidget {
   final int likes;
-  final String likesLabel;
   final int commenters;
   final int shares;
   final int views;
@@ -3188,7 +3391,6 @@ class _EngagementBar extends StatelessWidget {
     required this.commenters,
     required this.shares,
     required this.score,
-    this.likesLabel = 'likes',
     this.views = 0,
     this.onViewTap,
   });
@@ -3226,7 +3428,7 @@ class _EngagementBar extends StatelessWidget {
           Icon(Icons.favorite, size: 13, color: Colors.pink),
           const SizedBox(width: 3),
           Text(
-            '$likes $likesLabel',
+            '$likes likes',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -3285,6 +3487,7 @@ class _ActionBtn extends StatelessWidget {
 
 class _ShareSheet extends StatefulWidget {
   final String targetId;
+  final String contentPrefix; // 'kupost' or 'kuevent'
   final String userId;
   final VoidCallback onShared;
   final String caption;
@@ -3292,6 +3495,7 @@ class _ShareSheet extends StatefulWidget {
 
   const _ShareSheet({
     required this.targetId,
+    required this.contentPrefix,
     required this.userId,
     required this.onShared,
     required this.caption,
@@ -3304,12 +3508,15 @@ class _ShareSheet extends StatefulWidget {
 
 class _ShareSheetState extends State<_ShareSheet> {
   bool _storyPosted = false;
-  final Set<String> _sentToIds = {};
+  final Set<String> _selected = {};
+  bool _sending = false;
   final _searchCtrl = TextEditingController();
   String _query = '';
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  String get _contentPayload => '${widget.contentPrefix}:${widget.targetId}';
 
   List<User> get _friends => users
       .where((u) => userState.isFollowingUser(u.id) && u.id != _myId)
@@ -3320,6 +3527,10 @@ class _ShareSheetState extends State<_ShareSheet> {
     final q = _query.toLowerCase();
     return _friends.where((u) => u.name.toLowerCase().contains(q)).toList();
   }
+
+  void _toggleSelect(String uid) => setState(
+    () => _selected.contains(uid) ? _selected.remove(uid) : _selected.add(uid),
+  );
 
   void _recordShare() {
     final alreadyShared = shares.any(
@@ -3359,25 +3570,46 @@ class _ShareSheetState extends State<_ShareSheet> {
             postedAt: DateTime.now(),
           ),
         );
-      } catch (_) {
-        // no club found — success feedback still shown
-      }
+      } catch (_) {}
     }
     setState(() => _storyPosted = true);
   }
 
-  Future<void> _sendToFriend(String friendId) async {
+  Future<void> _sendSeparately() async {
+    if (_selected.isEmpty || _sending) return;
+    setState(() => _sending = true);
     _recordShare();
-    await messageService.saveMessage(
-      Message(
-        id: 'share_${DateTime.now().millisecondsSinceEpoch}_$friendId',
-        senderId: _myId,
-        receiverId: friendId,
-        content: 'kupost:${widget.targetId}',
-        sentAt: DateTime.now(),
-      ),
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    for (final uid in _selected) {
+      await messageService.saveMessage(
+        Message(
+          id: 'share_${ts}_$uid',
+          senderId: _myId,
+          receiverId: uid,
+          content: _contentPayload,
+          sentAt: DateTime.now(),
+        ),
+      );
+    }
+    if (mounted) {
+      setState(() => _sending = false);
+      Navigator.pop(context);
+    }
+  }
+
+  void _createGroup() {
+    if (_selected.length < 2 || _sending) return;
+    _recordShare();
+    final group = groupChatService.createGroup(
+      creatorId: _myId,
+      memberIds: _selected.toList(),
+      initialContent: _contentPayload,
     );
-    setState(() => _sentToIds.add(friendId));
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => GroupChatScreen(group: group)),
+    );
   }
 
   @override
@@ -3389,11 +3621,13 @@ class _ShareSheetState extends State<_ShareSheet> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
+    final hasSelection = _selected.isNotEmpty;
+    final canGroup = _selected.length >= 2;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.62,
+      initialChildSize: 0.65,
       minChildSize: 0.4,
-      maxChildSize: 0.88,
+      maxChildSize: 0.92,
       snap: true,
       builder: (_, scrollController) => Container(
         decoration: BoxDecoration(
@@ -3402,7 +3636,6 @@ class _ShareSheetState extends State<_ShareSheet> {
         ),
         child: Column(
           children: [
-            // Handle + title
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: Column(
@@ -3417,12 +3650,12 @@ class _ShareSheetState extends State<_ShareSheet> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Share',
+                    'Send to…',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Choose how you\'d like to share this',
+                    'Select people, then choose how to send',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -3437,62 +3670,64 @@ class _ShareSheetState extends State<_ShareSheet> {
             Expanded(
               child: ListView(
                 controller: scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.only(bottom: 8),
                 children: [
-                  // ── Option 1: Add to Story ────────────────────────────
-                  _ShareOptionTile(
-                    icon: Icons.auto_stories_rounded,
-                    iconColor: const Color(0xFF7B5EA7),
-                    iconBg: const Color(0xFFF0EAFA),
-                    title: 'Add to your story',
-                    subtitle: 'Repost this to your club\'s story',
-                    trailing: _storyPosted
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_rounded,
-                                  size: 14,
-                                  color: Colors.green,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Added',
-                                  style: TextStyle(
-                                    fontSize: 12,
+                  if (authService.currentAdmin != null) ...[
+                    _ShareOptionTile(
+                      icon: Icons.auto_stories_rounded,
+                      iconColor: const Color(0xFF7B5EA7),
+                      iconBg: const Color(0xFFF0EAFA),
+                      title: 'Add to your story',
+                      subtitle: 'Repost this to your club\'s story',
+                      trailing: _storyPosted
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 14,
                                     color: Colors.green,
-                                    fontWeight: FontWeight.w600,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Added',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppColors.secondaryText,
                             ),
-                          )
-                        : Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                    onTap: _storyPosted ? null : _addToStory,
-                  ),
+                      onTap: _storyPosted ? null : _addToStory,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      child: Divider(height: 1, color: AppColors.lightGray),
+                    ),
+                  ],
 
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    child: Divider(height: 1, color: AppColors.lightGray),
-                  ),
-
-                  // ── Option 2: Send to Friend ──────────────────────────
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(16, 6, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                     child: Text(
-                      'SEND TO A FRIEND',
+                      'SELECT PEOPLE',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -3502,7 +3737,6 @@ class _ShareSheetState extends State<_ShareSheet> {
                     ),
                   ),
 
-                  // Search box
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Container(
@@ -3514,9 +3748,9 @@ class _ShareSheetState extends State<_ShareSheet> {
                       child: TextField(
                         controller: _searchCtrl,
                         onChanged: (v) => setState(() => _query = v),
-                        style: TextStyle(fontSize: 14),
+                        style: const TextStyle(fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'Search friends',
+                          hintText: 'Search friends…',
                           hintStyle: TextStyle(
                             color: AppColors.secondaryText,
                             fontSize: 14,
@@ -3527,19 +3761,20 @@ class _ShareSheetState extends State<_ShareSheet> {
                             color: AppColors.secondaryText,
                           ),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                          ),
                         ),
                       ),
                     ),
                   ),
 
-                  // Friends list
                   if (filtered.isEmpty)
                     Padding(
-                      padding: EdgeInsets.symmetric(vertical: 28),
+                      padding: const EdgeInsets.symmetric(vertical: 28),
                       child: Center(
                         child: Text(
-                          'Follow people to send them posts',
+                          'Follow people to send them content',
                           style: TextStyle(
                             color: AppColors.secondaryText,
                             fontSize: 14,
@@ -3548,17 +3783,187 @@ class _ShareSheetState extends State<_ShareSheet> {
                       ),
                     )
                   else
-                    ...filtered.map(
-                      (u) => _FriendSendRow(
-                        user: u,
-                        sent: _sentToIds.contains(u.id),
-                        onSend: _sentToIds.contains(u.id)
-                            ? null
-                            : () => _sendToFriend(u.id),
+                    ...filtered.map((u) {
+                      final selected = _selected.contains(u.id);
+                      return InkWell(
+                        onTap: () => _toggleSelect(u.id),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              UserAvatar(userId: u.id, name: u.name, size: 42),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      u.name,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                    Text(
+                                      u.email,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.secondaryText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: selected
+                                      ? AppColors.primaryRed
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: selected
+                                        ? AppColors.primaryRed
+                                        : AppColors.divider,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: selected
+                                    ? const Icon(
+                                        Icons.check_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      )
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+
+            Container(
+              color: AppColors.card,
+              padding: EdgeInsets.fromLTRB(
+                16,
+                10,
+                16,
+                MediaQuery.of(context).padding.bottom + 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (hasSelection)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '${_selected.length} ${_selected.length == 1 ? "person" : "people"} selected',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.secondaryText,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-
-                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: hasSelection ? _sendSeparately : null,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: hasSelection
+                                  ? AppColors.primaryRed
+                                  : AppColors.lightGray,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.center,
+                            child: _sending
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.send_rounded,
+                                        size: 16,
+                                        color: hasSelection
+                                            ? Colors.white
+                                            : AppColors.secondaryText,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Send Separately',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: hasSelection
+                                              ? Colors.white
+                                              : AppColors.secondaryText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
+                      if (canGroup) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _createGroup,
+                            child: Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.primaryRed),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.group_rounded,
+                                    size: 16,
+                                    color: AppColors.primaryRed,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Create Group',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primaryRed,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -3629,93 +4034,6 @@ class _ShareOptionTile extends StatelessWidget {
             trailing,
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _FriendSendRow extends StatelessWidget {
-  final User user;
-  final bool sent;
-  final VoidCallback? onSend;
-
-  const _FriendSendRow({
-    required this.user,
-    required this.sent,
-    required this.onSend,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(
-        children: [
-          UserAvatar(userId: user.id, name: user.name, size: 42),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.name,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  user.email,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: onSend,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              decoration: BoxDecoration(
-                color: sent
-                    ? Colors.green.withValues(alpha: 0.1)
-                    : AppColors.primaryRed,
-                borderRadius: BorderRadius.circular(20),
-                border: sent
-                    ? Border.all(color: Colors.green.withValues(alpha: 0.35))
-                    : null,
-              ),
-              child: sent
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.check_rounded,
-                          size: 13,
-                          color: Colors.green,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Sent',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.green,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      'Send',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -13,7 +13,7 @@ class StudentProfileData {
   final int followers;
   final int following;
   final List<String> vibes;
-  final StudentEventData nextEvent;
+  final StudentEventData? nextEvent;
 
   const StudentProfileData({
     required this.initials,
@@ -26,7 +26,7 @@ class StudentProfileData {
     required this.followers,
     required this.following,
     required this.vibes,
-    required this.nextEvent,
+    this.nextEvent,
   });
 }
 
@@ -52,38 +52,17 @@ class StudentProfileScreen extends StatelessWidget {
   final VoidCallback? onEditProfile;
   final List<Club> followedClubs;
   final ValueChanged<Club>? onClubTap;
-  final List<String>? vibeTopics;
+  final StudentProfileData data;
 
   const StudentProfileScreen({
     super.key,
     required this.onSettings,
+    required this.data,
     this.onEditBio,
     this.onEditProfile,
     this.followedClubs = const [],
     this.onClubTap,
-    this.vibeTopics,
   });
-
-  static const _data = StudentProfileData(
-    initials: 'ED',
-    name: 'Emin Doğu',
-    graduation: "KOÇ '28",
-    major: 'Economics',
-    year: '1st Year',
-    bio:
-        'Halfway through Prep, fully committed to figuring out which clubs serve the best tea — debate-team rookie, ex-rower, will trade notes for filter coffee.',
-    clubs: 3,
-    followers: 248,
-    following: 186,
-    vibes: ['Debate', 'Rowing', 'Film', 'Climate', 'Entrepreneur'],
-    nextEvent: StudentEventData(
-      month: 'MAY',
-      day: '16',
-      title: 'Spring debate showcase',
-      clubLine: 'Debate Society · Sat · 19:00',
-      location: 'SOS Z18',
-    ),
-  );
 
   static const Color _burgundy = Color(0xFF8D1F2D);
   static const Color _background = Color(0xFFF7F4F2);
@@ -122,24 +101,22 @@ class StudentProfileScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
-                  child: ProfileHeader(data: _data),
+                  child: ProfileHeader(data: data),
                 ),
               ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                  child: _ProfileIdentity(data: _data, onEditBio: onEditBio),
+                  child: _ProfileIdentity(data: data, onEditBio: onEditBio),
                 ),
               ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
                   child: StatsCard(
-                    clubs: followedClubs.isEmpty
-                        ? _data.clubs
-                        : followedClubs.length,
-                    followers: _data.followers,
-                    following: _data.following,
+                    clubs: data.clubs,
+                    followers: data.followers,
+                    following: data.following,
                     onClubsTap: () =>
                         _showFollowedClubsSheet(context, followedClubs),
                   ),
@@ -154,21 +131,23 @@ class StudentProfileScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
-                  child: _VibeSection(vibes: vibeTopics ?? _data.vibes),
+                  child: _VibeSection(vibes: data.vibes),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
-                  child: _UpNextHeader(),
+              if (data.nextEvent != null) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
+                    child: _UpNextHeader(),
+                  ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-                  child: EventCard(event: _data.nextEvent),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                    child: EventCard(event: data.nextEvent!),
+                  ),
                 ),
-              ),
+              ],
               SliverToBoxAdapter(child: SizedBox(height: bottom + 116)),
             ],
           ),

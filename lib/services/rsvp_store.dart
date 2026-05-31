@@ -76,10 +76,16 @@ class RsvpStore extends ChangeNotifier {
       event.rsvpTimestamps[userId] = DateTime.now().toIso8601String();
     }
 
-    // 3. Persist asynchronously (fire-and-forget, same as existing pattern)
+    // 3. Persist asynchronously (fire-and-forget, same as existing pattern).
     contentStore.saveEvents();
-    if (!wasAttending) {
-      unawaited(calendarSyncService.addToDeviceCalendar(event, userId));
+    if (wasAttending) {
+      unawaited(
+        calendarSyncService.removeEventFromDeviceCalendar(event, userId),
+      );
+    } else {
+      unawaited(
+        calendarSyncService.syncEventsToDeviceCalendar([event], userId),
+      );
     }
 
     // 4. Clear pending — another notifyListeners so isPending consumers update

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/auth_choice_screen.dart';
 import 'screens/login_screen.dart';
@@ -48,7 +49,7 @@ void main() async {
       ..clear()
       ..addAll(dynNotifs);
   }
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatefulWidget {

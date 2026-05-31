@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../features/calendar/widgets/add_to_calendar_button.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/calendar_sync_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
@@ -524,71 +524,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ],
 
-                  // ── Add to calendar ────────────────────────────────────────
-                  if (!isPast) ...[
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () async {
-                        final alreadySynced = calendarSyncService.isSynced(
-                          _loggedInId,
-                          event.id,
-                        );
-                        final synced = await calendarSyncService
-                            .addToDeviceCalendar(event, _loggedInId);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              alreadySynced || synced
-                                  ? 'Added to your phone calendar.'
-                                  : 'Could not open your phone calendar.',
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: AppColors.divider,
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.calendar_month_outlined,
-                              color: AppColors.secondaryText,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Add to Calendar',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                              ),
-                            ),
-                            const Spacer(),
-                            Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 13,
-                              color: AppColors.secondaryText.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-
                   const SizedBox(height: 80),
                 ],
               ),
@@ -1016,10 +951,7 @@ class _RsvpPanel extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: HSLColor.fromAHSL(
-                                      1,
-                                      hue,
-                                      0.55,
-                                      0.42,
+                                      1, hue, 0.55, 0.42,
                                     ).toColor(),
                                     border: Border.all(
                                       color: AppColors.card,
@@ -1060,6 +992,10 @@ class _RsvpPanel extends StatelessWidget {
                     const SizedBox(height: 10),
                   ],
                   RsvpButton(eventId: event.id, color: color, isPast: isPast),
+                  if (!isPast) ...[
+                    const SizedBox(height: 8),
+                    AddToCalendarButton(event: event, color: color),
+                  ],
                 ],
               ),
             ),
