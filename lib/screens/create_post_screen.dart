@@ -6,7 +6,7 @@ import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../models/news_post.dart';
-import '../widgets/story_image_uploader.dart';
+import '../widgets/content_image_uploader.dart';
 
 // ── Template definitions ─────────────────────────────────────────────────────
 
@@ -27,14 +27,46 @@ class PostTemplate {
 }
 
 const _templates = [
-  PostTemplate(id: 'tpl:0', label: 'Sunset',   colors: [Color(0xFFFF6B6B), Color(0xFFFFE66D)]),
-  PostTemplate(id: 'tpl:1', label: 'Ocean',    colors: [Color(0xFF667EEA), Color(0xFF64D9E8)]),
-  PostTemplate(id: 'tpl:2', label: 'Forest',   colors: [Color(0xFF2E7D32), Color(0xFF81C784)]),
-  PostTemplate(id: 'tpl:3', label: 'Midnight', colors: [Color(0xFF1A1A2E), Color(0xFF16213E)]),
-  PostTemplate(id: 'tpl:4', label: 'Rose',     colors: [Color(0xFF8C1D40), Color(0xFFE91E8C)]),
-  PostTemplate(id: 'tpl:5', label: 'Gold',     colors: [Color(0xFFB8860B), Color(0xFFFFD700)]),
-  PostTemplate(id: 'tpl:6', label: 'Aurora',   colors: [Color(0xFF6A1B9A), Color(0xFF00BCD4)]),
-  PostTemplate(id: 'tpl:7', label: 'Lava',     colors: [Color(0xFFE65100), Color(0xFFFF8F00)]),
+  PostTemplate(
+    id: 'tpl:0',
+    label: 'Sunset',
+    colors: [Color(0xFFFF6B6B), Color(0xFFFFE66D)],
+  ),
+  PostTemplate(
+    id: 'tpl:1',
+    label: 'Ocean',
+    colors: [Color(0xFF667EEA), Color(0xFF64D9E8)],
+  ),
+  PostTemplate(
+    id: 'tpl:2',
+    label: 'Forest',
+    colors: [Color(0xFF2E7D32), Color(0xFF81C784)],
+  ),
+  PostTemplate(
+    id: 'tpl:3',
+    label: 'Midnight',
+    colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+  ),
+  PostTemplate(
+    id: 'tpl:4',
+    label: 'Rose',
+    colors: [Color(0xFF8C1D40), Color(0xFFE91E8C)],
+  ),
+  PostTemplate(
+    id: 'tpl:5',
+    label: 'Gold',
+    colors: [Color(0xFFB8860B), Color(0xFFFFD700)],
+  ),
+  PostTemplate(
+    id: 'tpl:6',
+    label: 'Aurora',
+    colors: [Color(0xFF6A1B9A), Color(0xFF00BCD4)],
+  ),
+  PostTemplate(
+    id: 'tpl:7',
+    label: 'Lava',
+    colors: [Color(0xFFE65100), Color(0xFFFF8F00)],
+  ),
 ];
 
 Widget buildPostBanner({
@@ -62,7 +94,9 @@ Widget buildPostBanner({
                   color: fallbackColor.withValues(alpha: 0.12),
                   child: Center(
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white54),
+                      strokeWidth: 2,
+                      color: Colors.white54,
+                    ),
                   ),
                 ),
           errorBuilder: (ctx, e, _) => Container(
@@ -70,8 +104,11 @@ Widget buildPostBanner({
             height: height,
             color: fallbackColor.withValues(alpha: 0.18),
             child: Center(
-              child: Icon(Icons.broken_image_outlined,
-                  color: fallbackColor.withValues(alpha: 0.4), size: 40),
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: fallbackColor.withValues(alpha: 0.4),
+                size: 40,
+              ),
             ),
           ),
         ),
@@ -89,8 +126,12 @@ Widget buildPostBanner({
           boundaryMargin: const EdgeInsets.all(double.infinity),
           minScale: 0.5,
           maxScale: 5.0,
-          child: Image.file(File(imagePath), fit: BoxFit.cover,
-              width: double.infinity, height: height),
+          child: Image.file(
+            File(imagePath),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: height,
+          ),
         ),
       ),
     );
@@ -99,13 +140,17 @@ Widget buildPostBanner({
   // Template or fallback gradient
   final gradient = imagePath != null
       ? LinearGradient(
-          colors: _templates.firstWhere((t) => t.id == imagePath,
-              orElse: () => _templates[0]).colors,
+          colors: _templates
+              .firstWhere((t) => t.id == imagePath, orElse: () => _templates[0])
+              .colors,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         )
       : LinearGradient(
-          colors: [fallbackColor.withValues(alpha: 0.7), fallbackColor.withValues(alpha: 0.25)],
+          colors: [
+            fallbackColor.withValues(alpha: 0.7),
+            fallbackColor.withValues(alpha: 0.25),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         );
@@ -146,7 +191,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   late final List<_ClubOption> _myClubs;
 
   // Image state
-  String? _imagePath;          // null | "tpl:N" | file path
+  String? _imagePath; // null | "tpl:N" | file path
   late final TabController _mediaTabController;
 
   @override
@@ -201,15 +246,18 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   }
 
   bool get _canPost =>
-      _contentController.text.trim().isNotEmpty &&
-      _selectedClub != null;
+      _contentController.text.trim().isNotEmpty && _selectedClub != null;
 
   Color get _clubColor {
     if (_selectedClub == null) return AppColors.primaryRed;
     final idx = clubs.indexWhere((c) => c.id == _selectedClub!.id);
     const colors = [
-      Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+      Color(0xFFB41C18),
+      Color(0xFF1565C0),
+      Color(0xFF2E7D32),
+      Color(0xFF6A1B9A),
+      Color(0xFFE65100),
+      Color(0xFF00838F),
     ];
     return colors[(idx < 0 ? 0 : idx) % colors.length];
   }
@@ -225,7 +273,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         surfaceTintColor: Colors.transparent,
         leading: TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: AppColors.secondaryText),
+          ),
         ),
         leadingWidth: 70,
         title: Text('New Post', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -240,12 +291,20 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: Text('Post', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                child: Text(
+                  'Post',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
               ),
             ),
           ),
@@ -291,8 +350,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                       // Gallery
                       Padding(
                         padding: const EdgeInsets.all(10),
-                        child: StoryImageUploader(
-                          imagePath: _imagePath != null && !_imagePath!.startsWith('tpl:')
+                        child: ContentImageUploader(
+                          imagePath:
+                              _imagePath != null &&
+                                  !_imagePath!.startsWith('tpl:')
                               ? _imagePath
                               : null,
                           onChanged: (p) => setState(() => _imagePath = p),
@@ -317,13 +378,18 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 Row(
                   children: [
                     Container(
-                      width: 40, height: 40,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Center(
-                        child: Icon(Icons.admin_panel_settings, color: AppColors.primaryRed, size: 20),
+                        child: Icon(
+                          Icons.admin_panel_settings,
+                          color: AppColors.primaryRed,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -331,9 +397,21 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(adminName,
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text)),
-                          Text('Club Admin', style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+                          Text(
+                            adminName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          Text(
+                            'Club Admin',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -343,7 +421,14 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
                 // Club picker
                 if (_myClubs.length > 1) ...[
-                  Text('Posting as', style: TextStyle(fontSize: 12, color: AppColors.secondaryText, fontWeight: FontWeight.w500)),
+                  Text(
+                    'Posting as',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Container(
                     decoration: BoxDecoration(
@@ -356,9 +441,19 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                       child: DropdownButton<_ClubOption>(
                         value: _selectedClub,
                         isExpanded: true,
-                        hint: Text('Select club', style: TextStyle(color: AppColors.secondaryText)),
+                        hint: Text(
+                          'Select club',
+                          style: TextStyle(color: AppColors.secondaryText),
+                        ),
                         dropdownColor: AppColors.card,
-                        items: _myClubs.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
+                        items: _myClubs
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(c.name),
+                              ),
+                            )
+                            .toList(),
                         onChanged: (v) => setState(() => _selectedClub = v),
                       ),
                     ),
@@ -369,10 +464,19 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 // Tag hint
                 Row(
                   children: [
-                    Icon(Icons.alternate_email, size: 13, color: AppColors.secondaryText),
+                    Icon(
+                      Icons.alternate_email,
+                      size: 13,
+                      color: AppColors.secondaryText,
+                    ),
                     SizedBox(width: 4),
-                    Text('Use @ClubName to tag a collaborating club',
-                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText)),
+                    Text(
+                      'Use @ClubName to tag a collaborating club',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -381,10 +485,17 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 TextField(
                   controller: _contentController,
                   onChanged: (_) => setState(() {}),
-                  style: TextStyle(fontSize: 15, color: AppColors.text, height: 1.6),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.text,
+                    height: 1.6,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Write something for your club members…',
-                    hintStyle: TextStyle(fontSize: 15, color: AppColors.secondaryText),
+                    hintStyle: TextStyle(
+                      fontSize: 15,
+                      color: AppColors.secondaryText,
+                    ),
                     border: InputBorder.none,
                     filled: false,
                   ),
@@ -425,27 +536,44 @@ class _TemplatesRow extends StatelessWidget {
             width: 68,
             margin: const EdgeInsets.only(right: 10),
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: tpl.colors, begin: tpl.begin, end: tpl.end),
+              gradient: LinearGradient(
+                colors: tpl.colors,
+                begin: tpl.begin,
+                end: tpl.end,
+              ),
               borderRadius: BorderRadius.circular(10),
               border: isSelected
                   ? Border.all(color: Colors.white, width: 3)
                   : null,
               boxShadow: isSelected
-                  ? [BoxShadow(color: tpl.colors.first.withValues(alpha: 0.5), blurRadius: 8)]
+                  ? [
+                      BoxShadow(
+                        color: tpl.colors.first.withValues(alpha: 0.5),
+                        blurRadius: 8,
+                      ),
+                    ]
                   : [],
             ),
             child: Stack(
               children: [
                 if (isSelected)
-                  Center(child: Icon(Icons.check_circle, color: Colors.white, size: 24)),
+                  Center(
+                    child: Icon(
+                      Icons.check_circle,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
                 Positioned(
                   bottom: 4,
-                  left: 0, right: 0,
+                  left: 0,
+                  right: 0,
                   child: Text(
                     tpl.label,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 10, color: Colors.white,
+                      fontSize: 10,
+                      color: Colors.white,
                       fontWeight: FontWeight.w600,
                       shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
                     ),

@@ -22,6 +22,8 @@ class CalendarResult {
 
 class CalendarService {
   static const _prefPrefix = 'myclubs_cal_';
+  static const _initialPermissionPromptSeenKey =
+      'myclubs_calendar_permission_prompt_seen_v1';
   final dc.DeviceCalendarPlugin _plugin = dc.DeviceCalendarPlugin();
   bool _tzInitialized = false;
 
@@ -57,6 +59,16 @@ class CalendarService {
   }
 
   Future<void> openSettings() => ph.openAppSettings();
+
+  Future<bool> hasShownInitialPermissionPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_initialPermissionPromptSeenKey) ?? false;
+  }
+
+  Future<void> markInitialPermissionPromptShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_initialPermissionPromptSeenKey, true);
+  }
 
   Future<CalendarResult> addEvent(CalendarEventModel model) async {
     try {

@@ -7,6 +7,7 @@ import '../services/rsvp_store.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
+import '../services/tutorial_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -35,7 +36,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (ctx, setSheetState) {
             final value = controller.text.trim();
             final isValid = value.isEmpty || _isValidUsername(value);
-            final isTaken = isValid && value.isNotEmpty &&
+            final isTaken =
+                isValid &&
+                value.isNotEmpty &&
                 userState.isUsernameTaken(value, excludeId: userId);
             final canSave = value != current && isValid && !isTaken;
 
@@ -55,7 +58,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Center(
                       child: Container(
-                        width: 36, height: 4,
+                        width: 36,
+                        height: 4,
                         decoration: BoxDecoration(
                           color: AppColors.divider,
                           borderRadius: BorderRadius.circular(2),
@@ -74,7 +78,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 6),
                     Text(
                       'Choose how others see you. Your real name stays for search.',
-                      style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.secondaryText,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     TextField(
@@ -94,8 +101,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         errorText: isTaken
                             ? 'This username is already taken'
                             : (!isValid && value.isNotEmpty)
-                                ? 'Only letters, numbers, underscores and dots'
-                                : errorText,
+                            ? 'Only letters, numbers, underscores and dots'
+                            : errorText,
                         filled: true,
                         fillColor: AppColors.background,
                         border: OutlineInputBorder(
@@ -105,21 +112,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                              color: AppColors.primaryRed, width: 1.5),
+                            color: AppColors.primaryRed,
+                            width: 1.5,
+                          ),
                         ),
                         counterStyle: TextStyle(
-                            color: AppColors.secondaryText, fontSize: 11),
+                          color: AppColors.secondaryText,
+                          fontSize: 11,
+                        ),
                       ),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
-                            RegExp(r'[a-zA-Z0-9_.À-öø-ÿ]')),
+                          RegExp(r'[a-zA-Z0-9_.À-öø-ÿ]'),
+                        ),
                       ],
                       onChanged: (_) => setSheetState(() {}),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Letters, numbers, underscores and dots. Leave blank to use your real name.',
-                      style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.secondaryText,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -127,8 +142,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Expanded(
                           child: TextButton(
                             onPressed: () => Navigator.pop(ctx),
-                            child: Text('Cancel',
-                                style: TextStyle(color: AppColors.secondaryText)),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(color: AppColors.secondaryText),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -141,7 +158,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   : AppColors.divider,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
                             onPressed: canSave
@@ -157,9 +175,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     setState(() {});
                                   }
                                 : null,
-                            child: Text('Save',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            child: Text(
+                              'Save',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -176,6 +198,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isValidUsername(String value) =>
       RegExp(r'^[a-zA-Z0-9_.À-öø-ÿ]{1,30}$').hasMatch(value);
+
+  Future<void> _replayTutorial() async {
+    await tutorialService.reset(_userId);
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    tutorialService.requestReplay();
+  }
 
   void _openPreferencesSheet(Set<String> _) {
     showModalBottomSheet<void>(
@@ -194,10 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
       ),
@@ -217,23 +243,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: AppColors.lightRed,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.alternate_email_rounded,
-                    color: AppColors.primaryRed, size: 20),
+                child: Icon(
+                  Icons.alternate_email_rounded,
+                  color: AppColors.primaryRed,
+                  size: 20,
+                ),
               ),
               title: Text(
                 'Username',
                 style: TextStyle(
-                    fontWeight: FontWeight.w600, color: AppColors.text),
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
               ),
               subtitle: Text(
                 userState.usernameFor(_userId) != null
                     ? '@${userState.usernameFor(_userId)}'
                     : 'Not set — tap to choose one',
-                style: TextStyle(
-                    fontSize: 12, color: AppColors.secondaryText),
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
-              trailing: Icon(Icons.chevron_right_rounded,
-                  color: AppColors.secondaryText),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.secondaryText,
+              ),
               onTap: _openUsernameSheet,
             ),
           ),
@@ -250,7 +282,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final times = personalizationService.timePrefs;
               final summary = [
                 if (major.isNotEmpty) major,
-                if (interests.isNotEmpty) interests.take(2).join(', ') + (interests.length > 2 ? '…' : ''),
+                if (interests.isNotEmpty)
+                  interests.take(2).join(', ') +
+                      (interests.length > 2 ? '…' : ''),
               ].join(' · ');
               return Container(
                 color: AppColors.card,
@@ -258,24 +292,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     ListTile(
                       leading: Container(
-                        width: 36, height: 36,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
                           color: AppColors.lightRed,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(Icons.tune_rounded,
-                            color: AppColors.primaryRed, size: 20),
+                        child: Icon(
+                          Icons.tune_rounded,
+                          color: AppColors.primaryRed,
+                          size: 20,
+                        ),
                       ),
-                      title: Text('My Preferences',
-                          style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+                      title: Text(
+                        'My Preferences',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
                       subtitle: Text(
-                        summary.isNotEmpty ? summary : 'Not set — tap to configure',
-                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                        summary.isNotEmpty
+                            ? summary
+                            : 'Not set — tap to configure',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: Icon(Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText),
+                      trailing: Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.secondaryText,
+                      ),
                       onTap: () => _openPreferencesSheet(times),
                     ),
                   ],
@@ -311,19 +361,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: Text(
                   themeService.isDark ? 'Dark Mode' : 'Light Mode',
                   style: TextStyle(
-                      fontWeight: FontWeight.w600, color: AppColors.text),
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
                 ),
                 subtitle: Text(
                   themeService.isDark
                       ? 'Switch to light theme'
                       : 'Switch to dark theme',
                   style: TextStyle(
-                      fontSize: 12, color: AppColors.secondaryText),
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
                 value: themeService.isDark,
                 activeThumbColor: AppColors.primaryRed,
                 onChanged: (v) => themeService.setDark(v),
               ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Help section ────────────────────────────────────────────────
+          _SectionHeader(title: 'Help'),
+          Container(
+            color: AppColors.card,
+            child: ListTile(
+              leading: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.lightRed,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.school_rounded,
+                  color: AppColors.primaryRed,
+                  size: 20,
+                ),
+              ),
+              title: Text(
+                'Replay App Tour',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              subtitle: Text(
+                'Review every main area and how it works',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.secondaryText,
+              ),
+              onTap: _replayTutorial,
             ),
           ),
 
@@ -417,7 +510,11 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
 
   Future<void> _save() async {
     await personalizationService.completeOnboarding(
-        widget.userId, _interests, _times, _major);
+      widget.userId,
+      _interests,
+      _times,
+      _major,
+    );
     await userPrefsService.save(widget.userId);
     if (mounted) {
       Navigator.pop(context);
@@ -433,43 +530,61 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 32),
+        20,
+        16,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 32,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
             child: Container(
-              width: 36, height: 4,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2)),
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
               Container(
-                width: 38, height: 38,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.tune_rounded,
-                    color: AppColors.primaryRed, size: 20),
+                  color: AppColors.lightRed,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: AppColors.primaryRed,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('My Preferences',
-                        style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.text)),
-                    Text('Interests, major & schedule',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.secondaryText)),
+                    Text(
+                      'My Preferences',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    Text(
+                      'Interests, major & schedule',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -486,16 +601,22 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                   onTap: () => setState(() => _tab = i),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: sel ? AppColors.primaryRed : AppColors.surfaceAlt,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(_tabLabels[i],
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-                            color: sel ? Colors.white : AppColors.text)),
+                    child: Text(
+                      _tabLabels[i],
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                        color: sel ? Colors.white : AppColors.text,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -507,8 +628,8 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
             child: _tab == 0
                 ? _buildInterestsTab()
                 : _tab == 1
-                    ? _buildMajorTab()
-                    : _buildScheduleTab(),
+                ? _buildMajorTab()
+                : _buildScheduleTab(),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -520,11 +641,14 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 elevation: 0,
               ),
-              child: Text('Save changes',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              child: Text(
+                'Save changes',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
             ),
           ),
         ],
@@ -540,7 +664,9 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
       children: kInterests.map((tag) {
         final sel = _interests.contains(tag);
         return GestureDetector(
-          onTap: () => setState(() => sel ? _interests.remove(tag) : _interests.add(tag)),
+          onTap: () => setState(
+            () => sel ? _interests.remove(tag) : _interests.add(tag),
+          ),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -548,7 +674,8 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
               color: sel ? AppColors.primaryRed : AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                  color: sel ? AppColors.primaryRed : AppColors.divider),
+                color: sel ? AppColors.primaryRed : AppColors.divider,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -557,11 +684,14 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                   Icon(Icons.check_rounded, size: 13, color: Colors.white),
                   const SizedBox(width: 5),
                 ],
-                Text(tag,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: sel ? Colors.white : AppColors.text)),
+                Text(
+                  tag,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: sel ? Colors.white : AppColors.text,
+                  ),
+                ),
               ],
             ),
           ),
@@ -591,44 +721,59 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
               color: sel ? AppColors.lightRed : AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                  color: sel ? AppColors.primaryRed : AppColors.divider,
-                  width: sel ? 1.5 : 1),
+                color: sel ? AppColors.primaryRed : AppColors.divider,
+                width: sel ? 1.5 : 1,
+              ),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 32, height: 32,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                      color: AppColors.lightRed,
-                      borderRadius: BorderRadius.circular(9)),
-                  child: Icon(Icons.school_outlined,
-                      size: 16, color: AppColors.primaryRed),
+                    color: AppColors.lightRed,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    Icons.school_outlined,
+                    size: 16,
+                    color: AppColors.primaryRed,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.text)),
-                      Text(depts,
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.secondaryText)),
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      Text(
+                        depts,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  width: 20, height: 20,
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: sel ? AppColors.primaryRed : Colors.transparent,
                     border: Border.all(
-                        color: sel ? AppColors.primaryRed : AppColors.divider,
-                        width: 1.5),
+                      color: sel ? AppColors.primaryRed : AppColors.divider,
+                      width: 1.5,
+                    ),
                   ),
                   child: sel
                       ? Icon(Icons.check, size: 12, color: Colors.white)
@@ -660,28 +805,34 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
       children: kTimeSlots.map((slot) {
         final sel = _times.contains(slot);
         return GestureDetector(
-          onTap: () => setState(
-              () => sel ? _times.remove(slot) : _times.add(slot)),
+          onTap: () =>
+              setState(() => sel ? _times.remove(slot) : _times.add(slot)),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             decoration: BoxDecoration(
               color: sel ? AppColors.primaryRed : AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                  color: sel ? AppColors.primaryRed : AppColors.divider),
+                color: sel ? AppColors.primaryRed : AppColors.divider,
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(iconMap[slot],
-                    size: 18,
-                    color: sel ? Colors.white : AppColors.secondaryText),
+                Icon(
+                  iconMap[slot],
+                  size: 18,
+                  color: sel ? Colors.white : AppColors.secondaryText,
+                ),
                 const SizedBox(width: 8),
-                Text(slot,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: sel ? Colors.white : AppColors.text)),
+                Text(
+                  slot,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: sel ? Colors.white : AppColors.text,
+                  ),
+                ),
               ],
             ),
           ),

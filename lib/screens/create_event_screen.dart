@@ -6,7 +6,7 @@ import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import 'dart:io';
-import '../widgets/story_image_uploader.dart';
+import '../widgets/content_image_uploader.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
@@ -17,14 +17,32 @@ class CreateEventScreen extends StatefulWidget {
 }
 
 const _kLocationChips = [
-  'SCI', 'ENG', 'SNA', 'Henry Çimleri',
-  'Kurucular Salonu', 'SOS', 'Odeon', 'CASE',
+  'SCI',
+  'ENG',
+  'SNA',
+  'Henry Çimleri',
+  'Kurucular Salonu',
+  'SOS',
+  'Odeon',
+  'CASE',
 ];
 
 const _kTagSuggestions = [
-  'Free entry', 'Free food', 'Workshop', 'Talk', 'Panel',
-  'Networking', 'Career', 'Competition', 'Social', 'Arts',
-  'Music', 'Film', 'Tech', 'Academic', 'Volunteer',
+  'Free entry',
+  'Free food',
+  'Workshop',
+  'Talk',
+  'Panel',
+  'Networking',
+  'Career',
+  'Competition',
+  'Social',
+  'Arts',
+  'Music',
+  'Film',
+  'Tech',
+  'Academic',
+  'Volunteer',
 ];
 
 class _ScheduleEntry {
@@ -99,11 +117,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (picked == null || !mounted) return;
     setState(() {
       if (isStart) {
-        _startDate = DateTime(picked.year, picked.month, picked.day,
-            _startDate.hour, _startDate.minute);
+        _startDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _startDate.hour,
+          _startDate.minute,
+        );
       } else {
-        _endDate = DateTime(picked.year, picked.month, picked.day,
-            _endDate.hour, _endDate.minute);
+        _endDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _endDate.hour,
+          _endDate.minute,
+        );
       }
     });
   }
@@ -123,11 +151,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (picked == null || !mounted) return;
     setState(() {
       if (isStart) {
-        _startDate = DateTime(_startDate.year, _startDate.month, _startDate.day,
-            picked.hour, picked.minute);
+        _startDate = DateTime(
+          _startDate.year,
+          _startDate.month,
+          _startDate.day,
+          picked.hour,
+          picked.minute,
+        );
       } else {
-        _endDate = DateTime(_endDate.year, _endDate.month, _endDate.day,
-            picked.hour, picked.minute);
+        _endDate = DateTime(
+          _endDate.year,
+          _endDate.month,
+          _endDate.day,
+          picked.hour,
+          picked.minute,
+        );
       }
     });
   }
@@ -154,12 +192,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     // Default next slot 30 min after previous
     final nextMinutes = lastTime.hour * 60 + lastTime.minute + 30;
     setState(() {
-      _scheduleEntries.add(_ScheduleEntry(
-        time: TimeOfDay(
-            hour: (nextMinutes ~/ 60) % 24, minute: nextMinutes % 60),
-        titleCtrl: TextEditingController(),
-        subtitleCtrl: TextEditingController(),
-      ));
+      _scheduleEntries.add(
+        _ScheduleEntry(
+          time: TimeOfDay(
+            hour: (nextMinutes ~/ 60) % 24,
+            minute: nextMinutes % 60,
+          ),
+          titleCtrl: TextEditingController(),
+          subtitleCtrl: TextEditingController(),
+        ),
+      );
     });
   }
 
@@ -183,8 +225,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final baseDate = _startDate;
       schedule = filledSlots.map((e) {
         return EventSlot(
-          time: DateTime(baseDate.year, baseDate.month, baseDate.day,
-              e.time.hour, e.time.minute),
+          time: DateTime(
+            baseDate.year,
+            baseDate.month,
+            baseDate.day,
+            e.time.hour,
+            e.time.minute,
+          ),
           title: e.titleCtrl.text.trim(),
           subtitle: e.subtitleCtrl.text.trim().isEmpty
               ? null
@@ -246,13 +293,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         foregroundColor: AppColors.text,
         leading: TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel',
-              style: TextStyle(color: AppColors.secondaryText)),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: AppColors.secondaryText),
+          ),
         ),
         leadingWidth: 80,
-        title: Text('New Event',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 17)),
+        title: Text(
+          'New Event',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        ),
         centerTitle: true,
         actions: [
           ValueListenableBuilder(
@@ -282,8 +332,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             accentColorHex: _accentColorHex,
             titleText: _titleController.text.trim(),
             onImageChanged: (p) => setState(() => _imagePath = p),
-            onColorChanged: (hex) =>
-                setState(() => _accentColorHex = hex),
+            onColorChanged: (hex) => setState(() => _accentColorHex = hex),
           ),
           const SizedBox(height: 16),
 
@@ -381,7 +430,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 160),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: selected
                                 ? AppColors.primaryRed
@@ -414,7 +465,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     Text(
                       'Selected: ${_selectedTags.join(', ')}',
                       style: TextStyle(
-                          fontSize: 12, color: AppColors.secondaryText),
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -424,32 +477,32 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       Expanded(
                         child: TextField(
                           controller: _customTagCtrl,
-                          style: TextStyle(
-                              fontSize: 13, color: AppColors.text),
+                          style: TextStyle(fontSize: 13, color: AppColors.text),
                           decoration: InputDecoration(
                             hintText: 'Add custom tag…',
                             hintStyle: TextStyle(
-                                color: AppColors.secondaryText,
-                                fontSize: 13),
+                              color: AppColors.secondaryText,
+                              fontSize: 13,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: AppColors.divider),
+                              borderSide: BorderSide(color: AppColors.divider),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide:
-                                  BorderSide(color: AppColors.divider),
+                              borderSide: BorderSide(color: AppColors.divider),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide(
-                                  color: AppColors.primaryRed),
+                                color: AppColors.primaryRed,
+                              ),
                             ),
                             isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                           ),
                           onSubmitted: (v) {
                             final tag = v.trim();
@@ -467,8 +520,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       GestureDetector(
                         onTap: () {
                           final tag = _customTagCtrl.text.trim();
-                          if (tag.isNotEmpty &&
-                              !_selectedTags.contains(tag)) {
+                          if (tag.isNotEmpty && !_selectedTags.contains(tag)) {
                             setState(() {
                               _selectedTags.add(tag);
                               _customTagCtrl.clear();
@@ -477,7 +529,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed,
                             borderRadius: BorderRadius.circular(10),
@@ -531,22 +585,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               children: [
                 // Existing slots
                 for (int i = 0; i < _scheduleEntries.length; i++) ...[
-                  if (i > 0)
-                    Divider(height: 1, color: AppColors.divider),
+                  if (i > 0) Divider(height: 1, color: AppColors.divider),
                   _ScheduleSlotEditor(
                     entry: _scheduleEntries[i],
                     index: i,
                     onRemove: () => _removeScheduleEntry(i),
-                    onTimeTap: () =>
-                        _pickSlotTime(_scheduleEntries[i]),
+                    onTimeTap: () => _pickSlotTime(_scheduleEntries[i]),
                     onChanged: () => setState(() {}),
                   ),
                 ],
 
                 // Add slot button
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: GestureDetector(
                     onTap: _addScheduleEntry,
                     child: Container(
@@ -556,15 +610,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         color: AppColors.surfaceAlt,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppColors.divider,
-                            style: BorderStyle.solid),
+                          color: AppColors.divider,
+                          style: BorderStyle.solid,
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_rounded,
-                              size: 16,
-                              color: AppColors.secondaryText),
+                          Icon(
+                            Icons.add_rounded,
+                            size: 16,
+                            color: AppColors.secondaryText,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             'Add time slot',
@@ -585,11 +642,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   Divider(height: 1, color: AppColors.divider),
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     child: Row(
                       children: [
-                        Icon(Icons.lock_outline_rounded,
-                            size: 16, color: AppColors.secondaryText),
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 16,
+                          color: AppColors.secondaryText,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -606,18 +668,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                               Text(
                                 'Programme only visible to confirmed attendees',
                                 style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.secondaryText),
+                                  fontSize: 11,
+                                  color: AppColors.secondaryText,
+                                ),
                               ),
                             ],
                           ),
                         ),
                         Switch(
                           value: _scheduleGated,
-                          onChanged: (v) =>
-                              setState(() => _scheduleGated = v),
+                          onChanged: (v) => setState(() => _scheduleGated = v),
                           activeThumbColor: AppColors.primaryRed,
-                          activeTrackColor: AppColors.primaryRed.withValues(alpha: 0.4),
+                          activeTrackColor: AppColors.primaryRed.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ],
                     ),
@@ -703,39 +767,45 @@ class _HeroEditor extends StatelessWidget {
                         end: Alignment.bottomRight,
                       ),
                     ),
-                    child: Stack(children: [
-                      Positioned(
-                        top: -30, right: -30,
-                        child: Container(
-                          width: 140, height: 140,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.07),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          top: -30,
+                          right: -30,
+                          child: Container(
+                            width: 140,
+                            height: 140,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.07),
+                            ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        bottom: 10, left: -20,
-                        child: Container(
-                          width: 90, height: 90,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.05),
+                        Positioned(
+                          bottom: 10,
+                          left: -20,
+                          child: Container(
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.05),
+                            ),
                           ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                   ),
 
                 // Color tint overlay when image + color chosen
                 if (hasImage && accentColorHex != null)
-                  Container(
-                    color: _previewColor.withValues(alpha: 0.35),
-                  ),
+                  Container(color: _previewColor.withValues(alpha: 0.35)),
 
                 // Bottom scrim
                 Positioned(
-                  left: 0, right: 0, bottom: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
                   height: 110,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -753,7 +823,9 @@ class _HeroEditor extends StatelessWidget {
 
                 // Title preview
                 Positioned(
-                  left: 14, right: 14, bottom: 14,
+                  left: 14,
+                  right: 14,
+                  bottom: 14,
                   child: Text(
                     titleText.isEmpty ? 'Event title preview' : titleText,
                     style: TextStyle(
@@ -772,7 +844,8 @@ class _HeroEditor extends StatelessWidget {
 
                 // Photo edit button (top-right)
                 Positioned(
-                  top: 10, right: 10,
+                  top: 10,
+                  right: 10,
                   child: _PhotoEditButton(
                     hasImage: hasImage,
                     imagePath: imagePath,
@@ -799,8 +872,11 @@ class _HeroEditor extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.palette_outlined,
-                      size: 15, color: AppColors.secondaryText),
+                  Icon(
+                    Icons.palette_outlined,
+                    size: 15,
+                    color: AppColors.secondaryText,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Background colour',
@@ -812,9 +888,13 @@ class _HeroEditor extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    accentColorHex == null ? 'Auto (club colour)' : '#$accentColorHex',
+                    accentColorHex == null
+                        ? 'Auto (club colour)'
+                        : '#$accentColorHex',
                     style: TextStyle(
-                        fontSize: 11, color: AppColors.secondaryText),
+                      fontSize: 11,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
                 ],
               ),
@@ -897,9 +977,8 @@ class _ColorSwatch extends StatelessWidget {
                 ),
               )
             : isSelected
-                ? const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 18)
-                : null,
+            ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+            : null,
       ),
     );
   }
@@ -923,10 +1002,8 @@ class _PhotoEditButton extends StatelessWidget {
         showModalBottomSheet(
           context: context,
           backgroundColor: Colors.transparent,
-          builder: (_) => _PhotoPickerSheet(
-            hasImage: hasImage,
-            onChanged: onChanged,
-          ),
+          builder: (_) =>
+              _PhotoPickerSheet(hasImage: hasImage, onChanged: onChanged),
         );
       },
       child: Container(
@@ -947,9 +1024,10 @@ class _PhotoEditButton extends StatelessWidget {
             Text(
               hasImage ? 'Change photo' : 'Add photo',
               style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -962,12 +1040,11 @@ class _PhotoPickerSheet extends StatelessWidget {
   final bool hasImage;
   final ValueChanged<String?> onChanged;
 
-  const _PhotoPickerSheet(
-      {required this.hasImage, required this.onChanged});
+  const _PhotoPickerSheet({required this.hasImage, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return StoryImageUploader(
+    return ContentImageUploader(
       imagePath: null,
       onChanged: (p) {
         Navigator.pop(context);
@@ -1016,7 +1093,9 @@ class _ScheduleSlotEditor extends StatelessWidget {
                 onTap: onTimeTap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
                     borderRadius: BorderRadius.circular(8),
@@ -1041,7 +1120,9 @@ class _ScheduleSlotEditor extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 6),
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: entry.isHighlighted
                         ? AppColors.primaryRed.withValues(alpha: 0.12)
@@ -1069,8 +1150,11 @@ class _ScheduleSlotEditor extends StatelessWidget {
               // Remove button
               GestureDetector(
                 onTap: onRemove,
-                child: Icon(Icons.close_rounded,
-                    size: 18, color: AppColors.secondaryText),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.secondaryText,
+                ),
               ),
             ],
           ),
@@ -1082,7 +1166,9 @@ class _ScheduleSlotEditor extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'Session title (required)',
               hintStyle: TextStyle(
-                  color: AppColors.secondaryText, fontSize: 13),
+                color: AppColors.secondaryText,
+                fontSize: 13,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: AppColors.divider),
@@ -1096,8 +1182,10 @@ class _ScheduleSlotEditor extends StatelessWidget {
                 borderSide: BorderSide(color: AppColors.primaryRed),
               ),
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -1108,7 +1196,9 @@ class _ScheduleSlotEditor extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'Subtitle / speaker (optional)',
               hintStyle: TextStyle(
-                  color: AppColors.secondaryText, fontSize: 12),
+                color: AppColors.secondaryText,
+                fontSize: 12,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: AppColors.divider),
@@ -1122,8 +1212,10 @@ class _ScheduleSlotEditor extends StatelessWidget {
                 borderSide: BorderSide(color: AppColors.primaryRed),
               ),
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
             ),
           ),
         ],
@@ -1166,8 +1258,7 @@ class _SectionHeader extends StatelessWidget {
             ),
             Text(
               subtitle,
-              style: TextStyle(
-                  fontSize: 11, color: AppColors.secondaryText),
+              style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
             ),
           ],
         ),
@@ -1219,11 +1310,9 @@ class _Field extends StatelessWidget {
         style: TextStyle(fontSize: 14, color: AppColors.text),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle:
-              TextStyle(color: AppColors.secondaryText, fontSize: 13),
+          labelStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
           hintText: hint,
-          hintStyle:
-              TextStyle(color: AppColors.secondaryText, fontSize: 13),
+          hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
           border: InputBorder.none,
         ),
       ),
@@ -1253,12 +1342,16 @@ class _LocationPicker extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: Row(
             children: [
-              Icon(Icons.location_on_outlined,
-                  size: 18, color: AppColors.secondaryText),
+              Icon(
+                Icons.location_on_outlined,
+                size: 18,
+                color: AppColors.secondaryText,
+              ),
               const SizedBox(width: 8),
-              Text('Location',
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.secondaryText)),
+              Text(
+                'Location',
+                style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+              ),
             ],
           ),
         ),
@@ -1277,7 +1370,9 @@ class _LocationPicker extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 6),
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: selected
                         ? AppColors.primaryRed
@@ -1294,9 +1389,7 @@ class _LocationPicker extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: selected
-                          ? Colors.white
-                          : AppColors.secondaryText,
+                      color: selected ? Colors.white : AppColors.secondaryText,
                     ),
                   ),
                 ),
@@ -1313,11 +1406,12 @@ class _LocationPicker extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'Or type a custom location…',
               hintStyle: TextStyle(
-                  color: AppColors.secondaryText, fontSize: 13),
+                color: AppColors.secondaryText,
+                fontSize: 13,
+              ),
               border: InputBorder.none,
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
             ),
           ),
         ),
@@ -1343,8 +1437,18 @@ class _DateTimeRow extends StatelessWidget {
 
   String _fmtDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
@@ -1359,8 +1463,7 @@ class _DateTimeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1368,27 +1471,35 @@ class _DateTimeRow extends StatelessWidget {
             children: [
               SizedBox(
                 width: 52,
-                child: Text(label,
-                    style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.text,
-                        fontWeight: FontWeight.w500)),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               GestureDetector(
                 onTap: onDateTap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(_fmtDate(dateTime),
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.w600)),
+                  child: Text(
+                    _fmtDate(dateTime),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1396,24 +1507,31 @@ class _DateTimeRow extends StatelessWidget {
                 onTap: onTimeTap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(_fmtTime(dateTime),
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.w600)),
+                  child: Text(
+                    _fmtTime(dateTime),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
           if (error != null) ...[
             const SizedBox(height: 4),
-            Text(error!,
-                style: const TextStyle(fontSize: 11, color: Colors.red)),
+            Text(
+              error!,
+              style: const TextStyle(fontSize: 11, color: Colors.red),
+            ),
           ],
         ],
       ),

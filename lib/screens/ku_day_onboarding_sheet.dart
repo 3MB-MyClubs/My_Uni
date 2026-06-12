@@ -13,6 +13,8 @@ Future<void> showKuDayOnboarding(BuildContext context) async {
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    isDismissible: false,
+    enableDrag: false,
     backgroundColor: Colors.transparent,
     builder: (_) => const _OnboardingSheet(),
   );
@@ -36,10 +38,18 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
 
   Color _clubColor(String clubId) {
     const colors = [
-      Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-      Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-      Color(0xFF558B2F), Color(0xFF283593), Color(0xFF6D4C41),
-      Color(0xFF00695C), Color(0xFF4527A0), Color(0xFFC62828),
+      Color(0xFFB41C18),
+      Color(0xFF1565C0),
+      Color(0xFF2E7D32),
+      Color(0xFF6A1B9A),
+      Color(0xFFE65100),
+      Color(0xFF00838F),
+      Color(0xFF558B2F),
+      Color(0xFF283593),
+      Color(0xFF6D4C41),
+      Color(0xFF00695C),
+      Color(0xFF4527A0),
+      Color(0xFFC62828),
     ];
     final idx = clubs.indexWhere((c) => c.id == clubId);
     return colors[(idx < 0 ? 0 : idx) % colors.length];
@@ -54,7 +64,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       return;
     }
     await personalizationService.completeOnboarding(
-        uid, _interests, _times, _selectedMajor);
+      uid,
+      _interests,
+      _times,
+      _selectedMajor,
+    );
     for (final clubId in _followedInOnboarding) {
       if (!userState.followedClubIds.contains(clubId)) {
         userState.toggleFollow(clubId);
@@ -64,12 +78,12 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
     if (mounted) Navigator.pop(context);
   }
 
-  void _skip() {
+  Future<void> _skip() async {
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (uid != null) {
-      personalizationService.completeOnboarding(uid, {}, {}, '');
+      await personalizationService.completeOnboarding(uid, {}, {}, '');
     }
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   // ── Root build ─────────────────────────────────────────────────────────────
@@ -77,6 +91,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -87,15 +104,17 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         24,
         MediaQuery.of(context).viewInsets.bottom + 32,
       ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        child: _step == 0
-            ? _buildInterestsStep()
-            : _step == 1
-                ? _buildMajorStep()
-                : _step == 2
-                    ? _buildTimesStep()
-                    : _buildClubsStep(),
+      child: SingleChildScrollView(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          child: _step == 0
+              ? _buildInterestsStep()
+              : _step == 1
+              ? _buildMajorStep()
+              : _step == 2
+              ? _buildTimesStep()
+              : _buildClubsStep(),
+        ),
       ),
     );
   }
@@ -122,15 +141,28 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
   }
 
   Widget _dragHandle() => Center(
-        child: Container(
-          width: 36,
-          height: 4,
-          decoration: BoxDecoration(
-            color: AppColors.divider,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      );
+    child: Container(
+      width: 36,
+      height: 4,
+      decoration: BoxDecoration(
+        color: AppColors.divider,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    ),
+  );
+
+  Widget _skipButton() => TextButton(
+    key: ValueKey('ku-day-skip-step-$_step'),
+    onPressed: _skip,
+    child: Text(
+      'Skip setup',
+      style: TextStyle(
+        color: AppColors.secondaryText,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 
   // ── Step 0 — Interests ─────────────────────────────────────────────────────
 
@@ -182,14 +214,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 ],
               ),
             ),
-            TextButton(
-              onPressed: _skip,
-              child: Text(
-                'Skip',
-                style: TextStyle(
-                    color: AppColors.secondaryText, fontSize: 13),
-              ),
-            ),
+            _skipButton(),
           ],
         ),
         const SizedBox(height: 24),
@@ -231,21 +256,17 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color:
-                      selected ? AppColors.primaryRed : AppColors.surfaceAlt,
+                  color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: selected
-                        ? AppColors.primaryRed
-                        : AppColors.divider,
+                    color: selected ? AppColors.primaryRed : AppColors.divider,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (selected) ...[
-                      Icon(Icons.check_rounded,
-                          size: 14, color: Colors.white),
+                      Icon(Icons.check_rounded, size: 14, color: Colors.white),
                       const SizedBox(width: 5),
                     ],
                     Text(
@@ -266,13 +287,15 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
+            key: const ValueKey('ku-day-next-step-0'),
             onPressed: () => setState(() => _step = 1),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: 0,
             ),
             child: Text(
@@ -301,8 +324,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           children: [
             GestureDetector(
               onTap: () => setState(() => _step = 0),
-              child: Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 18, color: AppColors.secondaryText),
+              child: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: AppColors.secondaryText,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -315,6 +341,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 ),
               ),
             ),
+            _skipButton(),
           ],
         ),
         const SizedBox(height: 6),
@@ -341,20 +368,19 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             final depts = faculty['departments'] as String;
             final selected = _selectedMajor == name;
             return GestureDetector(
+              key: ValueKey('ku-day-major-$name'),
               onTap: () => setState(() => _selectedMajor = name),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.lightRed
-                      : AppColors.surfaceAlt,
+                  color: selected ? AppColors.lightRed : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: selected
-                        ? AppColors.primaryRed
-                        : AppColors.divider,
+                    color: selected ? AppColors.primaryRed : AppColors.divider,
                     width: selected ? 1.5 : 1,
                   ),
                 ),
@@ -367,8 +393,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                         color: AppColors.lightRed,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.school_outlined,
-                          size: 18, color: AppColors.primaryRed),
+                      child: Icon(
+                        Icons.school_outlined,
+                        size: 18,
+                        color: AppColors.primaryRed,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -387,8 +416,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                           Text(
                             depts,
                             style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.secondaryText),
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
                           ),
                         ],
                       ),
@@ -411,8 +441,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                         ),
                       ),
                       child: selected
-                          ? Icon(Icons.check,
-                              size: 12, color: Colors.white)
+                          ? Icon(Icons.check, size: 12, color: Colors.white)
                           : null,
                     ),
                   ],
@@ -425,6 +454,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
+            key: const ValueKey('ku-day-next-step-1'),
             onPressed: _selectedMajor.isNotEmpty
                 ? () => setState(() => _step = 2)
                 : null,
@@ -435,7 +465,8 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               disabledForegroundColor: AppColors.secondaryText,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: 0,
             ),
             child: Text(
@@ -471,8 +502,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           children: [
             GestureDetector(
               onTap: () => setState(() => _step = 1),
-              child: Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 18, color: AppColors.secondaryText),
+              child: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: AppColors.secondaryText,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -485,6 +519,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 ),
               ),
             ),
+            _skipButton(),
           ],
         ),
         const SizedBox(height: 6),
@@ -520,13 +555,10 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 decoration: BoxDecoration(
-                  color:
-                      selected ? AppColors.primaryRed : AppColors.surfaceAlt,
+                  color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: selected
-                        ? AppColors.primaryRed
-                        : AppColors.divider,
+                    color: selected ? AppColors.primaryRed : AppColors.divider,
                   ),
                 ),
                 child: Row(
@@ -535,9 +567,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     Icon(
                       iconMap[slot],
                       size: 18,
-                      color: selected
-                          ? Colors.white
-                          : AppColors.secondaryText,
+                      color: selected ? Colors.white : AppColors.secondaryText,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -558,13 +588,15 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
+            key: const ValueKey('ku-day-next-step-2'),
             onPressed: () => setState(() => _step = 3),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: 0,
             ),
             child: Text(
@@ -583,12 +615,12 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
     final alreadyFollowed = userState.followedClubIds;
 
     // Rank clubs by how many selected interests they match; exclude followed.
-    final candidates = kClubInterestMap.keys
-        .where((id) => !alreadyFollowed.contains(id))
-        .map((id) =>
-            (id, personalizationService.interestMatchCount(id)))
-        .toList()
-      ..sort((a, b) => b.$2.compareTo(a.$2));
+    final candidates =
+        kClubInterestMap.keys
+            .where((id) => !alreadyFollowed.contains(id))
+            .map((id) => (id, personalizationService.interestMatchCount(id)))
+            .toList()
+          ..sort((a, b) => b.$2.compareTo(a.$2));
 
     final recommended = candidates.take(6).map((t) => t.$1).toList();
 
@@ -605,8 +637,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           children: [
             GestureDetector(
               onTap: () => setState(() => _step = 2),
-              child: Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 18, color: AppColors.secondaryText),
+              child: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: AppColors.secondaryText,
+              ),
             ),
             const SizedBox(width: 10),
             Container(
@@ -616,8 +651,11 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.groups_rounded,
-                  size: 18, color: AppColors.primaryRed),
+              child: Icon(
+                Icons.groups_rounded,
+                size: 18,
+                color: AppColors.primaryRed,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -635,51 +673,61 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                   Text(
                     'Follow to see their posts.',
                     style: TextStyle(
-                        fontSize: 12, color: AppColors.secondaryText),
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
                 ],
               ),
             ),
-            TextButton(
+            _skipButton(),
+          ],
+        ),
+        if (recommended.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
               onPressed: () =>
                   setState(() => _followedInOnboarding.addAll(recommended)),
               child: Text(
                 'Follow all',
                 style: TextStyle(
-                    color: AppColors.primaryRed,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600),
+                  color: AppColors.primaryRed,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ],
-        ),
+          ),
         if (_interests.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: _interests
-                .map((tag) => Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color:
-                            AppColors.primaryRed.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color:
-                              AppColors.primaryRed.withValues(alpha: 0.25),
-                        ),
+                .map(
+                  (tag) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.primaryRed.withValues(alpha: 0.25),
                       ),
-                      child: Text(
-                        tag,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.w500,
-                        ),
+                    ),
+                    child: Text(
+                      tag,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ))
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -691,8 +739,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               child: Text(
                 'No new clubs to suggest — you\'re already well-connected!',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 13, color: AppColors.secondaryText),
+                style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
               ),
             ),
           )
@@ -704,21 +751,24 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (_, i) {
               final clubId = recommended[i];
-              final club = clubs.firstWhere((c) => c.id == clubId,
-                  orElse: () => clubs.first);
+              final club = clubs.firstWhere(
+                (c) => c.id == clubId,
+                orElse: () => clubs.first,
+              );
               final color = _clubColor(clubId);
-              final matchCount =
-                  personalizationService.interestMatchCount(clubId);
+              final matchCount = personalizationService.interestMatchCount(
+                clubId,
+              );
               final isFollowed = _followedInOnboarding.contains(clubId);
 
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
-                  color: isFollowed
-                      ? AppColors.lightRed
-                      : AppColors.surfaceAlt,
+                  color: isFollowed ? AppColors.lightRed : AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: isFollowed
@@ -754,10 +804,13 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                             const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.accentGold
-                                    .withValues(alpha: 0.15),
+                                color: AppColors.accentGold.withValues(
+                                  alpha: 0.15,
+                                ),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -785,7 +838,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 7),
+                          horizontal: 14,
+                          vertical: 7,
+                        ),
                         decoration: BoxDecoration(
                           color: isFollowed
                               ? AppColors.primaryRed
@@ -794,8 +849,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                           border: Border.all(
                             color: isFollowed
                                 ? AppColors.primaryRed
-                                : AppColors.primaryRed
-                                    .withValues(alpha: 0.5),
+                                : AppColors.primaryRed.withValues(alpha: 0.5),
                           ),
                         ),
                         child: Text(
@@ -825,7 +879,8 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: 0,
             ),
             child: Text(
@@ -842,7 +897,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 TextSpan(
                   text: 'Following ',
                   style: TextStyle(
-                      fontSize: 12, color: AppColors.secondaryText),
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
                 TextSpan(
                   text: '${_followedInOnboarding.length}',
@@ -855,7 +912,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 TextSpan(
                   text: ' clubs',
                   style: TextStyle(
-                      fontSize: 12, color: AppColors.secondaryText),
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
               ],
             ),

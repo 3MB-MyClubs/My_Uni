@@ -6,6 +6,7 @@ import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
@@ -468,16 +469,7 @@ class _EventBody extends StatelessWidget {
   final Color color;
   const _EventBody({required this.event, required this.color});
 
-  bool get _isCurrentAdminEventOwner {
-    final admin = authService.currentAdmin;
-    if (admin == null) return false;
-    try {
-      return clubs.firstWhere((c) => c.adminUserIds.contains(admin.id)).id ==
-          event.clubId;
-    } catch (_) {
-      return false;
-    }
-  }
+  bool get _isCurrentAdminEventOwner => canViewEventAttendance(event);
 
   @override
   Widget build(BuildContext context) {

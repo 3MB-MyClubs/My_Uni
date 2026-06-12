@@ -20,6 +20,7 @@ import 'services/personalization_service.dart';
 import 'services/theme_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
+import 'services/tutorial_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
@@ -38,6 +39,7 @@ void main() async {
   await personalizationService.initialize();
   await themeService.initialize();
   await calendarSyncService.initialize();
+  await tutorialService.initialize();
   contentStore.applyToLists();
   contentStore.loadBoardMemberRequests();
   contentStore.loadBoardMemberIds();

@@ -53,7 +53,7 @@ class RecommendationService {
 
     final reason = isFollowing
         ? 'Live now · you follow ${_shortName(club.name)}'
-        : 'Live now · ${top.attendeeUserIds.length} people are there';
+        : 'Live now on campus';
 
     return Recommendation(
       type: RecType.happeningNow,
@@ -233,9 +233,7 @@ class RecommendationService {
         .where((id) => userState.followedUserIds.contains(id))
         .length;
     if (followersGoing > 0) {
-      final n = followersGoing;
-      return '$n ${n == 1 ? "person" : "people"} you follow '
-          '${n == 1 ? "is" : "are"} going';
+      return 'People you follow are going';
     }
     if (userState.followedClubIds.contains(event.clubId)) {
       return 'Because you follow ${_shortName(club.name)}';
@@ -246,9 +244,6 @@ class RecommendationService {
       orElse: () => '',
     );
     if (matchedTag.isNotEmpty) return 'Matches your $matchedTag interest';
-    if (event.attendeeUserIds.length >= 3) {
-      return '${event.attendeeUserIds.length} people are going';
-    }
     return 'Popular on campus';
   }
 

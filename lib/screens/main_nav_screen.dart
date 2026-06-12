@@ -8,6 +8,8 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
+import '../services/tutorial_service.dart';
+import '../widgets/app_tutorial_overlay.dart';
 import 'chat_screen.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
@@ -18,7 +20,6 @@ import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_post_screen.dart';
 import 'create_event_screen.dart';
-import 'create_story_screen.dart';
 
 class MainNavScreen extends ConsumerStatefulWidget {
   final bool isAdmin;
@@ -32,12 +33,251 @@ class MainNavScreen extends ConsumerStatefulWidget {
 class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   int _selectedIndex = 0;
   OverlayEntry? _bannerEntry;
+  bool _showTutorial = false;
+
+  final _contentKey = GlobalKey();
+  final _homeHeaderKey = GlobalKey();
+  final _homeEventsKey = GlobalKey();
+  final _homeFeedKey = GlobalKey();
+  final _bottomNavKey = GlobalKey();
+  final _homeNavKey = GlobalKey();
+  final _eventsNavKey = GlobalKey();
+  final _searchNavKey = GlobalKey();
+  final _alertsNavKey = GlobalKey();
+  final _profileNavKey = GlobalKey();
+  final _createNavKey = GlobalKey();
+  final _adminNavKey = GlobalKey();
+
+  String get _currentUserId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   @override
   void initState() {
     super.initState();
     userState.incomingMessageNotifier.addListener(_onIncomingMessage);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _requestCalendarIfNeeded());
+    tutorialService.replayRequests.addListener(_onTutorialReplayRequested);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _startInitialExperience(),
+    );
+  }
+
+  void _startInitialExperience() {
+    if (!mounted) return;
+    if (!tutorialService.isComplete(_currentUserId)) {
+      _startTutorial();
+      return;
+    }
+    _requestCalendarIfNeeded();
+  }
+
+  void _onTutorialReplayRequested() {
+    if (!mounted) return;
+    _startTutorial();
+  }
+
+  void _startTutorial() {
+    setState(() {
+      _selectedIndex = 0;
+      _showTutorial = true;
+    });
+  }
+
+  Future<void> _finishTutorial() async {
+    if (!_showTutorial) return;
+    setState(() {
+      _showTutorial = false;
+      _selectedIndex = 0;
+    });
+    await tutorialService.complete(_currentUserId);
+    if (mounted) await _requestCalendarIfNeeded();
+  }
+
+  void _onTutorialStepChanged(AppTutorialStep step) {
+    if (_selectedIndex == step.tabIndex) return;
+    setState(() => _selectedIndex = step.tabIndex);
+  }
+
+  List<AppTutorialStep> get _tutorialSteps {
+    final steps = <AppTutorialStep>[
+      const AppTutorialStep(
+        eyebrow: 'Welcome',
+        title: 'Your campus, in one place',
+        description:
+            'This quick tour uses the real app screens. We will show you where events, clubs, people, alerts, and profile tools live.',
+        icon: Icons.waving_hand_rounded,
+        tabIndex: 0,
+        tips: [
+          'Use Next and Back at your own pace.',
+          'Skip tour is always available in the top-right corner.',
+          'You can replay the full tour later from Settings.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Home',
+        title: 'Shortcuts and campus updates',
+        description:
+            'The Home header keeps search and notifications close. Below it, your feed combines updates from clubs you follow with campus recommendations.',
+        icon: Icons.home_rounded,
+        targetKey: _homeHeaderKey,
+        tabIndex: 0,
+        tips: [
+          'Tap the search icon to find a person or club quickly.',
+          'The bell opens your latest activity.',
+          'Pull down on Home whenever you want to refresh.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Home events',
+        title: 'See what is happening this week',
+        description:
+            'These event cards show the next campus activities. Tap any card to open its full details before deciding whether to RSVP.',
+        icon: Icons.event_available_rounded,
+        targetKey: _homeEventsKey,
+        tabIndex: 0,
+        tips: [
+          'Swipe sideways to browse up to ten upcoming events.',
+          'Open an event to see its date, time, location, and description.',
+          'After you RSVP, it can be added to your personal calendar.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Home feed',
+        title: 'Follow, RSVP, share, and save',
+        description:
+            'Switch between Following and All to control your feed. Every post and event has its own actions, and tapping an event opens its details.',
+        icon: Icons.dynamic_feed_rounded,
+        targetKey: _homeFeedKey,
+        tabIndex: 0,
+        tips: [
+          'Follow clubs to shape the Following feed.',
+          'Use RSVP on events and Save on anything you want to revisit.',
+          'Share sends a post or event to another student.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Events',
+        title: 'Plan the week',
+        description:
+            'The Events tab is your campus agenda. Browse by day, search event names or clubs, and filter the list to clubs you follow.',
+        icon: Icons.calendar_month_rounded,
+        targetKey: _contentKey,
+        tabIndex: 1,
+        tips: [
+          'Choose a day from the date strip to narrow the agenda.',
+          'Tap an event to open details and RSVP.',
+          'Going events appear in your personal calendar view.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Search',
+        title: 'Find people and clubs',
+        description:
+            'Search by a student’s first name, surname, or major, and search clubs by name. Suggested people prioritize useful campus connections.',
+        icon: Icons.manage_search_rounded,
+        targetKey: _contentKey,
+        tabIndex: 2,
+        tips: [
+          'Type a name or surname to find a specific student.',
+          'Open a profile before following to see clubs and interests.',
+          'Follow and unfollow directly from search results.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Alerts',
+        title: 'Keep track of activity',
+        description:
+            'Alerts collect follow activity, club updates, event changes, message notices, and other account activity in one place.',
+        icon: Icons.notifications_active_rounded,
+        targetKey: _contentKey,
+        tabIndex: 3,
+        tips: [
+          'Unread activity is marked with a badge in the navigation bar.',
+          'Tap an alert to open the related person, message, club, or event.',
+          'Opening this tab clears the navigation badge.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Profile',
+        title: 'Your campus identity',
+        description:
+            'Your Profile shows your bio, major, interests, clubs, connections, saved content, and upcoming RSVP. Use Settings to edit preferences and appearance.',
+        icon: Icons.account_circle_rounded,
+        targetKey: _contentKey,
+        tabIndex: 4,
+        tips: [
+          'Edit your profile so classmates know who you are.',
+          'Open follower and following lists from the profile counts.',
+          'Settings includes preferences, theme, and Replay App Tour.',
+        ],
+      ),
+      AppTutorialStep(
+        eyebrow: 'Navigation',
+        title: 'Move around from anywhere',
+        description:
+            'The bottom bar stays available across the main app. The active section turns red, and badges tell you when something needs attention.',
+        icon: Icons.touch_app_rounded,
+        targetKey: _bottomNavKey,
+        tabIndex: 0,
+        tips: [
+          'Home is your personalized starting point.',
+          'Events and Search are for discovery and planning.',
+          'Alerts and Profile keep your activity and identity organized.',
+        ],
+      ),
+    ];
+
+    if (_isClubAdmin) {
+      steps.add(
+        AppTutorialStep(
+          eyebrow: 'Club tools',
+          title: 'Publish for your club',
+          description:
+              'Club posters get this central Create button. It opens a chooser for a club update or a scheduled event.',
+          icon: Icons.add_circle_rounded,
+          targetKey: _createNavKey,
+          tabIndex: 0,
+          tips: [
+            'Post shares a club update with followers.',
+            'Event adds a date, time, location, and RSVP page.',
+            'Only the event poster can see attendee totals and the RSVP list.',
+          ],
+        ),
+      );
+    }
+
+    if (widget.isAdmin) {
+      steps.add(
+        AppTutorialStep(
+          eyebrow: 'Administration',
+          title: 'Manage the wider community',
+          description:
+              'The Admin area contains platform-level moderation and management tools that are only visible to the super admin.',
+          icon: Icons.admin_panel_settings_rounded,
+          targetKey: _adminNavKey,
+          tabIndex: 5,
+          tips: [
+            'Review management information from the dedicated dashboard.',
+            'Student and club navigation remains available beside it.',
+          ],
+        ),
+      );
+    }
+
+    steps.add(
+      const AppTutorialStep(
+        eyebrow: 'You are ready',
+        title: 'Explore at your own pace',
+        description:
+            'That is the complete map. The tour will not appear automatically again for this account, but you can replay it from Profile → Settings.',
+        icon: Icons.rocket_launch_rounded,
+        tabIndex: 0,
+        tips: [
+          'Tap Start exploring to return to Home.',
+          'Your follows, RSVPs, saves, and preferences personalize the app.',
+        ],
+      ),
+    );
+    return steps;
   }
 
   Future<void> _requestCalendarIfNeeded() async {
@@ -46,94 +286,118 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     if (!mounted) return;
     if (permission == CalendarPermissionState.granted ||
         permission == CalendarPermissionState.permanentlyDenied ||
-        permission == CalendarPermissionState.restricted) { return; }
-    await _showCalendarExplanationDialog();
+        permission == CalendarPermissionState.restricted) {
+      return;
+    }
+    if (await service.hasShownInitialPermissionPrompt()) return;
+
+    await service.markInitialPermissionPromptShown();
     if (!mounted) return;
-    await service.requestPermission();
+    final shouldRequest = await _showCalendarExplanationDialog();
+    if (!mounted) return;
+    if (shouldRequest) await service.requestPermission();
   }
 
-  Future<void> _showCalendarExplanationDialog() {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.calendar_month_rounded,
-                  size: 32, color: AppColors.primaryRed),
+  Future<bool> _showCalendarExplanationDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            backgroundColor: AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Connect Your Calendar',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.text),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'My Clubs can add events you RSVP to directly into your phone\'s Calendar app, so you never miss anything.\n\nYour calendar data is only used to add events you choose.',
-              style: TextStyle(
-                  fontSize: 13, color: AppColors.secondaryText, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-        actions: [
-          Row(children: [
-            Expanded(
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.secondaryText,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: AppColors.divider),
+            contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.calendar_month_rounded,
+                    size: 32,
+                    color: AppColors.primaryRed,
                   ),
                 ),
-                child: const Text('Not Now',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  backgroundColor: AppColors.primaryRed,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 16),
+                Text(
+                  'Connect Your Calendar',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.text,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                child: const Text('Continue',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
+                const SizedBox(height: 10),
+                Text(
+                  'My Clubs can add events you RSVP to directly into your phone\'s Calendar app, so you never miss anything.\n\nYour calendar data is only used to add events you choose.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.secondaryText,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
-          ]),
-        ],
-      ),
-    );
+            actions: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.secondaryText,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: AppColors.divider),
+                        ),
+                      ),
+                      child: const Text(
+                        'Not Now',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppColors.primaryRed,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Continue',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   @override
   void dispose() {
     userState.incomingMessageNotifier.removeListener(_onIncomingMessage);
+    tutorialService.replayRequests.removeListener(_onTutorialReplayRequested);
     _bannerEntry?.remove();
     super.dispose();
   }
@@ -264,26 +528,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CreateOption(
-                    icon: Icons.auto_stories_rounded,
-                    label: 'Story',
-                    subtitle: 'Post a club story',
-                    color: const Color(0xFF2E7D32),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          fullscreenDialog: true,
-                          builder: (_) => CreateStoryScreen(
-                            onPosted: () => setState(() {}),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
               ],
             ),
           ],
@@ -304,18 +548,38 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         // Non-const instances so Flutter creates new widget objects each rebuild,
         // which triggers element.update() → markNeedsBuild() on each screen state.
         final screens = <Widget>[
-          FeedScreen(),        // 0
-          ThisWeekScreen(),    // 1
-          ExploreScreen(),     // 2
+          FeedScreen(
+            tutorialHeaderKey: _homeHeaderKey,
+            tutorialEventsKey: _homeEventsKey,
+            tutorialFeedKey: _homeFeedKey,
+          ), // 0
+          ThisWeekScreen(), // 1
+          ExploreScreen(), // 2
           NotificationsScreen(), // 3
           ProfileScreen(onLogout: widget.onLogout), // 4
-          if (widget.isAdmin) AdminDashboard(),     // 5
+          if (widget.isAdmin) AdminDashboard(), // 5
         ];
 
-        return Scaffold(
-          extendBody: true,
-          body: IndexedStack(index: _selectedIndex, children: screens),
-          bottomNavigationBar: _buildBottomNav(context),
+        return Stack(
+          children: [
+            Scaffold(
+              extendBody: true,
+              body: KeyedSubtree(
+                key: _contentKey,
+                child: IndexedStack(index: _selectedIndex, children: screens),
+              ),
+              bottomNavigationBar: _buildBottomNav(context),
+            ),
+            if (_showTutorial)
+              Positioned.fill(
+                child: AppTutorialOverlay(
+                  steps: _tutorialSteps,
+                  onStepChanged: _onTutorialStepChanged,
+                  onComplete: _finishTutorial,
+                  onSkip: _finishTutorial,
+                ),
+              ),
+          ],
         );
       },
     );
@@ -327,6 +591,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: Container(
+          key: _bottomNavKey,
           height: 72,
           decoration: BoxDecoration(
             color: AppColors.card,
@@ -347,6 +612,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _NavItem(
+                key: _homeNavKey,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
                 label: 'Home',
@@ -354,6 +620,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 onTap: () => setState(() => _selectedIndex = 0),
               ),
               _NavItem(
+                key: _eventsNavKey,
                 icon: Icons.calendar_today_outlined,
                 activeIcon: Icons.calendar_today_rounded,
                 label: 'Events',
@@ -361,14 +628,17 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 onTap: () => setState(() => _selectedIndex = 1),
               ),
               _NavItem(
+                key: _searchNavKey,
                 icon: Icons.search_outlined,
                 activeIcon: Icons.search_rounded,
                 label: 'Search',
                 selected: _selectedIndex == 2,
                 onTap: () => setState(() => _selectedIndex = 2),
               ),
-              if (_isClubAdmin) _CenterAddButton(onTap: _onAddTap),
+              if (_isClubAdmin)
+                _CenterAddButton(key: _createNavKey, onTap: _onAddTap),
               _NavItem(
+                key: _alertsNavKey,
                 icon: Icons.notifications_none_rounded,
                 activeIcon: Icons.notifications_rounded,
                 label: 'Alerts',
@@ -380,6 +650,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 },
               ),
               _NavItem(
+                key: _profileNavKey,
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: 'Profile',
@@ -388,6 +659,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
               ),
               if (widget.isAdmin)
                 _NavItem(
+                  key: _adminNavKey,
                   icon: Icons.admin_panel_settings_outlined,
                   activeIcon: Icons.admin_panel_settings_rounded,
                   label: 'Admin',
@@ -411,6 +683,7 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _NavItem({
+    super.key,
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -499,7 +772,7 @@ class _NavItem extends StatelessWidget {
 
 class _CenterAddButton extends StatelessWidget {
   final VoidCallback onTap;
-  const _CenterAddButton({required this.onTap});
+  const _CenterAddButton({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

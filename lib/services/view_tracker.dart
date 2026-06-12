@@ -2,8 +2,8 @@ import 'package:hive/hive.dart';
 import '../models/user.dart';
 import 'mock_data.dart';
 
-/// Tracks who has viewed each story, post, or event.
-/// Key: contentId (storyId, postId, eventId)
+/// Tracks who has viewed each post or event.
+/// Key: contentId (postId or eventId)
 /// Value: Set of userIds
 ///
 /// Stored in Hive box "view_tracker_v1" so views survive logout/restart.

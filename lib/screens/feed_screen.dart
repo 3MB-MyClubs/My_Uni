@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
@@ -21,16 +18,19 @@ import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/message_service.dart';
-import 'messages_screen.dart';
-import 'my_calendar_screen.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
+import '../widgets/expandable_post_caption.dart';
 import '../services/group_chat_service.dart';
 import 'group_chat_screen.dart';
+import 'notifications_screen.dart';
+import 'this_week_screen.dart';
+import 'explore_screen.dart';
+import 'event_detail_screen.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -61,41 +61,25 @@ class _ClubSuggestion {
   const _ClubSuggestion(this.club);
 }
 
-class _CampusWeather {
-  final int temperature;
-  final String condition;
-  final String icon;
-  final DateTime updatedAt;
-
-  const _CampusWeather({
-    required this.temperature,
-    required this.condition,
-    required this.icon,
-    required this.updatedAt,
-  });
-
-  String get label => '$temperature°C · $condition';
-}
-
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  final Key? tutorialHeaderKey;
+  final Key? tutorialEventsKey;
+  final Key? tutorialFeedKey;
+
+  const FeedScreen({
+    super.key,
+    this.tutorialHeaderKey,
+    this.tutorialEventsKey,
+    this.tutorialFeedKey,
+  });
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  static const _nativeChannel = MethodChannel('ku_app/native_weather');
-  static const _campusWeatherUrl =
-      'https://api.open-meteo.com/v1/forecast?latitude=41.2050&longitude=29.0720&current=temperature_2m,weather_code&timezone=Europe%2FIstanbul';
-
-  final Set<String> _viewedClubIds = {};
-  Timer? _weatherRefreshTimer;
-  _CampusWeather? _campusWeather;
-  bool _isWeatherLoading = false;
-
   // true = show only followed clubs, false = show all clubs
   bool _followedOnly = true;
 
@@ -191,136 +175,25 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshCampusWeather();
-    _weatherRefreshTimer = Timer.periodic(
-      const Duration(minutes: 5),
-      (_) => _refreshCampusWeather(),
-    );
   }
 
   @override
   void dispose() {
-    _weatherRefreshTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _onRefresh() async {
-    await Future.wait([
-      Future.delayed(const Duration(milliseconds: 600)),
-      _refreshCampusWeather(),
-    ]);
+    await Future.delayed(const Duration(milliseconds: 600));
     setState(() {});
   }
 
-  Future<void> _refreshCampusWeather() async {
-    if (_isWeatherLoading) return;
-    _isWeatherLoading = true;
-    try {
-      final client = HttpClient();
-      try {
-        final request = await client.getUrl(Uri.parse(_campusWeatherUrl));
-        final response = await request.close();
-        if (response.statusCode != HttpStatus.ok) return;
-
-        final body = await response.transform(utf8.decoder).join();
-        final json = jsonDecode(body) as Map<String, dynamic>;
-        final current = json['current'] as Map<String, dynamic>?;
-        if (current == null) return;
-
-        final temp = (current['temperature_2m'] as num).round();
-        final code = (current['weather_code'] as num).toInt();
-        final weather = _weatherFromCode(code, temp);
-
-        if (!mounted) return;
-        setState(() => _campusWeather = weather);
-      } finally {
-        client.close(force: true);
-      }
-    } catch (_) {
-      // Keep the last successful reading visible if the network is unavailable.
-    } finally {
-      _isWeatherLoading = false;
-    }
-  }
-
-  _CampusWeather _weatherFromCode(int code, int temperature) {
-    final now = DateTime.now();
-    if (code == 0) {
-      return _CampusWeather(
-        temperature: temperature,
-        condition: 'Clear',
-        icon: '☀️',
-        updatedAt: now,
-      );
-    }
-    if (code == 1 || code == 2) {
-      return _CampusWeather(
-        temperature: temperature,
-        condition: 'Partly cloudy',
-        icon: '⛅',
-        updatedAt: now,
-      );
-    }
-    if (code == 3 || code == 45 || code == 48) {
-      return _CampusWeather(
-        temperature: temperature,
-        condition: code == 3 ? 'Cloudy' : 'Foggy',
-        icon: code == 3 ? '☁️' : '🌫️',
-        updatedAt: now,
-      );
-    }
-    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
-      return _CampusWeather(
-        temperature: temperature,
-        condition: 'Rainy',
-        icon: '🌧️',
-        updatedAt: now,
-      );
-    }
-    if (code >= 71 && code <= 77) {
-      return _CampusWeather(
-        temperature: temperature,
-        condition: 'Snowy',
-        icon: '❄️',
-        updatedAt: now,
-      );
-    }
-    if (code >= 95) {
-      return _CampusWeather(
-        temperature: temperature,
-        condition: 'Stormy',
-        icon: '⛈️',
-        updatedAt: now,
-      );
-    }
-    return _CampusWeather(
-      temperature: temperature,
-      condition: 'Updated',
-      icon: '🌡️',
-      updatedAt: now,
-    );
-  }
-
-  Future<void> _openNativeWeatherApp() async {
-    try {
-      final opened = await _nativeChannel.invokeMethod<bool>('openWeatherApp');
-      if (opened == true || !mounted) return;
-    } catch (_) {
-      if (!mounted) return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Weather app is not available')),
-    );
-  }
-
   // ── Feed tab state ─────────────────────────────────────────────────────────
-  // 0 = For You (all clubs), 1 = Following (followed clubs only)
+  // 0 = Following (followed clubs only), 1 = All
   int _feedTab = 0;
 
   @override
   Widget build(BuildContext context) {
-    _followedOnly = _feedTab == 1;
+    _followedOnly = _feedTab == 0;
 
     final mixed = _buildMixedFeed(_buildFeed());
     return Scaffold(
@@ -331,10 +204,10 @@ class _FeedScreenState extends State<FeedScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            _buildAppBar(),
+            _buildTopBar(),
+            _buildGreeting(),
+            _buildEventsRail(),
             _buildFeedTabs(),
-            _buildStoriesRow(),
-            _buildContextBar(),
             if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -458,488 +331,332 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  String get _greeting {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   String get _firstName {
     final name =
         authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
     return name.split(' ').first;
   }
 
-  String get _greetingEmoji {
-    final h = DateTime.now().hour;
-    if (h < 6) return '🌙';
-    if (h < 12) return '☀️';
-    if (h < 17) return '👋';
-    if (h < 21) return '🌆';
-    return '🌙';
-  }
-
-  SliverAppBar _buildAppBar() {
+  // ── UniHub top bar ───────────────────────────────────────────────────────
+  SliverAppBar _buildTopBar() {
     return SliverAppBar(
-      backgroundColor: Colors.transparent,
-      foregroundColor: AppColors.text,
+      pinned: true,
+      floating: false,
+      backgroundColor: AppColors.card,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      floating: true,
-      snap: true,
-      expandedHeight: 96,
-      collapsedHeight: 60,
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: EdgeInsets.zero,
-        collapseMode: CollapseMode.pin,
-        title: Builder(
-          builder: (ctx) {
-            final isDark = Theme.of(ctx).brightness == Brightness.dark;
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: isDark
-                      ? [Color(0xFF180820), Color(0xFF1A0A1E)]
-                      : [AppColors.card, AppColors.card],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.fromLTRB(18, 0, 56, 12),
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+      toolbarHeight: 56,
+      leading: const SizedBox.shrink(),
+      leadingWidth: 0,
+      titleSpacing: 0,
+      title: Padding(
+        key: widget.tutorialHeaderKey,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            // UniHub logotype
+            RichText(
+              text: TextSpan(
                 children: [
-                  Text(
-                    '$_greeting $_greetingEmoji',
+                  TextSpan(
+                    text: 'Uni',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _firstName,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
                       color: AppColors.text,
                       letterSpacing: -0.8,
-                      height: 1,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'Hub',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.primaryRed,
+                      letterSpacing: -0.8,
                     ),
                   ),
                 ],
               ),
-            );
-          },
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.calendar_month_outlined),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
-          ),
-          tooltip: 'My Calendar',
-        ),
-        IconButton(
-          icon: Icon(Icons.send_outlined),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const MessagesScreen()),
-          ),
-          tooltip: 'Direct Messages',
-        ),
-      ],
-    );
-  }
-
-  // ── Feed Tabs (For You / Following) ──────────────────────────────────────
-  SliverToBoxAdapter _buildFeedTabs() {
-    const labels = ['For You', 'Following'];
-    return SliverToBoxAdapter(
-      child: Builder(
-        builder: (ctx) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          return Container(
-            decoration: BoxDecoration(
-              gradient: isDark
-                  ? LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFF1E0A22), AppColors.card],
-                    )
-                  : null,
-              color: isDark ? null : AppColors.card,
             ),
-            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(labels.length, (i) {
-                  final active = _feedTab == i;
-                  return GestureDetector(
-                    onTap: () => setState(() => _feedTab = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: active
-                            ? LinearGradient(
-                                colors: [
-                                  AppColors.primaryRed,
-                                  Color(0xFF6A1530),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )
-                            : null,
-                        color: active
-                            ? null
-                            : isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: active
-                              ? AppColors.primaryRed.withValues(alpha: 0.6)
-                              : AppColors.divider,
-                          width: 1,
-                        ),
-                        boxShadow: active
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.primaryRed.withValues(
-                                    alpha: 0.35,
-                                  ),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        labels[i],
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: active
-                              ? FontWeight.w700
-                              : FontWeight.w400,
-                          color: active
-                              ? Colors.white
-                              : AppColors.secondaryText,
-                          letterSpacing: active ? 0.2 : 0,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
+            const Spacer(),
+            // Search button
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ExploreScreen()),
+              ),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: AppColors.text,
+                ),
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Context Bar (weather + academic week) ─────────────────────────────────
-  SliverToBoxAdapter _buildContextBar() {
-    final weather = _campusWeather;
-    final weatherLabel = weather?.label ?? 'Loading weather';
-    final weatherIcon = weather?.icon ?? '🌡️';
-    final now = DateTime.now();
-    // Approximate academic week (spring semester starts early Feb)
-    final semesterStart = DateTime(now.year, 2, 3);
-    final weekNum = ((now.difference(semesterStart).inDays) / 7).ceil().clamp(
-      1,
-      16,
-    );
-    final finalsWeek = DateTime(now.year, 5, 26);
-    final weeksToFinals = ((finalsWeek.difference(now).inDays) / 7).ceil();
-    final weekLabel = weekNum <= 16 ? 'Week $weekNum of 16' : 'Finals Week';
-    final finalsLabel = weeksToFinals > 0
-        ? 'Finals in $weeksToFinals wks'
-        : 'Finals now';
-
-    return SliverToBoxAdapter(
-      child: Builder(
-        builder: (ctx) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: Row(
-              children: [
-                // Weather card
-                Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _openNativeWeatherApp,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: isDark
-                              ? LinearGradient(
-                                  colors: [
-                                    Color(0xFF1A1226),
-                                    Color(0xFF140818),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                )
-                              : null,
-                          color: isDark ? null : AppColors.surfaceAlt,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isDark
-                                ? AppColors.glassEdge
-                                : AppColors.divider,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isDark
-                                  ? Colors.black.withValues(alpha: 0.3)
-                                  : AppColors.primaryRed.withValues(
-                                      alpha: 0.05,
-                                    ),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Text(weatherIcon, style: TextStyle(fontSize: 22)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    weatherLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.text,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Istanbul · Campus',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.secondaryText,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+            const SizedBox(width: 8),
+            // Bell button with unread badge
+            ListenableBuilder(
+              listenable: userState,
+              builder: (_, x) => GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => NotificationsScreen()),
+                ),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Center(
+                        child: Icon(
+                          Icons.notifications_none_rounded,
+                          size: 18,
+                          color: AppColors.text,
                         ),
                       ),
-                    ),
+                      if (userState.unreadNotifications > 0)
+                        Positioned(
+                          top: 7,
+                          right: 8,
+                          child: Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.card,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                // Academic week card
-                Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.push(
-                        ctx,
-                        MaterialPageRoute(
-                          builder: (_) => const MyCalendarScreen(),
-                        ),
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppColors.primaryRed.withValues(alpha: 0.18),
-                              AppColors.card,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: AppColors.primaryRed.withValues(alpha: 0.2),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryRed.withValues(
-                                alpha: 0.08,
-                              ),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Text('📅', style: TextStyle(fontSize: 22)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    weekLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.text,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                  Text(
-                                    finalsLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.primaryRed.withValues(
-                                        alpha: 0.8,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              size: 18,
-                              color: AppColors.primaryRed.withValues(
-                                alpha: 0.75,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          );
-        },
+          ],
+        ),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          height: 1,
+          color: AppColors.divider.withValues(alpha: 0.6),
+        ),
       ),
     );
   }
 
-  // Returns clubs that have at least one story posted within the last 24 hours,
-  // sorted: unseen (newest story first) → seen / oldest.
-  List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
-  _activeStoryClubs() {
-    const colors = [
-      Color(0xFF8C1D40),
-      Color(0xFF1565C0),
-      Color(0xFF2E7D32),
-      Color(0xFF6A1B9A),
-      Color(0xFFE65100),
-      Color(0xFF00838F),
-    ];
-    final cutoff = DateTime.now().subtract(const Duration(hours: 24));
-
-    final result =
-        <({dynamic club, List<ClubStory> stories, bool seen, Color color})>[];
-    for (int i = 0; i < clubs.length; i++) {
-      final club = clubs[i];
-      if (!_clubVisible(club.id)) continue;
-      final recent =
-          clubStories
-              .where((s) => s.clubId == club.id && s.postedAt.isAfter(cutoff))
-              .toList()
-            ..sort((a, b) => b.postedAt.compareTo(a.postedAt)); // newest first
-      if (recent.isEmpty) continue;
-      result.add((
-        club: club,
-        stories: recent,
-        seen: _viewedClubIds.contains(club.id),
-        color: colors[i % colors.length],
-      ));
-    }
-
-    // Sort: unseen first (newest → oldest), then seen (newest → oldest).
-    // Unseen always precede seen regardless of recency.
-    result.sort((a, b) {
-      if (a.seen != b.seen) return a.seen ? 1 : -1; // unseen before seen
-      return b.stories.first.postedAt.compareTo(
-        a.stories.first.postedAt,
-      ); // newest leftmost in both groups
-    });
-
-    return result;
-  }
-
-  SliverToBoxAdapter _buildStoriesRow() {
-    final active = _activeStoryClubs();
-    if (active.isEmpty) return SliverToBoxAdapter(child: SizedBox.shrink());
-
+  // ── Greeting ─────────────────────────────────────────────────────────────
+  SliverToBoxAdapter _buildGreeting() {
+    final h = DateTime.now().hour;
+    final greet = h < 5
+        ? 'Still up'
+        : h < 12
+        ? 'Good morning'
+        : h < 17
+        ? 'Good afternoon'
+        : 'Good evening';
     return SliverToBoxAdapter(
-      child: Container(
-        color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              height: 106,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                itemCount: active.length,
-                itemBuilder: (context, i) {
-                  final entry = active[i];
-                  return _StoryBubble(
-                    club: entry.club,
-                    stories: entry.stories,
-                    seen: entry.seen,
-                    color: entry.color,
-                    allClubs: active,
-                    startClubIndex: i,
-                    onViewed: () =>
-                        setState(() => _viewedClubIds.add(entry.club.id)),
-                    onDeleted: () => setState(() {}),
-                  );
-                },
+            Text(
+              '$greet,',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.secondaryText,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.1,
               ),
             ),
-            Divider(height: 1),
+            const SizedBox(height: 2),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: _firstName,
+                    style: TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                      letterSpacing: -1.2,
+                      height: 1.02,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '.',
+                    style: TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryRed,
+                      letterSpacing: -1.2,
+                      height: 1.02,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── This Week events rail ─────────────────────────────────────────────────
+  SliverToBoxAdapter _buildEventsRail() {
+    final now = DateTime.now();
+    final weekEnd = now.add(const Duration(days: 7));
+    final weekEvents =
+        events
+            .where(
+              (e) =>
+                  e.dateTime.isAfter(now.subtract(const Duration(hours: 2))) &&
+                  e.dateTime.isBefore(weekEnd),
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+    if (weekEvents.isEmpty) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
+    final shown = weekEvents.take(10).toList();
+    final userId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    rsvpStore.seedAll(shown, userId);
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        key: widget.tutorialEventsKey,
+        padding: const EdgeInsets.only(top: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text(
+                    'THIS WEEK',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.secondaryText,
+                      letterSpacing: 0.9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
+                    ),
+                    child: Text(
+                      'See all',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 200,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: shown.length,
+                separatorBuilder: (_, i) => const SizedBox(width: 12),
+                itemBuilder: (ctx, i) => _EventRailCard(event: shown[i]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Feed section header + filter tabs ────────────────────────────────────
+  SliverToBoxAdapter _buildFeedTabs() {
+    // tab 0 = Following, tab 1 = All
+    const tabs = [('following', 'Following'), ('all', 'All')];
+    return SliverToBoxAdapter(
+      child: Padding(
+        key: widget.tutorialFeedKey,
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+        child: Row(
+          children: [
+            Text(
+              'FROM YOUR CLUBS',
+              style: TextStyle(
+                fontSize: 10,
+                color: AppColors.secondaryText,
+                letterSpacing: 0.9,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Row(
+              children: tabs.asMap().entries.map((entry) {
+                final i = entry.key;
+                final label = entry.value.$2;
+                final active = _feedTab == i;
+                return GestureDetector(
+                  onTap: () => setState(() => _feedTab = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 13,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: active ? AppColors.primaryRed : Colors.transparent,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: active
+                            ? AppColors.primaryRed
+                            : AppColors.divider.withValues(alpha: 1.4),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: active ? Colors.white : AppColors.secondaryText,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),
@@ -963,8 +680,6 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 }
-
-// ─── Story Bubble ─────────────────────────────────────────────────────────────
 
 // ─── People You Might Know ────────────────────────────────────────────────────
 
@@ -1151,148 +866,10 @@ class _TrendingEventCard extends StatelessWidget {
   const _TrendingEventCard({required this.event, required this.onUpdate});
 
   void _showDetail(BuildContext context, Color color) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
-    final DateTime start = event.dateTime;
-    final DateTime end = event.endTime;
-    final userId = authService.currentUser?.id ?? '';
-    rsvpStore.seed(event.id, event.attendeeUserIds.contains(userId));
-
-    String fmt(DateTime dt) {
-      const mo = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '${mo[dt.month - 1]} ${dt.day}  ·  $h:$m ${dt.hour < 12 ? "AM" : "PM"}';
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                club.name.split(' ').first,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              event.title,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 16,
-                  color: AppColors.primaryRed,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    event.location,
-                    style: TextStyle(fontSize: 14, color: AppColors.text),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(
-                  Icons.play_circle_outline,
-                  size: 16,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Starts  ${fmt(start)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(
-                  Icons.stop_circle_outlined,
-                  size: 16,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Ends  ${fmt(end)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: RsvpButton(
-                eventId: event.id,
-                color: color,
-                isPast: end.isBefore(DateTime.now()),
-              ),
-            ),
-          ],
-        ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailScreen(event: event, color: color),
       ),
     );
   }
@@ -1636,735 +1213,6 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
   }
 }
 
-// ─── Story Bubble ─────────────────────────────────────────────────────────────
-
-class _StoryBubble extends StatelessWidget {
-  final dynamic club;
-  final List<ClubStory> stories;
-  final bool seen;
-  final Color color;
-  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
-  allClubs;
-  final int startClubIndex;
-  final VoidCallback onViewed;
-  final VoidCallback onDeleted;
-
-  const _StoryBubble({
-    required this.club,
-    required this.stories,
-    required this.seen,
-    required this.color,
-    required this.allClubs,
-    required this.startClubIndex,
-    required this.onViewed,
-    required this.onDeleted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        onViewed();
-        _openStoryViewer(context, allClubs, startClubIndex);
-      },
-      child: Padding(
-        padding: const EdgeInsets.only(right: 10),
-        child: SizedBox(
-          width: 68,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(2.5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: seen
-                      ? LinearGradient(
-                          colors: [
-                            AppColors.secondaryText,
-                            AppColors.secondaryText,
-                          ],
-                        )
-                      : LinearGradient(
-                          colors: [AppColors.primaryRed, AppColors.accentGold],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.card,
-                  ),
-                  child: ClubAvatar(
-                    clubId: club.id,
-                    clubName: club.name,
-                    color: color,
-                    size: 48,
-                    fontSize: 18,
-                    shape: 'circle',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                club.name.split(' ').first,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: seen ? AppColors.secondaryText : AppColors.text,
-                  fontWeight: seen ? FontWeight.normal : FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openStoryViewer(
-    BuildContext context,
-    List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
-    allClubs,
-    int startClubIndex,
-  ) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.transparent,
-        pageBuilder: (_, a1, a2) => _StoryViewer(
-          allClubs: allClubs,
-          startClubIndex: startClubIndex,
-          onDeleted: onDeleted,
-        ),
-        transitionsBuilder: (_, animation, a2, child) =>
-            FadeTransition(opacity: animation, child: child),
-        transitionDuration: const Duration(milliseconds: 200),
-      ),
-    );
-  }
-}
-
-// ─── Story Viewer ─────────────────────────────────────────────────────────────
-
-class _StoryViewer extends StatefulWidget {
-  final List<({dynamic club, List<ClubStory> stories, bool seen, Color color})>
-  allClubs;
-  final int startClubIndex;
-  final VoidCallback? onDeleted;
-
-  const _StoryViewer({
-    required this.allClubs,
-    required this.startClubIndex,
-    this.onDeleted,
-  });
-
-  @override
-  State<_StoryViewer> createState() => _StoryViewerState();
-}
-
-class _StoryViewerState extends State<_StoryViewer>
-    with TickerProviderStateMixin {
-  late int _clubIndex;
-  late List<ClubStory> _stories;
-  int _index = 0;
-
-  // Progress bar timer
-  late AnimationController _progressController;
-
-  // Crossfade between stories
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnim;
-
-  // Swipe-down-to-dismiss
-  double _dragOffset = 0;
-  bool _dismissing = false;
-
-  dynamic get _club => widget.allClubs[_clubIndex].club;
-  Color get _color => widget.allClubs[_clubIndex].color;
-
-  String get _loggedInId =>
-      authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
-
-  bool get _isOwner {
-    if (_index >= _stories.length) return false;
-    final creatorId = _stories[_index].createdByUserId;
-    return creatorId != null && creatorId == _loggedInId;
-  }
-
-  void _loadClub(int clubIndex) {
-    _clubIndex = clubIndex;
-    _stories = List.of(widget.allClubs[clubIndex].stories);
-    final uid =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final firstUnseen = _stories.indexWhere(
-      (s) => !viewTracker.viewerIds(s.id).contains(uid),
-    );
-    _index = firstUnseen == -1 ? 0 : firstUnseen;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadClub(widget.startClubIndex);
-
-    _progressController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 5))
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) _nextStory();
-          });
-
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 180),
-    );
-    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
-
-    _progressController.forward();
-    _fadeController.forward();
-    _recordCurrentView();
-  }
-
-  void _recordCurrentView() {
-    final userId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    if (_index < _stories.length) {
-      viewTracker.recordView(_stories[_index].id, userId);
-    }
-  }
-
-  /// Crossfade to the new content, then restart progress.
-  void _crossfadeTo(VoidCallback updateState) {
-    _progressController.stop();
-    _fadeController.reverse().then((_) {
-      if (!mounted) return;
-      setState(updateState);
-      _fadeController.forward();
-      _progressController.forward(from: 0);
-      _recordCurrentView();
-    });
-  }
-
-  void _nextStory() {
-    if (_index < _stories.length - 1) {
-      _crossfadeTo(() => _index++);
-    } else if (_clubIndex < widget.allClubs.length - 1) {
-      _crossfadeTo(() => _loadClub(_clubIndex + 1));
-    } else {
-      _animatedPop();
-    }
-  }
-
-  void _prevStory() {
-    if (_index > 0) {
-      _crossfadeTo(() => _index--);
-    } else if (_clubIndex > 0) {
-      _crossfadeTo(() {
-        _clubIndex--;
-        _stories = List.of(widget.allClubs[_clubIndex].stories);
-        _index = _stories.length - 1;
-      });
-    } else {
-      _progressController.forward(from: 0);
-    }
-  }
-
-  /// Slide the card down off screen then pop — smooth exit.
-  void _animatedPop() {
-    if (_dismissing) return;
-    _dismissing = true;
-    _progressController.stop();
-    const dur = Duration(milliseconds: 280);
-    final size = MediaQuery.of(context).size;
-    // Animate _dragOffset to full screen height
-    final start = _dragOffset;
-    final end = size.height;
-    // Use AnimationController for the exit slide
-    final exitCtrl = AnimationController(vsync: this, duration: dur);
-    final exitAnim = Tween<double>(
-      begin: start,
-      end: end,
-    ).animate(CurvedAnimation(parent: exitCtrl, curve: Curves.easeInCubic));
-    exitAnim.addListener(() {
-      if (mounted) setState(() => _dragOffset = exitAnim.value);
-    });
-    exitCtrl.forward().then((_) {
-      exitCtrl.dispose();
-      if (mounted) Navigator.of(context).pop();
-    });
-  }
-
-  void _deleteCurrentStory() {
-    _progressController.stop();
-    final nav = Navigator.of(context);
-    showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Delete story?',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
-        ),
-        content: Text(
-          'This story will be permanently removed.',
-          style: TextStyle(color: AppColors.secondaryText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.secondaryText),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete'),
-          ),
-        ],
-      ),
-    ).then((confirmed) {
-      if (confirmed != true) {
-        _progressController.forward();
-        return;
-      }
-      final storyId = _stories[_index].id;
-      clubStories.removeWhere((s) => s.id == storyId);
-      contentStore.saveClubStories();
-      setState(() => _stories.removeAt(_index));
-      widget.onDeleted?.call();
-      if (_stories.isEmpty) {
-        nav.pop();
-      } else {
-        if (_index >= _stories.length) _index = _stories.length - 1;
-        _progressController.forward(from: 0);
-      }
-    });
-  }
-
-  Future<void> _showViewersSheet(
-    BuildContext context,
-    String contentId,
-    String title,
-  ) {
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _ViewersSheet(contentId: contentId, title: title),
-    );
-  }
-
-  String _timeAgoStory(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
-  @override
-  void dispose() {
-    _progressController.dispose();
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final story = _stories[_index];
-    final size = MediaQuery.of(context).size;
-    final hasPhoto = story.imagePath != null;
-
-    // How transparent the barrier gets as user drags down (0→1 over 200px)
-    final dismissProgress = (_dragOffset / 200).clamp(0.0, 1.0);
-    final barrierOpacity = 1.0 - dismissProgress * 0.85;
-
-    return Scaffold(
-      backgroundColor: Colors.black.withValues(alpha: barrierOpacity),
-      body: GestureDetector(
-        // Vertical drag for dismiss
-        onVerticalDragUpdate: (details) {
-          if (details.delta.dy > 0) {
-            setState(() => _dragOffset += details.delta.dy);
-          } else if (_dragOffset > 0) {
-            setState(() {
-              _dragOffset = (_dragOffset + details.delta.dy).clamp(
-                0.0,
-                double.infinity,
-              );
-            });
-          }
-        },
-        onVerticalDragEnd: (details) {
-          if (_dragOffset > 120 ||
-              (details.velocity.pixelsPerSecond.dy > 600)) {
-            _animatedPop();
-          } else {
-            setState(() => _dragOffset = 0);
-          }
-        },
-        child: Transform.translate(
-          offset: Offset(0, _dragOffset),
-          child: SafeArea(
-            child: Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20 + dismissProgress * 10),
-                child: FadeTransition(
-                  opacity: _fadeAnim,
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height * 0.88,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // Background: photo or gradient
-                        if (hasPhoto && story.imagePath!.startsWith('https://'))
-                          Image.network(
-                            story.imagePath!,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (_, child, progress) =>
-                                progress == null
-                                ? child
-                                : Container(
-                                    color: _color.withValues(alpha: 0.18),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white54,
-                                      ),
-                                    ),
-                                  ),
-                            errorBuilder: (_, err, trace) => Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    _color,
-                                    _color.withValues(alpha: 0.75),
-                                    Colors.black,
-                                  ],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                              ),
-                            ),
-                          )
-                        else if (hasPhoto)
-                          Image.file(File(story.imagePath!), fit: BoxFit.cover)
-                        else
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  _color,
-                                  _color.withValues(alpha: 0.75),
-                                  Colors.black,
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                          ),
-                        // Dark overlay for readability when photo is shown
-                        if (hasPhoto)
-                          Container(
-                            color: Colors.black.withValues(alpha: 0.35),
-                          ),
-
-                        // Progress bars
-                        Positioned(
-                          top: 12,
-                          left: 12,
-                          right: 12,
-                          child: Row(
-                            children: List.generate(_stories.length, (i) {
-                              return Expanded(
-                                child: Container(
-                                  height: 2.5,
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.35),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                  child: i < _index
-                                      ? Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              2,
-                                            ),
-                                          ),
-                                        )
-                                      : i == _index
-                                      ? AnimatedBuilder(
-                                          animation: _progressController,
-                                          builder: (_, child) =>
-                                              FractionallySizedBox(
-                                                alignment: Alignment.centerLeft,
-                                                widthFactor:
-                                                    _progressController.value,
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          2,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                        )
-                                      : const SizedBox(),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-
-                        // Header: club name + delete (admin) + close
-                        Positioned(
-                          top: 28,
-                          left: 16,
-                          right: 16,
-                          child: Row(
-                            children: [
-                              ClubAvatar(
-                                clubId: _club.id,
-                                clubName: _club.name,
-                                color: Colors.white,
-                                size: 40,
-                                fontSize: 16,
-                                shape: 'circle',
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _club.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    Text(
-                                      _timeAgoStory(story.postedAt),
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (_isOwner)
-                                GestureDetector(
-                                  onTap: _deleteCurrentStory,
-                                  child: Container(
-                                    margin: const EdgeInsets.only(right: 8),
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.25),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.delete_outline,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
-                              GestureDetector(
-                                onTap: _animatedPop,
-                                child: Icon(
-                                  Icons.close,
-                                  color: Colors.white,
-                                  size: 26,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Emoji (bottom-left, only if set)
-                        if (story.emoji != null)
-                          Positioned(
-                            left: 28,
-                            bottom: 80,
-                            child: Text(
-                              story.emoji!,
-                              style: TextStyle(fontSize: 52),
-                            ),
-                          ),
-
-                        // Overlay text at saved position + color
-                        if (story.text.isNotEmpty)
-                          LayoutBuilder(
-                            builder: (ctx, constraints) {
-                              const maxW = 300.0;
-                              final sw = constraints.maxWidth;
-                              final sh = constraints.maxHeight;
-                              final left = (story.textOffsetX * sw - maxW / 2)
-                                  .clamp(0.0, sw - maxW);
-                              final top = (story.textOffsetY * sh - 22).clamp(
-                                40.0,
-                                sh - 80,
-                              );
-                              return Stack(
-                                children: [
-                                  Positioned(
-                                    left: left,
-                                    top: top,
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: maxW,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        story.text,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Color(story.textColorValue),
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          shadows: const [
-                                            Shadow(
-                                              blurRadius: 6,
-                                              color: Colors.black87,
-                                            ),
-                                            Shadow(
-                                              blurRadius: 14,
-                                              color: Colors.black54,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-
-                        // Viewers bar (admin only — bottom of story)
-                        if (_isOwner)
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: () {
-                                _progressController.stop();
-                                _showViewersSheet(
-                                  context,
-                                  _stories[_index].id,
-                                  _stories[_index].text.isNotEmpty
-                                      ? _stories[_index].text
-                                      : 'Story',
-                                ).then((_) => _progressController.forward());
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withValues(alpha: 0.7),
-                                    ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.remove_red_eye_outlined,
-                                      color: Colors.white70,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '${viewTracker.viewCount(_stories[_index].id)} viewer${viewTracker.viewCount(_stories[_index].id) == 1 ? '' : 's'}',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      color: Colors.white54,
-                                      size: 16,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                        // Tap left / right navigation
-                        Row(
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: _prevStory,
-                                behavior: HitTestBehavior.translucent,
-                              ),
-                            ),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: _nextStory,
-                                behavior: HitTestBehavior.translucent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Viewers Sheet ────────────────────────────────────────────────────────────
-
 class _ViewersSheet extends StatelessWidget {
   final String contentId;
   final String title;
@@ -2552,8 +1400,6 @@ void _openShareSheet(
   BuildContext context,
   String targetId,
   VoidCallback onShared, {
-  String caption = '',
-  String clubName = '',
   bool isEvent = false,
 }) {
   final currentUser = authService.currentUser;
@@ -2566,8 +1412,6 @@ void _openShareSheet(
       contentPrefix: isEvent ? 'kuevent' : 'kupost',
       userId: currentUser?.id ?? authService.currentAdmin?.id ?? 'guest',
       onShared: onShared,
-      caption: caption,
-      clubName: clubName,
     ),
   );
 }
@@ -2669,6 +1513,131 @@ class _PostCardState extends State<_PostCard>
     contentStore.saveLikes();
     setState(() {});
     widget.onUpdate();
+  }
+
+  void _showPostOptions() {
+    final isSaved = userState.isSaved(widget.post.id);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        Widget tile({
+          required IconData icon,
+          required String label,
+          required VoidCallback onTap,
+          Color? color,
+        }) {
+          return ListTile(
+            leading: Icon(icon, color: color ?? AppColors.text),
+            title: Text(
+              label,
+              style: TextStyle(
+                color: color ?? AppColors.text,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              onTap();
+            },
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              tile(
+                icon: Icons.ios_share,
+                label: 'Share',
+                onTap: () => _openShareSheet(context, widget.post.id, () {
+                  setState(() {});
+                  widget.onUpdate();
+                }),
+              ),
+              tile(
+                icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                label: isSaved ? 'Remove from saved' : 'Save post',
+                onTap: () {
+                  setState(() => userState.toggleSave(widget.post.id));
+                  widget.onUpdate();
+                },
+              ),
+              tile(
+                icon: Icons.link_rounded,
+                label: 'Copy link',
+                onTap: () {
+                  Clipboard.setData(
+                    ClipboardData(text: 'kuclubs://post/${widget.post.id}'),
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Link copied to clipboard'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              tile(
+                icon: Icons.flag_outlined,
+                label: 'Report post',
+                color: AppColors.primaryRed,
+                onTap: _reportPost,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _reportPost() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          'Report this post?',
+          style: TextStyle(color: AppColors.text),
+        ),
+        content: Text(
+          'Our team will review it for violations of community guidelines.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Thanks for the report. We\'ll take a look.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: const Text('Report'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -2801,7 +1770,7 @@ class _PostCardState extends State<_PostCard>
                 ClubFollowButton(clubId: club.id, size: 'small'),
                 IconButton(
                   icon: Icon(Icons.more_horiz, color: AppColors.secondaryText),
-                  onPressed: () {},
+                  onPressed: _showPostOptions,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
                     minWidth: 32,
@@ -2856,21 +1825,10 @@ class _PostCardState extends State<_PostCard>
                 _ActionBtn(
                   icon: Icons.send_outlined,
                   color: AppColors.text,
-                  onTap: () => _openShareSheet(
-                    context,
-                    widget.post.id,
-                    () {
-                      setState(() {});
-                      widget.onUpdate();
-                    },
-                    caption: widget.post.content,
-                    clubName: clubs
-                        .firstWhere(
-                          (c) => c.id == widget.post.clubId,
-                          orElse: () => clubs.first,
-                        )
-                        .name,
-                  ),
+                  onTap: () => _openShareSheet(context, widget.post.id, () {
+                    setState(() {});
+                    widget.onUpdate();
+                  }),
                 ),
                 const Spacer(),
                 _ActionBtn(
@@ -2916,22 +1874,22 @@ class _PostCardState extends State<_PostCard>
           // ── Caption ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${club.name}  ',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                      fontSize: 13,
-                    ),
-                  ),
-                  TextSpan(
-                    text: widget.post.content,
-                    style: TextStyle(color: AppColors.text, fontSize: 13),
-                  ),
-                ],
+            child: ExpandablePostCaption(
+              authorName: club.name,
+              caption: widget.post.content,
+              authorStyle: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+                fontSize: 13,
+              ),
+              captionStyle: TextStyle(
+                color: AppColors.text,
+                fontSize: 13,
+              ),
+              moreStyle: TextStyle(
+                color: AppColors.secondaryText,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -3055,6 +2013,15 @@ class _EventCardState extends State<_EventCard> {
     }
   }
 
+  void _openDetails(Color color) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailScreen(event: widget.event, color: color),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.event.clubId);
@@ -3070,285 +2037,277 @@ class _EventCardState extends State<_EventCard> {
         ? 'Tomorrow'
         : 'In $daysAway days';
 
-    return Container(
-      color: AppColors.card,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
-            child: Row(
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ClubProfileScreen(club: club, color: clubColor),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openDetails(clubColor),
+      child: Container(
+        color: AppColors.card,
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            ClubProfileScreen(club: club, color: clubColor),
+                      ),
+                    ),
+                    child: ClubAvatar(
+                      clubId: club.id,
+                      clubName: club.name,
+                      color: clubColor,
+                      size: 38,
+                      fontSize: 16,
+                      shape: 'circle',
                     ),
                   ),
-                  child: ClubAvatar(
-                    clubId: club.id,
-                    clubName: club.name,
-                    color: clubColor,
-                    size: 38,
-                    fontSize: 16,
-                    shape: 'circle',
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ClubProfileScreen(
-                                    club: club,
-                                    color: clubColor,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ClubProfileScreen(
+                                      club: club,
+                                      color: clubColor,
+                                    ),
                                   ),
                                 ),
+                                child: Text(
+                                  club.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: AppColors.text,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentGold.withValues(
+                                  alpha: 0.2,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                club.name,
+                                'Event',
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: AppColors.text,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB8860B),
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.accentGold.withValues(
-                                alpha: 0.2,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              'Event',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFB8860B),
-                              ),
-                            ),
-                          ),
-                          if (badge != null) ...[
-                            const SizedBox(width: 4),
-                            badge,
+                            if (badge != null) ...[
+                              const SizedBox(width: 4),
+                              badge,
+                            ],
                           ],
-                        ],
-                      ),
-                      Text(
-                        daysLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.w500,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                ClubFollowButton(clubId: club.id, size: 'small'),
-              ],
-            ),
-          ),
-
-          // ── Event banner ──
-          Container(
-            width: double.infinity,
-            height: 160,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  clubColor.withValues(alpha: 0.8),
-                  clubColor.withValues(alpha: 0.3),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Stack(
-              children: [
-                // Big date in background
-                Positioned(
-                  right: 16,
-                  top: 12,
-                  child: Text(
-                    '${dt.day}',
-                    style: TextStyle(
-                      fontSize: 80,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white.withValues(alpha: 0.15),
+                        Text(
+                          daysLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.primaryRed,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  ClubFollowButton(clubId: club.id, size: 'small'),
+                ],
+              ),
+            ),
+
+            // ── Event banner ──
+            Container(
+              width: double.infinity,
+              height: 160,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    clubColor.withValues(alpha: 0.8),
+                    clubColor.withValues(alpha: 0.3),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      // Date chip
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+              ),
+              child: Stack(
+                children: [
+                  // Big date in background
+                  Positioned(
+                    right: 16,
+                    top: 12,
+                    child: Text(
+                      '${dt.day}',
+                      style: TextStyle(
+                        fontSize: 80,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white.withValues(alpha: 0.15),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Date chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.event.title,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black45),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.event.title,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          shadows: [
-                            Shadow(blurRadius: 4, color: Colors.black45),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Action row ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            child: Row(
-              children: [
-                // RSVP button — reads/writes global store
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: RsvpButton(
-                    eventId: widget.event.id,
-                    color: AppColors.primaryRed,
-                    compact: true,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _ActionBtn(
-                  icon: Icons.send_outlined,
-                  color: AppColors.text,
-                  onTap: () => _openShareSheet(
-                    context,
-                    widget.event.id,
-                    () {
-                      setState(() {});
-                      widget.onUpdate();
-                    },
-                    caption: widget.event.title,
-                    clubName: clubs
-                        .firstWhere(
-                          (c) => c.id == widget.event.clubId,
-                          orElse: () => clubs.first,
-                        )
-                        .name,
-                    isEvent: true,
-                  ),
-                ),
-                const Spacer(),
-                _ActionBtn(
-                  icon: userState.isSaved(widget.event.id)
-                      ? Icons.bookmark
-                      : Icons.bookmark_border,
-                  color: userState.isSaved(widget.event.id)
-                      ? AppColors.primaryRed
-                      : AppColors.text,
-                  onTap: () {
-                    setState(() => userState.toggleSave(widget.event.id));
-                    userPrefsService.save(
-                      authService.currentUser?.id ??
-                          authService.currentAdmin?.id ??
-                          '',
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // ── Engagement stats (own-club admin only) ──
-          if (_isOwnerOfClub(widget.event.clubId)) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: _EngagementBar(
-                likes: 0,
-                commenters: 0,
-                shares: shareCount,
-                score: widget.score,
-                views: viewTracker.viewCount(widget.event.id),
-                onViewTap: () => showModalBottomSheet<void>(
-                  context: context,
-                  backgroundColor: Colors.transparent,
-                  isScrollControlled: true,
-                  builder: (_) => _ViewersSheet(
-                    contentId: widget.event.id,
-                    title: 'Event Viewers',
-                  ),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 6),
-
-          // ── Description ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${club.name}  ',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                      fontSize: 13,
+                      ],
                     ),
-                  ),
-                  TextSpan(
-                    text: widget.event.description,
-                    style: TextStyle(color: AppColors.text, fontSize: 13),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-        ],
+
+            // ── Action row ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Row(
+                children: [
+                  // RSVP button — reads/writes global store
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: RsvpButton(
+                      eventId: widget.event.id,
+                      color: AppColors.primaryRed,
+                      compact: true,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionBtn(
+                    icon: Icons.send_outlined,
+                    color: AppColors.text,
+                    onTap: () => _openShareSheet(context, widget.event.id, () {
+                      setState(() {});
+                      widget.onUpdate();
+                    }, isEvent: true),
+                  ),
+                  const Spacer(),
+                  _ActionBtn(
+                    icon: userState.isSaved(widget.event.id)
+                        ? Icons.bookmark
+                        : Icons.bookmark_border,
+                    color: userState.isSaved(widget.event.id)
+                        ? AppColors.primaryRed
+                        : AppColors.text,
+                    onTap: () {
+                      setState(() => userState.toggleSave(widget.event.id));
+                      userPrefsService.save(
+                        authService.currentUser?.id ??
+                            authService.currentAdmin?.id ??
+                            '',
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Engagement stats (own-club admin only) ──
+            if (_isOwnerOfClub(widget.event.clubId)) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: _EngagementBar(
+                  likes: 0,
+                  commenters: 0,
+                  shares: shareCount,
+                  score: widget.score,
+                  views: viewTracker.viewCount(widget.event.id),
+                  onViewTap: () => showModalBottomSheet<void>(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    builder: (_) => _ViewersSheet(
+                      contentId: widget.event.id,
+                      title: 'Event Viewers',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 6),
+
+            // ── Description ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${club.name}  ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.text,
+                        fontSize: 13,
+                      ),
+                    ),
+                    TextSpan(
+                      text: widget.event.description,
+                      style: TextStyle(color: AppColors.text, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
       ),
     );
   }
@@ -3490,16 +2449,12 @@ class _ShareSheet extends StatefulWidget {
   final String contentPrefix; // 'kupost' or 'kuevent'
   final String userId;
   final VoidCallback onShared;
-  final String caption;
-  final String clubName;
 
   const _ShareSheet({
     required this.targetId,
     required this.contentPrefix,
     required this.userId,
     required this.onShared,
-    required this.caption,
-    required this.clubName,
   });
 
   @override
@@ -3507,7 +2462,6 @@ class _ShareSheet extends StatefulWidget {
 }
 
 class _ShareSheetState extends State<_ShareSheet> {
-  bool _storyPosted = false;
   final Set<String> _selected = {};
   bool _sending = false;
   final _searchCtrl = TextEditingController();
@@ -3548,31 +2502,6 @@ class _ShareSheetState extends State<_ShareSheet> {
       contentStore.saveShares();
       widget.onShared();
     }
-  }
-
-  void _addToStory() {
-    _recordShare();
-    final admin = authService.currentAdmin;
-    if (admin != null) {
-      try {
-        final myClub = clubs.firstWhere(
-          (c) => c.adminUserIds.contains(admin.id),
-        );
-        final preview = widget.caption.length > 120
-            ? '${widget.caption.substring(0, 120)}…'
-            : widget.caption;
-        clubStories.add(
-          ClubStory(
-            id: 'repost_${DateTime.now().millisecondsSinceEpoch}',
-            clubId: myClub.id,
-            emoji: '🔁',
-            text: 'Reposted from ${widget.clubName}\n\n$preview',
-            postedAt: DateTime.now(),
-          ),
-        );
-      } catch (_) {}
-    }
-    setState(() => _storyPosted = true);
   }
 
   Future<void> _sendSeparately() async {
@@ -3672,58 +2601,6 @@ class _ShareSheetState extends State<_ShareSheet> {
                 controller: scrollController,
                 padding: const EdgeInsets.only(bottom: 8),
                 children: [
-                  if (authService.currentAdmin != null) ...[
-                    _ShareOptionTile(
-                      icon: Icons.auto_stories_rounded,
-                      iconColor: const Color(0xFF7B5EA7),
-                      iconBg: const Color(0xFFF0EAFA),
-                      title: 'Add to your story',
-                      subtitle: 'Repost this to your club\'s story',
-                      trailing: _storyPosted
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.check_circle_rounded,
-                                    size: 14,
-                                    color: Colors.green,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Added',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.green,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Icon(
-                              Icons.chevron_right_rounded,
-                              color: AppColors.secondaryText,
-                            ),
-                      onTap: _storyPosted ? null : _addToStory,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      child: Divider(height: 1, color: AppColors.lightGray),
-                    ),
-                  ],
-
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                     child: Text(
@@ -3974,71 +2851,6 @@ class _ShareSheetState extends State<_ShareSheet> {
   }
 }
 
-class _ShareOptionTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String title;
-  final String subtitle;
-  final Widget trailing;
-  final VoidCallback? onTap;
-
-  const _ShareOptionTile({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.subtitle,
-    required this.trailing,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            trailing,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─── Comments Bottom Sheet ────────────────────────────────────────────────────
 
 class _CommentsSheet extends StatefulWidget {
@@ -4273,6 +3085,270 @@ class _CommentsSheetState extends State<_CommentsSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Event Rail Card ──────────────────────────────────────────────────────────
+
+class _EventRailCard extends StatefulWidget {
+  final Event event;
+  const _EventRailCard({required this.event});
+
+  @override
+  State<_EventRailCard> createState() => _EventRailCardState();
+}
+
+class _EventRailCardState extends State<_EventRailCard> {
+  static const _colors = [
+    Color(0xFFB41C18),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
+    Color(0xFF512DA8),
+    Color(0xFFAD1457),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final ev = widget.event;
+    final club = clubs.firstWhere(
+      (c) => c.id == ev.clubId,
+      orElse: () => clubs.first,
+    );
+    final idx = clubs.indexOf(club);
+    final color = _colors[idx < 0 ? 0 : idx % _colors.length];
+    final now = DateTime.now();
+    final isLive = ev.dateTime.isBefore(now) && ev.endTime.isAfter(now);
+    final daysAway = ev.dateTime.difference(now).inDays;
+    final String dayLabel;
+    if (isLive) {
+      dayLabel = 'LIVE';
+    } else if (daysAway == 0) {
+      dayLabel = 'Today';
+    } else if (daysAway == 1) {
+      dayLabel = 'Tomorrow';
+    } else {
+      const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      dayLabel = wd[ev.dateTime.weekday - 1];
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EventDetailScreen(event: ev, color: color),
+        ),
+      ),
+      child: Container(
+        width: 188,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.divider),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Club monogram + live/day badge
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      club.name.replaceFirst(RegExp(r'^KU\s+'), '').isNotEmpty
+                          ? club.name.replaceFirst(RegExp(r'^KU\s+'), '')[0]
+                          : club.name[0],
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (isLive)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PulsingDot(color: AppColors.primaryRed),
+                      const SizedBox(width: 4),
+                      Text(
+                        'LIVE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryRed,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    dayLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.secondaryText,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Event title
+            Expanded(
+              child: Text(
+                ev.title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                  letterSpacing: -0.3,
+                  height: 1.2,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Location
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 12,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    ev.location,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.secondaryText,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            // Time
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 12,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isLive
+                      ? 'Now · ${_fmt(ev.dateTime)}'
+                      : '$dayLabel · ${_fmt(ev.dateTime)}',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'View details',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmt(DateTime dt) {
+    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m ${dt.hour < 12 ? 'AM' : 'PM'}';
+  }
+}
+
+// ─── Pulsing dot (live indicator) ─────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  final Color color;
+  const _PulsingDot({required this.color});
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.45,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (_, child) => Transform.scale(scale: _scale.value, child: child),
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

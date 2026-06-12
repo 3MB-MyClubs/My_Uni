@@ -6,14 +6,16 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
-import '../widgets/club_avatar.dart';
-import '../widgets/user_avatar.dart';
-import '../widgets/club_follow_button.dart';
-import '../widgets/user_follow_button.dart';
-import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
 
+/// Discover Clubs + Find People.
+///
+/// Recreated from the Campus Signup Flow design handoff (screens 07 "Find
+/// People" and 08 "Discover Clubs"): card rows with a colored monogram, a
+/// title, a meta line, interest pills, and a pill toggle button — plus a
+/// rounded search field and horizontally-scrolling category chips for clubs.
+/// Everything is wired to the app's real follow state and navigation.
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
 
@@ -25,25 +27,46 @@ class _ExploreScreenState extends State<ExploreScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  // Clubs tab
+  // Clubs tab state
   final _clubSearchController = TextEditingController();
   String _clubQuery = '';
   String _selectedCategory = 'All';
 
-  // People tab
+  // People tab state
   final _peopleSearchController = TextEditingController();
   String _peopleQuery = '';
+  String? _peopleFeedback;
+  bool _peopleFeedbackIsFollowing = false;
+  int _peopleFeedbackVersion = 0;
+  final List<String> _peopleSuggestionIds = [];
+  final Set<String> _pendingSuggestionReplacements = {};
 
-  static const _categories = ['All', 'Tech', 'Arts', 'Music', 'Sports', 'Academic'];
+  static const List<String> _categories = [
+    'All',
+    'Sports',
+    'Arts',
+    'Engineering',
+    'Business',
+    'Social',
+    'Academic',
+  ];
 
-  static const Map<String, String> _clubCategory = {
-    'c1': 'Tech',
-    'c2': 'Arts',
-    'c3': 'Arts',
-    'c4': 'Music',
-    'c5': 'Academic',
-    'c6': 'Academic',
-  };
+  // Palette for the colored monograms (mirrors the design's per-item hues).
+  static const List<Color> _hues = [
+    Color(0xFFB41C18),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
+    Color(0xFF512DA8),
+    Color(0xFFAD1457),
+  ];
+
+  Color _hueFor(int index) => _hues[index % _hues.length];
+
+  String get _myId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   @override
   void initState() {
@@ -60,26 +83,233 @@ class _ExploreScreenState extends State<ExploreScreen>
     super.dispose();
   }
 
+  // ─── Category inference ──────────────────────────────────────────────────
+  // The Club model has no category field, so we infer one from the name so the
+  // filter chips do real work across every club.
+  static String categoryFor(Club club) {
+    final n = club.name.toLowerCase();
+    bool has(List<String> keys) => keys.any(n.contains);
+
+    if (has([
+      'mühendis',
+      'bilgisayar',
+      'aiche',
+      'kumech',
+      'ies',
+      'kuswe',
+      'kuacm',
+    ])) {
+      return 'Engineering';
+    }
+    if (has(['ekonomi', 'girişimcilik', 'işletme', 'pazarlama', 'politik'])) {
+      return 'Business';
+    }
+    if (has(['dağcılık', 'fenerbahçe', 'kartal', 'spor'])) {
+      return 'Sports';
+    }
+    if (has([
+      'sanat',
+      'dans',
+      'ebru',
+      'fotoğraf',
+      'folklör',
+      'müzik',
+      'müzikal',
+      'orkestra',
+      'resim',
+      'sinema',
+      'tiyatro',
+      'radyo',
+      'thm',
+      'koro',
+    ])) {
+      return 'Arts';
+    }
+    if (has([
+      'gönüllü',
+      'kadın',
+      'kuir',
+      'kürt',
+      'sosyal',
+      'düşünce',
+      'dayanışma',
+    ])) {
+      return 'Social';
+    }
+    // Felsefe, Hukuk, Tarih, Tıp, Hemşirelik, Nöroloji, Münazara, Beşeri,
+    // Türk Araştırmaları, Arkeoloji, Atatürkçü … and anything else.
+    return 'Academic';
+  }
+
   List<Club> get _filteredClubs {
+    final q = _clubQuery.toLowerCase();
     return clubs.where((c) {
-      final matchesQuery = _clubQuery.isEmpty ||
-          c.name.toLowerCase().contains(_clubQuery.toLowerCase()) ||
-          c.description.toLowerCase().contains(_clubQuery.toLowerCase());
+      final matchesQuery =
+          q.isEmpty ||
+          c.name.toLowerCase().contains(q) ||
+          c.description.toLowerCase().contains(q) ||
+          categoryFor(c).toLowerCase().contains(q);
       final matchesCategory =
-          _selectedCategory == 'All' || (_clubCategory[c.id] == _selectedCategory);
+          _selectedCategory == 'All' || categoryFor(c) == _selectedCategory;
       return matchesQuery && matchesCategory;
     }).toList();
   }
 
+  /// The current user's subscribed club ids (for computing shared interests).
+  Set<String> get _mySubscribedClubIds {
+    final me = users.cast<User?>().firstWhere(
+      (u) => u?.id == _myId,
+      orElse: () => null,
+    );
+    return {...?me?.subscribedClubIds};
+  }
+
+  List<String> _sharedClubNames(User other) {
+    final mine = _mySubscribedClubIds;
+    return other.subscribedClubIds
+        .where(mine.contains)
+        .map((id) {
+          final club = clubs.cast<Club?>().firstWhere(
+            (c) => c?.id == id,
+            orElse: () => null,
+          );
+          return club?.name;
+        })
+        .whereType<String>()
+        .toList();
+  }
+
+  int _mutualFriendCount(User other) {
+    return other.followingUserIds
+        .where(userState.followedUserIds.contains)
+        .length;
+  }
+
+  List<User> _rankedSuggestionCandidates() {
+    final candidates = users
+        .where((u) => u.id != _myId && !userState.isFollowingUser(u.id))
+        .toList();
+    final mutualConnections =
+        candidates.where((u) => _mutualFriendCount(u) > 0).toList()
+          ..sort((a, b) {
+            final mutuals = _mutualFriendCount(
+              b,
+            ).compareTo(_mutualFriendCount(a));
+            return mutuals != 0 ? mutuals : a.name.compareTo(b.name);
+          });
+    final strangers =
+        candidates.where((u) => _mutualFriendCount(u) == 0).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+
+    return [...mutualConnections, ...strangers];
+  }
+
+  List<User> _suggestedPeople() {
+    final ranked = _rankedSuggestionCandidates();
+    final rankedById = {for (final person in ranked) person.id: person};
+
+    if (_peopleSuggestionIds.isEmpty) {
+      _peopleSuggestionIds.addAll(ranked.take(10).map((person) => person.id));
+    } else {
+      for (var i = 0; i < _peopleSuggestionIds.length; i++) {
+        final id = _peopleSuggestionIds[i];
+        if (rankedById.containsKey(id) ||
+            _pendingSuggestionReplacements.contains(id)) {
+          continue;
+        }
+        final replacement = ranked.cast<User?>().firstWhere(
+          (person) => !_peopleSuggestionIds.contains(person!.id),
+          orElse: () => null,
+        );
+        if (replacement == null) {
+          _peopleSuggestionIds.removeAt(i--);
+        } else {
+          _peopleSuggestionIds[i] = replacement.id;
+        }
+      }
+      for (final person in ranked) {
+        if (_peopleSuggestionIds.length >= 10) break;
+        if (!_peopleSuggestionIds.contains(person.id)) {
+          _peopleSuggestionIds.add(person.id);
+        }
+      }
+    }
+
+    return _peopleSuggestionIds
+        .map(
+          (id) => users.cast<User?>().firstWhere(
+            (person) => person?.id == id,
+            orElse: () => null,
+          ),
+        )
+        .whereType<User>()
+        .toList();
+  }
+
+  /// Search by first or last name. Without a query, suggest at most ten people:
+  /// mutual-friend connections first, then strangers to fill the list.
   List<User> get _filteredPeople {
-    if (_peopleQuery.isEmpty) return [];
-    final myId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    return users.where((u) {
-      if (u.id == myId) return false;
-      return u.name.toLowerCase().contains(_peopleQuery.toLowerCase()) ||
-          u.email.toLowerCase().contains(_peopleQuery.toLowerCase());
-    }).toList();
+    final q = _peopleQuery.toLowerCase().trim();
+    if (q.isNotEmpty) {
+      return users.where((u) {
+        if (u.id == _myId) return false;
+        return u.name.toLowerCase().contains(q);
+      }).toList();
+    }
+
+    return _suggestedPeople();
+  }
+
+  void _persist() => userPrefsService.save(_myId);
+
+  void _togglePersonFollow(User person) {
+    final nowFollowing = !userState.isFollowingUser(person.id);
+    final feedbackVersion = ++_peopleFeedbackVersion;
+    final isSuggestion = _peopleQuery.trim().isEmpty;
+
+    if (nowFollowing && isSuggestion) {
+      _pendingSuggestionReplacements.add(person.id);
+    }
+
+    userState.toggleFollowUser(person.id);
+    _persist();
+
+    setState(() {
+      _peopleFeedbackIsFollowing = nowFollowing;
+      _peopleFeedback = nowFollowing
+          ? isSuggestion
+                ? 'Following ${person.name}. New suggestion added.'
+                : 'You are now following ${person.name}.'
+          : 'You unfollowed ${person.name}.';
+    });
+
+    if (nowFollowing && isSuggestion) {
+      Future.delayed(const Duration(milliseconds: 420), () {
+        if (!mounted) return;
+        final index = _peopleSuggestionIds.indexOf(person.id);
+        _pendingSuggestionReplacements.remove(person.id);
+        if (index < 0 || !userState.isFollowingUser(person.id)) return;
+
+        final replacement = _rankedSuggestionCandidates()
+            .cast<User?>()
+            .firstWhere(
+              (candidate) => !_peopleSuggestionIds.contains(candidate!.id),
+              orElse: () => null,
+            );
+        setState(() {
+          if (replacement == null) {
+            _peopleSuggestionIds.removeAt(index);
+          } else {
+            _peopleSuggestionIds[index] = replacement.id;
+          }
+        });
+      });
+    }
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted || feedbackVersion != _peopleFeedbackVersion) return;
+      setState(() => _peopleFeedback = null);
+    });
   }
 
   @override
@@ -89,7 +319,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       appBar: AppBar(
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
-        title: Text(
+        title: const Text(
           'Explore',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
@@ -98,589 +328,758 @@ class _ExploreScreenState extends State<ExploreScreen>
           labelColor: AppColors.primaryRed,
           unselectedLabelColor: AppColors.secondaryText,
           indicatorColor: AppColors.primaryRed,
-          tabs: [
-            Tab(text: 'Clubs'),
-            Tab(text: 'People'),
+          tabs: const [
+            Tab(text: 'Discover Clubs'),
+            Tab(text: 'Find People'),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildClubsTab(),
-          _buildPeopleTab(),
-        ],
-      ),
-    );
-  }
-
-  // ─── Clubs Tab ───────────────────────────────────────────────────────────────
-
-  Widget _buildClubsTab() {
-    return CustomScrollView(
-      slivers: [
-        _buildClubSearchBar(),
-        _buildCategories(),
-        _buildClubsGrid(),
-        _buildUpcomingEventsHeader(),
-        _buildEventsList(),
-        SliverToBoxAdapter(child: SizedBox(height: 80)),
-      ],
-    );
-  }
-
-  SliverToBoxAdapter _buildClubSearchBar() {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: TextField(
-          controller: _clubSearchController,
-          onChanged: (v) => setState(() => _clubQuery = v),
-          decoration: InputDecoration(
-            hintText: 'Search clubs...',
-            prefixIcon: Icon(Icons.search, color: AppColors.secondaryText),
-            suffixIcon: _clubQuery.isNotEmpty
-                ? IconButton(
-                    icon: Icon(Icons.close, size: 18),
-                    onPressed: () {
-                      _clubSearchController.clear();
-                      setState(() => _clubQuery = '');
-                    },
-                  )
-                : null,
-            filled: true,
-            fillColor: AppColors.lightGray,
-            contentPadding:
-                const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  SliverToBoxAdapter _buildCategories() {
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 48,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          itemCount: _categories.length,
-          separatorBuilder: (context, i) => const SizedBox(width: 8),
-          itemBuilder: (context, i) {
-            final cat = _categories[i];
-            final selected = cat == _selectedCategory;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedCategory = cat),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.primaryRed : AppColors.lightGray,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  cat,
-                  style: TextStyle(
-                    color: selected ? Colors.white : AppColors.text,
-                    fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  SliverPadding _buildClubsGrid() {
-    final filtered = _filteredClubs;
-    if (filtered.isEmpty) {
-      return SliverPadding(
-        padding: const EdgeInsets.all(32),
-        sliver: SliverToBoxAdapter(
-          child: Center(
-            child: Text(
-              'No clubs found',
-              style: TextStyle(color: AppColors.secondaryText, fontSize: 16),
-            ),
-          ),
-        ),
-      );
-    }
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate(
-          (context, i) => _ClubCard(club: filtered[i]),
-          childCount: filtered.length,
-        ),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.85,
-        ),
-      ),
-    );
-  }
-
-  SliverToBoxAdapter _buildUpcomingEventsHeader() {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-        child: Text(
-          'Upcoming Events',
-          style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text),
-        ),
-      ),
-    );
-  }
-
-  SliverList _buildEventsList() {
-    final upcoming = events
-        .where((e) => e.dateTime.isAfter(DateTime.now()))
-        .toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, i) => _EventCard(event: upcoming[i]),
-        childCount: upcoming.length,
-      ),
-    );
-  }
-
-  // ─── People Tab ──────────────────────────────────────────────────────────────
-
-  Widget _buildPeopleTab() {
-    final people = _filteredPeople;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            controller: _peopleSearchController,
-            onChanged: (v) => setState(() => _peopleQuery = v),
-            decoration: InputDecoration(
-              hintText: 'Search people...',
-              prefixIcon:
-                  Icon(Icons.person_search, color: AppColors.secondaryText),
-              suffixIcon: _peopleQuery.isNotEmpty
-                  ? IconButton(
-                      icon: Icon(Icons.close, size: 18),
-                      onPressed: () {
-                        _peopleSearchController.clear();
-                        setState(() => _peopleQuery = '');
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: AppColors.lightGray,
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: people.isEmpty
-              ? Center(
-                  child: Text(
-                    _peopleQuery.isEmpty ? 'Type a name to search people' : 'No people found',
-                    style: TextStyle(color: AppColors.secondaryText),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.only(bottom: 80),
-                  itemCount: people.length,
-                  separatorBuilder: (context, i) =>
-                      Divider(height: 1, indent: 72),
-                  itemBuilder: (context, i) =>
-                      _PeopleCard(user: people[i], onStateChanged: () => setState(() {})),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Club Card ───────────────────────────────────────────────────────────────
-
-class _ClubCard extends StatefulWidget {
-  final Club club;
-  const _ClubCard({required this.club});
-
-  @override
-  State<_ClubCard> createState() => _ClubCardState();
-}
-
-class _ClubCardState extends State<_ClubCard> {
-  static const List<Color> _avatarColors = [
-    Color(0xFFB41C18),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
-  Color get _color {
-    final idx = clubs.indexOf(widget.club) % _avatarColors.length;
-    return _avatarColors[idx];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final members = clubMemberCount(widget.club.id);
-
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ClubProfileScreen(club: widget.club, color: _color),
-        ),
-      ),
-      child: Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClubAvatar(
-              clubId: widget.club.id,
-              clubName: widget.club.name,
-              color: _color,
-              size: 52,
-              fontSize: 24,
-              borderRadius: 14,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              widget.club.name,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$members members',
-              style:
-                  TextStyle(fontSize: 12, color: AppColors.secondaryText),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Text(
-                widget.club.description,
-                style:
-                    TextStyle(fontSize: 12, color: AppColors.secondaryText),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ClubFollowButton(clubId: widget.club.id, fullWidth: true),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
-}
-
-// ─── People Card ─────────────────────────────────────────────────────────────
-
-class _PeopleCard extends StatelessWidget {
-  final User user;
-  final VoidCallback onStateChanged;
-
-  const _PeopleCard({required this.user, required this.onStateChanged});
-
-  static const List<Color> _colors = [
-    Color(0xFFB41C18),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
-  Color get _color {
-    final idx = users.indexOf(user) % _colors.length;
-    return _colors[idx];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isClubAdmin = user.role == 'admin';
-
-    return ListTile(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: UserAvatar(
-        userId: user.id,
-        name: user.name,
-        size: 48,
-        fontSize: 18,
-        backgroundColor: _color.withValues(alpha: 0.15),
-        textColor: _color,
-      ),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              user.name,
-              style: TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 14),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (isClubAdmin) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'Club Admin',
-                style: TextStyle(
-                    fontSize: 10,
-                    color: AppColors.primaryRed,
-                    fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ],
-      ),
-      subtitle: Text(
-        user.email,
-        style:
-            TextStyle(fontSize: 12, color: AppColors.secondaryText),
-      ),
-      trailing: ListenableBuilder(
+      body: ListenableBuilder(
         listenable: userState,
-        builder: (context, _) {
-          final isFollowing = userState.isFollowingUser(user.id);
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isFollowing)
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ChatScreen(
-                        otherUserId: user.id,
-                        otherUserName: user.name,
-                      ),
-                    ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.lightRed,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.chat_bubble_outline,
-                        size: 16, color: AppColors.primaryRed),
-                  ),
-                ),
-              UserFollowButton(
-                userId: user.id,
-                onTap: () {
-                  userState.toggleFollowUser(user.id);
-                  userPrefsService.save(
-                      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '');
-                  onStateChanged();
-                },
-              ),
-            ],
-          );
-        },
+        builder: (context, _) => TabBarView(
+          controller: _tabController,
+          children: [_buildClubsTab(), _buildPeopleTab()],
+        ),
       ),
     );
   }
-}
 
-// ─── Event Card ──────────────────────────────────────────────────────────────
+  // ─── Shared atoms ────────────────────────────────────────────────────────
 
-class _EventCard extends StatefulWidget {
-  final dynamic event;
-  const _EventCard({required this.event});
-
-  @override
-  State<_EventCard> createState() => _EventCardState();
-}
-
-class _EventCardState extends State<_EventCard> {
-  bool _attending = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final club = clubs.firstWhere((c) => c.id == widget.event.clubId);
-    final dt = widget.event.dateTime as DateTime;
-    final daysAway = dt.difference(DateTime.now()).inDays;
-    final daysLabel = daysAway == 0
-        ? 'Today'
-        : daysAway == 1
-            ? 'Tomorrow'
-            : 'In $daysAway days';
-
+  Widget _searchField({
+    required TextEditingController controller,
+    required String hint,
+    required String value,
+    required ValueChanged<String> onChanged,
+  }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(14),
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: AppColors.divider, width: 1.5),
       ),
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.lightRed,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${dt.day}',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryRed,
-                    height: 1,
-                  ),
-                ),
-                Text(
-                  _monthAbbr(dt.month),
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.primaryRed),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
+          Icon(Icons.search, size: 19, color: AppColors.secondaryText),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.event.title as String,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                isCollapsed: true,
+                filled: false,
+                border: InputBorder.none,
+                hintText: hint,
+                hintStyle: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 15,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  club.name,
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.secondaryText),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(Icons.schedule,
-                        size: 12, color: AppColors.primaryRed),
-                    const SizedBox(width: 3),
-                    Text(
-                      daysLabel,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(width: 10),
-                    Icon(Icons.people_outline,
-                        size: 12, color: AppColors.secondaryText),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${(widget.event.attendeeUserIds as List).length} attending',
-                      style: TextStyle(
-                          fontSize: 12, color: AppColors.secondaryText),
-                    ),
-                  ],
-                ),
-              ],
+              ),
+              style: TextStyle(color: AppColors.text, fontSize: 15),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => setState(() => _attending = !_attending),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _attending ? AppColors.primaryRed : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.primaryRed),
-              ),
-              child: Text(
-                _attending ? 'Going' : 'Join',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _attending ? Colors.white : AppColors.primaryRed,
-                ),
+          if (value.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                controller.clear();
+                onChanged('');
+              },
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: AppColors.secondaryText,
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text, {Widget? trailing}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            text.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 0.9,
+              fontWeight: FontWeight.w600,
+              color: AppColors.secondaryText,
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+
+  /// The Join / Follow style pill toggle used by both card types.
+  Widget _togglePill({
+    required bool active,
+    required String activeLabel,
+    required String inactiveLabel,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? AppColors.lightRed : AppColors.primaryRed,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: active ? AppColors.primaryRed : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          active ? activeLabel : inactiveLabel,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: active ? AppColors.primaryRed : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pill(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(String title, String subtitle) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.text,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
           ),
         ],
       ),
     );
   }
 
-  String _monthAbbr(int month) {
-    const months = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
-    ];
-    return months[month - 1];
+  // ─── Discover Clubs tab ──────────────────────────────────────────────────
+
+  Widget _buildClubsTab() {
+    final filtered = _filteredClubs;
+    final filtering = _clubQuery.isNotEmpty || _selectedCategory != 'All';
+    final label = filtering
+        ? '${filtered.length} club${filtered.length == 1 ? '' : 's'}'
+        : 'All clubs';
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(
+            children: [
+              _searchField(
+                controller: _clubSearchController,
+                hint: 'Search clubs…',
+                value: _clubQuery,
+                onChanged: (v) => setState(() => _clubQuery = v),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 32,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (context, i) {
+                    final cat = _categories[i];
+                    final active = cat == _selectedCategory;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedCategory = cat),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: active ? AppColors.primaryRed : AppColors.card,
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(
+                            color: active
+                                ? AppColors.primaryRed
+                                : AppColors.divider,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: active ? Colors.white : AppColors.text,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: filtered.isEmpty
+              ? _emptyState(
+                  'No clubs match',
+                  'Try a different filter or search term',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: filtered.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) return _sectionLabel(label);
+                    final club = filtered[i - 1];
+                    return _ClubRow(
+                      club: club,
+                      category: categoryFor(club),
+                      members: clubMemberCount(club.id),
+                      color: _hueFor(clubs.indexOf(club)),
+                      joined: userState.isFollowing(club.id),
+                      onJoin: () {
+                        userState.toggleFollow(club.id);
+                        _persist();
+                      },
+                      onOpen: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClubProfileScreen(
+                            club: club,
+                            color: _hueFor(clubs.indexOf(club)),
+                          ),
+                        ),
+                      ),
+                      pillBuilder: _pill,
+                      toggleBuilder: _togglePill,
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Find People tab ─────────────────────────────────────────────────────
+
+  Widget _buildPeopleTab() {
+    final searching = _peopleQuery.trim().isNotEmpty;
+    final people = _filteredPeople;
+
+    final label = searching
+        ? '${people.length} result${people.length == 1 ? '' : 's'}'
+        : 'Suggested for you';
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(
+            children: [
+              _searchField(
+                controller: _peopleSearchController,
+                hint: 'Search by name or surname…',
+                value: _peopleQuery,
+                onChanged: (v) => setState(() => _peopleQuery = v),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SizeTransition(
+                        sizeFactor: animation,
+                        axisAlignment: -1,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: _peopleFeedback == null
+                      ? const SizedBox(key: ValueKey('no-follow-feedback'))
+                      : Container(
+                          key: ValueKey(_peopleFeedback),
+                          margin: const EdgeInsets.only(top: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _peopleFeedbackIsFollowing
+                                ? AppColors.lightRed
+                                : AppColors.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _peopleFeedbackIsFollowing
+                                  ? AppColors.primaryRed.withValues(alpha: 0.25)
+                                  : AppColors.divider,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _peopleFeedbackIsFollowing
+                                    ? Icons.check_circle_rounded
+                                    : Icons.person_remove_rounded,
+                                size: 18,
+                                color: _peopleFeedbackIsFollowing
+                                    ? AppColors.primaryRed
+                                    : AppColors.secondaryText,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _peopleFeedback!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.text,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: people.isEmpty
+              ? _emptyState(
+                  searching
+                      ? 'No one matches "$_peopleQuery"'
+                      : 'No people yet',
+                  'Try a name or surname',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: people.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return _sectionLabel(label);
+                    }
+                    final person = people[i - 1];
+                    return AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 380),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        final slide = Tween<Offset>(
+                          begin: const Offset(0.08, 0),
+                          end: Offset.zero,
+                        ).animate(animation);
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(position: slide, child: child),
+                        );
+                      },
+                      child: _PersonRow(
+                        key: ValueKey(person.id),
+                        user: person,
+                        subtitle: _personSubtitle(person),
+                        sharedTags: _sharedClubNames(person),
+                        color: _hueFor(users.indexOf(person)),
+                        following: userState.isFollowingUser(person.id),
+                        onFollow: () => _togglePersonFollow(person),
+                        onOpen: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: person),
+                          ),
+                        ),
+                        pillBuilder: _pill,
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  String _personSubtitle(User u) {
+    final major = userState.majors[u.id]?.trim();
+    final year = userState.years[u.id]?.trim();
+    if (major != null && major.isNotEmpty) {
+      return year != null && year.isNotEmpty ? '$major · $year' : major;
+    }
+    final clubCount = u.subscribedClubIds.length;
+    final followerCount = users
+        .where((o) => o.followingUserIds.contains(u.id))
+        .length;
+    return '$clubCount clubs · $followerCount followers';
+  }
+}
+
+// ─── Club row ────────────────────────────────────────────────────────────────
+
+class _ClubRow extends StatelessWidget {
+  final Club club;
+  final String category;
+  final int members;
+  final Color color;
+  final bool joined;
+  final VoidCallback onJoin;
+  final VoidCallback onOpen;
+  final Widget Function(String, Color) pillBuilder;
+  final Widget Function({
+    required bool active,
+    required String activeLabel,
+    required String inactiveLabel,
+    required VoidCallback onTap,
+  })
+  toggleBuilder;
+
+  const _ClubRow({
+    required this.club,
+    required this.category,
+    required this.members,
+    required this.color,
+    required this.joined,
+    required this.onJoin,
+    required this.onOpen,
+    required this.pillBuilder,
+    required this.toggleBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onOpen,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                club.name.characters.first.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    club.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$members members · $category',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  pillBuilder(category, color),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            toggleBuilder(
+              active: joined,
+              activeLabel: 'Joined ✓',
+              inactiveLabel: 'Join',
+              onTap: onJoin,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Person row ──────────────────────────────────────────────────────────────
+
+class _PersonRow extends StatefulWidget {
+  final User user;
+  final String subtitle;
+  final List<String> sharedTags;
+  final Color color;
+  final bool following;
+  final VoidCallback onFollow;
+  final VoidCallback onOpen;
+  final Widget Function(String, Color) pillBuilder;
+
+  const _PersonRow({
+    super.key,
+    required this.user,
+    required this.subtitle,
+    required this.sharedTags,
+    required this.color,
+    required this.following,
+    required this.onFollow,
+    required this.onOpen,
+    required this.pillBuilder,
+  });
+
+  @override
+  State<_PersonRow> createState() => _PersonRowState();
+}
+
+class _PersonRowState extends State<_PersonRow> {
+  late bool _displayFollowing;
+  bool _changing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayFollowing = widget.following;
+  }
+
+  @override
+  void didUpdateWidget(covariant _PersonRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_changing && oldWidget.following != widget.following) {
+      _displayFollowing = widget.following;
+    }
+  }
+
+  String get _initials {
+    final parts = widget.user.name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    return parts.take(2).map((p) => p.characters.first.toUpperCase()).join();
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_changing) return;
+    setState(() {
+      _changing = true;
+      _displayFollowing = !_displayFollowing;
+    });
+    widget.onFollow();
+
+    await Future<void>.delayed(const Duration(milliseconds: 420));
+    if (mounted) {
+      setState(() => _changing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onOpen,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _changing && _displayFollowing
+                ? AppColors.primaryRed.withValues(alpha: 0.35)
+                : AppColors.divider,
+          ),
+          boxShadow: _changing
+              ? [
+                  BoxShadow(
+                    color: AppColors.primaryRed.withValues(alpha: 0.08),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: widget.color.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                _initials,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: widget.color,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.user.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    widget.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  if (widget.sharedTags.isNotEmpty) ...[
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: widget.sharedTags
+                          .take(2)
+                          .map(
+                            (t) => widget.pillBuilder(t, AppColors.primaryRed),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: _toggleFollow,
+              child: AnimatedScale(
+                scale: _changing ? 1.06 : 1,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutBack,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _displayFollowing
+                        ? AppColors.lightRed
+                        : AppColors.primaryRed,
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                      color: _displayFollowing
+                          ? AppColors.primaryRed
+                          : Colors.transparent,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: Row(
+                      key: ValueKey(_displayFollowing),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _displayFollowing
+                              ? Icons.check_rounded
+                              : Icons.person_add_alt_1_rounded,
+                          size: 15,
+                          color: _displayFollowing
+                              ? AppColors.primaryRed
+                              : Colors.white,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _displayFollowing ? 'Following' : 'Follow',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _displayFollowing
+                                ? AppColors.primaryRed
+                                : Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

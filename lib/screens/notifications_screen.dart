@@ -21,25 +21,48 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final Set<String> _read = {};
+  String _filterMode = 'All';
 
-  int get _unreadCount {
-    final currentId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final all = [...notifications, ...userState.dynamicNotifications]
-        .where((n) => n.userId == currentId);
-    return all.where((n) => !_read.contains(n.id)).length;
+  String get _myId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  List<AppNotification> get _allNotifs =>
+      [
+      ...notifications,
+      ...userState.dynamicNotifications,
+    ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  int get _totalUnread => _allNotifs.where((n) => !_read.contains(n.id)).length;
+
+  List<AppNotification> get _visibleNotifs {
+    if (_filterMode == 'Unread') {
+      return _allNotifs.where((n) => !_read.contains(n.id)).toList();
+    }
+    return _allNotifs;
+  }
+
+  void _markRead(AppNotification n) {
+    if (_read.contains(n.id)) return;
+    setState(() {
+      _read.add(n.id);
+      if (userState.unreadNotifications > 0) userState.unreadNotifications--;
+    });
   }
 
   void _markAllRead() => setState(() {
-        _read.addAll(notifications.map((n) => n.id));
-        userState.unreadNotifications = 0;
-      });
+    _read.addAll(_allNotifs.map((n) => n.id));
+    userState.unreadNotifications = 0;
+  });
+
+  // ─── Time helpers ─────────────────────────────────────────────────────────
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays == 1) return 'Yesterday';
-    return '${diff.inDays}d ago';
+    return '${diff.inDays}d';
   }
 
   bool _isToday(DateTime dt) {
@@ -48,29 +71,48 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   bool _isYesterday(DateTime dt) {
-    final yesterday = DateTime.now().subtract(const Duration(days: 1));
-    return dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+    final y = DateTime.now().subtract(const Duration(days: 1));
+    return dt.year == y.year && dt.month == y.month && dt.day == y.day;
   }
 
   bool _isThisWeek(DateTime dt) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final dtDay = DateTime(dt.year, dt.month, dt.day);
-    final diff = today.difference(dtDay).inDays;
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(d).inDays;
     return diff >= 2 && diff <= 6;
   }
 
   bool _isThisMonth(DateTime dt) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final dtDay = DateTime(dt.year, dt.month, dt.day);
-    final diff = today.difference(dtDay).inDays;
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(d).inDays;
     return diff >= 7 && dt.year == now.year && dt.month == now.month;
   }
 
+  bool _isThisYear(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(d).inDays;
+    return diff >= 0 &&
+        dt.year == now.year &&
+        !_isToday(dt) &&
+        !_isYesterday(dt) &&
+        !_isThisWeek(dt) &&
+        !_isThisMonth(dt);
+  }
+
+  // ─── Navigation ───────────────────────────────────────────────────────────
+
   static const List<Color> _clubColors = [
-    Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    Color(0xFFB41C18),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
   ];
 
   Color _colorForClub(String clubId) {
@@ -78,171 +120,250 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
   }
 
-  void _navigate(BuildContext context, AppNotification n) {
+  void _navigate(AppNotification n) {
     final type = n.targetType;
     final id = n.targetId;
     if (type == null || id == null) return;
-
     switch (type) {
       case 'post':
-        final post = newsPosts.firstWhere((p) => p.id == id, orElse: () => newsPosts.first);
-        final color = _colorForClub(post.clubId);
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => PostDetailScreen(post: post, clubColor: color),
-        ));
+        final post = newsPosts.firstWhere(
+          (p) => p.id == id,
+          orElse: () => newsPosts.first,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PostDetailScreen(
+              post: post,
+              clubColor: _colorForClub(post.clubId),
+            ),
+          ),
+        );
       case 'club':
-        final club = clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first);
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ClubProfileScreen(club: club, color: _colorForClub(id)),
-        ));
+        final club = clubs.firstWhere(
+          (c) => c.id == id,
+          orElse: () => clubs.first,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ClubProfileScreen(club: club, color: _colorForClub(id)),
+          ),
+        );
       case 'event':
-        final event = events.firstWhere((e) => e.id == id, orElse: () => events.first);
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => EventDetailScreen(event: event, color: _colorForClub(event.clubId)),
-        ));
+        final event = events.firstWhere(
+          (e) => e.id == id,
+          orElse: () => events.first,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EventDetailScreen(
+              event: event,
+              color: _colorForClub(event.clubId),
+            ),
+          ),
+        );
       case 'user':
-        final user = users.firstWhere((u) => u.id == id, orElse: () => users.first);
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => UserProfileScreen(user: user),
-        ));
+      case 'follow_accepted':
+        final user = users.firstWhere(
+          (u) => u.id == id,
+          orElse: () => users.first,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
+        );
       case 'message':
-        final sender = users.firstWhere((u) => u.id == id, orElse: () => users.first);
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ChatScreen(otherUserId: sender.id, otherUserName: sender.name),
-        ));
-      case 'story':
-        // No standalone story viewer — open the club profile instead.
-        final club = clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first);
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ClubProfileScreen(club: club, color: _colorForClub(id)),
-        ));
+        final sender = users.firstWhere(
+          (u) => u.id == id,
+          orElse: () => users.first,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ChatScreen(otherUserId: sender.id, otherUserName: sender.name),
+          ),
+        );
     }
   }
 
+  String? _actionLabel(String? type) {
+    switch (type) {
+      case 'event':
+        return 'Details';
+      case 'club':
+        return 'Open';
+      case 'post':
+        return 'Read';
+      case 'message':
+        return 'Reply';
+      case 'user':
+      case 'follow_accepted':
+        return 'View';
+    }
+    return null;
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    // Only show notifications addressed to the currently logged-in user/admin.
-    final currentId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final all = [...notifications, ...userState.dynamicNotifications]
-        .where((n) => n.userId == currentId)
-        .toList();
-    final sorted = all..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final today     = sorted.where((n) => _isToday(n.createdAt)).toList();
-    final yesterday = sorted.where((n) => _isYesterday(n.createdAt)).toList();
-    final thisWeek  = sorted.where((n) => _isThisWeek(n.createdAt)).toList();
-    final thisMonth = sorted.where((n) => _isThisMonth(n.createdAt)).toList();
-    final thisYear  = sorted.where((n) {
-      final now = DateTime.now();
-      final today0 = DateTime(now.year, now.month, now.day);
-      final dtDay = DateTime(n.createdAt.year, n.createdAt.month, n.createdAt.day);
-      final diff = today0.difference(dtDay).inDays;
-      return diff >= 0 && n.createdAt.year == now.year &&
-          !_isToday(n.createdAt) && !_isYesterday(n.createdAt) &&
-          !_isThisWeek(n.createdAt) && !_isThisMonth(n.createdAt);
-    }).toList();
-    final older = sorted.where((n) => n.createdAt.year < DateTime.now().year).toList();
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.delayed(const Duration(milliseconds: 400));
-          if (mounted) setState(() {});
+      body: ListenableBuilder(
+        listenable: userState,
+        builder: (context, _) {
+          final sorted = _visibleNotifs;
+          final today = sorted.where((n) => _isToday(n.createdAt)).toList();
+          final yesterday = sorted
+              .where((n) => _isYesterday(n.createdAt))
+              .toList();
+          final thisWeek = sorted
+              .where((n) => _isThisWeek(n.createdAt))
+              .toList();
+          final thisMonth = sorted
+              .where((n) => _isThisMonth(n.createdAt))
+              .toList();
+          final thisYear = sorted
+              .where((n) => _isThisYear(n.createdAt))
+              .toList();
+          final older = sorted
+              .where((n) => n.createdAt.year < DateTime.now().year)
+              .toList();
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              await Future.delayed(const Duration(milliseconds: 400));
+              if (mounted) setState(() {});
+            },
+            color: AppColors.primaryRed,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                _buildHeader(),
+                if (sorted.isEmpty)
+                  SliverFillRemaining(
+                    child: _filterMode == 'Unread'
+                        ? const _NoUnreadState()
+                        : const _EmptyState(),
+                  )
+                else ...[
+                  if (today.isNotEmpty) ...[
+                    _sectionLabel(
+                      'Today',
+                      today.where((n) => !_read.contains(n.id)).length,
+                    ),
+                    _buildTimeline(today),
+                  ],
+                  if (yesterday.isNotEmpty) ...[
+                    _sectionLabel('Yesterday'),
+                    _buildTimeline(yesterday),
+                  ],
+                  if (thisWeek.isNotEmpty) ...[
+                    _sectionLabel('This Week'),
+                    _buildTimeline(thisWeek),
+                  ],
+                  if (thisMonth.isNotEmpty) ...[
+                    _sectionLabel('This Month'),
+                    _buildTimeline(thisMonth),
+                  ],
+                  if (thisYear.isNotEmpty) ...[
+                    _sectionLabel('This Year'),
+                    _buildTimeline(thisYear),
+                  ],
+                  if (older.isNotEmpty) ...[
+                    _sectionLabel('Older'),
+                    _buildTimeline(older),
+                  ],
+                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                ],
+              ],
+            ),
+          );
         },
-        color: AppColors.primaryRed,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            _buildHeader(),
-            if (all.isEmpty)
-              const SliverFillRemaining(child: _EmptyState())
-            else ...[
-              if (today.isNotEmpty) ...[
-                _SectionHeader(title: 'Today', count: today.where((n) => !_read.contains(n.id)).length),
-                _buildGroup(today),
-              ],
-              if (yesterday.isNotEmpty) ...[
-                _SectionHeader(title: 'Yesterday'),
-                _buildGroup(yesterday),
-              ],
-              if (thisWeek.isNotEmpty) ...[
-                _SectionHeader(title: 'This Week'),
-                _buildGroup(thisWeek),
-              ],
-              if (thisMonth.isNotEmpty) ...[
-                _SectionHeader(title: 'This Month'),
-                _buildGroup(thisMonth),
-              ],
-              if (thisYear.isNotEmpty) ...[
-                _SectionHeader(title: 'This Year'),
-                _buildGroup(thisYear),
-              ],
-              if (older.isNotEmpty) ...[
-                _SectionHeader(title: 'Older'),
-                _buildGroup(older),
-              ],
-              SliverToBoxAdapter(child: SizedBox(height: 32)),
-            ],
-          ],
-        ),
       ),
     );
   }
 
+  // ─── Header sliver ────────────────────────────────────────────────────────
+
   SliverToBoxAdapter _buildHeader() {
+    final unread = _totalUnread;
     return SliverToBoxAdapter(
       child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.primaryRed, Color(0xFFB71C1C)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+        color: AppColors.card,
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 8, 20),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Notifications',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: -0.5,
-                        ),
+                // Title row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            'Notifications',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text,
+                              letterSpacing: -0.7,
+                            ),
+                          ),
+                          if (unread > 0) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              '$unread new',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (_unreadCount > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            '$_unreadCount unread',
-                            style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.8)),
+                    ),
+                    if (unread > 0)
+                      GestureDetector(
+                        onTap: _markAllRead,
+                        child: Text(
+                          'Mark all read',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.primaryRed,
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-                if (_unreadCount > 0)
-                  TextButton.icon(
-                    onPressed: _markAllRead,
-                    icon: Icon(Icons.done_all, color: Colors.white, size: 16),
-                    label: Text(
-                      'Mark all read',
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      backgroundColor: Colors.white.withValues(alpha: 0.15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                  ),
+                const SizedBox(height: 14),
+                // Filter pills
+                Row(
+                  children: [
+                    for (final f in ['All', 'Unread']) ...[
+                      _FilterPill(
+                        label: f,
+                        active: _filterMode == f,
+                        onTap: () => setState(() => _filterMode = f),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Divider(height: 1, color: AppColors.divider),
               ],
             ),
           ),
@@ -251,101 +372,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  SliverList _buildGroup(List<AppNotification> items) {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, i) {
-          final n = items[i];
-          final isRead = _read.contains(n.id);
+  // ─── Section label ────────────────────────────────────────────────────────
 
-          if (n.targetType == 'follow_request') {
-            return _FollowRequestCard(
-              notification: n,
-              timeLabel: _timeAgo(n.createdAt),
-              isRead: isRead,
-              onAccept: () => setState(() {
-                _read.add(n.id);
-                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-                final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-                userState.acceptFollowRequest(n.fromId!, myId);
-                userPrefsService.save(myId);
-              }),
-              onDecline: () => setState(() {
-                _read.add(n.id);
-                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-                userState.declineFollowRequest(n.fromId!);
-                final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-                userPrefsService.save(myId);
-              }),
-            );
-          }
-
-          if (n.targetType == 'board_member_request') {
-            return _BoardMemberRequestCard(
-              notification: n,
-              timeLabel: _timeAgo(n.createdAt),
-              isRead: isRead,
-              onTap: () {
-                setState(() {
-                  _read.add(n.id);
-                  if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-                });
-                final clubId = n.targetId ?? '';
-                final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-                final color = const [
-                  Color(0xFFE53935), Color(0xFF8E24AA), Color(0xFF1E88E5),
-                  Color(0xFF00897B), Color(0xFFF4511E), Color(0xFF3949AB),
-                ][clubs.indexOf(club) % 6];
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => ClubProfileScreen(club: club, color: color),
-                ));
-              },
-            );
-          }
-
-          return _NotificationCard(
-            notification: n,
-            timeLabel: _timeAgo(n.createdAt),
-            isRead: isRead,
-            onTap: () {
-              setState(() {
-                _read.add(n.id);
-                if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-              });
-              _navigate(context, n);
-            },
-          );
-        },
-        childCount: items.length,
-      ),
-    );
-  }
-}
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final int count;
-  const _SectionHeader({required this.title, this.count = 0});
-
-  @override
-  Widget build(BuildContext context) {
+  SliverToBoxAdapter _sectionLabel(String title, [int unreadInGroup = 0]) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
         child: Row(
           children: [
             Text(
-              title,
+              title.toUpperCase(),
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 10,
                 fontWeight: FontWeight.bold,
                 color: AppColors.secondaryText,
-                letterSpacing: 0.5,
+                letterSpacing: 0.9,
               ),
             ),
-            if (count > 0) ...[
+            if (unreadInGroup > 0) ...[
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
@@ -354,8 +398,12 @@ class _SectionHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '$count',
-                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  '$unreadInGroup',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -364,181 +412,446 @@ class _SectionHeader extends StatelessWidget {
       ),
     );
   }
+
+  // ─── Timeline group ───────────────────────────────────────────────────────
+
+  SliverToBoxAdapter _buildTimeline(List<AppNotification> items) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: [
+            for (int i = 0; i < items.length; i++)
+              _buildTimelineRow(items[i], isLast: i == items.length - 1),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimelineRow(AppNotification n, {required bool isLast}) {
+    final isRead = _read.contains(n.id);
+
+    // Follow request
+    if (n.targetType == 'follow_request') {
+      return _TimelineRow(
+        node: _AvatarNode(userId: n.fromId ?? ''),
+        isLast: isLast,
+        onTap: () => _markRead(n),
+        child: _FollowRequestContent(
+          notification: n,
+          timeLabel: _timeAgo(n.createdAt),
+          isRead: isRead,
+          onAccept: () {
+            _markRead(n);
+            userState.acceptFollowRequest(n.fromId!, _myId);
+            userPrefsService.save(_myId);
+            setState(() {});
+          },
+          onDecline: () {
+            _markRead(n);
+            userState.declineFollowRequest(n.fromId!);
+            userPrefsService.save(_myId);
+            setState(() {});
+          },
+        ),
+      );
+    }
+
+    // Board member request
+    if (n.targetType == 'board_member_request') {
+      return _TimelineRow(
+        node: _AvatarNode(userId: n.fromId ?? ''),
+        isLast: isLast,
+        onTap: () {
+          _markRead(n);
+          final clubId = n.targetId ?? '';
+          final club = clubs.firstWhere(
+            (c) => c.id == clubId,
+            orElse: () => clubs.first,
+          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ClubProfileScreen(club: club, color: _colorForClub(clubId)),
+            ),
+          );
+        },
+        child: _BoardRequestContent(
+          notification: n,
+          timeLabel: _timeAgo(n.createdAt),
+          isRead: isRead,
+        ),
+      );
+    }
+
+    // Standard notification
+    final actionLabel = _actionLabel(n.targetType);
+    return _TimelineRow(
+      node: _NotifNodeIcon(targetType: n.targetType, message: n.message),
+      isLast: isLast,
+      onTap: () {
+        _markRead(n);
+        _navigate(n);
+      },
+      child: _NotifCard(
+        notification: n,
+        timeLabel: _timeAgo(n.createdAt),
+        isRead: isRead,
+        actionLabel: actionLabel,
+        onAction: () {
+          _markRead(n);
+          _navigate(n);
+        },
+      ),
+    );
+  }
 }
 
-// ─── Notification Card ────────────────────────────────────────────────────────
+// ─── Timeline rail row ────────────────────────────────────────────────────────
 
-class _NotificationCard extends StatelessWidget {
-  final AppNotification notification;
-  final String timeLabel;
-  final bool isRead;
+class _TimelineRow extends StatelessWidget {
+  final Widget node;
+  final Widget child;
+  final bool isLast;
   final VoidCallback onTap;
 
-  const _NotificationCard({
-    required this.notification,
-    required this.timeLabel,
-    required this.isRead,
+  const _TimelineRow({
+    required this.node,
+    required this.child,
+    required this.isLast,
     required this.onTap,
   });
 
-  _NotifStyle get _style {
-    switch (notification.targetType) {
-      case 'message':
-        return _NotifStyle(Icons.message_rounded, const Color(0xFF00838F),
-            const Color(0xFFE0F7FA), 'Message');
-      case 'event':
-        return _NotifStyle(Icons.event_rounded, const Color(0xFFE65100),
-            const Color(0xFFFFF3E0), 'Event');
-      case 'post':
-        return _NotifStyle(Icons.article_rounded, const Color(0xFF2E7D32),
-            const Color(0xFFE8F5E9), 'Post');
-      case 'story':
-        return _NotifStyle(Icons.auto_stories_rounded, const Color(0xFF6A1B9A),
-            const Color(0xFFF3E5F5), 'Story');
-      case 'follow_request':
-      case 'follow_accepted':
-        return _NotifStyle(Icons.person_add_rounded, const Color(0xFF6A1B9A),
-            const Color(0xFFF3E5F5), 'Follow');
-      case 'club':
-        return _NotifStyle(Icons.groups_rounded, AppColors.primaryRed,
-            AppColors.lightRed, 'Club');
-    }
-    // Fallback: derive from message text for legacy/untyped notifications.
-    final msg = notification.message.toLowerCase();
-    if (msg.contains('liked')) {
-      return _NotifStyle(Icons.favorite_rounded, const Color(0xFFE91E63),
-          const Color(0xFFFCE4EC), 'Like');
-    }
-    if (msg.contains('comment')) {
-      return _NotifStyle(Icons.chat_bubble_rounded, const Color(0xFF1565C0),
-          const Color(0xFFE3F2FD), 'Comment');
-    }
-    if (msg.contains('follow')) {
-      return _NotifStyle(Icons.person_add_rounded, const Color(0xFF6A1B9A),
-          const Color(0xFFF3E5F5), 'Follow');
-    }
-    return _NotifStyle(Icons.notifications_rounded, AppColors.primaryRed,
-        AppColors.lightRed, 'Alert');
-  }
-
   @override
   Widget build(BuildContext context) {
-    final s = _style;
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isRead ? AppColors.divider : s.iconColor.withValues(alpha: 0.3),
-            width: isRead ? 0.5 : 1.5,
-          ),
-          boxShadow: isRead
-              ? []
-              : [
-                  BoxShadow(
-                    color: s.iconColor.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon badge
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: s.bgColor,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(s.icon, color: s.iconColor, size: 22),
-              ),
-              const SizedBox(width: 12),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: s.bgColor,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            s.typeLabel,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: s.iconColor,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          timeLabel,
-                          style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
-                        ),
-                        if (!isRead) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: s.iconColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      notification.message,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.text,
-                        fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
-                        height: 1.4,
+      behavior: HitTestBehavior.translucent,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Left rail: 40px icon + vertical connector line
+            SizedBox(
+              width: 40,
+              child: Column(
+                children: [
+                  node,
+                  if (!isLast)
+                    Expanded(
+                      child: Center(
+                        child: Container(width: 2, color: AppColors.divider),
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
-              if (notification.targetType != null &&
-                  notification.targetType != 'follow_request') ...[
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.secondaryText),
-              ],
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            // Content card
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 4 : 16),
+                child: child,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─── Follow Request Card ──────────────────────────────────────────────────────
+// ─── Node widgets (left rail) ─────────────────────────────────────────────────
 
-class _FollowRequestCard extends StatelessWidget {
+class _NotifNodeIcon extends StatelessWidget {
+  final String? targetType;
+  final String message;
+
+  const _NotifNodeIcon({required this.targetType, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, iconColor, bgColor, isCircle) = _style;
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: isCircle ? null : BorderRadius.circular(13),
+        shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+      ),
+      child: Icon(icon, color: iconColor, size: 20),
+    );
+  }
+
+  (IconData, Color, Color, bool) get _style {
+    switch (targetType) {
+      case 'event':
+        return (
+          Icons.event_rounded,
+          const Color(0xFFE65100),
+          const Color(0xFFFFF3E0),
+          false,
+        );
+      case 'post':
+        return (
+          Icons.article_rounded,
+          const Color(0xFF2E7D32),
+          const Color(0xFFE8F5E9),
+          false,
+        );
+      case 'message':
+        return (
+          Icons.message_rounded,
+          const Color(0xFF00838F),
+          const Color(0xFFE0F7FA),
+          false,
+        );
+      case 'follow_accepted':
+        return (
+          Icons.person_add_rounded,
+          const Color(0xFF6A1B9A),
+          const Color(0xFFF3E5F5),
+          true,
+        );
+      case 'user':
+        return (
+          Icons.person_rounded,
+          const Color(0xFF6A1B9A),
+          const Color(0xFFF3E5F5),
+          true,
+        );
+      case 'club':
+        return (
+          Icons.groups_rounded,
+          AppColors.primaryRed,
+          AppColors.lightRed,
+          false,
+        );
+    }
+    final msg = message.toLowerCase();
+    if (msg.contains('liked') || msg.contains('like')) {
+      return (
+        Icons.favorite_rounded,
+        const Color(0xFFE91E63),
+        const Color(0xFFFCE4EC),
+        true,
+      );
+    }
+    if (msg.contains('comment')) {
+      return (
+        Icons.chat_bubble_rounded,
+        const Color(0xFF1565C0),
+        const Color(0xFFE3F2FD),
+        false,
+      );
+    }
+    return (
+      Icons.notifications_rounded,
+      AppColors.primaryRed,
+      AppColors.lightRed,
+      false,
+    );
+  }
+}
+
+class _AvatarNode extends StatelessWidget {
+  final String userId;
+  const _AvatarNode({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = users.cast<dynamic>().firstWhere(
+      (u) => u.id == userId,
+      orElse: () => users.first,
+    );
+    return UserAvatar(
+      userId: user.id as String,
+      name: user.name as String,
+      size: 40,
+      fontSize: 15,
+      backgroundColor: const Color(0xFFF3E5F5),
+      textColor: const Color(0xFF6A1B9A),
+      borderRadius: BorderRadius.circular(20),
+    );
+  }
+}
+
+// ─── Notification content cards ───────────────────────────────────────────────
+
+class _NotifCard extends StatelessWidget {
+  final AppNotification notification;
+  final String timeLabel;
+  final bool isRead;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _NotifCard({
+    required this.notification,
+    required this.timeLabel,
+    required this.isRead,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  String? _boldTitle() {
+    // If there's a known sender, the bold title is their name.
+    if (notification.fromId != null) {
+      final u = users.cast<dynamic>().firstWhere(
+        (u) => u.id == notification.fromId,
+        orElse: () => null,
+      );
+      if (u != null) return u.name as String;
+    }
+    // For club/event notifications, use the club name if message starts with it.
+    if (notification.targetType == 'club' && notification.targetId != null) {
+      final club = clubs.cast<dynamic>().firstWhere(
+        (c) => c.id == notification.targetId,
+        orElse: () => null,
+      );
+      if (club != null &&
+          notification.message.startsWith(club.name as String)) {
+        return club.name as String;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _boldTitle();
+    final body = title != null && notification.message.startsWith(title)
+        ? notification.message.substring(title.length)
+        : notification.message;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isRead ? Colors.transparent : AppColors.lightRed,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isRead ? AppColors.divider : Colors.transparent,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: title != null
+                    ? RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: title,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: AppColors.text,
+                                height: 1.4,
+                              ),
+                            ),
+                            TextSpan(
+                              text: body,
+                              style: TextStyle(
+                                fontWeight: FontWeight.normal,
+                                fontSize: 14,
+                                color: AppColors.text,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Text(
+                        notification.message,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.text,
+                          fontWeight: isRead
+                              ? FontWeight.normal
+                              : FontWeight.w600,
+                          height: 1.4,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    timeLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.secondaryText,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  if (!isRead) ...[
+                    const SizedBox(height: 5),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          if (actionLabel != null) ...[
+            const SizedBox(height: 9),
+            GestureDetector(
+              onTap: onAction,
+              child: Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: isRead ? AppColors.card : Colors.white,
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                    color: AppColors.primaryRed.withValues(alpha: 0.25),
+                    width: 1.5,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  actionLabel!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryRed,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Follow request card content ──────────────────────────────────────────────
+
+class _FollowRequestContent extends StatelessWidget {
   final AppNotification notification;
   final String timeLabel;
   final bool isRead;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
 
-  const _FollowRequestCard({
+  const _FollowRequestContent({
     required this.notification,
     required this.timeLabel,
     required this.isRead,
@@ -549,335 +862,351 @@ class _FollowRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fromId = notification.fromId ?? '';
-    final sender = users.firstWhere((u) => u.id == fromId, orElse: () => users.first);
-    final alreadyHandled = !userState.incomingFollowRequests.containsKey(fromId);
+    final alreadyHandled = !userState.incomingFollowRequests.containsKey(
+      fromId,
+    );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        color: isRead ? Colors.transparent : AppColors.lightRed,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isRead
-              ? AppColors.divider
-              : const Color(0xFF6A1B9A).withValues(alpha: 0.35),
-          width: isRead ? 0.5 : 1.5,
+          color: isRead ? AppColors.divider : Colors.transparent,
+          width: 1,
         ),
-        boxShadow: isRead
-            ? []
-            : [
-                BoxShadow(
-                  color: const Color(0xFF6A1B9A).withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar
-                UserAvatar(
-                  userId: sender.id,
-                  name: sender.name,
-                  size: 46,
-                  fontSize: 20,
-                  backgroundColor: const Color(0xFFF3E5F5),
-                  textColor: const Color(0xFF6A1B9A),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3E5F5),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Follow Request',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF6A1B9A),
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(timeLabel,
-                              style: TextStyle(
-                                  fontSize: 11, color: AppColors.secondaryText)),
-                          if (!isRead) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: Color(0xFF6A1B9A),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ],
-                        ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        notification.message,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3E5F5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'FOLLOW REQUEST',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.text,
-                          fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
-                          height: 1.4,
+                          fontSize: 9,
+                          color: Color(0xFF6A1B9A),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      notification.message,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.text,
+                        fontWeight: isRead
+                            ? FontWeight.normal
+                            : FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            if (!alreadyHandled) ...[
-              const SizedBox(height: 12),
-              Row(
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onAccept,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryRed,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          'Accept',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                  Text(
+                    timeLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.secondaryText,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onDecline,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: AppColors.secondaryText.withValues(alpha: 0.4)),
-                        ),
-                        child: Text(
-                          'Decline',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
+                  if (!isRead) ...[
+                    const SizedBox(height: 5),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF6A1B9A),
+                        shape: BoxShape.circle,
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
-            ] else ...[
-              const SizedBox(height: 8),
-              Text(
-                alreadyHandled && userState.isFollowingUser(fromId)
-                    ? 'You accepted this request.'
-                    : 'You declined this request.',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
             ],
-          ],
-        ),
+          ),
+          const SizedBox(height: 10),
+          if (!alreadyHandled)
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: onAccept,
+                    child: Container(
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Accept',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: onDecline,
+                    child: Container(
+                      height: 32,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(
+                          color: AppColors.secondaryText.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Decline',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(
+              userState.isFollowingUser(fromId)
+                  ? 'You accepted this request.'
+                  : 'You declined this request.',
+              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            ),
+        ],
       ),
     );
   }
 }
 
-// ─── Board Member Request Card ────────────────────────────────────────────────
+// ─── Board member request card content ───────────────────────────────────────
 
-class _BoardMemberRequestCard extends StatelessWidget {
+class _BoardRequestContent extends StatelessWidget {
   final AppNotification notification;
   final String timeLabel;
   final bool isRead;
-  final VoidCallback onTap;
 
-  const _BoardMemberRequestCard({
+  const _BoardRequestContent({
     required this.notification,
     required this.timeLabel,
     required this.isRead,
-    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final fromId = notification.fromId ?? '';
     final clubId = notification.targetId ?? '';
-    final requester = users.firstWhere((u) => u.id == fromId, orElse: () => users.first);
-    final club = clubs.firstWhere((c) => c.id == clubId, orElse: () => clubs.first);
-    // Derive handled state from the persisted BoardMemberRequest records —
-    // never from userState, which is per-session and not visible across logins.
+    final requester = users.firstWhere(
+      (u) => u.id == fromId,
+      orElse: () => users.first,
+    );
+    final club = clubs.firstWhere(
+      (c) => c.id == clubId,
+      orElse: () => clubs.first,
+    );
     final alreadyHandled = !boardMemberRequests.any(
-        (r) => r.userId == fromId && r.clubId == clubId && r.status == 'pending');
+      (r) => r.userId == fromId && r.clubId == clubId && r.status == 'pending',
+    );
 
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
+    return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        color: isRead ? Colors.transparent : AppColors.lightRed,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isRead
-              ? AppColors.divider
-              : const Color(0xFF1565C0).withValues(alpha: 0.35),
-          width: isRead ? 0.5 : 1.5,
+          color: isRead ? AppColors.divider : Colors.transparent,
+          width: 1,
         ),
-        boxShadow: isRead
-            ? []
-            : [
-                BoxShadow(
-                  color: const Color(0xFF1565C0).withValues(alpha: 0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar
-                UserAvatar(
-                  userId: requester.id,
-                  name: requester.name,
-                  size: 46,
-                  fontSize: 20,
-                  backgroundColor: const Color(0xFFE3F2FD),
-                  textColor: const Color(0xFF1565C0),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Board Request',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF1565C0),
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(timeLabel,
-                              style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                          if (!isRead) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              width: 7, height: 7,
-                              decoration: BoxDecoration(
-                                color: Color(0xFF1565C0),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ],
-                        ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        notification.message,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'BOARD REQUEST',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.text,
-                          fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
-                          height: 1.4,
+                          fontSize: 9,
+                          color: Color(0xFF1565C0),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Club: ${club.name}',
-                        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      notification.message,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.text,
+                        fontWeight: isRead
+                            ? FontWeight.normal
+                            : FontWeight.w600,
+                        height: 1.4,
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Club: ${club.name}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    timeLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  if (!isRead) ...[
+                    const SizedBox(height: 5),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1565C0),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (alreadyHandled)
+            Text(
+              club.boardMemberIds.contains(fromId)
+                  ? 'Approved — ${requester.name} is now a board member.'
+                  : 'This request was declined.',
+              style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+            )
+          else
+            Row(
+              children: [
+                const Icon(
+                  Icons.touch_app_outlined,
+                  size: 13,
+                  color: Color(0xFF1565C0),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Tap to review in the club\'s Board tab',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: const Color(0xFF1565C0),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            if (alreadyHandled)
-              Text(
-                club.boardMemberIds.contains(fromId)
-                    ? 'Approved — ${requester.name} is now a board member.'
-                    : 'This request was declined.',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              )
-            else
-              Row(
-                children: [
-                  Icon(Icons.touch_app_outlined, size: 13, color: Color(0xFF1565C0)),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Tap to review in the club\'s Board tab',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF1565C0), fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-          ],
-        ),
+        ],
       ),
-    ),
     );
   }
 }
 
-// ─── Style helper ─────────────────────────────────────────────────────────────
+// ─── Filter pill ──────────────────────────────────────────────────────────────
 
-class _NotifStyle {
-  final IconData icon;
-  final Color iconColor;
-  final Color bgColor;
-  final String typeLabel;
-  const _NotifStyle(this.icon, this.iconColor, this.bgColor, this.typeLabel);
+class _FilterPill extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _FilterPill({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primaryRed : AppColors.background,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: active ? AppColors.primaryRed : AppColors.divider,
+            width: 1.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: active ? Colors.white : AppColors.text,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
+// ─── Empty states ─────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
@@ -889,20 +1218,74 @@ class _EmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 90,
-            height: 90,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               color: AppColors.lightRed,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.notifications_none_rounded, size: 44, color: AppColors.primaryRed),
+            child: Icon(
+              Icons.notifications_none_rounded,
+              size: 40,
+              color: AppColors.primaryRed,
+            ),
           ),
           const SizedBox(height: 16),
-          Text('All caught up!',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+          Text(
+            'All caught up!',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.text,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text('No notifications yet.',
-              style: TextStyle(fontSize: 14, color: AppColors.secondaryText)),
+          Text(
+            'No notifications yet.',
+            style: TextStyle(fontSize: 14, color: AppColors.secondaryText),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoUnreadState extends StatelessWidget {
+  const _NoUnreadState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppColors.lightRed,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.done_all_rounded,
+              size: 38,
+              color: AppColors.primaryRed,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'You\'re all caught up!',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.text,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'No unread notifications.',
+            style: TextStyle(fontSize: 14, color: AppColors.secondaryText),
+          ),
         ],
       ),
     );

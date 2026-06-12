@@ -1,20 +1,25 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../widgets/club_avatar.dart';
 import '../models/club.dart';
+import '../models/event.dart';
 import '../models/user.dart';
+import '../services/personalization_service.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
+import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
+import 'my_calendar_screen.dart';
 import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
 import 'settings_screen.dart';
@@ -41,7 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
 
-  int _contentTab = 0; // 0 = Posts, 1 = Stories, 2 = Events
+  int _contentTab = 0; // 0 = Posts, 1 = Events
   static const List<String> _yearOptions = [
     '1st Year',
     '2nd Year',
@@ -286,6 +291,201 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return users
         .where((user) => userState.followedUserIds.contains(user.id))
         .toList();
+  }
+
+  String _initialsFor(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    return parts.take(2).map((part) => part[0].toUpperCase()).join();
+  }
+
+  String _graduationLabel(String? year) {
+    const yearsUntilGraduation = {
+      '1st Year': 3,
+      '2nd Year': 2,
+      '3rd Year': 1,
+      '4th Year': 0,
+      '5th Year': 0,
+    };
+    final offset = yearsUntilGraduation[year];
+    if (offset == null) return 'KOÇ UNIVERSITY';
+    final graduationYear = (DateTime.now().year + offset) % 100;
+    return "KOÇ '${graduationYear.toString().padLeft(2, '0')}";
+  }
+
+  Event? _nextUpcomingEvent(String userId) {
+    final now = DateTime.now();
+    final upcoming =
+        events
+            .where(
+              (event) =>
+                  event.endTime.isAfter(now) &&
+                  event.attendeeUserIds.contains(userId),
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return upcoming.isEmpty ? null : upcoming.first;
+  }
+
+  StudentEventData _eventDataFor(Event event) {
+    final club = clubs.cast<Club?>().firstWhere(
+      (club) => club?.id == event.clubId,
+      orElse: () => null,
+    );
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final hour = event.dateTime.hour.toString().padLeft(2, '0');
+    final minute = event.dateTime.minute.toString().padLeft(2, '0');
+
+    return StudentEventData(
+      month: _monthAbbr(event.dateTime.month),
+      day: event.dateTime.day.toString(),
+      title: event.title,
+      clubLine:
+          '${club?.name ?? 'Campus event'} · '
+          '${weekdays[event.dateTime.weekday - 1]} · $hour:$minute',
+      location: event.location,
+    );
+  }
+
+  Color _colorForClubId(String clubId) {
+    final idx = clubs.indexWhere((c) => c.id == clubId);
+    return _clubColor(idx < 0 ? 0 : idx);
+  }
+
+  /// Copies a shareable profile link to the clipboard and confirms via snackbar.
+  void _shareProfile(String userId, String name) {
+    final handle = userState.usernameFor(userId) ?? userId;
+    Clipboard.setData(ClipboardData(text: 'kuclubs://user/$handle'));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("$name's profile link copied to clipboard"),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _editVibes(String userId) {
+    final current = {...?userState.interests[userId]};
+    final options = <String>[
+      ...kInterests,
+      ...current.where((c) => !kInterests.contains(c)),
+    ];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final selected = {...current};
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              22,
+              18,
+              22,
+              MediaQuery.of(context).viewInsets.bottom + 28,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Your vibe',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.text,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Pick the topics that describe you.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 10,
+                  children: options.map((topic) {
+                    final isOn = selected.contains(topic);
+                    return GestureDetector(
+                      onTap: () => setSheetState(() {
+                        if (isOn) {
+                          selected.remove(topic);
+                        } else {
+                          selected.add(topic);
+                        }
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 15,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isOn
+                              ? AppColors.primaryRed
+                              : AppColors.lightGray,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: isOn
+                                ? AppColors.primaryRed
+                                : AppColors.divider,
+                          ),
+                        ),
+                        child: Text(
+                          topic,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isOn ? Colors.white : AppColors.text,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      userState.setInterests(userId, selected.toList());
+                      userPrefsService.save(userId);
+                      Navigator.pop(sheetContext);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showFollowersSheet(List<User> followers) {
@@ -647,29 +847,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isAdmin = admin != null;
 
     if (user != null && !isAdmin) {
-      final followedClubs = clubs
-          .where((club) => userState.isFollowing(club.id))
-          .toList();
-      return StudentProfileScreen(
-        onSettings: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SettingsScreen(onLogout: widget.onLogout ?? () {}),
-          ),
-        ),
-        onEditBio: () => _editBio(context, user.id),
-        onEditProfile: () => _editMajorAndYear(context, user.id),
-        followedClubs: followedClubs,
-        onClubTap: (club) => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ClubProfileScreen(
+      return ListenableBuilder(
+        listenable: userState,
+        builder: (context, _) {
+          final followedClubs = clubs
+              .where((club) => userState.isFollowing(club.id))
+              .toList();
+          final followers = _followersForUser(user.id);
+          final following = _followingUsers();
+          final name = userState.displayNameFor(user.id, user.name);
+          final year = userState.years[user.id];
+          final nextEvent = _nextUpcomingEvent(user.id);
+
+          final clubDetails = followedClubs.map((club) {
+            final memberCount = subscriptions
+                .where((s) => s.clubId == club.id)
+                .length;
+            final role = club.boardMemberIds.contains(user.id)
+                ? 'Board'
+                : 'Member';
+            return StudentClubDetail(
               club: club,
-              color: _clubColor(clubs.indexOf(club)),
+              memberCount: memberCount,
+              role: role,
+            );
+          }).toList();
+
+          return StudentProfileScreen(
+            data: StudentProfileData(
+              initials: _initialsFor(name),
+              name: name,
+              graduation: _graduationLabel(year),
+              major: userState.majors[user.id] ?? 'Major not added',
+              year: year ?? 'Year not added',
+              bio:
+                  userState.bios[user.id] ?? 'Add a bio to introduce yourself.',
+              clubs: followedClubs.length,
+              followers: followers.length,
+              following: following.length,
+              vibes: userState.interests[user.id] ?? const [],
+              nextEvent: nextEvent == null ? null : _eventDataFor(nextEvent),
+              clubDetails: clubDetails,
             ),
-          ),
-        ),
-        vibeTopics: userState.interests[user.id],
+            onSettings: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    SettingsScreen(onLogout: widget.onLogout ?? () {}),
+              ),
+            ),
+            onEditBio: () => _editBio(context, user.id),
+            onEditProfile: () => _editMajorAndYear(context, user.id),
+            onShare: () => _shareProfile(user.id, name),
+            onEditVibes: () => _editVibes(user.id),
+            onSeeAllEvents: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
+            ),
+            onEventTap: nextEvent == null
+                ? null
+                : () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EventDetailScreen(
+                        event: nextEvent,
+                        color: _colorForClubId(nextEvent.clubId),
+                      ),
+                    ),
+                  ),
+            onFollowersTap: () => _showFollowersSheet(followers),
+            onFollowingTap: () => _showFollowingSheet(following),
+            followedClubs: followedClubs,
+            onClubTap: (club) => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ClubProfileScreen(
+                  club: club,
+                  color: _clubColor(clubs.indexOf(club)),
+                ),
+              ),
+            ),
+          );
+        },
       );
     }
 
@@ -1905,10 +2164,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final myPosts = newsPosts.where((p) => p.clubId == managedClub.id).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    final myStories =
-        clubStories.where((s) => s.clubId == managedClub.id).toList()
-          ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
-
     final myEvents = events.where((e) => e.clubId == managedClub.id).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
@@ -1973,19 +2228,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(width: 8),
                     _ContentTabChip(
-                      label: 'Stories',
-                      count: myStories.length,
+                      label: 'Events',
+                      count: myEvents.length,
                       selected: _contentTab == 1,
                       color: clubColor,
                       onTap: () => setState(() => _contentTab = 1),
-                    ),
-                    const SizedBox(width: 8),
-                    _ContentTabChip(
-                      label: 'Events',
-                      count: myEvents.length,
-                      selected: _contentTab == 2,
-                      color: clubColor,
-                      onTap: () => setState(() => _contentTab = 2),
                     ),
                   ],
                 ),
@@ -1995,8 +2242,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (_contentTab == 0)
                 _buildPostsList(myPosts, clubColor, adminId),
               if (_contentTab == 1)
-                _buildStoriesList(myStories, clubColor, adminId),
-              if (_contentTab == 2)
                 _buildEventsList(myEvents, clubColor, adminId),
 
               const SizedBox(height: 8),
@@ -2166,242 +2411,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStoriesList(List myStories, Color color, String adminId) {
-    if (myStories.isEmpty) {
-      return const _EmptyHint(text: 'No stories yet.');
-    }
-    return SizedBox(
-      height: 172,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        itemCount: myStories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 10),
-        itemBuilder: (ctx, i) {
-          final s = myStories[i];
-          final hasPhoto = s.imagePath != null;
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 90,
-              height: 160,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Background
-                  GestureDetector(
-                    onTap: () => _showStoryPreview(ctx, s),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (hasPhoto && s.imagePath!.startsWith('http'))
-                          Image.network(
-                            s.imagePath!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c2, e, st) =>
-                                _storyGradientBox(color),
-                          )
-                        else if (hasPhoto)
-                          Image.file(File(s.imagePath!), fit: BoxFit.cover)
-                        else
-                          _storyGradientBox(color),
-                        // Dark scrim
-                        Container(color: Colors.black.withValues(alpha: 0.25)),
-                        // Text preview
-                        if (s.text.isNotEmpty)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(6, 28, 6, 20),
-                              child: Text(
-                                s.text,
-                                textAlign: TextAlign.center,
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Color(s.textColorValue),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: const [
-                                    Shadow(
-                                      blurRadius: 4,
-                                      color: Colors.black87,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        // Date chip
-                        Positioned(
-                          bottom: 5,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Text(
-                              _timeAgoLabel(s.postedAt),
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Delete button
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: GestureDetector(
-                      onTap: () =>
-                          _confirmDelete(
-                            'Delete story?',
-                            'This story will be permanently removed.',
-                          ).then((confirmed) {
-                            if (confirmed != true || !mounted) return;
-                            final ok = contentStore.deleteStory(s.id, adminId);
-                            if (mounted) {
-                              if (ok) {
-                                setState(() {});
-                              } else {
-                                Navigator.popUntil(context, (r) => r.isFirst);
-                              }
-                            }
-                          }),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.85),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.delete_outline,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _storyGradientBox(Color color) => Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [color.withValues(alpha: 0.8), color.withValues(alpha: 0.4)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-    ),
-  );
-
-  void _showStoryPreview(BuildContext context, dynamic story) {
-    final hasPhoto = story.imagePath != null;
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (ctx) => GestureDetector(
-        onTap: () => Navigator.pop(ctx),
-        child: Center(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 24),
-            height: MediaQuery.of(ctx).size.height * 0.72,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: const Color(0xFF1a1a2e),
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (hasPhoto && (story.imagePath as String).startsWith('http'))
-                  Image.network(
-                    story.imagePath as String,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c2, e, st) =>
-                        _storyGradientBox(AppColors.primaryRed),
-                  )
-                else if (hasPhoto)
-                  Image.file(File(story.imagePath as String), fit: BoxFit.cover)
-                else
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-                Container(color: Colors.black.withValues(alpha: 0.2)),
-                if ((story.text as String).isNotEmpty)
-                  Align(
-                    alignment: Alignment(
-                      ((story.textOffsetX as double) - 0.5) * 2,
-                      ((story.textOffsetY as double) - 0.5) * 2,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        story.text as String,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(story.textColorValue as int),
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          shadows: const [
-                            Shadow(blurRadius: 6, color: Colors.black87),
-                            Shadow(blurRadius: 12, color: Colors.black54),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                // Close hint
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.close, color: Colors.white, size: 18),
-                  ),
-                ),
-                // Time label
-                Positioned(
-                  bottom: 16,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Text(
-                      _timeAgoLabel(story.postedAt as DateTime),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white60,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEventsList(List myEvents, Color color, String adminId) {
     if (myEvents.isEmpty) {
       return const _EmptyHint(text: 'No events yet.');
@@ -2546,34 +2555,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-              // View RSVPs link — only visible to the owning club admin
-              Padding(
-                padding: const EdgeInsets.only(left: 84, right: 16, bottom: 8),
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RsvpListScreen(event: e, color: color),
+              if (canViewEventAttendance(e))
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 84,
+                    right: 16,
+                    bottom: 8,
+                  ),
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RsvpListScreen(event: e, color: color),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.people_outline, size: 14, color: color),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${e.attendeeUserIds.length} attending · View RSVPs',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(Icons.chevron_right, size: 14, color: color),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.people_outline, size: 14, color: color),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${e.attendeeUserIds.length} attending · View RSVPs',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Icon(Icons.chevron_right, size: 14, color: color),
-                    ],
-                  ),
                 ),
-              ),
               Divider(height: 1, indent: 84, color: AppColors.divider),
             ],
           ),

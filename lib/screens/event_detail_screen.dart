@@ -5,6 +5,7 @@ import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
+import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/view_tracker.dart';
@@ -38,16 +39,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       widget.event.createdByUserId != null &&
       widget.event.createdByUserId == _loggedInId;
 
-  bool get _isEventOwnerClub {
-    final admin = authService.currentAdmin;
-    if (admin == null) return false;
-    try {
-      return clubs.firstWhere((c) => c.adminUserIds.contains(admin.id)).id ==
-          widget.event.clubId;
-    } catch (_) {
-      return false;
-    }
-  }
+  bool get _canViewAttendance => canViewEventAttendance(widget.event);
 
   bool get _isLive {
     final now = DateTime.now();
@@ -315,7 +307,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Quick info card ──────────────────────────────────────
-                  _QuickInfoCard(event: event, color: color),
+                  _QuickInfoCard(
+                    event: event,
+                    color: color,
+                    showAttendance: _canViewAttendance,
+                  ),
 
                   const SizedBox(height: 10),
 
@@ -513,7 +509,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
 
                   // ── Attending count (admin only) ───────────────────────────
-                  if (_isEventOwnerClub) ...[
+                  if (_canViewAttendance) ...[
                     const SizedBox(height: 16),
                     ListenableBuilder(
                       listenable: rsvpStore,
@@ -537,6 +533,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         event: event,
         color: color,
         isPast: isPast,
+        showAttendance: _canViewAttendance,
       ),
     );
   }
@@ -687,7 +684,12 @@ class _HeroTagPill extends StatelessWidget {
 class _QuickInfoCard extends StatelessWidget {
   final Event event;
   final Color color;
-  const _QuickInfoCard({required this.event, required this.color});
+  final bool showAttendance;
+  const _QuickInfoCard({
+    required this.event,
+    required this.color,
+    required this.showAttendance,
+  });
 
   String _pad(int n) => n.toString().padLeft(2, '0');
   String _fmtTime(DateTime dt) => '${_pad(dt.hour)}:${_pad(dt.minute)}';
@@ -754,19 +756,21 @@ class _QuickInfoCard extends StatelessWidget {
             value: event.location,
             color: color,
           ),
-          Divider(
-            height: 1,
-            indent: 16,
-            endIndent: 16,
-            color: AppColors.divider,
-          ),
-          _InfoRow(
-            icon: Icons.people_outline_rounded,
-            label: 'Attending',
-            value:
-                '$attendeeCount ${attendeeCount == 1 ? 'person' : 'people'} going',
-            color: color,
-          ),
+          if (showAttendance) ...[
+            Divider(
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: AppColors.divider,
+            ),
+            _InfoRow(
+              icon: Icons.people_outline_rounded,
+              label: 'Attending',
+              value:
+                  '$attendeeCount ${attendeeCount == 1 ? 'person' : 'people'} going',
+              color: color,
+            ),
+          ],
         ],
       ),
     );
@@ -898,11 +902,13 @@ class _RsvpPanel extends StatelessWidget {
   final Event event;
   final Color color;
   final bool isPast;
+  final bool showAttendance;
 
   const _RsvpPanel({
     required this.event,
     required this.color,
     required this.isPast,
+    required this.showAttendance,
   });
 
   @override
@@ -934,7 +940,7 @@ class _RsvpPanel extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!isPast && count > 0) ...[
+                  if (showAttendance && !isPast && count > 0) ...[
                     Row(
                       children: [
                         SizedBox(
@@ -951,7 +957,10 @@ class _RsvpPanel extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: HSLColor.fromAHSL(
-                                      1, hue, 0.55, 0.42,
+                                      1,
+                                      hue,
+                                      0.55,
+                                      0.42,
                                     ).toColor(),
                                     border: Border.all(
                                       color: AppColors.card,

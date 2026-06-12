@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
+import '../services/event_access.dart';
 import '../services/mock_data.dart';
 
 class RsvpListScreen extends StatelessWidget {
@@ -12,6 +13,23 @@ class RsvpListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!canViewEventAttendance(event)) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          title: const Text('Attendees'),
+        ),
+        body: Center(
+          child: Text(
+            'Only the event poster can view RSVPs.',
+            style: TextStyle(color: AppColors.secondaryText),
+          ),
+        ),
+      );
+    }
+
     // Sort attendees by RSVP timestamp (earliest first); fall back to userId sort
     final entries = event.rsvpTimestamps.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
@@ -32,10 +50,14 @@ class RsvpListScreen extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Attendees',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-            Text('$totalCount registered',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
+            Text(
+              'Attendees',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+            Text(
+              '$totalCount registered',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            ),
           ],
         ),
         elevation: 0,
@@ -50,8 +72,7 @@ class RsvpListScreen extends StatelessWidget {
           : ListView.separated(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: entries.length + legacyIds.length,
-              separatorBuilder: (_, _) =>
-                  Divider(height: 1, indent: 72),
+              separatorBuilder: (_, _) => Divider(height: 1, indent: 72),
               itemBuilder: (context, i) {
                 final String userId;
                 final DateTime? timestamp;
@@ -77,31 +98,35 @@ class RsvpListScreen extends StatelessWidget {
                 );
 
                 return ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   leading: CircleAvatar(
                     backgroundColor: color.withValues(alpha: 0.15),
                     child: Text(
-                      user.name.isNotEmpty
-                          ? user.name[0].toUpperCase()
-                          : '?',
+                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                       style: TextStyle(
-                          color: color, fontWeight: FontWeight.bold),
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   title: Text(
                     user.name,
                     style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text,
-                        fontSize: 14),
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                      fontSize: 14,
+                    ),
                   ),
                   subtitle: timestamp != null
                       ? Text(
                           'RSVP\'d ${_formatTimestamp(timestamp)}',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText),
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
                         )
                       : null,
                 );
@@ -112,8 +137,18 @@ class RsvpListScreen extends StatelessWidget {
 
   String _formatTimestamp(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final m = dt.minute.toString().padLeft(2, '0');

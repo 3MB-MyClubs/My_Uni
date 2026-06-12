@@ -8,21 +8,21 @@ import '../models/notification.dart';
 import '../models/share.dart';
 import 'mock_data.dart';
 
-/// Persists all user-generated content (posts, events, stories, comments,
-/// likes, shares, dynamic notifications) to a Hive box.
+/// Persists all user-generated content (posts, events, comments, likes, shares,
+/// and dynamic notifications) to a Hive box.
 ///
 /// On first run the lists keep their seed data from mock_data.dart.
 /// Every subsequent run loads the last saved state.
 ///
 /// [_seedVersion] must be incremented whenever mock_data.dart changes event or
-/// post seed data. A version mismatch causes the stored events/posts/stories
-/// to be discarded so the fresh mock data is used instead.
+/// post seed data. A version mismatch causes stored events/posts to be
+/// discarded so the fresh mock data is used instead.
 class ContentStore {
   static const _boxName = 'content_v1';
 
   /// Bump this integer any time you change mock event / post seed data.
   /// The stored version is compared on startup; a mismatch clears stale data.
-  static const int _seedVersion = 6;
+  static const int _seedVersion = 7;
 
   late Box<dynamic> _box;
   bool _initialized = false;
@@ -44,29 +44,42 @@ class ContentStore {
     final versionMatch = storedVersion == _seedVersion;
 
     // Always load user-generated interaction data (safe across versions)
-    _load('comments', comments,
-        (m) => Comment.fromMap(Map<String, dynamic>.from(m as Map)));
-    _load('likes', likes,
-        (m) => Like.fromMap(Map<String, dynamic>.from(m as Map)));
-    _load('shares', shares,
-        (m) => Share.fromMap(Map<String, dynamic>.from(m as Map)));
+    _load(
+      'comments',
+      comments,
+      (m) => Comment.fromMap(Map<String, dynamic>.from(m as Map)),
+    );
+    _load(
+      'likes',
+      likes,
+      (m) => Like.fromMap(Map<String, dynamic>.from(m as Map)),
+    );
+    _load(
+      'shares',
+      shares,
+      (m) => Share.fromMap(Map<String, dynamic>.from(m as Map)),
+    );
 
     if (versionMatch) {
       // Load seed data that may have been mutated by user actions
-      _load('posts', newsPosts,
-          (m) => NewsPost.fromMap(Map<String, dynamic>.from(m as Map)));
-      _load('events', events,
-          (m) => Event.fromMap(Map<String, dynamic>.from(m as Map)));
-      _load('stories', clubStories,
-          (m) => ClubStory.fromMap(Map<String, dynamic>.from(m as Map)));
+      _load(
+        'posts',
+        newsPosts,
+        (m) => NewsPost.fromMap(Map<String, dynamic>.from(m as Map)),
+      );
+      _load(
+        'events',
+        events,
+        (m) => Event.fromMap(Map<String, dynamic>.from(m as Map)),
+      );
     } else {
       // Seed data changed — discard stale Hive data, use fresh mock data,
       // and write the new version so this only triggers once.
       _box.delete('posts');
       _box.delete('events');
-      _box.delete('stories');
       _box.put('seedVersion', _seedVersion);
     }
+    _box.delete('stories');
   }
 
   void _load<T>(String key, List<T> target, T Function(dynamic) fromRaw) {
@@ -85,9 +98,6 @@ class ContentStore {
   Future<void> saveEvents() async =>
       _box.put('events', events.map((e) => e.toMap()).toList());
 
-  Future<void> saveClubStories() async =>
-      _box.put('stories', clubStories.map((s) => s.toMap()).toList());
-
   Future<void> saveComments() async =>
       _box.put('comments', comments.map((c) => c.toMap()).toList());
 
@@ -98,29 +108,40 @@ class ContentStore {
       _box.put('shares', shares.map((s) => s.toMap()).toList());
 
   Future<void> saveDynamicNotifications(List<AppNotification> ns) async =>
-      _box.put('dynNotifs', ns.map((n) => n.toMap()).toList());
+      _box.put(
+        'dynNotifs',
+        ns.where((n) => n.targetType != 'story').map((n) => n.toMap()).toList(),
+      );
 
   List<AppNotification>? loadDynamicNotifications() {
     final raw = _box.get('dynNotifs');
     if (raw == null) return null;
     return (raw as List)
-        .map((m) => AppNotification.fromMap(Map<String, dynamic>.from(m as Map)))
+        .map(
+          (m) => AppNotification.fromMap(Map<String, dynamic>.from(m as Map)),
+        )
+        .where((n) => n.targetType != 'story')
         .toList();
   }
 
   // ── Board member requests ────────────────────────────────────────────────────
 
   Future<void> saveBoardMemberRequests() async => _box.put(
-      'boardRequests',
-      boardMemberRequests.map((r) => r.toMap()).toList());
+    'boardRequests',
+    boardMemberRequests.map((r) => r.toMap()).toList(),
+  );
 
   void loadBoardMemberRequests() {
     final raw = _box.get('boardRequests');
     if (raw == null) return;
     boardMemberRequests
       ..clear()
-      ..addAll((raw as List).map(
-          (m) => BoardMemberRequest.fromMap(Map<String, dynamic>.from(m as Map))));
+      ..addAll(
+        (raw as List).map(
+          (m) =>
+              BoardMemberRequest.fromMap(Map<String, dynamic>.from(m as Map)),
+        ),
+      );
   }
 
   // ── Club board member IDs ────────────────────────────────────────────────────
@@ -185,7 +206,8 @@ class ContentStore {
     final idx = events.indexWhere((e) => e.id == eventId);
     if (idx == -1) return false;
     final ev = events[idx];
-    final allowed = ev.createdByUserId == requestingUserId ||
+    final allowed =
+        ev.createdByUserId == requestingUserId ||
         _isClubAdmin(ev.clubId, requestingUserId);
     if (!allowed) return false;
     events.removeAt(idx);
@@ -197,23 +219,12 @@ class ContentStore {
     final idx = newsPosts.indexWhere((p) => p.id == postId);
     if (idx == -1) return false;
     final post = newsPosts[idx];
-    final allowed = post.authorId == requestingUserId ||
+    final allowed =
+        post.authorId == requestingUserId ||
         _isClubAdmin(post.clubId, requestingUserId);
     if (!allowed) return false;
     newsPosts.removeAt(idx);
     saveNewsPosts();
-    return true;
-  }
-
-  bool deleteStory(String storyId, String requestingUserId) {
-    final idx = clubStories.indexWhere((s) => s.id == storyId);
-    if (idx == -1) return false;
-    final story = clubStories[idx];
-    final allowed = story.createdByUserId == requestingUserId ||
-        _isClubAdmin(story.clubId, requestingUserId);
-    if (!allowed) return false;
-    clubStories.removeAt(idx);
-    saveClubStories();
     return true;
   }
 
@@ -223,7 +234,6 @@ class ContentStore {
     await Future.wait([
       saveNewsPosts(),
       saveEvents(),
-      saveClubStories(),
       saveComments(),
       saveLikes(),
       saveShares(),

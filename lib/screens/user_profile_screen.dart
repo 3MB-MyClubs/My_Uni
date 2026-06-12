@@ -11,6 +11,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
+import 'saved_posts_screen.dart';
 
 // ── Design palette ─────────────────────────────────────────────────────────────
 const _burgundy = Color(0xFF8C1D40);
@@ -116,6 +117,158 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => UserProfileScreen(user: u)),
+    );
+  }
+
+  static const List<String> _yearOptions = [
+    '1st Year',
+    '2nd Year',
+    '3rd Year',
+    '4th Year',
+    '5th Year',
+  ];
+
+  void _editProfile() {
+    final id = _myId;
+    final bioController = TextEditingController(text: userState.bios[id] ?? '');
+    final majorController = TextEditingController(
+      text: userState.majors[id] ?? '',
+    );
+    var selectedYear = userState.years[id];
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            22,
+            18,
+            22,
+            MediaQuery.of(context).viewInsets.bottom + 28,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Edit profile',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Bio',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: bioController,
+                maxLines: 3,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  hintText: 'Tell people a bit about yourself',
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Major',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: majorController,
+                decoration: const InputDecoration(hintText: 'e.g. Economics'),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Year',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _yearOptions.map((year) {
+                  final isOn = selectedYear == year;
+                  return GestureDetector(
+                    onTap: () => setSheetState(
+                      () => selectedYear = isOn ? null : year,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isOn ? _burgundy : AppColors.lightGray,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: isOn ? _burgundy : AppColors.divider,
+                        ),
+                      ),
+                      child: Text(
+                        year,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isOn ? Colors.white : AppColors.text,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    userState.setBio(id, bioController.text.trim());
+                    userState.setMajor(id, majorController.text.trim());
+                    userState.setYear(id, selectedYear ?? '');
+                    _persist();
+                    Navigator.pop(sheetContext);
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -372,7 +525,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     SizedBox(
                       height: 34,
                       child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: _editProfile,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _burgundy,
                           foregroundColor: Colors.white,
@@ -399,7 +552,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       width: 34,
                       child: IconButton(
                         padding: EdgeInsets.zero,
-                        onPressed: () {},
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SavedPostsScreen(),
+                          ),
+                        ),
                         icon: Icon(
                           Icons.bookmark_outline,
                           color: AppColors.text,

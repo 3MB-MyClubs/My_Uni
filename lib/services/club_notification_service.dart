@@ -36,8 +36,7 @@ class ClubNotificationService {
     // Source 2 — runtime follows of the currently logged-in user.
     final loggedInId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    if (loggedInId.isNotEmpty &&
-        userState.followedClubIds.contains(clubId)) {
+    if (loggedInId.isNotEmpty && userState.followedClubIds.contains(clubId)) {
       ids.add(loggedInId);
     }
 
@@ -76,15 +75,17 @@ class ClubNotificationService {
     for (final userId in _recipientIds(post.clubId, post.authorId)) {
       final notifId = 'club_post_${post.id}_$userId';
       if (_alreadyNotified(notifId)) continue;
-      _emit(AppNotification(
-        id: notifId,
-        userId: userId,
-        message: '${club.name} shared a new post',
-        createdAt: DateTime.now(),
-        targetType: 'post',
-        targetId: post.id,
-        fromId: post.clubId,
-      ));
+      _emit(
+        AppNotification(
+          id: notifId,
+          userId: userId,
+          message: '${club.name} shared a new post',
+          createdAt: DateTime.now(),
+          targetType: 'post',
+          targetId: post.id,
+          fromId: post.clubId,
+        ),
+      );
     }
   }
 
@@ -98,38 +99,17 @@ class ClubNotificationService {
     for (final userId in _recipientIds(event.clubId, authorId)) {
       final notifId = 'club_event_${event.id}_$userId';
       if (_alreadyNotified(notifId)) continue;
-      _emit(AppNotification(
-        id: notifId,
-        userId: userId,
-        message: '${club.name} posted a new event: ${event.title}',
-        createdAt: DateTime.now(),
-        targetType: 'event',
-        targetId: event.id,
-        fromId: event.clubId,
-      ));
-    }
-  }
-
-  /// Notifies all followers of [story.clubId] that a new story was posted.
-  /// Routes to the club profile (no standalone story-detail screen exists).
-  void notifyFollowersAboutStory(ClubStory story) {
-    final club = clubs.firstWhere(
-      (c) => c.id == story.clubId,
-      orElse: () => clubs.first,
-    );
-    final authorId = story.createdByUserId ?? '';
-    for (final userId in _recipientIds(story.clubId, authorId)) {
-      final notifId = 'club_story_${story.id}_$userId';
-      if (_alreadyNotified(notifId)) continue;
-      _emit(AppNotification(
-        id: notifId,
-        userId: userId,
-        message: '${club.name} added a new story',
-        createdAt: DateTime.now(),
-        targetType: 'story',
-        targetId: story.clubId, // navigates to club profile
-        fromId: story.clubId,
-      ));
+      _emit(
+        AppNotification(
+          id: notifId,
+          userId: userId,
+          message: '${club.name} posted a new event: ${event.title}',
+          createdAt: DateTime.now(),
+          targetType: 'event',
+          targetId: event.id,
+          fromId: event.clubId,
+        ),
+      );
     }
   }
 }

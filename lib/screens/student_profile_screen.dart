@@ -2,6 +2,21 @@ import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../widgets/club_avatar.dart';
 
+// ─── Data classes ──────────────────────────────────────────────────────────────
+
+/// Detail entry for a single club shown in the Clubs card.
+class StudentClubDetail {
+  final Club club;
+  final int memberCount;
+  final String role; // 'Member' | 'Board'
+
+  const StudentClubDetail({
+    required this.club,
+    required this.memberCount,
+    this.role = 'Member',
+  });
+}
+
 class StudentProfileData {
   final String initials;
   final String name;
@@ -14,6 +29,7 @@ class StudentProfileData {
   final int following;
   final List<String> vibes;
   final StudentEventData? nextEvent;
+  final List<StudentClubDetail> clubDetails;
 
   const StudentProfileData({
     required this.initials,
@@ -27,6 +43,7 @@ class StudentProfileData {
     required this.following,
     required this.vibes,
     this.nextEvent,
+    this.clubDetails = const [],
   });
 }
 
@@ -46,10 +63,18 @@ class StudentEventData {
   });
 }
 
+// ─── Main screen ───────────────────────────────────────────────────────────────
+
 class StudentProfileScreen extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback? onEditBio;
   final VoidCallback? onEditProfile;
+  final VoidCallback? onShare;
+  final VoidCallback? onEditVibes;
+  final VoidCallback? onSeeAllEvents;
+  final VoidCallback? onEventTap;
+  final VoidCallback? onFollowersTap;
+  final VoidCallback? onFollowingTap;
   final List<Club> followedClubs;
   final ValueChanged<Club>? onClubTap;
   final StudentProfileData data;
@@ -60,15 +85,26 @@ class StudentProfileScreen extends StatelessWidget {
     required this.data,
     this.onEditBio,
     this.onEditProfile,
+    this.onShare,
+    this.onEditVibes,
+    this.onSeeAllEvents,
+    this.onEventTap,
+    this.onFollowersTap,
+    this.onFollowingTap,
     this.followedClubs = const [],
     this.onClubTap,
   });
 
-  static const Color _burgundy = Color(0xFF8D1F2D);
-  static const Color _background = Color(0xFFF7F4F2);
-  static const Color _text = Color(0xFF1F1F1F);
-  static const Color _secondary = Color(0xFF7A7A7A);
-  static const Color _green = Color(0xFF27C46B);
+  // ─── Design tokens ──────────────────────────────────────────────────────────
+  static const Color _burgundy     = Color(0xFF8D1F2D);
+  static const Color _burgundyDeep = Color(0xFF5A0D1B);
+  static const Color _burgundyTint = Color(0xFFF5E8EA);
+  static const Color _background   = Color(0xFFF7F4F2);
+  static const Color _card         = Color(0xFFFFFFFF);
+  static const Color _text         = Color(0xFF1F1F1F);
+  static const Color _body         = Color(0xFF454545);
+  static const Color _secondary    = Color(0xFF7A7A7A);
+  static const Color _hair         = Color(0xFFE8E3DE);
 
   @override
   Widget build(BuildContext context) {
@@ -92,63 +128,117 @@ class StudentProfileScreen extends StatelessWidget {
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
+              // ── Banner + overlapping identity (all in one Stack) ────────────
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
-                  child: _TopBar(onSettings: onSettings),
+                child: IntrinsicHeight(
+                  child: Stack(
+                    children: [
+                      // Full-width gradient banner
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 168,
+                        child: _BannerSection(
+                          graduation: data.graduation,
+                          onSettings: onSettings,
+                          onShare: onShare,
+                        ),
+                      ),
+                      // Identity section overlaps banner by 44px
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 124, 20, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Avatar + Edit profile row
+                            _AvatarEditRow(
+                              initials: data.initials,
+                              onEditProfile: onEditProfile,
+                            ),
+                            const SizedBox(height: 14),
+                            // Name + major + year
+                            _NameMajorBlock(data: data),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+
+              // ── Stats bar ───────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 0),
-                  child: ProfileHeader(data: data),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                  child: _ProfileIdentity(data: data, onEditBio: onEditBio),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
                   child: StatsCard(
                     clubs: data.clubs,
                     followers: data.followers,
                     following: data.following,
                     onClubsTap: () =>
-                        _showFollowedClubsSheet(context, followedClubs),
+                        _showFollowedClubsSheet(context),
+                    onFollowersTap: onFollowersTap,
+                    onFollowingTap: onFollowingTap,
                   ),
                 ),
               ),
+
+              // ── About card ──────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-                  child: _ProfileActions(onEditProfile: onEditProfile),
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                  child: _AboutCard(
+                    bio: data.bio,
+                    onEdit: onEditBio,
+                  ),
                 ),
               ),
+
+              // ── Interests card ──────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
-                  child: _VibeSection(vibes: data.vibes),
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                  child: _InterestsCard(
+                    vibes: data.vibes,
+                    onEdit: onEditVibes,
+                  ),
                 ),
               ),
+
+              // ── Clubs card ──────────────────────────────────────────────────
+              if (data.clubDetails.isNotEmpty || followedClubs.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                    child: _ClubsCard(
+                      details: data.clubDetails,
+                      fallbackClubs: followedClubs,
+                      onClubTap: onClubTap,
+                      onSeeAll: () => _showFollowedClubsSheet(context),
+                    ),
+                  ),
+                ),
+
+              // ── Up next event ───────────────────────────────────────────────
               if (data.nextEvent != null) ...[
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
-                    child: _UpNextHeader(),
+                    child: _UpNextHeader(onSeeAll: onSeeAllEvents),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-                    child: EventCard(event: data.nextEvent!),
+                    child: EventCard(
+                      event: data.nextEvent!,
+                      onTap: onEventTap,
+                    ),
                   ),
                 ),
               ],
-              SliverToBoxAdapter(child: SizedBox(height: bottom + 116)),
+
+              SliverToBoxAdapter(child: SizedBox(height: bottom + 48)),
             ],
           ),
         ),
@@ -156,7 +246,9 @@ class StudentProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showFollowedClubsSheet(BuildContext context, List<Club> clubs) {
+  // ─── Clubs sheet ─────────────────────────────────────────────────────────────
+
+  void _showFollowedClubsSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -205,7 +297,7 @@ class StudentProfileScreen extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       child: Text(
-                        '${clubs.length}',
+                        '${followedClubs.length}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -217,7 +309,7 @@ class StudentProfileScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: clubs.isEmpty
+                child: followedClubs.isEmpty
                     ? Center(
                         child: Text(
                           'No followed clubs yet.',
@@ -230,11 +322,13 @@ class StudentProfileScreen extends StatelessWidget {
                       )
                     : ListView.separated(
                         controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
-                        itemCount: clubs.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        padding:
+                            const EdgeInsets.fromLTRB(18, 0, 18, 28),
+                        itemCount: followedClubs.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: 10),
                         itemBuilder: (context, index) {
-                          final club = clubs[index];
+                          final club = followedClubs[index];
                           return _ScaleTap(
                             onTap: () {
                               Navigator.pop(sheetContext);
@@ -244,9 +338,11 @@ class StudentProfileScreen extends StatelessWidget {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius:
+                                    BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: Colors.black.withValues(alpha: 0.05),
+                                  color: Colors.black
+                                      .withValues(alpha: 0.05),
                                 ),
                               ),
                               child: Row(
@@ -264,11 +360,13 @@ class StudentProfileScreen extends StatelessWidget {
                                     child: Text(
                                       club.name,
                                       maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                      overflow:
+                                          TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         color: _text,
                                         fontSize: 15,
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight:
+                                            FontWeight.w800,
                                       ),
                                     ),
                                   ),
@@ -292,439 +390,105 @@ class StudentProfileScreen extends StatelessWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
+// ─── Banner section ───────────────────────────────────────────────────────────
+
+class _BannerSection extends StatelessWidget {
+  final String graduation;
   final VoidCallback onSettings;
+  final VoidCallback? onShare;
 
-  const _TopBar({required this.onSettings});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Text(
-            'Profile',
-            style: TextStyle(
-              color: StudentProfileScreen._text,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.2,
-            ),
-          ),
-          Positioned(
-            right: 0,
-            child: _ScaleTap(
-              onTap: onSettings,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.05),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.settings_outlined,
-                  size: 20,
-                  color: StudentProfileScreen._text,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ProfileHeader extends StatelessWidget {
-  final StudentProfileData data;
-
-  const ProfileHeader({super.key, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 198,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            height: 154,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(32),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF67101F),
-                  Color(0xFF8D1F2D),
-                  Color(0xFF3B0B15),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: StudentProfileScreen._burgundy.withValues(alpha: 0.25),
-                  blurRadius: 30,
-                  offset: const Offset(0, 18),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(32),
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: -34,
-                    top: 18,
-                    child: _BlurCircle(
-                      size: 118,
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
-                  ),
-                  Positioned(
-                    right: -22,
-                    bottom: -32,
-                    child: _BlurCircle(
-                      size: 136,
-                      color: const Color(0xFFFFB3C0).withValues(alpha: 0.18),
-                    ),
-                  ),
-                  Positioned(
-                    right: 18,
-                    top: 18,
-                    child: CapsuleBadge(
-                      icon: Icons.school_outlined,
-                      label: data.graduation,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 22,
-            bottom: 0,
-            child: _Avatar(initials: data.initials),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BlurCircle extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const _BlurCircle({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color, blurRadius: 40, spreadRadius: 18)],
-      ),
-    );
-  }
-}
-
-class CapsuleBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const CapsuleBadge({super.key, required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  final String initials;
-
-  const _Avatar({required this.initials});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 108,
-      height: 108,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7DCE4),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Center(
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: StudentProfileScreen._burgundy,
-                fontSize: 31,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.6,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 7,
-            bottom: 8,
-            child: Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: StudentProfileScreen._green,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileIdentity extends StatelessWidget {
-  final StudentProfileData data;
-  final VoidCallback? onEditBio;
-
-  const _ProfileIdentity({required this.data, this.onEditBio});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data.name,
-                    style: const TextStyle(
-                      color: StudentProfileScreen._text,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      height: 1.04,
-                      letterSpacing: -0.9,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.school_outlined,
-                        size: 15,
-                        color: StudentProfileScreen._secondary,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          data.major,
-                          overflow: TextOverflow.ellipsis,
-                          style: _metaStyle(),
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 7),
-                        child: Text(
-                          '•',
-                          style: TextStyle(
-                            color: StudentProfileScreen._secondary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      Text(data.year, style: _metaStyle()),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            _ScaleTap(
-              child: Container(
-                height: 42,
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.07),
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.ios_share_outlined,
-                      size: 17,
-                      color: StudentProfileScreen._text,
-                    ),
-                    SizedBox(width: 7),
-                    Text(
-                      'Share',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: StudentProfileScreen._text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        RichText(
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          text: TextSpan(
-            style: const TextStyle(
-              color: StudentProfileScreen._text,
-              fontSize: 15,
-              height: 1.42,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -0.1,
-            ),
-            children: [
-              TextSpan(text: data.bio),
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 7),
-                  child: GestureDetector(
-                    onTap: onEditBio,
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 14,
-                          color: StudentProfileScreen._burgundy,
-                        ),
-                        SizedBox(width: 3),
-                        Text(
-                          'Edit',
-                          style: TextStyle(
-                            color: StudentProfileScreen._burgundy,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  static TextStyle _metaStyle() {
-    return const TextStyle(
-      color: StudentProfileScreen._secondary,
-      fontSize: 14,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.1,
-    );
-  }
-}
-
-class StatsCard extends StatelessWidget {
-  final int clubs;
-  final int followers;
-  final int following;
-  final VoidCallback? onClubsTap;
-
-  const StatsCard({
-    super.key,
-    required this.clubs,
-    required this.followers,
-    required this.following,
-    this.onClubsTap,
+  const _BannerSection({
+    required this.graduation,
+    required this.onSettings,
+    this.onShare,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 94,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.055),
-            blurRadius: 26,
-            offset: const Offset(0, 12),
-          ),
-        ],
+      height: 168,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF5A0D1B), // burgundyDeep
+            Color(0xFF8D1F2D), // burgundy
+            Color(0xFF8C3020), // warm orange-red
+          ],
+          stops: [0.0, 0.6, 1.0],
+        ),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          Expanded(
-            child: _StatItem(
-              value: clubs.toString(),
-              label: 'Clubs',
-              onTap: onClubsTap,
+          // Shield watermark (top-right, partially visible)
+          Positioned(
+            right: -32,
+            top: -28,
+            child: Opacity(
+              opacity: 0.12,
+              child: CustomPaint(
+                size: const Size(210, 240),
+                painter: _ShieldPainter(),
+              ),
             ),
           ),
-          _StatDivider(),
-          Expanded(
-            child: _StatItem(value: followers.toString(), label: 'Followers'),
-          ),
-          _StatDivider(),
-          Expanded(
-            child: _StatItem(value: following.toString(), label: 'Following'),
+          // Nav overlay
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Share icon (left)
+                GestureDetector(
+                  onTap: onShare,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.ios_share_outlined,
+                      color: Colors.white,
+                      size: 17,
+                    ),
+                  ),
+                ),
+                // Graduation badge (center)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    graduation,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.white.withValues(alpha: 0.78),
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                // Settings icon (right)
+                GestureDetector(
+                  onTap: onSettings,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.settings_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -732,110 +496,118 @@ class StatsCard extends StatelessWidget {
   }
 }
 
-class _StatItem extends StatelessWidget {
-  final String value;
-  final String label;
-  final VoidCallback? onTap;
+/// Shield crest watermark — matches the SVG `M2 4 H54 V36 C54 50 42 60 28 62 C14 60 2 50 2 36 Z`
+/// painted in white, scaled to the custom size.
+class _ShieldPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sx = size.width / 56.0;
+    final sy = size.height / 64.0;
 
-  const _StatItem({required this.value, required this.label, this.onTap});
+    final path = Path()
+      ..moveTo(2 * sx, 4 * sy)
+      ..lineTo(54 * sx, 4 * sy)
+      ..lineTo(54 * sx, 36 * sy)
+      ..cubicTo(
+        54 * sx, 50 * sy,
+        42 * sx, 60 * sy,
+        28 * sx, 62 * sy,
+      )
+      ..cubicTo(
+        14 * sx, 60 * sy,
+        2 * sx, 50 * sy,
+        2 * sx, 36 * sy,
+      )
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return _ScaleTap(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: StudentProfileScreen._burgundy,
-              fontSize: 25,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              color: StudentProfileScreen._secondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.7,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(_ShieldPainter old) => false;
 }
 
-class _StatDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 44,
-      color: Colors.black.withValues(alpha: 0.07),
-    );
-  }
-}
+// ─── Avatar + Edit profile row ────────────────────────────────────────────────
 
-class _ProfileActions extends StatelessWidget {
+class _AvatarEditRow extends StatelessWidget {
+  final String initials;
   final VoidCallback? onEditProfile;
 
-  const _ProfileActions({this.onEditProfile});
+  const _AvatarEditRow({required this.initials, this.onEditProfile});
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(
-          child: _ScaleTap(
-            onTap: onEditProfile,
-            child: Container(
-              height: 54,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: StudentProfileScreen._burgundy,
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: [
-                  BoxShadow(
-                    color: StudentProfileScreen._burgundy.withValues(
-                      alpha: 0.25,
-                    ),
-                    blurRadius: 18,
-                    offset: const Offset(0, 9),
-                  ),
-                ],
+        // Avatar: white-padded rounded rectangle with gradient fill
+        Container(
+          width: 92,
+          height: 92,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
-              child: const Text(
-                'Edit Profile',
-                style: TextStyle(
-                  color: Colors.white,
+            ],
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFEDD5D8), Color(0xFFE0C4C0)],
+              ),
+            ),
+            child: Center(
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: StudentProfileScreen._burgundyDeep,
+                  fontSize: 32,
                   fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                  letterSpacing: -0.1,
+                  letterSpacing: -1,
                 ),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        // Edit profile pill button
         _ScaleTap(
+          onTap: onEditProfile,
           child: Container(
-            width: 54,
-            height: 54,
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
               color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: StudentProfileScreen._burgundy
+                    .withValues(alpha: 0.25),
+                width: 1.5,
+              ),
             ),
-            child: const Icon(
-              Icons.lock_outline_rounded,
-              color: StudentProfileScreen._text,
-              size: 21,
+            alignment: Alignment.center,
+            child: const Text(
+              'Edit profile',
+              style: TextStyle(
+                color: StudentProfileScreen._burgundy,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
+              ),
             ),
           ),
         ),
@@ -844,54 +616,123 @@ class _ProfileActions extends StatelessWidget {
   }
 }
 
-class _VibeSection extends StatelessWidget {
-  final List<String> vibes;
+// ─── Name + major + year block ────────────────────────────────────────────────
 
-  const _VibeSection({required this.vibes});
+class _NameMajorBlock extends StatelessWidget {
+  final StudentProfileData data;
+
+  const _NameMajorBlock({required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final hasMajor = data.major.isNotEmpty &&
+        data.major != 'Major not added';
+    final hasYear =
+        data.year.isNotEmpty && data.year != 'Year not added';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(title: 'Vibe', trailing: 'Edit', onTrailingTap: () {}),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 9,
-          runSpacing: 10,
-          children: vibes.map((vibe) => InterestTag(label: vibe)).toList(),
+        // Name
+        Text(
+          data.name,
+          style: const TextStyle(
+            color: StudentProfileScreen._text,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.8,
+            height: 1.1,
+          ),
         ),
+        if (hasMajor || hasYear) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              if (hasMajor) ...[
+                _FacultySquare(major: data.major),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    data.major,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: StudentProfileScreen._body,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ),
+              ],
+              if (hasMajor && hasYear) ...[
+                Container(
+                  width: 3,
+                  height: 3,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: StudentProfileScreen._secondary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+              if (hasYear)
+                Text(
+                  data.year,
+                  style: const TextStyle(
+                    color: StudentProfileScreen._body,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }
 }
 
-class InterestTag extends StatelessWidget {
-  final String label;
+/// Small 18×18 colored square representing the student's faculty / major.
+class _FacultySquare extends StatelessWidget {
+  final String major;
+  const _FacultySquare({required this.major});
 
-  const InterestTag({super.key, required this.label});
+  static Color _colorFor(String major) {
+    // Fixed palette derived from first letter, similar to design's oklab approach.
+    final hues = [
+      const Color(0xFF1565C0), // A-C → blue
+      const Color(0xFF2E7D32), // D-G → green
+      const Color(0xFF6A1B9A), // H-M → purple
+      const Color(0xFFE65100), // N-R → orange
+      const Color(0xFF00838F), // S-Z → teal
+    ];
+    if (major.isEmpty) return hues[0];
+    final c = major.toUpperCase().codeUnitAt(0);
+    if (c <= 67) return hues[0]; // A-C
+    if (c <= 71) return hues[1]; // D-G
+    if (c <= 77) return hues[2]; // H-M
+    if (c <= 82) return hues[3]; // N-R
+    return hues[4];              // S-Z
+  }
 
   @override
   Widget build(BuildContext context) {
-    return _ScaleTap(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-        decoration: BoxDecoration(
-          color: StudentProfileScreen._burgundy,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: StudentProfileScreen._burgundy.withValues(alpha: 0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
+    final color = _colorFor(major);
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 1),
+      ),
+      child: Center(
         child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
+          major.isNotEmpty ? major[0].toUpperCase() : '?',
+          style: TextStyle(
+            color: color,
+            fontSize: 9,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -900,7 +741,611 @@ class InterestTag extends StatelessWidget {
   }
 }
 
+// ─── Stats card ───────────────────────────────────────────────────────────────
+
+class StatsCard extends StatelessWidget {
+  final int clubs;
+  final int followers;
+  final int following;
+  final VoidCallback? onClubsTap;
+  final VoidCallback? onFollowersTap;
+  final VoidCallback? onFollowingTap;
+
+  const StatsCard({
+    super.key,
+    required this.clubs,
+    required this.followers,
+    required this.following,
+    this.onClubsTap,
+    this.onFollowersTap,
+    this.onFollowingTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: StudentProfileScreen._card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: StudentProfileScreen._hair,
+          width: 1,
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: _StatCell(
+                value: clubs,
+                label: 'Clubs',
+                onTap: onClubsTap,
+              ),
+            ),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: StudentProfileScreen._hair,
+            ),
+            Expanded(
+              child: _StatCell(
+                value: following,
+                label: 'Following',
+                onTap: onFollowingTap,
+              ),
+            ),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: StudentProfileScreen._hair,
+            ),
+            Expanded(
+              child: _StatCell(
+                value: followers,
+                label: 'Followers',
+                onTap: onFollowersTap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  final int value;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _StatCell({required this.value, required this.label, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _ScaleTap(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '$value',
+              style: const TextStyle(
+                color: StudentProfileScreen._text,
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: StudentProfileScreen._secondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── About card ───────────────────────────────────────────────────────────────
+
+class _AboutCard extends StatelessWidget {
+  final String bio;
+  final VoidCallback? onEdit;
+
+  const _AboutCard({required this.bio, this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBio = bio.isNotEmpty &&
+        bio != 'Add a bio to introduce yourself.';
+    return _ProfileCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CardLabel(
+            title: 'About',
+            trailing: hasBio
+                ? GestureDetector(
+                    onTap: onEdit,
+                    child: const Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: StudentProfileScreen._burgundy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 10),
+          if (hasBio)
+            Text(
+              bio,
+              style: const TextStyle(
+                color: StudentProfileScreen._body,
+                fontSize: 14.5,
+                height: 1.5,
+                letterSpacing: -0.1,
+              ),
+            )
+          else
+            _ScaleTap(
+              onTap: onEdit,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.add_rounded,
+                    size: 16,
+                    color: StudentProfileScreen._burgundy,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Add a bio',
+                    style: const TextStyle(
+                      color: StudentProfileScreen._burgundy,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Interests card ───────────────────────────────────────────────────────────
+
+class _InterestsCard extends StatelessWidget {
+  final List<String> vibes;
+  final VoidCallback? onEdit;
+
+  const _InterestsCard({required this.vibes, this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProfileCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CardLabel(
+            title: 'Interests',
+            trailing: vibes.isNotEmpty
+                ? GestureDetector(
+                    onTap: onEdit,
+                    child: const Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: StudentProfileScreen._burgundy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 12),
+          if (vibes.isEmpty)
+            _ScaleTap(
+              onTap: onEdit,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(
+                    color: StudentProfileScreen._burgundy
+                        .withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(
+                      Icons.add_rounded,
+                      size: 15,
+                      color: StudentProfileScreen._burgundy,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Add your interests',
+                      style: TextStyle(
+                        color: StudentProfileScreen._burgundy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: vibes
+                  .map((v) => InterestTag(label: v, onTap: onEdit))
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Clubs card ───────────────────────────────────────────────────────────────
+
+class _ClubsCard extends StatelessWidget {
+  final List<StudentClubDetail> details;
+  final List<Club> fallbackClubs;
+  final ValueChanged<Club>? onClubTap;
+  final VoidCallback? onSeeAll;
+
+  const _ClubsCard({
+    required this.details,
+    required this.fallbackClubs,
+    this.onClubTap,
+    this.onSeeAll,
+  });
+
+  static const List<Color> _hues = [
+    Color(0xFFB41C18),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
+    Color(0xFF512DA8),
+    Color(0xFFAD1457),
+  ];
+
+  Color _colorFor(int index) => _hues[index % _hues.length];
+
+  @override
+  Widget build(BuildContext context) {
+    // Use clubDetails if populated, otherwise fall back to raw club list.
+    final hasDetails = details.isNotEmpty;
+    final count = hasDetails ? details.length : fallbackClubs.length;
+    final showSeeAll = count > 4;
+    final displayCount = showSeeAll ? 4 : count;
+
+    return _ProfileCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CardLabel(
+            title: 'Clubs · $count',
+            trailing: showSeeAll
+                ? GestureDetector(
+                    onTap: onSeeAll,
+                    child: const Text(
+                      'See all',
+                      style: TextStyle(
+                        color: StudentProfileScreen._burgundy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 4),
+          for (int i = 0; i < displayCount; i++)
+            hasDetails
+                ? _ClubRow(
+                    detail: details[i],
+                    color: _colorFor(i),
+                    isLast: i == displayCount - 1,
+                    onTap: () => onClubTap?.call(details[i].club),
+                  )
+                : _ClubRowFallback(
+                    club: fallbackClubs[i],
+                    color: _colorFor(i),
+                    isLast: i == displayCount - 1,
+                    onTap: () => onClubTap?.call(fallbackClubs[i]),
+                  ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClubRow extends StatelessWidget {
+  final StudentClubDetail detail;
+  final Color color;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  const _ClubRow({
+    required this.detail,
+    required this.color,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLeader = detail.role != 'Member';
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : Border(
+                  bottom: BorderSide(
+                    color: StudentProfileScreen._hair,
+                    width: 1,
+                  ),
+                ),
+        ),
+        child: Row(
+          children: [
+            // Club monogram
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Center(
+                child: Text(
+                  detail.club.name.isNotEmpty
+                      ? detail.club.name[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    detail.club.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: StudentProfileScreen._text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${detail.memberCount} members',
+                    style: const TextStyle(
+                      color: StudentProfileScreen._secondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Role badge
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: isLeader
+                    ? StudentProfileScreen._burgundy
+                    : StudentProfileScreen._background,
+                borderRadius: BorderRadius.circular(100),
+                border: isLeader
+                    ? null
+                    : Border.all(
+                        color: StudentProfileScreen._hair),
+              ),
+              child: Text(
+                detail.role,
+                style: TextStyle(
+                  color: isLeader
+                      ? Colors.white
+                      : StudentProfileScreen._body,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClubRowFallback extends StatelessWidget {
+  final Club club;
+  final Color color;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  const _ClubRowFallback({
+    required this.club,
+    required this.color,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : Border(
+                  bottom: BorderSide(
+                    color: StudentProfileScreen._hair,
+                    width: 1,
+                  ),
+                ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Center(
+                child: Text(
+                  club.name.isNotEmpty
+                      ? club.name[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                club.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: StudentProfileScreen._text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: StudentProfileScreen._background,
+                borderRadius: BorderRadius.circular(100),
+                border:
+                    Border.all(color: StudentProfileScreen._hair),
+              ),
+              child: const Text(
+                'Member',
+                style: TextStyle(
+                  color: StudentProfileScreen._body,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shared card shell ────────────────────────────────────────────────────────
+
+class _ProfileCard extends StatelessWidget {
+  final Widget child;
+  const _ProfileCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: StudentProfileScreen._card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: StudentProfileScreen._hair,
+          width: 1,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CardLabel extends StatelessWidget {
+  final String title;
+  final Widget? trailing;
+
+  const _CardLabel({required this.title, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            color: StudentProfileScreen._secondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.9,
+          ),
+        ),
+        if (trailing != null) ...[
+          const Spacer(),
+          trailing!,
+        ],
+      ],
+    );
+  }
+}
+
+// ─── Up next header ───────────────────────────────────────────────────────────
+
 class _UpNextHeader extends StatelessWidget {
+  final VoidCallback? onSeeAll;
+
+  const _UpNextHeader({this.onSeeAll});
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -914,26 +1359,9 @@ class _UpNextHeader extends StatelessWidget {
             letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(width: 8),
-        Container(
-          width: 22,
-          height: 22,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: StudentProfileScreen._burgundy,
-            shape: BoxShape.circle,
-          ),
-          child: const Text(
-            '2',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
         const Spacer(),
         _ScaleTap(
+          onTap: onSeeAll,
           child: const Row(
             children: [
               Text(
@@ -958,55 +1386,50 @@ class _UpNextHeader extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String trailing;
-  final VoidCallback? onTrailingTap;
+// ─── Interest tag ─────────────────────────────────────────────────────────────
 
-  const _SectionHeader({
-    required this.title,
-    required this.trailing,
-    this.onTrailingTap,
-  });
+class InterestTag extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: StudentProfileScreen._text,
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const Spacer(),
-        GestureDetector(
-          onTap: onTrailingTap,
-          child: Text(
-            trailing,
-            style: const TextStyle(
-              color: StudentProfileScreen._burgundy,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class EventCard extends StatelessWidget {
-  final StudentEventData event;
-
-  const EventCard({super.key, required this.event});
+  const InterestTag({super.key, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return _ScaleTap(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: StudentProfileScreen._burgundyTint,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: StudentProfileScreen._burgundy,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Event card ───────────────────────────────────────────────────────────────
+
+class EventCard extends StatelessWidget {
+  final StudentEventData event;
+  final VoidCallback? onTap;
+
+  const EventCard({super.key, required this.event, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _ScaleTap(
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -1109,9 +1532,11 @@ class EventCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: StudentProfileScreen._burgundy.withValues(alpha: 0.08),
+                color: StudentProfileScreen._burgundy
+                    .withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: const Row(
@@ -1141,6 +1566,45 @@ class EventCard extends StatelessWidget {
   }
 }
 
+// ─── Capsule badge (used externally) ─────────────────────────────────────────
+
+class CapsuleBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const CapsuleBadge({super.key, required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Scale-tap gesture helper ─────────────────────────────────────────────────
+
 class _ScaleTap extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -1151,23 +1615,40 @@ class _ScaleTap extends StatefulWidget {
   State<_ScaleTap> createState() => _ScaleTapState();
 }
 
-class _ScaleTapState extends State<_ScaleTap> {
-  bool _pressed = false;
+class _ScaleTapState extends State<_ScaleTap>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 90),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.94).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        child: widget.child,
-      ),
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
+        widget.onTap?.call();
+      },
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }
+

@@ -9,12 +9,12 @@ import '../services/app_colors.dart';
 /// Shows an empty placeholder with camera/library hint when [imagePath] is null,
 /// and a full-bleed preview with an X button and a "Change" pill when a photo
 /// has been selected. Tapping anywhere on the card opens the bottom-sheet picker.
-class StoryImageUploader extends StatefulWidget {
+class ContentImageUploader extends StatefulWidget {
   final String? imagePath;
   final ValueChanged<String?> onChanged;
   final double height;
 
-  const StoryImageUploader({
+  const ContentImageUploader({
     super.key,
     required this.imagePath,
     required this.onChanged,
@@ -22,12 +22,15 @@ class StoryImageUploader extends StatefulWidget {
   });
 
   @override
-  State<StoryImageUploader> createState() => _StoryImageUploaderState();
+  State<ContentImageUploader> createState() => _ContentImageUploaderState();
 }
 
-class _StoryImageUploaderState extends State<StoryImageUploader> {
+class _ContentImageUploaderState extends State<ContentImageUploader> {
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 90);
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 90,
+    );
     if (picked == null || !mounted) return;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
@@ -72,16 +75,28 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: Icon(Icons.camera_alt_rounded, color: AppColors.primaryRed),
-              title: Text('Take a photo', style: TextStyle(color: AppColors.text)),
+              leading: Icon(
+                Icons.camera_alt_rounded,
+                color: AppColors.primaryRed,
+              ),
+              title: Text(
+                'Take a photo',
+                style: TextStyle(color: AppColors.text),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.camera);
               },
             ),
             ListTile(
-              leading: Icon(Icons.photo_library_rounded, color: AppColors.primaryRed),
-              title: Text('Choose from library', style: TextStyle(color: AppColors.text)),
+              leading: Icon(
+                Icons.photo_library_rounded,
+                color: AppColors.primaryRed,
+              ),
+              title: Text(
+                'Choose from library',
+                style: TextStyle(color: AppColors.text),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.gallery);
@@ -90,7 +105,10 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
             if (widget.imagePath != null)
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.red),
-                title: Text('Remove photo', style: TextStyle(color: Colors.red)),
+                title: Text(
+                  'Remove photo',
+                  style: TextStyle(color: Colors.red),
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   widget.onChanged(null);
@@ -138,7 +156,10 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
                     bottom: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(10),
@@ -148,8 +169,10 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
                         children: [
                           Icon(Icons.edit, color: Colors.white, size: 13),
                           SizedBox(width: 4),
-                          Text('Change',
-                              style: TextStyle(color: Colors.white, fontSize: 11)),
+                          Text(
+                            'Change',
+                            style: TextStyle(color: Colors.white, fontSize: 11),
+                          ),
                         ],
                       ),
                     ),
@@ -167,12 +190,18 @@ class _StoryImageUploaderState extends State<StoryImageUploader> {
                   const SizedBox(height: 8),
                   Text(
                     'Add cover photo (optional)',
-                    style: TextStyle(color: AppColors.secondaryText, fontSize: 13),
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Tap to pick from camera or library',
-                    style: TextStyle(color: AppColors.secondaryText, fontSize: 11),
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
