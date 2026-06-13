@@ -22,7 +22,9 @@
       "Bash(which flutter *)",
       "Read(//opt/homebrew/bin/**)",
       "Bash(gunzip -c /Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/4d49ed4f-c330-4832-a039-808e9f0f7c30/tool-results/webfetch-1781191553935-emg3wb.bin)",
-      "Bash(tar -xf /tmp/design_fetched.bin -C /tmp/design_home)"
+      "Bash(tar -xf /tmp/design_fetched.bin -C /tmp/design_home)",
+      "Skill(run)",
+      "Skill(run:*)"
     ],
     "additionalDirectories": [
       "/tmp",

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/club.dart';
+import '../services/app_colors.dart';
 import '../widgets/club_avatar.dart';
 
 // ─── Data classes ──────────────────────────────────────────────────────────────
@@ -96,151 +97,131 @@ class StudentProfileScreen extends StatelessWidget {
   });
 
   // ─── Design tokens ──────────────────────────────────────────────────────────
-  static const Color _burgundy     = Color(0xFF8D1F2D);
+  static const Color _burgundy = Color(0xFF8D1F2D);
   static const Color _burgundyDeep = Color(0xFF5A0D1B);
-  static const Color _burgundyTint = Color(0xFFF5E8EA);
-  static const Color _background   = Color(0xFFF7F4F2);
-  static const Color _card         = Color(0xFFFFFFFF);
-  static const Color _text         = Color(0xFF1F1F1F);
-  static const Color _body         = Color(0xFF454545);
-  static const Color _secondary    = Color(0xFF7A7A7A);
-  static const Color _hair         = Color(0xFFE8E3DE);
+  static Color get _burgundyTint => AppColors.lightRed;
+  static Color get _background => AppColors.background;
+  static Color get _card => AppColors.card;
+  static Color get _text => AppColors.text;
+  static Color get _body => AppColors.text;
+  static Color get _secondary => AppColors.secondaryText;
+  static Color get _hair => AppColors.divider;
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).padding.bottom;
 
-    return Theme(
-      data: Theme.of(context).copyWith(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: _burgundy,
-          brightness: Brightness.light,
-          surface: _background,
-        ),
-        scaffoldBackgroundColor: _background,
-      ),
-      child: Scaffold(
-        backgroundColor: _background,
-        body: SafeArea(
-          bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            slivers: [
-              // ── Banner + overlapping identity (all in one Stack) ────────────
-              SliverToBoxAdapter(
-                child: IntrinsicHeight(
-                  child: Stack(
-                    children: [
-                      // Full-width gradient banner
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: 168,
-                        child: _BannerSection(
-                          graduation: data.graduation,
-                          onSettings: onSettings,
-                          onShare: onShare,
-                        ),
-                      ),
-                      // Identity section overlaps banner by 44px
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 124, 20, 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Avatar + Edit profile row
-                            _AvatarEditRow(
-                              initials: data.initials,
-                              onEditProfile: onEditProfile,
-                            ),
-                            const SizedBox(height: 14),
-                            // Name + major + year
-                            _NameMajorBlock(data: data),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Stats bar ───────────────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
-                  child: StatsCard(
-                    clubs: data.clubs,
-                    followers: data.followers,
-                    following: data.following,
-                    onClubsTap: () =>
-                        _showFollowedClubsSheet(context),
-                    onFollowersTap: onFollowersTap,
-                    onFollowingTap: onFollowingTap,
-                  ),
-                ),
-              ),
-
-              // ── About card ──────────────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                  child: _AboutCard(
-                    bio: data.bio,
-                    onEdit: onEditBio,
-                  ),
-                ),
-              ),
-
-              // ── Interests card ──────────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                  child: _InterestsCard(
-                    vibes: data.vibes,
-                    onEdit: onEditVibes,
-                  ),
-                ),
-              ),
-
-              // ── Clubs card ──────────────────────────────────────────────────
-              if (data.clubDetails.isNotEmpty || followedClubs.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                    child: _ClubsCard(
-                      details: data.clubDetails,
-                      fallbackClubs: followedClubs,
-                      onClubTap: onClubTap,
-                      onSeeAll: () => _showFollowedClubsSheet(context),
-                    ),
-                  ),
-                ),
-
-              // ── Up next event ───────────────────────────────────────────────
-              if (data.nextEvent != null) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
-                    child: _UpNextHeader(onSeeAll: onSeeAllEvents),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-                    child: EventCard(
-                      event: data.nextEvent!,
-                      onTap: onEventTap,
-                    ),
-                  ),
-                ),
-              ],
-
-              SliverToBoxAdapter(child: SizedBox(height: bottom + 48)),
-            ],
+    return Scaffold(
+      backgroundColor: _background,
+      body: SafeArea(
+        bottom: false,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
           ),
+          slivers: [
+            // ── Banner + overlapping identity (all in one Stack) ────────────
+            SliverToBoxAdapter(
+              child: IntrinsicHeight(
+                child: Stack(
+                  children: [
+                    // Full-width gradient banner
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 168,
+                      child: _BannerSection(
+                        graduation: data.graduation,
+                        onSettings: onSettings,
+                        onShare: onShare,
+                      ),
+                    ),
+                    // Identity section overlaps banner by 44px
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 124, 20, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Avatar + Edit profile row
+                          _AvatarEditRow(
+                            initials: data.initials,
+                            onEditProfile: onEditProfile,
+                          ),
+                          const SizedBox(height: 14),
+                          // Name + major + year
+                          _NameMajorBlock(data: data),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Stats bar ───────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
+                child: StatsCard(
+                  clubs: data.clubs,
+                  followers: data.followers,
+                  following: data.following,
+                  onClubsTap: () => _showFollowedClubsSheet(context),
+                  onFollowersTap: onFollowersTap,
+                  onFollowingTap: onFollowingTap,
+                ),
+              ),
+            ),
+
+            // ── About card ──────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: _AboutCard(bio: data.bio, onEdit: onEditBio),
+              ),
+            ),
+
+            // ── Interests card ──────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: _InterestsCard(vibes: data.vibes, onEdit: onEditVibes),
+              ),
+            ),
+
+            // ── Clubs card ──────────────────────────────────────────────────
+            if (data.clubDetails.isNotEmpty || followedClubs.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                  child: _ClubsCard(
+                    details: data.clubDetails,
+                    fallbackClubs: followedClubs,
+                    onClubTap: onClubTap,
+                    onSeeAll: () => _showFollowedClubsSheet(context),
+                  ),
+                ),
+              ),
+
+            // ── Up next event ───────────────────────────────────────────────
+            if (data.nextEvent != null) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 28, 22, 0),
+                  child: _UpNextHeader(onSeeAll: onSeeAllEvents),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                  child: EventCard(event: data.nextEvent!, onTap: onEventTap),
+                ),
+              ),
+            ],
+
+            SliverToBoxAdapter(child: SizedBox(height: bottom + 48)),
+          ],
         ),
       ),
     );
@@ -259,9 +240,9 @@ class StudentProfileScreen extends StatelessWidget {
         maxChildSize: 0.78,
         expand: false,
         builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: _background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
           ),
           child: Column(
             children: [
@@ -270,7 +251,7 @@ class StudentProfileScreen extends StatelessWidget {
                 width: 42,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: _secondary.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -278,7 +259,7 @@ class StudentProfileScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
                 child: Row(
                   children: [
-                    const Text(
+                    Text(
                       'Followed clubs',
                       style: TextStyle(
                         color: _text,
@@ -322,11 +303,9 @@ class StudentProfileScreen extends StatelessWidget {
                       )
                     : ListView.separated(
                         controller: scrollController,
-                        padding:
-                            const EdgeInsets.fromLTRB(18, 0, 18, 28),
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
                         itemCount: followedClubs.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final club = followedClubs[index];
                           return _ScaleTap(
@@ -337,13 +316,9 @@ class StudentProfileScreen extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius:
-                                    BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.black
-                                      .withValues(alpha: 0.05),
-                                ),
+                                color: _card,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: _hair),
                               ),
                               child: Row(
                                 children: [
@@ -360,17 +335,15 @@ class StudentProfileScreen extends StatelessWidget {
                                     child: Text(
                                       club.name,
                                       maxLines: 2,
-                                      overflow:
-                                          TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
                                         color: _text,
                                         fontSize: 15,
-                                        fontWeight:
-                                            FontWeight.w800,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                   ),
-                                  const Icon(
+                                  Icon(
                                     Icons.chevron_right_rounded,
                                     color: _secondary,
                                     size: 22,
@@ -508,16 +481,8 @@ class _ShieldPainter extends CustomPainter {
       ..moveTo(2 * sx, 4 * sy)
       ..lineTo(54 * sx, 4 * sy)
       ..lineTo(54 * sx, 36 * sy)
-      ..cubicTo(
-        54 * sx, 50 * sy,
-        42 * sx, 60 * sy,
-        28 * sx, 62 * sy,
-      )
-      ..cubicTo(
-        14 * sx, 60 * sy,
-        2 * sx, 50 * sy,
-        2 * sx, 36 * sy,
-      )
+      ..cubicTo(54 * sx, 50 * sy, 42 * sx, 60 * sy, 28 * sx, 62 * sy)
+      ..cubicTo(14 * sx, 60 * sy, 2 * sx, 50 * sy, 2 * sx, 36 * sy)
       ..close();
 
     canvas.drawPath(
@@ -552,11 +517,15 @@ class _AvatarEditRow extends StatelessWidget {
           height: 92,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: StudentProfileScreen._card,
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.22),
+                color: Colors.black.withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.42
+                      : 0.22,
+                ),
                 blurRadius: 24,
                 offset: const Offset(0, 10),
               ),
@@ -591,11 +560,10 @@ class _AvatarEditRow extends StatelessWidget {
             height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: StudentProfileScreen._card,
               borderRadius: BorderRadius.circular(100),
               border: Border.all(
-                color: StudentProfileScreen._burgundy
-                    .withValues(alpha: 0.25),
+                color: StudentProfileScreen._burgundy.withValues(alpha: 0.25),
                 width: 1.5,
               ),
             ),
@@ -625,10 +593,8 @@ class _NameMajorBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasMajor = data.major.isNotEmpty &&
-        data.major != 'Major not added';
-    final hasYear =
-        data.year.isNotEmpty && data.year != 'Year not added';
+    final hasMajor = data.major.isNotEmpty && data.major != 'Major not added';
+    final hasYear = data.year.isNotEmpty && data.year != 'Year not added';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,7 +602,7 @@ class _NameMajorBlock extends StatelessWidget {
         // Name
         Text(
           data.name,
-          style: const TextStyle(
+          style: TextStyle(
             color: StudentProfileScreen._text,
             fontSize: 26,
             fontWeight: FontWeight.w800,
@@ -655,7 +621,7 @@ class _NameMajorBlock extends StatelessWidget {
                   child: Text(
                     data.major,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: StudentProfileScreen._body,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -678,7 +644,7 @@ class _NameMajorBlock extends StatelessWidget {
               if (hasYear)
                 Text(
                   data.year,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: StudentProfileScreen._body,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -713,7 +679,7 @@ class _FacultySquare extends StatelessWidget {
     if (c <= 71) return hues[1]; // D-G
     if (c <= 77) return hues[2]; // H-M
     if (c <= 82) return hues[3]; // N-R
-    return hues[4];              // S-Z
+    return hues[4]; // S-Z
   }
 
   @override
@@ -767,20 +733,13 @@ class StatsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: StudentProfileScreen._card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: StudentProfileScreen._hair,
-          width: 1,
-        ),
+        border: Border.all(color: StudentProfileScreen._hair, width: 1),
       ),
       child: IntrinsicHeight(
         child: Row(
           children: [
             Expanded(
-              child: _StatCell(
-                value: clubs,
-                label: 'Clubs',
-                onTap: onClubsTap,
-              ),
+              child: _StatCell(value: clubs, label: 'Clubs', onTap: onClubsTap),
             ),
             VerticalDivider(
               width: 1,
@@ -831,7 +790,7 @@ class _StatCell extends StatelessWidget {
           children: [
             Text(
               '$value',
-              style: const TextStyle(
+              style: TextStyle(
                 color: StudentProfileScreen._text,
                 fontSize: 21,
                 fontWeight: FontWeight.w800,
@@ -842,7 +801,7 @@ class _StatCell extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 color: StudentProfileScreen._secondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -866,8 +825,7 @@ class _AboutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasBio = bio.isNotEmpty &&
-        bio != 'Add a bio to introduce yourself.';
+    final hasBio = bio.isNotEmpty && bio != 'Add a bio to introduce yourself.';
     return _ProfileCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -892,7 +850,7 @@ class _AboutCard extends StatelessWidget {
           if (hasBio)
             Text(
               bio,
-              style: const TextStyle(
+              style: TextStyle(
                 color: StudentProfileScreen._body,
                 fontSize: 14.5,
                 height: 1.5,
@@ -912,7 +870,7 @@ class _AboutCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     'Add a bio',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: StudentProfileScreen._burgundy,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -963,12 +921,15 @@ class _InterestsCard extends StatelessWidget {
               onTap: onEdit,
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 9),
+                  horizontal: 14,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(100),
                   border: Border.all(
-                    color: StudentProfileScreen._burgundy
-                        .withValues(alpha: 0.3),
+                    color: StudentProfileScreen._burgundy.withValues(
+                      alpha: 0.3,
+                    ),
                     width: 1.5,
                   ),
                 ),
@@ -1146,7 +1107,7 @@ class _ClubRow extends StatelessWidget {
                     detail.club.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: StudentProfileScreen._text,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1156,7 +1117,7 @@ class _ClubRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${detail.memberCount} members',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: StudentProfileScreen._secondary,
                       fontSize: 12,
                     ),
@@ -1166,8 +1127,7 @@ class _ClubRow extends StatelessWidget {
             ),
             // Role badge
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: isLeader
                     ? StudentProfileScreen._burgundy
@@ -1175,15 +1135,12 @@ class _ClubRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(100),
                 border: isLeader
                     ? null
-                    : Border.all(
-                        color: StudentProfileScreen._hair),
+                    : Border.all(color: StudentProfileScreen._hair),
               ),
               child: Text(
                 detail.role,
                 style: TextStyle(
-                  color: isLeader
-                      ? Colors.white
-                      : StudentProfileScreen._body,
+                  color: isLeader ? Colors.white : StudentProfileScreen._body,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.1,
@@ -1237,9 +1194,7 @@ class _ClubRowFallback extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  club.name.isNotEmpty
-                      ? club.name[0].toUpperCase()
-                      : '?',
+                  club.name.isNotEmpty ? club.name[0].toUpperCase() : '?',
                   style: TextStyle(
                     color: color,
                     fontSize: 18,
@@ -1254,7 +1209,7 @@ class _ClubRowFallback extends StatelessWidget {
                 club.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: StudentProfileScreen._text,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1263,15 +1218,13 @@ class _ClubRowFallback extends StatelessWidget {
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: StudentProfileScreen._background,
                 borderRadius: BorderRadius.circular(100),
-                border:
-                    Border.all(color: StudentProfileScreen._hair),
+                border: Border.all(color: StudentProfileScreen._hair),
               ),
-              child: const Text(
+              child: Text(
                 'Member',
                 style: TextStyle(
                   color: StudentProfileScreen._body,
@@ -1301,10 +1254,7 @@ class _ProfileCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: StudentProfileScreen._card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: StudentProfileScreen._hair,
-          width: 1,
-        ),
+        border: Border.all(color: StudentProfileScreen._hair, width: 1),
       ),
       child: child,
     );
@@ -1323,17 +1273,14 @@ class _CardLabel extends StatelessWidget {
       children: [
         Text(
           title.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             color: StudentProfileScreen._secondary,
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.9,
           ),
         ),
-        if (trailing != null) ...[
-          const Spacer(),
-          trailing!,
-        ],
+        if (trailing != null) ...[const Spacer(), trailing!],
       ],
     );
   }
@@ -1350,7 +1297,7 @@ class _UpNextHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Text(
+        Text(
           'Up next',
           style: TextStyle(
             color: StudentProfileScreen._text,
@@ -1433,11 +1380,11 @@ class EventCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: StudentProfileScreen._card,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: StudentProfileScreen._hair,
               blurRadius: 24,
               offset: const Offset(0, 12),
             ),
@@ -1468,7 +1415,7 @@ class EventCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     event.day,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -1487,7 +1434,7 @@ class EventCard extends StatelessWidget {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: StudentProfileScreen._text,
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
@@ -1499,7 +1446,7 @@ class EventCard extends StatelessWidget {
                     event.clubLine,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: StudentProfileScreen._secondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -1508,7 +1455,7 @@ class EventCard extends StatelessWidget {
                   const SizedBox(height: 7),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.location_on_outlined,
                         size: 15,
                         color: StudentProfileScreen._secondary,
@@ -1518,7 +1465,7 @@ class EventCard extends StatelessWidget {
                         child: Text(
                           event.location,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: StudentProfileScreen._secondary,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -1532,11 +1479,9 @@ class EventCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: StudentProfileScreen._burgundy
-                    .withValues(alpha: 0.08),
+                color: StudentProfileScreen._burgundy.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: const Row(
@@ -1627,9 +1572,10 @@ class _ScaleTapState extends State<_ScaleTap>
       vsync: this,
       duration: const Duration(milliseconds: 90),
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.94).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.94,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -1651,4 +1597,3 @@ class _ScaleTapState extends State<_ScaleTap>
     );
   }
 }
-

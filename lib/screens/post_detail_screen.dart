@@ -7,15 +7,19 @@ import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../models/like.dart';
 import '../models/comment.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
-import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 
 class PostDetailScreen extends StatefulWidget {
   final NewsPost post;
   final Color clubColor;
 
-  const PostDetailScreen({super.key, required this.post, required this.clubColor});
+  const PostDetailScreen({
+    super.key,
+    required this.post,
+    required this.clubColor,
+  });
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -41,21 +45,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete post?',
-            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text)),
-        content: Text('This post will be permanently removed.',
-            style: TextStyle(color: AppColors.secondaryText)),
+        title: Text(
+          'Delete post?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          'This post will be permanently removed.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.secondaryText)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('Delete'),
@@ -81,7 +93,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays == 1) return 'Yesterday';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[dt.month - 1]} ${dt.day}';
   }
 
@@ -89,14 +114,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final userId = authService.currentUser?.id ?? 'guest';
     if (userState.isLiked(widget.post.id)) {
       userState.toggleLike(widget.post.id);
-      likes.removeWhere((l) => l.postId == widget.post.id && l.userId == userId);
+      likes.removeWhere(
+        (l) => l.postId == widget.post.id && l.userId == userId,
+      );
     } else {
       userState.toggleLike(widget.post.id);
-      likes.add(Like(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        postId: widget.post.id,
-        userId: userId,
-      ));
+      likes.add(
+        Like(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          postId: widget.post.id,
+          userId: userId,
+        ),
+      );
     }
     contentStore.saveLikes();
     setState(() {});
@@ -106,13 +135,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
     final userId = authService.currentUser?.id ?? 'guest';
-    comments.add(Comment(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      postId: widget.post.id,
-      userId: userId,
-      content: text,
-      createdAt: DateTime.now(),
-    ));
+    comments.add(
+      Comment(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        postId: widget.post.id,
+        userId: userId,
+        content: text,
+        createdAt: DateTime.now(),
+      ),
+    );
     contentStore.saveComments();
     _commentController.clear();
     FocusScope.of(context).unfocus();
@@ -122,14 +153,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
-    final author = users.firstWhere((u) => u.id == widget.post.authorId,
-        orElse: () => users.first);
     final isLiked = userState.isLiked(widget.post.id);
     final likeCount = postLikeCount(widget.post.id);
-    final postComments = comments
-        .where((c) => c.postId == widget.post.id)
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final postComments =
+        comments.where((c) => c.postId == widget.post.id).toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -137,10 +165,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         backgroundColor: AppColors.card,
         foregroundColor: AppColors.text,
         surfaceTintColor: Colors.transparent,
-        title: Text(club.name,
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+        title: Text(
+          club.name,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (_isOwner)
             IconButton(
@@ -156,45 +186,41 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Author header ──
+                  // ── Club header ──
                   Container(
                     color: AppColors.card,
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                     child: Row(
                       children: [
-                        GestureDetector(
-                          onTap: () => Navigator.push(context,
-                              MaterialPageRoute(
-                                  builder: (_) => UserProfileScreen(user: author))),
-                          child: UserAvatar(
-                            userId: author.id,
-                            name: author.name,
-                            size: 42,
-                            fontSize: 18,
-                            backgroundColor: widget.clubColor.withValues(alpha: 0.18),
-                            textColor: widget.clubColor,
-                          ),
+                        ClubAvatar(
+                          clubId: club.id,
+                          clubName: club.name,
+                          size: 42,
+                          fontSize: 18,
+                          color: widget.clubColor,
+                          shape: 'circle',
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => Navigator.push(context,
-                                MaterialPageRoute(
-                                    builder: (_) => UserProfileScreen(user: author))),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(author.name,
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        color: AppColors.primaryRed)),
-                                Text(_timeAgo(widget.post.createdAt),
-                                    style: TextStyle(
-                                        fontSize: 12, color: AppColors.secondaryText)),
-                              ],
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                club.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                              Text(
+                                _timeAgo(widget.post.createdAt),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -205,17 +231,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   buildPostBanner(
                     imagePath: widget.post.imagePath,
                     fallbackColor: widget.clubColor,
-                    fallbackLetter: clubs.firstWhere(
-                      (c) => c.id == widget.post.clubId,
-                      orElse: () => clubs.first,
-                    ).name[0],
+                    fallbackLetter: clubs
+                        .firstWhere(
+                          (c) => c.id == widget.post.clubId,
+                          orElse: () => clubs.first,
+                        )
+                        .name[0],
                     height: 220,
                   ),
 
                   // ── Like + comment counts ──
                   Container(
                     color: AppColors.card,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     child: Row(
                       children: [
                         GestureDetector(
@@ -223,24 +254,39 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           child: Row(
                             children: [
                               Icon(
-                                isLiked ? Icons.favorite : Icons.favorite_border,
-                                color: isLiked ? Colors.pink : AppColors.secondaryText,
+                                isLiked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: isLiked
+                                    ? Colors.pink
+                                    : AppColors.secondaryText,
                                 size: 22,
                               ),
                               const SizedBox(width: 5),
-                              Text('$likeCount',
-                                  style: TextStyle(
-                                      fontSize: 14, color: AppColors.secondaryText)),
+                              Text(
+                                '$likeCount',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 18),
-                        Icon(Icons.chat_bubble_outline,
-                            color: AppColors.secondaryText, size: 22),
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          color: AppColors.secondaryText,
+                          size: 22,
+                        ),
                         const SizedBox(width: 5),
-                        Text('${postComments.length}',
-                            style: TextStyle(
-                                fontSize: 14, color: AppColors.secondaryText)),
+                        Text(
+                          '${postComments.length}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -250,11 +296,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     color: AppColors.card,
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Text(widget.post.content,
-                        style: TextStyle(
-                            fontSize: 15,
-                            color: AppColors.text,
-                            height: 1.6)),
+                    child: Text(
+                      widget.post.content,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.text,
+                        height: 1.6,
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 8),
@@ -265,19 +314,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       color: AppColors.card,
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                      child: Text('Comments (${postComments.length})',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: AppColors.text)),
+                      child: Text(
+                        'Comments (${postComments.length})',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: AppColors.text,
+                        ),
+                      ),
                     ),
                     ...postComments.map((c) {
-                      final commenter = users.firstWhere((u) => u.id == c.userId,
-                          orElse: () => users.first);
+                      final commenter = users.firstWhere(
+                        (u) => u.id == c.userId,
+                        orElse: () => users.first,
+                      );
                       return Container(
                         color: AppColors.card,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -294,24 +350,33 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text(commenter.name,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                              color: AppColors.text)),
+                                      Text(
+                                        commenter.name,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: AppColors.text,
+                                        ),
+                                      ),
                                       const SizedBox(width: 6),
-                                      Text(_timeAgo(c.createdAt),
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.secondaryText)),
+                                      Text(
+                                        _timeAgo(c.createdAt),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(c.content,
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.text,
-                                          height: 1.4)),
+                                  Text(
+                                    c.content,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.text,
+                                      height: 1.4,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -348,12 +413,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                         hintText: 'Add a comment...',
-                        hintStyle:
-                            TextStyle(color: AppColors.secondaryText),
+                        hintStyle: TextStyle(color: AppColors.secondaryText),
                         filled: true,
                         fillColor: AppColors.lightGray,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(22),
                           borderSide: BorderSide.none,
@@ -372,8 +438,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         shape: BoxShape.circle,
                         color: AppColors.primaryRed,
                       ),
-                      child: Icon(Icons.send_rounded,
-                          color: Colors.white, size: 18),
+                      child: Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ],

@@ -4,10 +4,12 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
+import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/tutorial_service.dart';
+import 'saved_posts_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -336,6 +338,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
+          // ── Saved content section ───────────────────────────────────────
+          _SectionHeader(title: 'Your Content'),
+          ListenableBuilder(
+            listenable: userState,
+            builder: (context, _) {
+              final savedCount = newsPosts
+                  .where((post) => userState.isSaved(post.id))
+                  .length;
+              return Container(
+                color: AppColors.card,
+                child: ListTile(
+                  leading: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.lightRed,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.bookmark_rounded,
+                      color: AppColors.primaryRed,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    'Saved Posts',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  subtitle: Text(
+                    savedCount == 0
+                        ? 'Posts you save will appear here'
+                        : '$savedCount saved post${savedCount == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.secondaryText,
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 24),
+
           // ── Appearance section ───────────────────────────────────────────
           _SectionHeader(title: 'Appearance'),
           ListenableBuilder(
@@ -385,38 +442,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Help section ────────────────────────────────────────────────
           _SectionHeader(title: 'Help'),
-          Container(
-            color: AppColors.card,
-            child: ListTile(
-              leading: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primaryRed, AppColors.darkRed],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                child: Icon(
-                  Icons.school_rounded,
-                  color: AppColors.primaryRed,
-                  size: 20,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryRed.withValues(alpha: 0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: _replayTutorial,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: const Icon(
+                            Icons.play_circle_fill_rounded,
+                            color: Colors.white,
+                            size: 27,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Replay App Tutorial',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Take the guided tour of every area again — anytime',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.3,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              title: Text(
-                'Replay App Tour',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              subtitle: Text(
-                'Review every main area and how it works',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.secondaryText,
-              ),
-              onTap: _replayTutorial,
             ),
           ),
 

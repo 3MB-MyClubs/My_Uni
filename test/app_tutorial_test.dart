@@ -58,21 +58,21 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Skip tour'), findsNWidgets(2));
+    expect(find.text('Skip tour'), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
     expect(find.text('Welcome'), findsOneWidget);
 
     await tester.tap(find.text('Next'));
     await tester.pump();
 
-    expect(find.text('Skip tour'), findsNWidgets(2));
+    expect(find.text('Skip tour'), findsOneWidget);
     expect(find.text('2/2'), findsOneWidget);
     expect(find.text('Ready'), findsOneWidget);
 
     await tester.tap(find.text('Start exploring'));
     expect(completed, isTrue);
 
-    await tester.tap(find.text('Skip tour').last);
+    await tester.tap(find.text('Skip tour'));
     expect(skipped, isTrue);
   });
 }

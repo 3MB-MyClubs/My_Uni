@@ -178,17 +178,12 @@ class UserPrefsService {
     dynamic raw, {
     Set<String> fallback = const {},
   }) {
+    target.clear();
     if (raw == null) {
-      if (fallback.isNotEmpty) {
-        target
-          ..clear()
-          ..addAll(fallback);
-      }
+      target.addAll(fallback);
       return;
     }
-    target
-      ..clear()
-      ..addAll(List<String>.from(raw as List));
+    target.addAll(List<String>.from(raw as List));
   }
 }
 

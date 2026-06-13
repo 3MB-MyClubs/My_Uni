@@ -3,6 +3,8 @@ import '../models/club.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
+import '../services/auth_service.dart';
+import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import 'post_detail_screen.dart';
@@ -46,9 +48,7 @@ class SavedPostsScreen extends StatelessWidget {
       body: ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
-          final saved = newsPosts
-              .where((p) => userState.isSaved(p.id))
-              .toList()
+          final saved = newsPosts.where((p) => userState.isSaved(p.id)).toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
           if (saved.isEmpty) {
@@ -111,7 +111,14 @@ class SavedPostsScreen extends StatelessWidget {
                         PostDetailScreen(post: post, clubColor: color),
                   ),
                 ),
-                onRemove: () => userState.toggleSave(post.id),
+                onRemove: () {
+                  userState.toggleSave(post.id);
+                  userPrefsService.save(
+                    authService.currentUser?.id ??
+                        authService.currentAdmin?.id ??
+                        '',
+                  );
+                },
               );
             },
           );

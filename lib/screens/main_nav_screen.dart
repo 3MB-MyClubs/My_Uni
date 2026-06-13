@@ -116,14 +116,14 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         eyebrow: 'Home',
         title: 'Shortcuts and campus updates',
         description:
-            'The Home header keeps search and notifications close. Below it, your feed combines updates from clubs you follow with campus recommendations.',
+            'The Home header keeps your calendar, search, and notifications one tap away. Below it, your feed combines updates from clubs you follow with campus recommendations.',
         icon: Icons.home_rounded,
         targetKey: _homeHeaderKey,
         tabIndex: 0,
         tips: [
+          'Tap the calendar icon to see everything you are going to.',
           'Tap the search icon to find a person or club quickly.',
           'The bell opens your latest activity.',
-          'Pull down on Home whenever you want to refresh.',
         ],
       ),
       AppTutorialStep(

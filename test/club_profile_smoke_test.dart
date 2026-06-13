@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/club_profile_screen.dart';
 import 'package:flutter_application_1/screens/explore_screen.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
+import 'package:flutter_application_1/screens/student_profile_screen.dart';
+import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
@@ -18,13 +20,12 @@ void main() {
     await themeService.setDark(true);
   });
 
-  testWidgets('ClubProfileScreen builds from a club card route', (tester) async {
+  testWidgets('ClubProfileScreen builds from a club card route', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: ClubProfileScreen(
-          club: clubs.first,
-          color: Colors.red,
-        ),
+        home: ClubProfileScreen(club: clubs.first, color: Colors.red),
       ),
     );
 
@@ -39,10 +40,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: ClubProfileScreen(
-          club: clubs.first,
-          color: Colors.red,
-        ),
+        home: ClubProfileScreen(club: clubs.first, color: Colors.red),
       ),
     );
 
@@ -52,13 +50,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ExploreScreen opens a club profile without a render exception',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: ExploreScreen(),
-      ),
-    );
+  testWidgets('ExploreScreen opens a club profile without a render exception', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
 
     await tester.pumpAndSettle();
 
@@ -69,20 +64,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ProfileScreen renders in light mode for a logged-in user',
-      (tester) async {
+  testWidgets('ProfileScreen renders in light mode for a logged-in user', (
+    tester,
+  ) async {
     await themeService.setDark(false);
     authService.login(users.first.email, users.first.password);
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: ProfileScreen(),
-      ),
-    );
+    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
 
     await tester.pumpAndSettle();
 
     expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('student profile uses the dark background in dark mode', (
+    tester,
+  ) async {
+    authService.login(users.first.email, users.first.password);
+
+    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byType(StudentProfileScreen), findsOneWidget);
+    final scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(StudentProfileScreen),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    expect(scaffold.backgroundColor, DarkColors.background);
     expect(tester.takeException(), isNull);
   });
 }
