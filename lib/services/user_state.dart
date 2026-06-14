@@ -22,6 +22,20 @@ class UserState extends ChangeNotifier {
   // Profile photo image paths keyed by user/admin id.
   final Map<String, String> profilePhotoPaths = {};
 
+  // Mock network photo URLs for demo users (seeded at startup, overridden by a real upload).
+  final Map<String, String> mockPhotoUrls = {
+    'u1':  'https://i.pravatar.cc/150?img=47',
+    'u2':  'https://i.pravatar.cc/150?img=11',
+    'u3':  'https://i.pravatar.cc/150?img=15',
+    'u4':  'https://i.pravatar.cc/150?img=44',
+    'u6':  'https://i.pravatar.cc/150?img=5',
+    'u8':  'https://i.pravatar.cc/150?img=9',
+    'u10': 'https://i.pravatar.cc/150?img=32',
+    'u11': 'https://i.pravatar.cc/150?img=21',
+    'u13': 'https://i.pravatar.cc/150?img=53',
+    'u14': 'https://i.pravatar.cc/150?img=58',
+  };
+
   // Profile cover photo image paths keyed by user/admin id.
   final Map<String, String> coverPhotoPaths = {};
 

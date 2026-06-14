@@ -31,18 +31,18 @@ class UserAvatar extends StatelessWidget {
       listenable: userState,
       builder: (context, _) {
         final photoPath = userState.profilePhotoPaths[userId];
+        final mockUrl = userState.mockPhotoUrls[userId];
         final bg = backgroundColor ?? AppColors.lightRed;
         final fg = textColor ?? AppColors.primaryRed;
         final isCircle = borderRadius == null;
+        final clip = isCircle ? BorderRadius.circular(size / 2) : borderRadius!;
 
+        // User-uploaded photo takes highest priority
         if (photoPath != null) {
           final file = File(photoPath);
-          // Guard: if the file was deleted (e.g. temp dir cleared), fall back.
           if (file.existsSync()) {
             return ClipRRect(
-              borderRadius: isCircle
-                  ? BorderRadius.circular(size / 2)
-                  : borderRadius!,
+              borderRadius: clip,
               child: Image.file(
                 file,
                 width: size,
@@ -53,6 +53,23 @@ class UserAvatar extends StatelessWidget {
             );
           }
         }
+
+        // Fall back to mock network photo for demo users
+        if (mockUrl != null) {
+          return ClipRRect(
+            borderRadius: clip,
+            child: Image.network(
+              mockUrl,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
+              loadingBuilder: (ctx, child, progress) =>
+                  progress == null ? child : _initial(bg, fg, isCircle),
+            ),
+          );
+        }
+
         return _initial(bg, fg, isCircle);
       },
     );
