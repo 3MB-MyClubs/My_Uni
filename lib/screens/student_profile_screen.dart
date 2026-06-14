@@ -29,6 +29,8 @@ class StudentProfileData {
   final int followers;
   final int following;
   final List<String> vibes;
+  final List<String> minors;
+  final List<String> doubleMajors;
   final StudentEventData? nextEvent;
   final List<StudentClubDetail> clubDetails;
 
@@ -43,6 +45,8 @@ class StudentProfileData {
     required this.followers,
     required this.following,
     required this.vibes,
+    this.minors = const [],
+    this.doubleMajors = const [],
     this.nextEvent,
     this.clubDetails = const [],
   });
@@ -654,7 +658,71 @@ class _NameMajorBlock extends StatelessWidget {
             ],
           ),
         ],
+        if (data.doubleMajors.isNotEmpty || data.minors.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final dm in data.doubleMajors)
+                _AcademicTag(label: 'Double major', value: dm, filled: true),
+              for (final mn in data.minors)
+                _AcademicTag(label: 'Minor', value: mn, filled: false),
+            ],
+          ),
+        ],
       ],
+    );
+  }
+}
+
+/// Small pill tag for a double major / minor program.
+class _AcademicTag extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool filled;
+  const _AcademicTag({
+    required this.label,
+    required this.value,
+    required this.filled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = StudentProfileScreen._burgundy;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: filled ? accent.withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: filled ? accent.withValues(alpha: 0.35) : StudentProfileScreen._hair,
+        ),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label · ',
+              style: TextStyle(
+                color: accent,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.1,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: StudentProfileScreen._body,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

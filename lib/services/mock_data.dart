@@ -5458,6 +5458,20 @@ final messages = <Message>[
     sentAt: DateTime.now().subtract(const Duration(hours: 1)),
   ),
   Message(
+    id: 'msg3v',
+    senderId: 'u1',
+    receiverId: 'u2',
+    content: 'kuvoice:0:14',
+    sentAt: DateTime.now().subtract(const Duration(minutes: 58)),
+  ),
+  Message(
+    id: 'msg3p',
+    senderId: 'u2',
+    receiverId: 'u1',
+    content: 'kuphoto:hack_ku_table.jpg',
+    sentAt: DateTime.now().subtract(const Duration(minutes: 52)),
+  ),
+  Message(
     id: 'msg4',
     senderId: 'u4',
     receiverId: 'u2',
@@ -5533,6 +5547,20 @@ final messages = <Message>[
     content:
         'Perfect 🎉 I\'ll add you to our WhatsApp group. Flutter workshop is the pre-game!',
     sentAt: DateTime.now().subtract(const Duration(minutes: 8)),
+  ),
+  Message(
+    id: 'msg10v',
+    senderId: 'u1',
+    receiverId: 'u5',
+    content: 'kuvoice:0:11',
+    sentAt: DateTime.now().subtract(const Duration(minutes: 6)),
+  ),
+  Message(
+    id: 'msg10p',
+    senderId: 'u5',
+    receiverId: 'u1',
+    content: 'kuphoto:fastapi_demo.png',
+    sentAt: DateTime.now().subtract(const Duration(minutes: 4)),
   ),
 
   // — Conversation with Can (u2) —
@@ -5765,6 +5793,32 @@ final messages = <Message>[
     receiverId: 'u5',
     content: 'Just your jersey 💛💙 Club handles snacks. CMON FENERBAHÇE',
     sentAt: DateTime.now().subtract(const Duration(days: 4, hours: 21)),
+  ),
+  // ── Direct message with a club account (u5 ↔ KUFoto / c13) ─────────────────
+  // Joint club discussions live in club_chat_service.dart; this is a private
+  // 1-on-1 DM with the club, shown under "Direct messages with clubs".
+  Message(
+    id: 'msgcdm_1',
+    senderId: 'u5',
+    receiverId: 'c13',
+    content:
+        'Hi! I\'m interested in joining KUFoto. Are you taking new members this semester?',
+    sentAt: DateTime.now().subtract(const Duration(hours: 7)),
+  ),
+  Message(
+    id: 'msgcdm_2',
+    senderId: 'c13',
+    receiverId: 'u5',
+    content:
+        'Hey! Absolutely 📸 We\'d love to have you. Next meeting is Thursday 17:00 at the studio — bring any camera, even your phone!',
+    sentAt: DateTime.now().subtract(const Duration(hours: 6, minutes: 45)),
+  ),
+  Message(
+    id: 'msgcdm_3',
+    senderId: 'c13',
+    receiverId: 'u5',
+    content: 'There\'s also a golden-hour campus walk this Saturday if you want a taste 🌅',
+    sentAt: DateTime.now().subtract(const Duration(hours: 6, minutes: 44)),
   ),
 ];
 

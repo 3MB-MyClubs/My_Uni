@@ -28,6 +28,8 @@ class UserPrefsService {
       'major_$userId': s.majors[userId],
       'year_$userId': s.years[userId],
       'interests_$userId': s.interests[userId],
+      'minors_$userId': s.minors[userId],
+      'doubleMajors_$userId': s.doubleMajors[userId],
       'followedUserIds_$userId': s.followedUserIds.toList(),
       'followedClubIds_$userId': s.followedClubIds.toList(),
       'likedPostIds_$userId': s.likedPostIds.toList(),
@@ -95,6 +97,16 @@ class UserPrefsService {
     final interests = _box.get('interests_$userId');
     if (interests != null) {
       s.interests[userId] = List<String>.from(interests as List);
+    }
+
+    final minors = _box.get('minors_$userId');
+    if (minors != null) {
+      s.minors[userId] = List<String>.from(minors as List);
+    }
+
+    final doubleMajors = _box.get('doubleMajors_$userId');
+    if (doubleMajors != null) {
+      s.doubleMajors[userId] = List<String>.from(doubleMajors as List);
     }
 
     _restoreSet(

@@ -82,8 +82,10 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  // true = show only followed clubs, false = show all clubs
-  bool _followedOnly = true;
+  // 0 = Following (followed clubs only), 1 = All
+  int _feedTab = 1;
+
+  bool get _followedOnly => _feedTab == 0;
 
   Set<String> get _followedIds => userState.followedClubIds;
 
@@ -202,14 +204,8 @@ class _FeedScreenState extends State<FeedScreen> {
     setState(() {});
   }
 
-  // ── Feed tab state ─────────────────────────────────────────────────────────
-  // 0 = Following (followed clubs only), 1 = All
-  int _feedTab = 0;
-
   @override
   Widget build(BuildContext context) {
-    _followedOnly = _feedTab == 0;
-
     final mixed = _buildMixedFeed(_buildFeed());
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -260,8 +256,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
-                          onPressed: () =>
-                              setState(() => _followedOnly = false),
+                          onPressed: () => setState(() => _feedTab = 1),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
                             foregroundColor: Colors.white,
@@ -300,14 +295,6 @@ class _FeedScreenState extends State<FeedScreen> {
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: AppColors.text,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _followedOnly ? 'From followed clubs' : 'All clubs',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.secondaryText,
                         ),
                       ),
                     ],
@@ -1017,50 +1004,9 @@ class _TrendingEventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.local_fire_department_rounded,
-                    size: 18,
-                    color: Colors.deepOrange,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Trending This Week',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      club.name.split(' ').first,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             // Event body
             Container(
-              margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              margin: const EdgeInsets.fromLTRB(14, 12, 14, 12),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.background,
@@ -1499,29 +1445,6 @@ String _timeAgo(DateTime dt) {
   return '${diff.inDays}d ago';
 }
 
-// Returns the trending badge widget if score is high enough
-Widget? _trendingBadge(double score) {
-  if (score < 6) return null;
-  final label = score >= 12 ? '🔥 Hot' : '📈 Trending';
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: score >= 12
-          ? const Color(0xFFFF6B35).withValues(alpha: 0.12)
-          : AppColors.lightRed,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      label,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: score >= 12 ? const Color(0xFFFF6B35) : AppColors.primaryRed,
-      ),
-    ),
-  );
-}
-
 void _openShareSheet(
   BuildContext context,
   String targetId,
@@ -1788,7 +1711,6 @@ class _PostCardState extends State<_PostCard>
         .toList();
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
-    final badge = _trendingBadge(widget.score);
 
     final commentCount = postComments.length;
     final hasImage =
@@ -1867,10 +1789,6 @@ class _PostCardState extends State<_PostCard>
                                   ),
                                 ),
                               ),
-                              if (badge != null) ...[
-                                const SizedBox(width: 6),
-                                badge,
-                              ],
                             ],
                           ),
                           const SizedBox(height: 1),
@@ -2144,7 +2062,6 @@ class _EventCardState extends State<_EventCard> {
     final clubColor = _colorForClub(club.id);
     final dt = widget.event.dateTime;
     final shareCount = postShareCount(widget.event.id);
-    final badge = _trendingBadge(widget.score);
 
     final daysAway = dt.difference(DateTime.now()).inDays;
     final daysLabel = daysAway == 0
@@ -2215,31 +2132,6 @@ class _EventCardState extends State<_EventCard> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.accentGold.withValues(
-                                  alpha: 0.2,
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                'Event',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFB8860B),
-                                ),
-                              ),
-                            ),
-                            if (badge != null) ...[
-                              const SizedBox(width: 4),
-                              badge,
-                            ],
                           ],
                         ),
                         Text(

@@ -8,6 +8,7 @@ import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
+import 'package:flutter_application_1/widgets/user_avatar.dart';
 
 void main() {
   setUp(() async {
@@ -61,6 +62,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ClubProfileScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Find People results use profile-photo-aware avatars', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Find People'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UserAvatar), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

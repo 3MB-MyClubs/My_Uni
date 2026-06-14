@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
+import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -906,16 +907,6 @@ class _PersonRowState extends State<_PersonRow> {
     }
   }
 
-  String get _initials {
-    final parts = widget.user.name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '?';
-    return parts.take(2).map((p) => p.characters.first.toUpperCase()).join();
-  }
-
   Future<void> _toggleFollow() async {
     if (_changing) return;
     setState(() {
@@ -959,22 +950,13 @@ class _PersonRowState extends State<_PersonRow> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: widget.color.withValues(alpha: 0.14),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                _initials,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: widget.color,
-                ),
-              ),
+            UserAvatar(
+              userId: widget.user.id,
+              name: widget.user.name,
+              size: 48,
+              fontSize: 16,
+              backgroundColor: widget.color.withValues(alpha: 0.14),
+              textColor: widget.color,
             ),
             const SizedBox(width: 12),
             Expanded(

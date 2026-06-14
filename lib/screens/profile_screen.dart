@@ -18,6 +18,7 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
+import 'edit_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'my_calendar_screen.dart';
 import 'rsvp_list_screen.dart';
@@ -886,6 +887,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               followers: followers.length,
               following: following.length,
               vibes: userState.interests[user.id] ?? const [],
+              minors: userState.minors[user.id] ?? const [],
+              doubleMajors: userState.doubleMajors[user.id] ?? const [],
               nextEvent: nextEvent == null ? null : _eventDataFor(nextEvent),
               clubDetails: clubDetails,
             ),
@@ -897,7 +900,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onEditBio: () => _editBio(context, user.id),
-            onEditProfile: () => _editMajorAndYear(context, user.id),
+            onEditProfile: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    EditProfileScreen(userId: user.id, realName: user.name),
+              ),
+            ).then((_) {
+              if (mounted) setState(() {});
+            }),
             onShare: () => _shareProfile(user.id, name),
             onEditVibes: () => _editVibes(user.id),
             onSeeAllEvents: () => Navigator.push(

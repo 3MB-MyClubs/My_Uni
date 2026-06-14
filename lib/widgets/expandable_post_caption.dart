@@ -15,7 +15,7 @@ class ExpandablePostCaption extends StatefulWidget {
     this.authorStyle,
     this.captionStyle,
     this.moreStyle,
-    this.collapsedWordCount = 7,
+    this.collapsedWordCount = 15,
   });
 
   @override

@@ -24,12 +24,12 @@ class UserState extends ChangeNotifier {
 
   // Mock network photo URLs for demo users (seeded at startup, overridden by a real upload).
   final Map<String, String> mockPhotoUrls = {
-    'u1':  'https://i.pravatar.cc/150?img=47',
-    'u2':  'https://i.pravatar.cc/150?img=11',
-    'u3':  'https://i.pravatar.cc/150?img=15',
-    'u4':  'https://i.pravatar.cc/150?img=44',
-    'u6':  'https://i.pravatar.cc/150?img=5',
-    'u8':  'https://i.pravatar.cc/150?img=9',
+    'u1': 'https://i.pravatar.cc/150?img=47',
+    'u2': 'https://i.pravatar.cc/150?img=11',
+    'u3': 'https://i.pravatar.cc/150?img=15',
+    'u4': 'https://i.pravatar.cc/150?img=44',
+    'u6': 'https://i.pravatar.cc/150?img=5',
+    'u8': 'https://i.pravatar.cc/150?img=9',
     'u10': 'https://i.pravatar.cc/150?img=32',
     'u11': 'https://i.pravatar.cc/150?img=21',
     'u13': 'https://i.pravatar.cc/150?img=53',
@@ -50,6 +50,12 @@ class UserState extends ChangeNotifier {
 
   // Student interest topics keyed by user id.
   final Map<String, List<String>> interests = {};
+
+  // Student minor program(s) keyed by user id.
+  final Map<String, List<String>> minors = {};
+
+  // Student double-major program(s) keyed by user id.
+  final Map<String, List<String>> doubleMajors = {};
 
   // Club profile photo paths keyed by club id.
   final Map<String, String> clubPhotoPaths = {};
@@ -80,8 +86,14 @@ class UserState extends ChangeNotifier {
 
   /// Sets the profile photo path for [userId] and notifies all listeners.
   void setProfilePhoto(String userId, String path) {
+    PaintingBinding.instance.imageCache.evict(FileImage(File(path)));
     profilePhotoPaths[userId] = path;
     notifyListeners();
+  }
+
+  /// Removes the profile photo for [userId] and notifies all listeners.
+  void removeProfilePhoto(String userId) {
+    if (profilePhotoPaths.remove(userId) != null) notifyListeners();
   }
 
   /// Sets the profile cover path for [userId] and notifies all listeners.
@@ -132,6 +144,28 @@ class UserState extends ChangeNotifier {
       interests.remove(userId);
     } else {
       interests[userId] = values;
+    }
+    notifyListeners();
+  }
+
+  /// Sets the student minor program(s) for [userId] and notifies all listeners.
+  void setMinors(String userId, List<String> values) {
+    final v = values.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (v.isEmpty) {
+      minors.remove(userId);
+    } else {
+      minors[userId] = v;
+    }
+    notifyListeners();
+  }
+
+  /// Sets the student double-major program(s) for [userId] and notifies listeners.
+  void setDoubleMajors(String userId, List<String> values) {
+    final v = values.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (v.isEmpty) {
+      doubleMajors.remove(userId);
+    } else {
+      doubleMajors[userId] = v;
     }
     notifyListeners();
   }

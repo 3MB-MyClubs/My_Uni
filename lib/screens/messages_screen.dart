@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import '../models/message.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_chat_service.dart';
 import '../services/group_chat_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
+import '../services/presence_service.dart';
 import '../services/user_state.dart';
+import '../widgets/chat_widgets.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
+import 'club_channel_screen.dart';
 import 'group_chat_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -21,6 +25,7 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  String _contactFilter = 'students';
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -31,23 +36,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return [
       ...users
           .where((u) => u.id != myId)
-          .map((u) => _Contact(
-                id: u.id,
-                name: userState.displayNameFor(u.id, u.name),
-                isClub: false,
-                isAdmin: u.role == 'admin',
-              )),
+          .map(
+            (u) => _Contact(
+              id: u.id,
+              name: userState.displayNameFor(u.id, u.name),
+              isClub: false,
+              isAdmin: u.role == 'admin',
+            ),
+          ),
       ...clubs.map((c) => _Contact(id: c.id, name: c.name, isClub: true)),
     ];
-  }
-
-  // Contacts filtered by search query
-  List<_Contact> get _searchResults {
-    if (_query.isEmpty) return [];
-    final q = _query.toLowerCase();
-    return _allContacts
-        .where((c) => c.name.toLowerCase().contains(q))
-        .toList();
   }
 
   // All messages from both mock seed data and Hive-persisted messages
@@ -79,12 +77,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Message? _lastMessage(String otherId) {
-    final convo = _allMessages
-        .where((m) =>
-            (m.senderId == _myId && m.receiverId == otherId) ||
-            (m.senderId == otherId && m.receiverId == _myId))
-        .toList()
-      ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    final convo =
+        _allMessages
+            .where(
+              (m) =>
+                  (m.senderId == _myId && m.receiverId == otherId) ||
+                  (m.senderId == otherId && m.receiverId == _myId),
+            )
+            .toList()
+          ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
     return convo.isEmpty ? null : convo.first;
   }
 
@@ -101,6 +102,35 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   bool _isClub(String id) => clubs.any((c) => c.id == id);
 
+  // Clubs the current user belongs to (subscriber / admin / board member).
+  // Each of these has a joint discussion channel shown in the Clubs tab.
+  List<String> get _myClubIds {
+    final me = _myId;
+    final ids = <String>{...?authService.currentUser?.subscribedClubIds};
+    for (final c in clubs) {
+      if (c.adminUserIds.contains(me) || c.boardMemberIds.contains(me)) {
+        ids.add(c.id);
+      }
+    }
+    final list = ids.toList();
+    // Most recently active discussions first.
+    list.sort((a, b) {
+      final ta = clubChatService.lastMessageFor(a)?.sentAt ?? DateTime(2000);
+      final tb = clubChatService.lastMessageFor(b)?.sentAt ?? DateTime(2000);
+      return tb.compareTo(ta);
+    });
+    return list;
+  }
+
+  String _firstName(String id) {
+    try {
+      final u = users.firstWhere((u) => u.id == id);
+      return userState.displayNameFor(u.id, u.name).split(' ').first;
+    } catch (_) {
+      return 'Member';
+    }
+  }
+
   void _openChat(String otherId, String otherName) {
     Navigator.push(
       context,
@@ -109,27 +139,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ChatScreen(otherUserId: otherId, otherUserName: otherName),
       ),
     ).then((_) => setState(() {}));
-  }
-
-  static const _clubColors = [
-    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-  ];
-
-  Widget _avatarFor(String id, String name) {
-    if (_isClub(id)) {
-      final idx = clubs.indexWhere((c) => c.id == id);
-      final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-      return ClubAvatar(
-        clubId: id,
-        clubName: name,
-        color: color,
-        size: 56,
-        fontSize: 22,
-        borderRadius: 14,
-      );
-    }
-    return UserAvatar(userId: id, name: name, size: 56, fontSize: 20);
   }
 
   @override
@@ -157,18 +166,33 @@ class _MessagesScreenState extends State<MessagesScreen> {
   String _lastGroupPreview(GroupChat g) {
     final msg = g.lastMessage;
     if (msg == null) return '';
-    if (msg.content.startsWith('kupost:')) return '📄 Shared a post';
-    if (msg.content.startsWith('kuevent:')) return '📅 Shared an event';
-    final name = msg.senderId == _myId ? 'You' : (() {
-      try {
-        return users.firstWhere((u) => u.id == msg.senderId).name.split(' ').first;
-      } catch (_) {
-        return 'Someone';
-      }
-    })();
-    return '$name: ${msg.content}';
+    final body = _previewBody(msg.content);
+    final name = msg.senderId == _myId
+        ? 'You'
+        : (() {
+            try {
+              return users
+                  .firstWhere((u) => u.id == msg.senderId)
+                  .name
+                  .split(' ')
+                  .first;
+            } catch (_) {
+              return 'Someone';
+            }
+          })();
+    return '$name: $body';
   }
 
+  // Collapses special content payloads into a short preview label.
+  String _previewBody(String content) {
+    if (content.startsWith('kupost:')) return '📄 Shared a post';
+    if (content.startsWith('kuevent:')) return '📅 Shared an event';
+    if (isPhotoContent(content)) return '📷 Photo';
+    if (isVoiceContent(content)) return '🎤 Voice note';
+    return content;
+  }
+
+  // ── Compose / new conversation ────────────────────────────────────────────
   void _openComposeSheet() async {
     final myId = _myId;
     final contacts = _allContacts.where((c) => !c.isClub).toList();
@@ -202,335 +226,1057 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final results = _searchResults;
-    final partnerIds = _conversationPartnerIds;
-    final isSearching = _query.isNotEmpty;
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.card,
-        foregroundColor: AppColors.text,
-        surfaceTintColor: Colors.transparent,
-        title: Text(
-          'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            _buildSearch(),
+            _buildContactFilters(),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: Listenable.merge([
+                  groupChatService,
+                  presenceService,
+                  userState,
+                ]),
+                builder: (context, _) => _buildBody(),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_square),
-            tooltip: 'New conversation',
-            onPressed: _openComposeSheet,
-          ),
-        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openComposeSheet,
-        backgroundColor: AppColors.primaryRed,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.edit_rounded),
-      ),
-      body: Column(
+    );
+  }
+
+  // ── Header: title · compose ─────────────────────────────────────────────────
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ── Search bar ──────────────────────────────────────────────────
-          Container(
-            color: AppColors.card,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: TextField(
-              controller: _searchController,
-              autofocus: false,
-              onChanged: (v) => setState(() => _query = v),
-              decoration: InputDecoration(
-                hintText: 'Search people or clubs...',
-                prefixIcon: Icon(Icons.search_rounded,
-                    color: AppColors.secondaryText),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppColors.lightGray,
-                contentPadding:
-                    const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: IconButton(
+              tooltip: 'Back',
+              padding: EdgeInsets.zero,
+              onPressed: () => Navigator.maybePop(context),
+              icon: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 20,
+                color: AppColors.text,
               ),
             ),
           ),
-
-          Expanded(
-            child: isSearching
-                // ── Search results ────────────────────────────────────────
-                ? results.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.search_off,
-                                size: 48, color: AppColors.secondaryText),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No results for "$_query"',
-                              style: TextStyle(
-                                  color: AppColors.secondaryText),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: results.length,
-                        separatorBuilder: (context, i) =>
-                            Divider(height: 1, indent: 72),
-                        itemBuilder: (context, i) => _ContactResultTile(
-                          contact: results[i],
-                          onTap: () =>
-                              _openChat(results[i].id, results[i].name),
-                        ),
-                      )
-                // ── Conversation list (groups + DMs) ─────────────────────
-                : ListenableBuilder(
-                    listenable: groupChatService,
-                    builder: (context, child) {
-                      final groups = groupChatService.groupsForUser(_myId);
-                      if (partnerIds.isEmpty && groups.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.chat_bubble_outline, size: 72, color: AppColors.secondaryText),
-                              const SizedBox(height: 16),
-                              Text('No messages yet',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
-                              const SizedBox(height: 8),
-                              Text('Search for a person or club above to start chatting',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: AppColors.secondaryText)),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return ListView(
-                        children: [
-                          // ── Group chats ──────────────────────────────────
-                          if (groups.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                              child: Text('GROUPS',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                                      color: AppColors.secondaryText, letterSpacing: 0.8)),
-                            ),
-                            ...groups.map((g) {
-                              final title = _groupTitle(g);
-                              final preview = _lastGroupPreview(g);
-                              final ts = g.lastMessage?.sentAt ?? g.createdAt;
-                              return InkWell(
-                                onTap: () => Navigator.push(context,
-                                    MaterialPageRoute(builder: (_) => GroupChatScreen(group: g)))
-                                    .then((_) => setState(() {})),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                  child: Row(
-                                    children: [
-                                      // Overlapping mini-avatars
-                                      SizedBox(
-                                        width: (g.memberIds.length.clamp(1, 3) * 18 + 14).toDouble(),
-                                        height: 48,
-                                        child: Stack(
-                                          children: g.memberIds.take(3).toList().asMap().entries.map((e) =>
-                                            Positioned(
-                                              left: e.key * 18.0,
-                                              top: e.key * 4.0,
-                                              child: Container(
-                                                decoration: BoxDecoration(shape: BoxShape.circle,
-                                                    border: Border.all(color: AppColors.background, width: 2)),
-                                                child: UserAvatar(
-                                                  userId: e.value,
-                                                  name: (() { try { return users.firstWhere((u) => u.id == e.value).name; } catch (_) { return '?'; } })(),
-                                                  size: 28, fontSize: 11,
-                                                ),
-                                              ),
-                                            ),
-                                          ).toList(),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.primaryRed.withValues(alpha: 0.12),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text('Group',
-                                                    style: TextStyle(fontSize: 10, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(child: Text(title,
-                                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.text),
-                                                  overflow: TextOverflow.ellipsis)),
-                                            ]),
-                                            const SizedBox(height: 2),
-                                            Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(_timeLabel(ts),
-                                          style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }),
-                            Divider(height: 1, indent: 16),
-                          ],
-
-                          // ── Direct messages ──────────────────────────────
-                          if (partnerIds.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                              child: Text('DIRECT MESSAGES',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                                      color: AppColors.secondaryText, letterSpacing: 0.8)),
-                            ),
-                            ...partnerIds.asMap().entries.map((entry) {
-                              final i = entry.key;
-                              final otherId = entry.value;
-                              final name = _nameFor(otherId);
-                              final last = _lastMessage(otherId);
-                              final isSentByMe = last != null && last.senderId == _myId;
-                              final all = _allMessages;
-                              final unread = !isSentByMe && messageService.hasUnread(_myId, otherId, all);
-                              final unreadCount = unread ? messageService.unreadCount(_myId, otherId, all) : 0;
-                              final isClub = _isClub(otherId);
-
-                              return Column(
-                                children: [
-                                  if (i > 0) Divider(height: 1, indent: 72),
-                                  InkWell(
-                                    onTap: () => _openChat(otherId, name),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                      child: Row(
-                                        children: [
-                                          _avatarFor(otherId, name),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(children: [
-                                                  Flexible(child: Text(name,
-                                                      style: TextStyle(fontWeight: unread ? FontWeight.bold : FontWeight.w600,
-                                                          fontSize: 15, color: AppColors.text),
-                                                      overflow: TextOverflow.ellipsis)),
-                                                  if (isClub) ...[
-                                                    const SizedBox(width: 6),
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(color: AppColors.lightRed, borderRadius: BorderRadius.circular(8)),
-                                                      child: Text('Club', style: TextStyle(fontSize: 10, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
-                                                    ),
-                                                  ],
-                                                ]),
-                                                const SizedBox(height: 2),
-                                                if (last != null)
-                                                  Text(isSentByMe ? 'You: ${last.content}' : last.content,
-                                                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                          color: unread ? AppColors.text : AppColors.secondaryText,
-                                                          fontSize: 13,
-                                                          fontWeight: unread ? FontWeight.w600 : FontWeight.normal)),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          if (last != null)
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                Text(_timeLabel(last.sentAt),
-                                                    style: TextStyle(fontSize: 11,
-                                                        fontWeight: unread ? FontWeight.bold : FontWeight.normal,
-                                                        color: unread ? AppColors.primaryRed : AppColors.secondaryText)),
-                                                const SizedBox(height: 4),
-                                                if (unread)
-                                                  Container(
-                                                    constraints: const BoxConstraints(minWidth: 20),
-                                                    height: 20,
-                                                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                                                    decoration: BoxDecoration(color: AppColors.primaryRed, borderRadius: BorderRadius.circular(10)),
-                                                    child: Center(child: Text(unreadCount > 99 ? '99+' : '$unreadCount',
-                                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold))),
-                                                  )
-                                                else
-                                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                                    Icon(isSentByMe ? Icons.done_all : Icons.arrow_back_ios_new, size: 11, color: AppColors.secondaryText),
-                                                    const SizedBox(width: 3),
-                                                    Text(isSentByMe ? 'Delivered' : 'Received',
-                                                        style: TextStyle(fontSize: 10, color: AppColors.secondaryText)),
-                                                  ]),
-                                              ],
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
+          Text(
+            'Messages',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
+              letterSpacing: -0.3,
+            ),
+          ),
+          GestureDetector(
+            onTap: _openComposeSheet,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.primaryRed.withValues(alpha: 0.24),
+                ),
+              ),
+              child: Icon(
+                Icons.edit_outlined,
+                size: 19,
+                color: AppColors.primaryRed,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildSearch() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.lightGray,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.divider),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 18,
+              color: AppColors.secondaryText,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: _contactFilter == 'students'
+                      ? 'Search students…'
+                      : 'Search clubs…',
+                  hintStyle: TextStyle(color: AppColors.secondaryText),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            if (_query.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  _searchController.clear();
+                  setState(() => _query = '');
+                },
+                child: Icon(
+                  Icons.close,
+                  size: 18,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContactFilters() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          children: [
+            _contactFilterButton('students', 'Students'),
+            _contactFilterButton('clubs', 'Clubs'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _contactFilterButton(String value, String label) {
+    final selected = _contactFilter == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _contactFilter = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.card : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: selected
+                ? Border.all(
+                    color: AppColors.primaryRed.withValues(alpha: 0.28),
+                  )
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? AppColors.primaryRed : AppColors.secondaryText,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    final q = _query.trim().toLowerCase();
+    final searching = q.isNotEmpty;
+    final showStudents = _contactFilter == 'students';
+
+    final partnerIds = _conversationPartnerIds;
+    final peopleIds = partnerIds.where((id) => !_isClub(id)).toList();
+    final clubDmIds = partnerIds.where((id) => _isClub(id)).toList();
+    final groups = groupChatService.groupsForUser(_myId);
+
+    bool matchId(String id) => _nameFor(id).toLowerCase().contains(q);
+
+    // ── Clubs tab ──
+    // Joint discussion channels for clubs I belong to.
+    final clubChannels = showStudents
+        ? <String>[]
+        : (searching ? _myClubIds.where(matchId).toList() : _myClubIds);
+    // 1-on-1 direct messages I've had with clubs.
+    final clubDms = showStudents
+        ? <String>[]
+        : (searching ? clubDmIds.where(matchId).toList() : clubDmIds);
+    // Clubs I can start a NEW direct message with (Clubs tab, search only).
+    final messageableClubs = (searching && !showStudents)
+        ? clubs
+              .where(
+                (c) =>
+                    c.name.toLowerCase().contains(q) &&
+                    !clubDmIds.contains(c.id),
+              )
+              .map((c) => c.id)
+              .toList()
+        : <String>[];
+
+    // ── Students tab: people DMs + my group chats ──
+    final dmPeople = showStudents
+        ? (searching ? peopleIds.where(matchId).toList() : peopleIds)
+        : <String>[];
+    final dmGroups = showStudents
+        ? (searching
+              ? groups
+                    .where((g) => _groupTitle(g).toLowerCase().contains(q))
+                    .toList()
+              : groups)
+        : <GroupChat>[];
+
+    // Students you could start a NEW chat with (students tab, search only).
+    final existing = {...partnerIds};
+    final newContacts = (searching && showStudents)
+        ? _allContacts
+              .where(
+                (c) =>
+                    !c.isClub &&
+                    !existing.contains(c.id) &&
+                    c.name.toLowerCase().contains(q),
+              )
+              .toList()
+        : <_Contact>[];
+
+    final nothing =
+        searching &&
+        dmPeople.isEmpty &&
+        dmGroups.isEmpty &&
+        clubChannels.isEmpty &&
+        clubDms.isEmpty &&
+        messageableClubs.isEmpty &&
+        newContacts.isEmpty;
+
+    if (nothing) return _EmptyState(query: _query);
+
+    final onlinePeople = showStudents
+        ? users
+              .where((u) => u.id != _myId && presenceService.isOnline(u.id))
+              .toList()
+        : <dynamic>[];
+
+    final hasVisibleConversations = showStudents
+        ? peopleIds.isNotEmpty || groups.isNotEmpty
+        : clubChannels.isNotEmpty || clubDmIds.isNotEmpty;
+    if (!searching && !hasVisibleConversations) {
+      return showStudents
+          ? _ColdStart(onCompose: _openComposeSheet)
+          : const _NoClubs();
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        if (!searching && onlinePeople.isNotEmpty) _activeRail(onlinePeople),
+        if (dmPeople.isNotEmpty) ...[
+          const _SectionLabel('Direct messages'),
+          ...dmPeople.map(_personRow),
+        ],
+        if (dmGroups.isNotEmpty) ...[
+          const _SectionLabel('Group chats'),
+          ...dmGroups.map(_groupRow),
+        ],
+        if (clubChannels.isNotEmpty) ...[
+          _SectionLabel(searching ? 'Club discussions' : 'My club discussions'),
+          ...clubChannels.map(_clubChannelRow),
+        ],
+        if (clubDms.isNotEmpty) ...[
+          const _SectionLabel('Direct messages with clubs'),
+          ...clubDms.map(_clubDmRow),
+        ],
+        if (messageableClubs.isNotEmpty) ...[
+          const _SectionLabel('Message a club'),
+          ...messageableClubs.map(
+            (id) => _ContactResultTile(
+              contact: _Contact(id: id, name: _nameFor(id), isClub: true),
+              onTap: () => _openChat(id, _nameFor(id)),
+            ),
+          ),
+        ],
+        if (newContacts.isNotEmpty) ...[
+          const _SectionLabel('Start a new chat'),
+          ...newContacts.map(
+            (c) => _ContactResultTile(
+              contact: c,
+              onTap: () => _openChat(c.id, c.name),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── Active-now rail ─────────────────────────────────────────────────────────
+  Widget _activeRail(List<dynamic> onlinePeople) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('Active now'),
+        SizedBox(
+          height: 84,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(20, 2, 20, 2),
+            itemCount: onlinePeople.length,
+            separatorBuilder: (_, i) => const SizedBox(width: 16),
+            itemBuilder: (context, i) {
+              final u = onlinePeople[i];
+              final name = userState.displayNameFor(u.id, u.name);
+              return GestureDetector(
+                onTap: () => _openChat(u.id, name),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        UserAvatar(
+                          userId: u.id,
+                          name: name,
+                          size: 54,
+                          fontSize: 21,
+                        ),
+                        Positioned(
+                          right: -1,
+                          bottom: -1,
+                          child: Container(
+                            width: 15,
+                            height: 15,
+                            decoration: BoxDecoration(
+                              color: kOnlineGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.background,
+                                width: 2.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 58,
+                      child: Text(
+                        name.split(' ').first,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Conversation rows ───────────────────────────────────────────────────────
+  Widget _personRow(String id) {
+    final name = _nameFor(id);
+    final last = _lastMessage(id);
+    final fromMe = last != null && last.senderId == _myId;
+    final all = _allMessages;
+    final unread =
+        !fromMe && last != null && messageService.hasUnread(_myId, id, all);
+    final unreadCount = unread ? messageService.unreadCount(_myId, id, all) : 0;
+    final online = presenceService.isOnline(id);
+    final typing = presenceService.isTyping(id);
+
+    return _ConvoRow(
+      leading: _dottedAvatar(
+        UserAvatar(userId: id, name: name, size: 52, fontSize: 20),
+        online: online,
+      ),
+      name: name,
+      preview: last == null
+          ? 'Tap to start chatting'
+          : _previewBody(last.content),
+      time: last == null ? '' : _timeLabel(last.sentAt),
+      fromMe: fromMe,
+      typing: typing,
+      unread: unreadCount,
+      onTap: () => _openChat(id, name),
+    );
+  }
+
+  // A 1-on-1 direct message with a club account (Clubs tab).
+  Widget _clubDmRow(String id) {
+    final name = _nameFor(id);
+    final last = _lastMessage(id);
+    final fromMe = last != null && last.senderId == _myId;
+    final all = _allMessages;
+    final unread =
+        !fromMe && last != null && messageService.hasUnread(_myId, id, all);
+    final unreadCount = unread ? messageService.unreadCount(_myId, id, all) : 0;
+    final idx = clubs.indexWhere((c) => c.id == id);
+    final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+
+    return _ConvoRow(
+      leading: ClubAvatar(
+        clubId: id,
+        clubName: name,
+        color: color,
+        size: 52,
+        fontSize: 20,
+        borderRadius: 17,
+      ),
+      name: name,
+      badge: 'Club',
+      preview: last == null
+          ? 'Tap to start chatting'
+          : _previewBody(last.content),
+      time: last == null ? '' : _timeLabel(last.sentAt),
+      fromMe: fromMe,
+      typing: presenceService.isTyping(id),
+      unread: unreadCount,
+      onTap: () => _openChat(id, name),
+    );
+  }
+
+  // A club's joint discussion channel (group chat for all members).
+  Widget _clubChannelRow(String clubId) {
+    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final name = idx >= 0 ? clubs[idx].name : 'Club';
+    final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+    final last = clubChatService.lastMessageFor(clubId);
+    final members = clubChatService.memberIdsFor(clubId);
+    final active = members.where((m) => presenceService.isOnline(m)).length;
+    final fromMe = last?.senderId == _myId;
+    final unread = clubChatService.unreadCount(clubId, _myId);
+
+    String preview;
+    if (last == null) {
+      preview = 'No messages yet — start the discussion';
+    } else {
+      final who = last.senderId == _myId ? 'You' : _firstName(last.senderId);
+      preview = '$who: ${_previewBody(last.content)}';
+    }
+
+    return _ConvoRow(
+      leading: _clubChannelLeading(clubId, name, color, active),
+      name: name,
+      badge: 'Club',
+      memberCount: members.length,
+      preview: preview,
+      time: last == null ? '' : _timeLabel(last.sentAt),
+      fromMe: fromMe,
+      typing: presenceService.isTyping('club_$clubId'),
+      unread: unread,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ClubChannelScreen(clubId: clubId, clubName: name, color: color),
+        ),
+      ).then((_) => setState(() {})),
+    );
+  }
+
+  // Club avatar + green "active members" badge.
+  Widget _clubChannelLeading(
+    String clubId,
+    String name,
+    Color color,
+    int active,
+  ) {
+    final avatar = ClubAvatar(
+      clubId: clubId,
+      clubName: name,
+      color: color,
+      size: 52,
+      fontSize: 20,
+      borderRadius: 17,
+    );
+    if (active == 0) return avatar;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 18),
+            height: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: kOnlineGreen,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: AppColors.background, width: 2),
+            ),
+            child: Center(
+              child: Text(
+                '$active',
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _groupRow(GroupChat g) {
+    final title = _groupTitle(g);
+    final preview = _lastGroupPreview(g);
+    final ts = g.lastMessage?.sentAt ?? g.createdAt;
+    final activeCount = g.memberIds
+        .where((m) => presenceService.isOnline(m))
+        .length;
+    final fromMe = g.lastMessage?.senderId == _myId;
+
+    return _ConvoRow(
+      leading: _groupLeading(g, activeCount),
+      name: title,
+      memberCount: g.memberIds.length,
+      preview: preview.isEmpty ? '${g.memberIds.length} members' : preview,
+      time: _timeLabel(ts),
+      fromMe: fromMe,
+      typing: presenceService.isTyping(g.id),
+      unread: 0,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => GroupChatScreen(group: g)),
+      ).then((_) => setState(() {})),
+    );
+  }
+
+  // Avatar + online presence dot.
+  Widget _dottedAvatar(Widget avatar, {required bool online}) {
+    if (!online) return avatar;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          right: -1,
+          bottom: -1,
+          child: Container(
+            width: 15,
+            height: 15,
+            decoration: BoxDecoration(
+              color: kOnlineGreen,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.background, width: 2.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Overlapping member avatars + green "active members" count badge.
+  Widget _groupLeading(GroupChat g, int activeCount) {
+    final shown = g.memberIds.take(3).toList();
+    return SizedBox(
+      width: 52,
+      height: 52,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * 13.0,
+              top: i * 7.0,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.background, width: 2),
+                ),
+                child: UserAvatar(
+                  userId: shown[i],
+                  name: _nameFor(shown[i]),
+                  size: 30,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          if (activeCount > 0)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                height: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: kOnlineGreen,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.background, width: 2),
+                ),
+                child: Center(
+                  child: Text(
+                    '$activeCount',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static const _clubColors = [
+    Color(0xFF8C1D40),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
+  ];
+
   String _timeLabel(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-
+    if (diff.inSeconds < 60) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
     final today = DateTime(now.year, now.month, now.day);
     final msgDay = DateTime(dt.year, dt.month, dt.day);
     final daysDiff = today.difference(msgDay).inDays;
-
     if (daysDiff == 1) return 'Yesterday';
     if (daysDiff < 7) {
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       return days[dt.weekday - 1];
     }
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     if (dt.year == now.year) return '${months[dt.month - 1]} ${dt.day}';
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 }
 
-// ─── Contact data class ────────────────────────────────────────────────────────
+// ─── Section label ────────────────────────────────────────────────────────────
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
 
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.6,
+          color: AppColors.secondaryText,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Conversation row ─────────────────────────────────────────────────────────
+class _ConvoRow extends StatefulWidget {
+  final Widget leading;
+  final String name;
+  final String? badge; // e.g. 'Club'
+  final int? memberCount; // groups
+  final String preview;
+  final String time;
+  final bool fromMe;
+  final bool typing;
+  final int unread;
+  final VoidCallback onTap;
+
+  const _ConvoRow({
+    required this.leading,
+    required this.name,
+    this.badge,
+    this.memberCount,
+    required this.preview,
+    required this.time,
+    required this.fromMe,
+    required this.typing,
+    required this.unread,
+    required this.onTap,
+  });
+
+  @override
+  State<_ConvoRow> createState() => _ConvoRowState();
+}
+
+class _ConvoRowState extends State<_ConvoRow> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = widget.unread > 0;
+    return InkWell(
+      onTap: widget.onTap,
+      onHighlightChanged: (v) => setState(() => _hover = v),
+      child: Container(
+        color: _hover ? AppColors.surfaceAlt : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+        child: Row(
+          children: [
+            widget.leading,
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          widget.name,
+                          style: TextStyle(
+                            fontSize: 15.5,
+                            fontWeight: unread
+                                ? FontWeight.w800
+                                : FontWeight.w700,
+                            color: AppColors.text,
+                            letterSpacing: -0.2,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (widget.badge != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            widget.badge!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primaryRed,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (widget.memberCount != null) ...[
+                        const SizedBox(width: 7),
+                        Text(
+                          '· ${widget.memberCount}',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppColors.secondaryText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      if (widget.fromMe && !widget.typing) ...[
+                        const ReadTicks(status: 'read', size: 14),
+                        const SizedBox(width: 5),
+                      ],
+                      Expanded(
+                        child: Text(
+                          widget.typing ? 'typing…' : widget.preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontStyle: widget.typing
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                            fontWeight: (unread || widget.typing)
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: widget.typing
+                                ? AppColors.primaryRed
+                                : (unread
+                                      ? AppColors.text
+                                      : AppColors.secondaryText),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.time,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
+                    color: unread
+                        ? AppColors.primaryRed
+                        : AppColors.secondaryText,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (unread)
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 20),
+                    height: 20,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        widget.unread > 99 ? '99+' : '${widget.unread}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 20, height: 20),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Warm empty state (search) ──────────────────────────────────────────────
+class _EmptyState extends StatelessWidget {
+  final String query;
+  const _EmptyState({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(40, 0, 40, 60),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: AppColors.lightRed,
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Icon(
+                Icons.forum_outlined,
+                size: 44,
+                color: AppColors.primaryRed,
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              'No matches for “$query”',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                color: AppColors.text,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Try a friend's name or a club. Start a new chat to connect with people across campus.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.secondaryText,
+                height: 1.55,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Cold start (no conversations yet) ──────────────────────────────────────
+class _ColdStart extends StatelessWidget {
+  final VoidCallback onCompose;
+  const _ColdStart({required this.onCompose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(40, 0, 40, 60),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 72,
+              color: AppColors.secondaryText,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start a new chat to connect with people across campus.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 18),
+            GestureDetector(
+              onTap: onCompose,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_square, size: 18, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'New conversation',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── No clubs joined (Clubs tab) ────────────────────────────────────────────
+class _NoClubs extends StatelessWidget {
+  const _NoClubs();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(40, 0, 40, 60),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.groups_outlined,
+              size: 72,
+              color: AppColors.secondaryText,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No club discussions yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Join a club to take part in its group discussion. Search above to find one.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Contact data class ────────────────────────────────────────────────────────
 class _Contact {
   final String id;
   final String name;
@@ -545,8 +1291,7 @@ class _Contact {
   });
 }
 
-// ─── Contact Result Tile ──────────────────────────────────────────────────────
-
+// ─── Contact result tile (search → start new chat) ──────────────────────────
 class _ContactResultTile extends StatelessWidget {
   final _Contact contact;
   final VoidCallback onTap;
@@ -554,15 +1299,17 @@ class _ContactResultTile extends StatelessWidget {
   const _ContactResultTile({required this.contact, required this.onTap});
 
   static const _clubColors = [
-    Color(0xFF8C1D40), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+    Color(0xFF8C1D40),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
   ];
 
   @override
   Widget build(BuildContext context) {
     final Widget avatar;
-    final Widget? subtitle;
-
     if (contact.isClub) {
       final idx = clubs.indexWhere((c) => c.id == contact.id);
       final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
@@ -572,37 +1319,42 @@ class _ContactResultTile extends StatelessWidget {
         color: color,
         size: 48,
         fontSize: 18,
-        borderRadius: 12,
+        borderRadius: 14,
       );
-      subtitle = null;
     } else {
       avatar = UserAvatar(
-          userId: contact.id, name: contact.name, size: 48, fontSize: 18);
-      subtitle = null;
+        userId: contact.id,
+        name: contact.name,
+        size: 48,
+        fontSize: 18,
+      );
     }
 
     final badge = contact.isClub
         ? 'Club'
         : contact.isAdmin
-            ? 'Club Admin'
-            : null;
+        ? 'Club Admin'
+        : null;
 
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: avatar,
       title: Row(
         children: [
           Flexible(
-            child: Text(contact.name,
-                style: TextStyle(fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              contact.name,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           if (badge != null) ...[
             const SizedBox(width: 6),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(10),
@@ -610,27 +1362,28 @@ class _ContactResultTile extends StatelessWidget {
               child: Text(
                 badge,
                 style: TextStyle(
-                    fontSize: 10,
-                    color: AppColors.primaryRed,
-                    fontWeight: FontWeight.w600),
+                  fontSize: 10,
+                  color: AppColors.primaryRed,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
         ],
       ),
-      subtitle: subtitle,
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: AppColors.primaryRed,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(
+        child: const Text(
           'Message',
           style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.white),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
       ),
       onTap: onTap,
@@ -639,7 +1392,6 @@ class _ContactResultTile extends StatelessWidget {
 }
 
 // ─── New Conversation Sheet ───────────────────────────────────────────────────
-
 class _NewConversationSheet extends StatefulWidget {
   final String myId;
   final List<_Contact> contacts;
@@ -667,7 +1419,9 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
   List<_Contact> get _results {
     if (_query.isEmpty) return widget.contacts;
     final q = _query.toLowerCase();
-    return widget.contacts.where((c) => c.name.toLowerCase().contains(q)).toList();
+    return widget.contacts
+        .where((c) => c.name.toLowerCase().contains(q))
+        .toList();
   }
 
   bool _isSelected(_Contact c) => _selected.any((s) => s.id == c.id);
@@ -709,7 +1463,9 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
   @override
   Widget build(BuildContext context) {
     final isGroup = _selected.length >= 2;
-    final canStart = _selected.isNotEmpty && (!isGroup || _groupNameCtrl.text.trim().isNotEmpty);
+    final canStart =
+        _selected.isNotEmpty &&
+        (!isGroup || _groupNameCtrl.text.trim().isNotEmpty);
     final height = MediaQuery.of(context).size.height * 0.85;
 
     return Container(
@@ -720,34 +1476,39 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
       ),
       child: Column(
         children: [
-          // Handle
           const SizedBox(height: 10),
           Container(
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 12),
-
-          // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Text('New Conversation',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                Text(
+                  'New Conversation',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.text,
+                  ),
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: AppColors.secondaryText),
+                  ),
                 ),
               ],
             ),
           ),
-
-          // Selected chips
           if (_selected.isNotEmpty) ...[
             const SizedBox(height: 8),
             SizedBox(
@@ -755,23 +1516,34 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: _selected.map((c) => Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Chip(
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    backgroundColor: AppColors.primaryRed.withValues(alpha: 0.12),
-                    label: Text(c.name.split(' ').first,
-                        style: TextStyle(fontSize: 12, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
-                    deleteIconColor: AppColors.primaryRed,
-                    onDeleted: () => _toggle(c),
-                    padding: EdgeInsets.zero,
-                  ),
-                )).toList(),
+                children: _selected
+                    .map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Chip(
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          backgroundColor: AppColors.primaryRed.withValues(
+                            alpha: 0.12,
+                          ),
+                          label: Text(
+                            c.name.split(' ').first,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.primaryRed,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          deleteIconColor: AppColors.primaryRed,
+                          onDeleted: () => _toggle(c),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ),
           ],
-
-          // Group name field
           if (_showGroupName) ...[
             const SizedBox(height: 8),
             Padding(
@@ -779,12 +1551,20 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
               child: TextField(
                 controller: _groupNameCtrl,
                 onChanged: (_) => setState(() {}),
+                style: TextStyle(color: AppColors.text),
                 decoration: InputDecoration(
                   hintText: 'Group name',
-                  prefixIcon: Icon(Icons.group_rounded, color: AppColors.secondaryText),
+                  hintStyle: TextStyle(color: AppColors.secondaryText),
+                  prefixIcon: Icon(
+                    Icons.group_rounded,
+                    color: AppColors.secondaryText,
+                  ),
                   filled: true,
                   fillColor: AppColors.card,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 0,
+                    horizontal: 16,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -793,19 +1573,21 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
               ),
             ),
           ],
-
           const SizedBox(height: 10),
-
-          // Search field
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
               controller: _searchCtrl,
               autofocus: true,
               onChanged: (v) => setState(() => _query = v),
+              style: TextStyle(color: AppColors.text),
               decoration: InputDecoration(
                 hintText: 'Search by name...',
-                prefixIcon: Icon(Icons.search_rounded, color: AppColors.secondaryText),
+                hintStyle: TextStyle(color: AppColors.secondaryText),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: AppColors.secondaryText,
+                ),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.close, size: 18),
@@ -817,7 +1599,10 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
                     : null,
                 filled: true,
                 fillColor: AppColors.card,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -826,38 +1611,65 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Results list
           Expanded(
             child: _results.isEmpty
                 ? Center(
-                    child: Text('No results', style: TextStyle(color: AppColors.secondaryText)),
+                    child: Text(
+                      'No results',
+                      style: TextStyle(color: AppColors.secondaryText),
+                    ),
                   )
                 : ListView.separated(
                     itemCount: _results.length,
-                    separatorBuilder: (ctx, i) => Divider(height: 1, indent: 64),
-                    itemBuilder: (_, i) {
+                    separatorBuilder: (ctx, i) => Divider(
+                      height: 1,
+                      indent: 64,
+                      color: AppColors.divider,
+                    ),
+                    itemBuilder: (ctx, i) {
                       final c = _results[i];
                       final selected = _isSelected(c);
                       return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: UserAvatar(userId: c.id, name: c.name, size: 44, fontSize: 16),
-                        title: Text(c.name,
-                            style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        leading: UserAvatar(
+                          userId: c.id,
+                          name: c.name,
+                          size: 44,
+                          fontSize: 16,
+                        ),
+                        title: Text(
+                          c.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
                         trailing: selected
                             ? Container(
-                                width: 28, height: 28,
+                                width: 28,
+                                height: 28,
                                 decoration: BoxDecoration(
                                   color: AppColors.primaryRed,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.check, color: Colors.white, size: 16),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
                               )
                             : Container(
-                                width: 28, height: 28,
+                                width: 28,
+                                height: 28,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.divider, width: 1.5),
+                                  border: Border.all(
+                                    color: AppColors.divider,
+                                    width: 1.5,
+                                  ),
                                 ),
                               ),
                         onTap: () => _toggle(c),
@@ -865,8 +1677,6 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
                     },
                   ),
           ),
-
-          // Start button
           SafeArea(
             top: false,
             child: Padding(
@@ -880,15 +1690,20 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: AppColors.divider,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: Text(
                     _selected.isEmpty
                         ? 'Select someone'
                         : isGroup
-                            ? 'Create Group'
-                            : 'Start Chat with ${_selected.first.name.split(' ').first}',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ? 'Create Group'
+                        : 'Start Chat with ${_selected.first.name.split(' ').first}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

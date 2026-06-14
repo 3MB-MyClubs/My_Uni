@@ -24,7 +24,8 @@
       "Bash(gunzip -c /Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/4d49ed4f-c330-4832-a039-808e9f0f7c30/tool-results/webfetch-1781191553935-emg3wb.bin)",
       "Bash(tar -xf /tmp/design_fetched.bin -C /tmp/design_home)",
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "Bash(tar -xzf \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/0ca6a9a0-851b-4201-b537-8b2b340d6f58/tool-results/webfetch-1781438685750-jsri7l.bin\" -C /tmp/unihub_design)"
     ],
     "additionalDirectories": [
       "/tmp",

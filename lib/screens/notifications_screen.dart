@@ -28,10 +28,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   List<AppNotification> get _allNotifs =>
       [
-      ...notifications,
-      ...userState.dynamicNotifications,
-    ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          ...notifications,
+          ...userState.dynamicNotifications,
+        ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   int get _totalUnread => _allNotifs.where((n) => !_read.contains(n.id)).length;
 
@@ -306,6 +306,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: IconButton(
+                        tooltip: 'Back',
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.maybePop(context),
+                        icon: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 20,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
