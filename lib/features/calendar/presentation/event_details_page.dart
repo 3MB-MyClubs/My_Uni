@@ -9,11 +9,7 @@ class EventDetailsPage extends ConsumerWidget {
   final app.Event event;
   final Color color;
 
-  const EventDetailsPage({
-    super.key,
-    required this.event,
-    required this.color,
-  });
+  const EventDetailsPage({super.key, required this.event, required this.color});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,10 +63,7 @@ class EventDetailsPage extends ConsumerWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                color.withValues(alpha: 0.7),
-                color,
-              ],
+              colors: [color.withValues(alpha: 0.7), color],
             ),
           ),
         ),
@@ -134,6 +127,10 @@ class EventDetailsPage extends ConsumerWidget {
   }
 
   Widget _buildBottomBar(BuildContext context) {
+    if (!event.endTime.isAfter(DateTime.now())) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -150,11 +147,7 @@ class EventDetailsPage extends ConsumerWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-          child: RsvpButton(
-            eventId: event.id,
-            color: color,
-            isPast: event.endTime.isBefore(DateTime.now()),
-          ),
+          child: RsvpButton(eventId: event.id, color: color),
         ),
       ),
     );
@@ -169,8 +162,18 @@ class _InfoCard extends StatelessWidget {
 
   String _fmt(DateTime dt) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final dow = days[dt.weekday - 1];
@@ -195,7 +198,12 @@ class _InfoCard extends StatelessWidget {
             value: _fmt(event.dateTime),
             color: color,
           ),
-          Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.divider),
+          Divider(
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+            color: AppColors.divider,
+          ),
           _Row(
             icon: Icons.schedule_rounded,
             label: 'Ends',
@@ -203,7 +211,12 @@ class _InfoCard extends StatelessWidget {
             color: color,
           ),
           if (event.location.isNotEmpty) ...[
-            Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.divider),
+            Divider(
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: AppColors.divider,
+            ),
             _Row(
               icon: Icons.location_on_rounded,
               label: 'Location',

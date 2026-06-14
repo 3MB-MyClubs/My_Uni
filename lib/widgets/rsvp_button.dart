@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/calendar_rsvp_helper.dart';
 import '../services/rsvp_store.dart';
 
-class RsvpButton extends StatelessWidget {
+class RsvpButton extends StatefulWidget {
   final String eventId;
   final Color color;
   final bool isPast;
   final bool compact;
+  final Event? event;
 
   const RsvpButton({
     super.key,
@@ -15,60 +18,62 @@ class RsvpButton extends StatelessWidget {
     required this.color,
     this.isPast = false,
     this.compact = false,
+    this.event,
   });
 
+  @override
+  State<RsvpButton> createState() => _RsvpButtonState();
+}
+
+class _RsvpButtonState extends State<RsvpButton> {
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
+  void _syncCalendar(BuildContext context) {
+    if (widget.event == null) return;
+    syncRsvpToDeviceCalendar(context, widget.event!);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.isPast) return const SizedBox.shrink();
+
     return ListenableBuilder(
       listenable: rsvpStore,
-      builder: (context, _) {
-        final attending = rsvpStore.isAttending(eventId);
-        final pending = rsvpStore.isPending(eventId);
-
-        void onToggle() {
-          if (pending) return;
-          rsvpStore.toggle(eventId, _userId);
-        }
+      builder: (ctx, _) {
+        final attending = rsvpStore.isAttending(widget.eventId);
+        final pending = rsvpStore.isPending(widget.eventId);
 
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
           transitionBuilder: (child, anim) => FadeTransition(
             opacity: anim,
             child: ScaleTransition(
-              scale: Tween<double>(begin: 0.97, end: 1.0).animate(
-                CurvedAnimation(parent: anim, curve: Curves.easeOut),
-              ),
+              scale: Tween<double>(
+                begin: 0.97,
+                end: 1.0,
+              ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
               child: child,
             ),
           ),
-          child: _build(attending, pending, onToggle),
+          child: _build(ctx, attending, pending),
         );
       },
     );
   }
 
-  Widget _build(bool attending, bool pending, VoidCallback onToggle) {
-    // ── Past ─────────────────────────────────────────────────────────────────
-    if (isPast) {
-      if (compact) {
-        return _CompactChip(
-          key: const ValueKey('past-c'),
-          label: 'Ended',
-          icon: Icons.event_busy_rounded,
-          active: false,
-          enabled: false,
-          color: AppColors.secondaryText,
-          onTap: () {},
-        );
+  Widget _build(BuildContext context, bool attending, bool pending) {
+    void onToggle() {
+      if (pending) return;
+      final wasAttending = rsvpStore.isAttending(widget.eventId);
+      rsvpStore.toggle(widget.eventId, _userId);
+      if (!wasAttending && widget.event != null) {
+        _syncCalendar(context);
       }
-      return _FullPastBar(key: const ValueKey('past-f'));
     }
 
     // ── Compact ───────────────────────────────────────────────────────────────
-    if (compact) {
+    if (widget.compact) {
       if (attending) {
         return Row(
           key: const ValueKey('compact-attending'),
@@ -79,7 +84,7 @@ class RsvpButton extends StatelessWidget {
               icon: Icons.check_circle_rounded,
               active: true,
               enabled: !pending,
-              color: color,
+              color: widget.color,
               onTap: onToggle,
             ),
             const SizedBox(width: 6),
@@ -93,7 +98,11 @@ class RsvpButton extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.close, size: 12, color: AppColors.secondaryText),
+                      Icon(
+                        Icons.close,
+                        size: 12,
+                        color: AppColors.secondaryText,
+                      ),
                       SizedBox(width: 3),
                       Text(
                         'Not Coming',
@@ -117,7 +126,7 @@ class RsvpButton extends StatelessWidget {
         icon: Icons.how_to_reg_rounded,
         active: false,
         enabled: !pending,
-        color: color,
+        color: widget.color,
         onTap: onToggle,
       );
     }
@@ -134,17 +143,14 @@ class RsvpButton extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      color,
-                      Color.lerp(color, Colors.black, 0.15)!,
-                    ],
+                    colors: [widget.color, Color.lerp(widget.color, Colors.black, 0.15)!],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: color.withValues(alpha: 0.30),
+                      color: widget.color.withValues(alpha: 0.30),
                       blurRadius: 14,
                       offset: const Offset(0, 5),
                     ),
@@ -153,8 +159,11 @@ class RsvpButton extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.check_circle_rounded,
-                        color: Colors.white, size: 19),
+                    Icon(
+                      Icons.check_circle_rounded,
+                      color: Colors.white,
+                      size: 19,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'You are attending',
@@ -185,10 +194,7 @@ class RsvpButton extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.divider,
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: AppColors.divider, width: 1.5),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -232,17 +238,14 @@ class RsvpButton extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  color,
-                  Color.lerp(color, Colors.black, 0.18)!,
-                ],
+                colors: [widget.color, Color.lerp(widget.color, Colors.black, 0.18)!],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: color.withValues(alpha: 0.35),
+                  color: widget.color.withValues(alpha: 0.35),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -251,8 +254,7 @@ class RsvpButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.how_to_reg_rounded,
-                    color: Colors.white, size: 20),
+                Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20),
                 SizedBox(width: 8),
                 Text(
                   'RSVP',
@@ -267,40 +269,6 @@ class RsvpButton extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ─── Past bar ─────────────────────────────────────────────────────────────────
-
-class _FullPastBar extends StatelessWidget {
-  const _FullPastBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_busy_rounded,
-              size: 18, color: AppColors.secondaryText),
-          SizedBox(width: 8),
-          Text(
-            'This event has passed',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.secondaryText,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -328,15 +296,13 @@ class _CompactChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor =
-        enabled ? color : color.withValues(alpha: 0.45);
+    final effectiveColor = enabled ? color : color.withValues(alpha: 0.45);
 
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           gradient: active
               ? LinearGradient(
@@ -354,16 +320,14 @@ class _CompactChip extends StatelessWidget {
                     color: color.withValues(alpha: 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
-                  )
+                  ),
                 ]
               : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 14,
-                color: active ? Colors.white : effectiveColor),
+            Icon(icon, size: 14, color: active ? Colors.white : effectiveColor),
             const SizedBox(width: 5),
             Text(
               label,

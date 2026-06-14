@@ -4,6 +4,7 @@ import '../features/calendar/widgets/add_to_calendar_button.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/calendar_rsvp_helper.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
@@ -127,7 +128,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       (c) => c.id == event.clubId,
       orElse: () => clubs.first,
     );
-    final isPast = event.endTime.isBefore(DateTime.now());
+    final isPast = !event.endTime.isAfter(DateTime.now());
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
 
     return Scaffold(
@@ -913,6 +914,8 @@ class _RsvpPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isPast) return const SizedBox.shrink();
+
     return ListenableBuilder(
       listenable: rsvpStore,
       builder: (context, _) {
@@ -1000,7 +1003,7 @@ class _RsvpPanel extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                   ],
-                  RsvpButton(eventId: event.id, color: color, isPast: isPast),
+                  RsvpButton(eventId: event.id, color: color, isPast: isPast, event: event),
                   if (!isPast) ...[
                     const SizedBox(height: 8),
                     AddToCalendarButton(event: event, color: color),
@@ -1036,7 +1039,8 @@ class _ProgrammeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final schedule = event.schedule!;
     final isRsvpd = rsvpStore.isAttending(event.id);
-    final locked = event.scheduleGated && !isRsvpd;
+    final isPast = !event.endTime.isAfter(DateTime.now());
+    final locked = event.scheduleGated && !isRsvpd && !isPast;
 
     return Container(
       decoration: BoxDecoration(
@@ -1076,6 +1080,7 @@ class _ProgrammeCard extends StatelessWidget {
                             builder: (ctx, _) => _InlineRsvpButton(
                               eventId: event.id,
                               color: color,
+                              event: event,
                             ),
                           ),
                         ],
@@ -1249,34 +1254,48 @@ class _SlotRow extends StatelessWidget {
   }
 }
 
-class _InlineRsvpButton extends StatelessWidget {
+class _InlineRsvpButton extends StatefulWidget {
   final String eventId;
   final Color color;
-  const _InlineRsvpButton({required this.eventId, required this.color});
+  final Event event;
+  const _InlineRsvpButton({
+    required this.eventId,
+    required this.color,
+    required this.event,
+  });
 
+  @override
+  State<_InlineRsvpButton> createState() => _InlineRsvpButtonState();
+}
+
+class _InlineRsvpButtonState extends State<_InlineRsvpButton> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: rsvpStore,
       builder: (ctx, _) {
-        final attending = rsvpStore.isAttending(eventId);
+        final attending = rsvpStore.isAttending(widget.eventId);
         return GestureDetector(
           onTap: () {
             final userId =
                 authService.currentUser?.id ??
                 authService.currentAdmin?.id ??
                 '';
-            rsvpStore.toggle(eventId, userId);
+            final wasAttending = rsvpStore.isAttending(widget.eventId);
+            rsvpStore.toggle(widget.eventId, userId);
+            if (!wasAttending) {
+              syncRsvpToDeviceCalendar(ctx, widget.event);
+            }
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
-              color: attending ? Colors.transparent : color,
+              color: attending ? Colors.transparent : widget.color,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: attending
                     ? AppColors.secondaryText.withValues(alpha: 0.4)
-                    : color,
+                    : widget.color,
               ),
             ),
             child: Text(

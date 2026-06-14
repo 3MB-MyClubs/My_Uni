@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
+
 import '../models/notification.dart';
 import 'content_store.dart';
 
@@ -41,6 +45,9 @@ class UserState extends ChangeNotifier {
 
   /// Sets the club photo path for [clubId] and notifies all listeners.
   void setClubPhoto(String clubId, String path) {
+    // Club photos are overwritten at a stable path. Remove the old decoded
+    // bitmap so every ClubAvatar immediately displays the newly edited photo.
+    PaintingBinding.instance.imageCache.evict(FileImage(File(path)));
     clubPhotoPaths[clubId] = path;
     notifyListeners();
   }

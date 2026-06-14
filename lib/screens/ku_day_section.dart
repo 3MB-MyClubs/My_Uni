@@ -802,6 +802,7 @@ class _EventActionsState extends State<_EventActions> {
         RsvpButton(
           eventId: widget.event.id,
           color: widget.color,
+          isPast: !widget.event.endTime.isAfter(DateTime.now()),
           compact: true,
         ),
         _ActionChip(

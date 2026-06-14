@@ -139,6 +139,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   String _groupTitle(GroupChat g) {
+    if (g.name != null && g.name!.isNotEmpty) return g.name!;
     final others = g.memberIds.where((id) => id != _myId).toList();
     final names = others.map((id) {
       try {
@@ -168,6 +169,37 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return '$name: ${msg.content}';
   }
 
+  void _openComposeSheet() async {
+    final myId = _myId;
+    final contacts = _allContacts.where((c) => !c.isClub).toList();
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NewConversationSheet(
+        myId: myId,
+        contacts: contacts,
+        onStartDm: (otherId, otherName) {
+          Navigator.pop(context);
+          _openChat(otherId, otherName);
+        },
+        onCreateGroup: (memberIds, groupName) {
+          Navigator.pop(context);
+          final group = groupChatService.createGroup(
+            creatorId: myId,
+            memberIds: memberIds,
+            initialContent: '👋 Group created',
+            groupName: groupName,
+          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => GroupChatScreen(group: group)),
+          ).then((_) => setState(() {}));
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final results = _searchResults;
@@ -184,6 +216,19 @@ class _MessagesScreenState extends State<MessagesScreen> {
           'Messages',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_square),
+            tooltip: 'New conversation',
+            onPressed: _openComposeSheet,
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openComposeSheet,
+        backgroundColor: AppColors.primaryRed,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.edit_rounded),
       ),
       body: Column(
         children: [
@@ -589,6 +634,268 @@ class _ContactResultTile extends StatelessWidget {
         ),
       ),
       onTap: onTap,
+    );
+  }
+}
+
+// ─── New Conversation Sheet ───────────────────────────────────────────────────
+
+class _NewConversationSheet extends StatefulWidget {
+  final String myId;
+  final List<_Contact> contacts;
+  final void Function(String otherId, String otherName) onStartDm;
+  final void Function(List<String> memberIds, String groupName) onCreateGroup;
+
+  const _NewConversationSheet({
+    required this.myId,
+    required this.contacts,
+    required this.onStartDm,
+    required this.onCreateGroup,
+  });
+
+  @override
+  State<_NewConversationSheet> createState() => _NewConversationSheetState();
+}
+
+class _NewConversationSheetState extends State<_NewConversationSheet> {
+  final _searchCtrl = TextEditingController();
+  final _groupNameCtrl = TextEditingController();
+  String _query = '';
+  final List<_Contact> _selected = [];
+  bool _showGroupName = false;
+
+  List<_Contact> get _results {
+    if (_query.isEmpty) return widget.contacts;
+    final q = _query.toLowerCase();
+    return widget.contacts.where((c) => c.name.toLowerCase().contains(q)).toList();
+  }
+
+  bool _isSelected(_Contact c) => _selected.any((s) => s.id == c.id);
+
+  void _toggle(_Contact c) {
+    setState(() {
+      if (_isSelected(c)) {
+        _selected.removeWhere((s) => s.id == c.id);
+      } else {
+        _selected.add(c);
+      }
+      _showGroupName = _selected.length >= 2;
+    });
+  }
+
+  void _onStart() {
+    if (_selected.isEmpty) return;
+    if (_selected.length == 1) {
+      widget.onStartDm(_selected.first.id, _selected.first.name);
+    } else {
+      final groupName = _groupNameCtrl.text.trim();
+      if (groupName.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a group name')),
+        );
+        return;
+      }
+      widget.onCreateGroup(_selected.map((c) => c.id).toList(), groupName);
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _groupNameCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isGroup = _selected.length >= 2;
+    final canStart = _selected.isNotEmpty && (!isGroup || _groupNameCtrl.text.trim().isNotEmpty);
+    final height = MediaQuery.of(context).size.height * 0.85;
+
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle
+          const SizedBox(height: 10),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Text('New Conversation',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+                ),
+              ],
+            ),
+          ),
+
+          // Selected chips
+          if (_selected.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: _selected.map((c) => Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Chip(
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    backgroundColor: AppColors.primaryRed.withValues(alpha: 0.12),
+                    label: Text(c.name.split(' ').first,
+                        style: TextStyle(fontSize: 12, color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
+                    deleteIconColor: AppColors.primaryRed,
+                    onDeleted: () => _toggle(c),
+                    padding: EdgeInsets.zero,
+                  ),
+                )).toList(),
+              ),
+            ),
+          ],
+
+          // Group name field
+          if (_showGroupName) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _groupNameCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Group name',
+                  prefixIcon: Icon(Icons.group_rounded, color: AppColors.secondaryText),
+                  filled: true,
+                  fillColor: AppColors.card,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 10),
+
+          // Search field
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'Search by name...',
+                prefixIcon: Icon(Icons.search_rounded, color: AppColors.secondaryText),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.card,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Results list
+          Expanded(
+            child: _results.isEmpty
+                ? Center(
+                    child: Text('No results', style: TextStyle(color: AppColors.secondaryText)),
+                  )
+                : ListView.separated(
+                    itemCount: _results.length,
+                    separatorBuilder: (ctx, i) => Divider(height: 1, indent: 64),
+                    itemBuilder: (_, i) {
+                      final c = _results[i];
+                      final selected = _isSelected(c);
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: UserAvatar(userId: c.id, name: c.name, size: 44, fontSize: 16),
+                        title: Text(c.name,
+                            style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+                        trailing: selected
+                            ? Container(
+                                width: 28, height: 28,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryRed,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.check, color: Colors.white, size: 16),
+                              )
+                            : Container(
+                                width: 28, height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.divider, width: 1.5),
+                                ),
+                              ),
+                        onTap: () => _toggle(c),
+                      );
+                    },
+                  ),
+          ),
+
+          // Start button
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: canStart ? _onStart : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppColors.divider,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text(
+                    _selected.isEmpty
+                        ? 'Select someone'
+                        : isGroup
+                            ? 'Create Group'
+                            : 'Start Chat with ${_selected.first.name.split(' ').first}',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

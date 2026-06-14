@@ -20,6 +20,7 @@ class GroupChat {
   final List<String> memberIds; // includes creator
   final List<GroupMessage> messages;
   final DateTime createdAt;
+  final String? name;
 
   GroupChat({
     required this.id,
@@ -27,6 +28,7 @@ class GroupChat {
     required this.memberIds,
     required this.messages,
     required this.createdAt,
+    this.name,
   });
 
   GroupMessage? get lastMessage =>
@@ -50,6 +52,7 @@ class GroupChatService extends ChangeNotifier {
     required String creatorId,
     required List<String> memberIds,
     required String initialContent,
+    String? groupName,
   }) {
     final all = ({creatorId, ...memberIds}).toList();
     final group = GroupChat(
@@ -65,6 +68,7 @@ class GroupChatService extends ChangeNotifier {
         ),
       ],
       createdAt: DateTime.now(),
+      name: groupName,
     );
     _groups.insert(0, group);
     notifyListeners();

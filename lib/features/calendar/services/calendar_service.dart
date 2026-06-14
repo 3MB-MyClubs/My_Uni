@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:device_calendar/device_calendar.dart' as dc;
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -24,6 +25,7 @@ class CalendarService {
   static const _prefPrefix = 'myclubs_cal_';
   static const _initialPermissionPromptSeenKey =
       'myclubs_calendar_permission_prompt_seen_v1';
+  static const _iosCalendarChannel = MethodChannel('ku_app/apple_calendar');
   final dc.DeviceCalendarPlugin _plugin = dc.DeviceCalendarPlugin();
   bool _tzInitialized = false;
 
@@ -36,8 +38,10 @@ class CalendarService {
   Future<CalendarPermissionState> checkPermission() async {
     try {
       if (Platform.isIOS) {
-        final status = await ph.Permission.calendarFullAccess.status;
-        return _fromStatus(status);
+        final status = await _iosCalendarChannel.invokeMethod<String>(
+          'checkPermission',
+        );
+        return _fromIosStatus(status);
       }
       final status = await ph.Permission.calendarWriteOnly.status;
       return _fromStatus(status);
@@ -48,6 +52,12 @@ class CalendarService {
 
   Future<CalendarPermissionState> requestPermission() async {
     try {
+      if (Platform.isIOS) {
+        final status = await _iosCalendarChannel.invokeMethod<String>(
+          'requestPermission',
+        );
+        return _fromIosStatus(status);
+      }
       final result = await _plugin.requestPermissions();
       if (result.isSuccess && result.data == true) {
         return CalendarPermissionState.granted;
@@ -72,6 +82,10 @@ class CalendarService {
 
   Future<CalendarResult> addEvent(CalendarEventModel model) async {
     try {
+      if (Platform.isIOS) {
+        return _addEventToAppleCalendar(model);
+      }
+
       _initTz();
       final calId = await _findWritableCalendarId();
       if (calId == null) {
@@ -113,6 +127,38 @@ class CalendarService {
       return const CalendarResult(success: true);
     } catch (e) {
       return CalendarResult(success: false, error: e.toString());
+    }
+  }
+
+  Future<CalendarResult> _addEventToAppleCalendar(
+    CalendarEventModel model,
+  ) async {
+    try {
+      final syncedIds = await _iosCalendarChannel.invokeListMethod<String>(
+        'syncEvents',
+        {
+          'events': [
+            {
+              'id': model.appEventId,
+              'title': model.title,
+              'description': model.description,
+              'location': model.location,
+              'startDate': model.startDate.millisecondsSinceEpoch,
+              'endDate': model.endDate.millisecondsSinceEpoch,
+            },
+          ],
+        },
+      );
+      final success = syncedIds?.contains(model.appEventId) ?? false;
+      return CalendarResult(
+        success: success,
+        error: success ? null : 'Failed to add event to Apple Calendar.',
+      );
+    } on PlatformException catch (error) {
+      return CalendarResult(
+        success: false,
+        error: error.message ?? 'Failed to add event to Apple Calendar.',
+      );
     }
   }
 
@@ -186,4 +232,12 @@ class CalendarService {
         ph.PermissionStatus.restricted => CalendarPermissionState.restricted,
         _ => CalendarPermissionState.unknown,
       };
+
+  CalendarPermissionState _fromIosStatus(String? status) => switch (status) {
+    'authorized' || 'writeOnly' => CalendarPermissionState.granted,
+    'denied' => CalendarPermissionState.permanentlyDenied,
+    'restricted' => CalendarPermissionState.restricted,
+    'notDetermined' => CalendarPermissionState.denied,
+    _ => CalendarPermissionState.unknown,
+  };
 }

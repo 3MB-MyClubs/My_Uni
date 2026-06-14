@@ -465,8 +465,8 @@ class _FeedScreenState extends State<FeedScreen> {
                   children: [
                     Center(
                       child: Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        size: 18,
+                        Icons.send_outlined,
+                        size: 20,
                         color: AppColors.text,
                       ),
                     ),
@@ -2342,6 +2342,7 @@ class _EventCardState extends State<_EventCard> {
                     child: RsvpButton(
                       eventId: widget.event.id,
                       color: AppColors.primaryRed,
+                      isPast: !widget.event.endTime.isAfter(DateTime.now()),
                       compact: true,
                     ),
                   ),

@@ -10,40 +10,44 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    if let controller = window?.rootViewController as? FlutterViewController {
-      let weatherChannel = FlutterMethodChannel(
-        name: "ku_app/native_weather",
-        binaryMessenger: controller.binaryMessenger
-      )
-      weatherChannel.setMethodCallHandler { call, result in
-        if call.method == "openWeatherApp" {
-          self.openWeatherApp(result: result)
-        } else {
-          result(FlutterMethodNotImplemented)
-        }
-      }
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
 
-      let calendarChannel = FlutterMethodChannel(
-        name: "ku_app/apple_calendar",
-        binaryMessenger: controller.binaryMessenger
-      )
-      calendarChannel.setMethodCallHandler { call, result in
-        if call.method == "syncEvents" {
-          self.syncEventsToAppleCalendar(call: call, result: result)
-        } else if call.method == "removeEvent" {
-          self.removeEventFromAppleCalendar(call: call, result: result)
-        } else if call.method == "checkPermission" {
-          self.checkCalendarPermissionStatus(result: result)
-        } else if call.method == "requestPermission" {
-          self.requestCalendarAccess { granted in
-            result(granted ? "authorized" : "denied")
-          }
-        } else {
-          result(FlutterMethodNotImplemented)
-        }
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let messenger = engineBridge.applicationRegistrar.messenger()
+
+    let weatherChannel = FlutterMethodChannel(
+      name: "ku_app/native_weather",
+      binaryMessenger: messenger
+    )
+    weatherChannel.setMethodCallHandler { call, result in
+      if call.method == "openWeatherApp" {
+        self.openWeatherApp(result: result)
+      } else {
+        result(FlutterMethodNotImplemented)
       }
     }
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+
+    let calendarChannel = FlutterMethodChannel(
+      name: "ku_app/apple_calendar",
+      binaryMessenger: messenger
+    )
+    calendarChannel.setMethodCallHandler { call, result in
+      if call.method == "syncEvents" {
+        self.syncEventsToAppleCalendar(call: call, result: result)
+      } else if call.method == "removeEvent" {
+        self.removeEventFromAppleCalendar(call: call, result: result)
+      } else if call.method == "checkPermission" {
+        self.checkCalendarPermissionStatus(result: result)
+      } else if call.method == "requestPermission" {
+        self.requestCalendarAccess { granted in
+          result(granted ? "authorized" : "denied")
+        }
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   private func openWeatherApp(result: @escaping FlutterResult) {
@@ -81,8 +85,8 @@ import UIKit
         for payload in eventPayloads {
           guard let id = payload["id"] as? String,
                 let title = payload["title"] as? String,
-                let startMs = payload["startDate"] as? Double,
-                let endMs = payload["endDate"] as? Double else {
+                let startMs = (payload["startDate"] as? NSNumber)?.doubleValue,
+                let endMs = (payload["endDate"] as? NSNumber)?.doubleValue else {
             continue
           }
 
@@ -181,7 +185,9 @@ import UIKit
   }
 
   private func unihubCalendar() throws -> EKCalendar {
-    if let existing = eventStore.calendars(for: .event).first(where: { $0.title == "UniHub" }) {
+    if let existing = eventStore.calendars(for: .event).first(where: {
+      $0.title == "UniHub" && $0.allowsContentModifications
+    }) {
       return existing
     }
 
@@ -189,12 +195,21 @@ import UIKit
     calendar.title = "UniHub"
     calendar.cgColor = UIColor(red: 0.71, green: 0.11, blue: 0.09, alpha: 1.0).cgColor
 
-    if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
-      calendar.source = localSource
-    } else if let defaultSource = eventStore.defaultCalendarForNewEvents?.source {
+    if let defaultSource = eventStore.defaultCalendarForNewEvents?.source {
       calendar.source = defaultSource
+    } else if let localSource = eventStore.sources.first(where: { $0.sourceType == .local }) {
+      calendar.source = localSource
     } else if let firstSource = eventStore.sources.first {
       calendar.source = firstSource
+    } else {
+      throw NSError(
+        domain: "UniHubCalendar",
+        code: 1,
+        userInfo: [
+          NSLocalizedDescriptionKey:
+            "No calendar account is available. Open the Calendar app once, then try again."
+        ]
+      )
     }
 
     try eventStore.saveCalendar(calendar, commit: true)
@@ -216,7 +231,4 @@ import UIKit
     }
   }
 
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-  }
 }
