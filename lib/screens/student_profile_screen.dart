@@ -124,40 +124,50 @@ class StudentProfileScreen extends StatelessWidget {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            // ── Banner + overlapping identity (all in one Stack) ────────────
+            // ── Clean identity header (no banner) ───────────────────────────
             SliverToBoxAdapter(
-              child: IntrinsicHeight(
-                child: Stack(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Full-width gradient banner
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: 168,
-                      child: _BannerSection(
-                        graduation: data.graduation,
-                        onSettings: onSettings,
-                        onShare: onShare,
-                      ),
-                    ),
-                    // Identity section overlaps banner by 44px
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 124, 20, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Avatar + Edit profile row
-                          _AvatarEditRow(
-                            initials: data.initials,
-                            onEditProfile: onEditProfile,
+                    // Top toolbar: share · graduation · settings
+                    Row(
+                      children: [
+                        if (onShare != null)
+                          _HeaderIconButton(
+                            icon: Icons.ios_share_outlined,
+                            onTap: onShare,
+                          )
+                        else
+                          const SizedBox(width: 40),
+                        Expanded(
+                          child: Text(
+                            data.graduation,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1.4,
+                              fontWeight: FontWeight.w700,
+                              color: StudentProfileScreen._burgundy,
+                            ),
                           ),
-                          const SizedBox(height: 14),
-                          // Name + major + year
-                          _NameMajorBlock(data: data),
-                        ],
-                      ),
+                        ),
+                        _HeaderIconButton(
+                          icon: Icons.settings_outlined,
+                          onTap: onSettings,
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 18),
+                    // Avatar + Edit profile row
+                    _AvatarEditRow(
+                      initials: data.initials,
+                      onEditProfile: onEditProfile,
+                    ),
+                    const SizedBox(height: 16),
+                    // Name + major + year + double major / minor tags
+                    _NameMajorBlock(data: data),
                   ],
                 ),
               ),
@@ -166,7 +176,7 @@ class StudentProfileScreen extends StatelessWidget {
             // ── Stats bar ───────────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 2, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                 child: StatsCard(
                   clubs: data.clubs,
                   followers: data.followers,
@@ -367,138 +377,31 @@ class StudentProfileScreen extends StatelessWidget {
   }
 }
 
-// ─── Banner section ───────────────────────────────────────────────────────────
 
-class _BannerSection extends StatelessWidget {
-  final String graduation;
-  final VoidCallback onSettings;
-  final VoidCallback? onShare;
+// ─── Header icon button (share / settings) ────────────────────────────────────
 
-  const _BannerSection({
-    required this.graduation,
-    required this.onSettings,
-    this.onShare,
-  });
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _HeaderIconButton({required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 168,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF5A0D1B), // burgundyDeep
-            Color(0xFF8D1F2D), // burgundy
-            Color(0xFF8C3020), // warm orange-red
-          ],
-          stops: [0.0, 0.6, 1.0],
+    return _ScaleTap(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: StudentProfileScreen._card,
+          shape: BoxShape.circle,
+          border: Border.all(color: StudentProfileScreen._hair),
         ),
-      ),
-      child: Stack(
-        children: [
-          // Shield watermark (top-right, partially visible)
-          Positioned(
-            right: -32,
-            top: -28,
-            child: Opacity(
-              opacity: 0.12,
-              child: CustomPaint(
-                size: const Size(210, 240),
-                painter: _ShieldPainter(),
-              ),
-            ),
-          ),
-          // Nav overlay
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Share icon (left)
-                GestureDetector(
-                  onTap: onShare,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.ios_share_outlined,
-                      color: Colors.white,
-                      size: 17,
-                    ),
-                  ),
-                ),
-                // Graduation badge (center)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    graduation,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white.withValues(alpha: 0.78),
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                // Settings icon (right)
-                GestureDetector(
-                  onTap: onSettings,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.settings_outlined,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        child: Icon(icon, size: 19, color: StudentProfileScreen._burgundy),
       ),
     );
   }
-}
-
-/// Shield crest watermark — matches the SVG `M2 4 H54 V36 C54 50 42 60 28 62 C14 60 2 50 2 36 Z`
-/// painted in white, scaled to the custom size.
-class _ShieldPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sx = size.width / 56.0;
-    final sy = size.height / 64.0;
-
-    final path = Path()
-      ..moveTo(2 * sx, 4 * sy)
-      ..lineTo(54 * sx, 4 * sy)
-      ..lineTo(54 * sx, 36 * sy)
-      ..cubicTo(54 * sx, 50 * sy, 42 * sx, 60 * sy, 28 * sx, 62 * sy)
-      ..cubicTo(14 * sx, 60 * sy, 2 * sx, 50 * sy, 2 * sx, 36 * sy)
-      ..close();
-
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ShieldPainter old) => false;
 }
 
 // ─── Avatar + Edit profile row ────────────────────────────────────────────────

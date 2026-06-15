@@ -16,26 +16,108 @@ const List<String> kInterests = [
 
 const List<String> kTimeSlots = ['Morning', 'Afternoon', 'Evening', 'Weekend'];
 
+const List<String> kAcademicPrograms = [
+  'Archaeology and History of Art',
+  'Business Administration',
+  'Chemical and Biological Engineering',
+  'Chemistry',
+  'Comparative Literature',
+  'Computer Engineering',
+  'Economics',
+  'Electrical and Electronics Engineering',
+  'History',
+  'Industrial Engineering',
+  'International Relations',
+  'Law',
+  'Mathematics',
+  'Mechanical Engineering',
+  'Media and Visual Arts',
+  'Medicine',
+  'Molecular Biology and Genetics',
+  'Nursing',
+  'Philosophy',
+  'Physics',
+  'Psychology',
+  'Sociology',
+];
+
 /// Weekly lecture schedule for the current user (Hakan Tuncay).
 /// days: 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri
 const List<Map<String, dynamic>> kCourseSchedule = [
-  {'title': 'MFIN 304 · Investment Analysis',     'room': 'CASE Z24', 'startH': 8,  'startM': 30, 'endH': 9,  'endM': 40, 'days': [2, 4], 'color': 0xFF7B1FA2},
-  {'title': 'INTL 380 · Comp. Political Economy', 'room': 'SNA 157',  'startH': 11, 'startM': 30, 'endH': 12, 'endM': 40, 'days': [1, 3], 'color': 0xFF1565C0},
-  {'title': 'MATH 480 · Financial Mathematics',   'room': 'CASE Z25', 'startH': 13, 'startM': 0,  'endH': 14, 'endM': 10, 'days': [1, 3], 'color': 0xFF2E7D32},
-  {'title': 'INTL 385 · Turkish Foreign Policy',  'room': 'CASE B24', 'startH': 14, 'startM': 30, 'endH': 15, 'endM': 40, 'days': [2, 4], 'color': 0xFF283593},
-  {'title': 'HIST 300 · Hist. of Modern Turkey',  'room': 'CASE B24', 'startH': 16, 'startM': 0,  'endH': 17, 'endM': 10, 'days': [1, 3], 'color': 0xFFBF360C},
-  {'title': 'UNIV 198 · AI Literacy',             'room': 'SOS B07',  'startH': 11, 'startM': 30, 'endH': 12, 'endM': 40, 'days': [4, 5], 'color': 0xFF00695C},
+  {
+    'title': 'MFIN 304 · Investment Analysis',
+    'room': 'CASE Z24',
+    'startH': 8,
+    'startM': 30,
+    'endH': 9,
+    'endM': 40,
+    'days': [2, 4],
+    'color': 0xFF7B1FA2,
+  },
+  {
+    'title': 'INTL 380 · Comp. Political Economy',
+    'room': 'SNA 157',
+    'startH': 11,
+    'startM': 30,
+    'endH': 12,
+    'endM': 40,
+    'days': [1, 3],
+    'color': 0xFF1565C0,
+  },
+  {
+    'title': 'MATH 480 · Financial Mathematics',
+    'room': 'CASE Z25',
+    'startH': 13,
+    'startM': 0,
+    'endH': 14,
+    'endM': 10,
+    'days': [1, 3],
+    'color': 0xFF2E7D32,
+  },
+  {
+    'title': 'INTL 385 · Turkish Foreign Policy',
+    'room': 'CASE B24',
+    'startH': 14,
+    'startM': 30,
+    'endH': 15,
+    'endM': 40,
+    'days': [2, 4],
+    'color': 0xFF283593,
+  },
+  {
+    'title': 'HIST 300 · Hist. of Modern Turkey',
+    'room': 'CASE B24',
+    'startH': 16,
+    'startM': 0,
+    'endH': 17,
+    'endM': 10,
+    'days': [1, 3],
+    'color': 0xFFBF360C,
+  },
+  {
+    'title': 'UNIV 198 · AI Literacy',
+    'room': 'SOS B07',
+    'startH': 11,
+    'startM': 30,
+    'endH': 12,
+    'endM': 40,
+    'days': [4, 5],
+    'color': 0xFF00695C,
+  },
 ];
 
 /// Faculty → departments map. Edit here to update the major picker.
 const List<Map<String, dynamic>> kFaculties = [
-  {'name': 'Engineering',                   'departments': 'CS, EE, ME, IE, ChBE'},
-  {'name': 'Sciences',                      'departments': 'Physics, Chemistry, Math, MBG'},
-  {'name': 'Business & Economics',          'departments': 'BA, Economics, IR'},
-  {'name': 'Social Sciences & Humanities',  'departments': 'Psychology, History, Media, Philosophy'},
-  {'name': 'Law',                           'departments': 'Hukuk Fakültesi'},
-  {'name': 'Medicine',                      'departments': 'Tıp Fakültesi'},
-  {'name': 'Undecided',                     'departments': 'Not sure yet'},
+  {'name': 'Engineering', 'departments': 'CS, EE, ME, IE, ChBE'},
+  {'name': 'Sciences', 'departments': 'Physics, Chemistry, Math, MBG'},
+  {'name': 'Business & Economics', 'departments': 'BA, Economics, IR'},
+  {
+    'name': 'Social Sciences & Humanities',
+    'departments': 'Psychology, History, Media, Philosophy',
+  },
+  {'name': 'Law', 'departments': 'Hukuk Fakültesi'},
+  {'name': 'Medicine', 'departments': 'Tıp Fakültesi'},
+  {'name': 'Undecided', 'departments': 'Not sure yet'},
 ];
 
 // ── Club → interest category mapping ─────────────────────────────────────────
@@ -112,12 +194,11 @@ class PersonalizationService extends ChangeNotifier {
     // If the stored onboarding version doesn't match the current one,
     // mark onboarding as incomplete so the user sees the new flow once.
     // Their existing interests/times/major are preserved.
-    final storedVersion =
-        _box!.get('obv_$userId', defaultValue: 0) as int;
+    final storedVersion = _box!.get('obv_$userId', defaultValue: 0) as int;
     final versionMatch = storedVersion == _onboardingVersion;
 
-    onboardingComplete = versionMatch &&
-        (_box!.get('ob_$userId', defaultValue: false) as bool);
+    onboardingComplete =
+        versionMatch && (_box!.get('ob_$userId', defaultValue: false) as bool);
     interests = _restoreSet(_box!.get('int_$userId'));
     timePrefs = _restoreSet(_box!.get('tp_$userId'));
     major = _box!.get('major_$userId', defaultValue: '') as String;

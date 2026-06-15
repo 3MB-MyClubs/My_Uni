@@ -16,6 +16,7 @@ import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'edit_profile_screen.dart';
@@ -153,9 +154,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editMajorAndYear(BuildContext context, String userId) async {
-    final majorController = TextEditingController(
-      text: userState.majors[userId] ?? '',
-    );
+    final savedMajor = userState.majors[userId];
+    String? selectedMajor = kAcademicPrograms.contains(savedMajor)
+        ? savedMajor
+        : null;
     var selectedYear = userState.years[userId];
 
     await showDialog<void>(
@@ -176,15 +178,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: majorController,
-                maxLength: 48,
-                style: TextStyle(color: AppColors.text),
-                decoration: InputDecoration(
-                  labelText: 'Major',
-                  hintText: 'e.g. Business Administration',
-                  hintStyle: TextStyle(color: AppColors.secondaryText),
-                ),
+              AcademicProgramField(
+                value: selectedMajor,
+                hint: 'Select your major',
+                onTap: () async {
+                  final result = await showAcademicProgramPicker(
+                    context: ctx,
+                    title: 'Select major',
+                    selected: selectedMajor == null
+                        ? const []
+                        : [selectedMajor!],
+                  );
+                  if (result == null || !ctx.mounted) return;
+                  setModalState(
+                    () => selectedMajor = result.isEmpty ? null : result.first,
+                  );
+                },
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
@@ -218,7 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                userState.setMajor(userId, majorController.text);
+                userState.setMajor(userId, selectedMajor ?? '');
                 userState.setYear(userId, selectedYear ?? '');
                 await userPrefsService.save(userId);
                 if (ctx.mounted) Navigator.pop(ctx);
@@ -229,8 +238,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
-
-    majorController.dispose();
   }
 
   Future<void> _editBio(BuildContext context, String userId) async {
@@ -900,15 +907,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onEditBio: () => _editBio(context, user.id),
-            onEditProfile: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    EditProfileScreen(userId: user.id, realName: user.name),
-              ),
-            ).then((_) {
-              if (mounted) setState(() {});
-            }),
+            onEditProfile: () =>
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        EditProfileScreen(userId: user.id, realName: user.name),
+                  ),
+                ).then((_) {
+                  if (mounted) setState(() {});
+                }),
             onShare: () => _shareProfile(user.id, name),
             onEditVibes: () => _editVibes(user.id),
             onSeeAllEvents: () => Navigator.push(

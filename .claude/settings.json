@@ -25,7 +25,8 @@
       "Bash(tar -xf /tmp/design_fetched.bin -C /tmp/design_home)",
       "Skill(run)",
       "Skill(run:*)",
-      "Bash(tar -xzf \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/0ca6a9a0-851b-4201-b537-8b2b340d6f58/tool-results/webfetch-1781438685750-jsri7l.bin\" -C /tmp/unihub_design)"
+      "Bash(tar -xzf \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/0ca6a9a0-851b-4201-b537-8b2b340d6f58/tool-results/webfetch-1781438685750-jsri7l.bin\" -C /tmp/unihub_design)",
+      "Bash(tar -xzf \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/0ca6a9a0-851b-4201-b537-8b2b340d6f58/tool-results/webfetch-1781516468854-bknjqh.bin\" -C /tmp/unihub_alerts)"
     ],
     "additionalDirectories": [
       "/tmp",

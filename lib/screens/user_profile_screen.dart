@@ -5,8 +5,10 @@ import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/academic_program_picker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
@@ -131,9 +133,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void _editProfile() {
     final id = _myId;
     final bioController = TextEditingController(text: userState.bios[id] ?? '');
-    final majorController = TextEditingController(
-      text: userState.majors[id] ?? '',
-    );
+    final savedMajor = userState.majors[id];
+    String? selectedMajor = kAcademicPrograms.contains(savedMajor)
+        ? savedMajor
+        : null;
     var selectedYear = userState.years[id];
 
     showModalBottomSheet<void>(
@@ -202,9 +205,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              TextField(
-                controller: majorController,
-                decoration: const InputDecoration(hintText: 'e.g. Economics'),
+              AcademicProgramField(
+                value: selectedMajor,
+                hint: 'Select your major',
+                onTap: () async {
+                  final result = await showAcademicProgramPicker(
+                    context: context,
+                    title: 'Select major',
+                    selected: selectedMajor == null
+                        ? const []
+                        : [selectedMajor!],
+                  );
+                  if (result == null || !context.mounted) return;
+                  setSheetState(
+                    () => selectedMajor = result.isEmpty ? null : result.first,
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Text(
@@ -222,9 +238,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 children: _yearOptions.map((year) {
                   final isOn = selectedYear == year;
                   return GestureDetector(
-                    onTap: () => setSheetState(
-                      () => selectedYear = isOn ? null : year,
-                    ),
+                    onTap: () =>
+                        setSheetState(() => selectedYear = isOn ? null : year),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -256,7 +271,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     userState.setBio(id, bioController.text.trim());
-                    userState.setMajor(id, majorController.text.trim());
+                    userState.setMajor(id, selectedMajor ?? '');
                     userState.setYear(id, selectedYear ?? '');
                     _persist();
                     Navigator.pop(sheetContext);

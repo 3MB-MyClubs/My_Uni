@@ -6,9 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../services/app_colors.dart';
-import '../services/personalization_service.dart' show kInterests, kFaculties;
+import '../services/personalization_service.dart'
+    show kAcademicPrograms, kInterests;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 
 /// Full-page profile editor: name, photo, bio, university year, major,
@@ -39,11 +41,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   late final TextEditingController _nameCtrl;
   late final TextEditingController _bioCtrl;
-  late final TextEditingController _majorCtrl;
-  final _doubleMajorCtrl = TextEditingController();
-  final _minorCtrl = TextEditingController();
 
   String? _year;
+  String? _major;
   late Set<String> _interests;
   late List<String> _doubleMajors;
   late List<String> _minors;
@@ -57,21 +57,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       text: userState.usernameFor(_userId) ?? widget.realName,
     );
     _bioCtrl = TextEditingController(text: userState.bios[_userId] ?? '');
-    _majorCtrl = TextEditingController(text: userState.majors[_userId] ?? '');
+    final savedMajor = userState.majors[_userId];
+    _major = kAcademicPrograms.contains(savedMajor) ? savedMajor : null;
     final y = userState.years[_userId];
     _year = (y != null && y.isNotEmpty) ? y : null;
     _interests = {...?userState.interests[_userId]};
-    _doubleMajors = [...?userState.doubleMajors[_userId]];
-    _minors = [...?userState.minors[_userId]];
+    _doubleMajors = [
+      ...?userState.doubleMajors[_userId]?.where(kAcademicPrograms.contains),
+    ];
+    _minors = [
+      ...?userState.minors[_userId]?.where(kAcademicPrograms.contains),
+    ];
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _bioCtrl.dispose();
-    _majorCtrl.dispose();
-    _doubleMajorCtrl.dispose();
-    _minorCtrl.dispose();
     super.dispose();
   }
 
@@ -86,7 +88,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       userState.setUsername(_userId, name);
     }
     userState.setBio(_userId, _bioCtrl.text);
-    userState.setMajor(_userId, _majorCtrl.text);
+    userState.setMajor(_userId, _major ?? '');
     userState.setYear(_userId, _year ?? '');
     userState.setInterests(_userId, _interests.toList());
     userState.setDoubleMajors(_userId, _doubleMajors);
@@ -95,11 +97,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(
-        content: Text('Profile updated'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ));
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
     Navigator.pop(context);
   }
 
@@ -133,11 +137,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 _pickPhoto(ImageSource.camera);
               }),
               Divider(height: 1, indent: 16, color: AppColors.divider),
-              _photoOption(Icons.photo_library_outlined, 'Choose from library',
-                  () {
-                Navigator.pop(context);
-                _pickPhoto(ImageSource.gallery);
-              }),
+              _photoOption(
+                Icons.photo_library_outlined,
+                'Choose from library',
+                () {
+                  Navigator.pop(context);
+                  _pickPhoto(ImageSource.gallery);
+                },
+              ),
               if (userState.profilePhotoPaths[_userId] != null) ...[
                 Divider(height: 1, indent: 16, color: AppColors.divider),
                 _photoOption(Icons.delete_outline_rounded, 'Remove photo', () {
@@ -154,8 +161,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _photoOption(IconData icon, String label, VoidCallback onTap,
-      {bool danger = false}) {
+  Widget _photoOption(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    bool danger = false,
+  }) {
     final color = danger ? Colors.red.shade400 : AppColors.primaryRed;
     return ListTile(
       leading: Container(
@@ -167,10 +178,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         child: Icon(icon, color: color),
       ),
-      title: Text(label,
-          style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: danger ? color : AppColors.text)),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: danger ? color : AppColors.text,
+        ),
+      ),
       onTap: onTap,
     );
   }
@@ -224,16 +238,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         foregroundColor: AppColors.text,
-        title: Text('Edit Profile',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(
+          'Edit Profile',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         actions: [
           TextButton(
             onPressed: _save,
-            child: Text('Save',
-                style: TextStyle(
-                    color: AppColors.primaryRed,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15)),
+            child: Text(
+              'Save',
+              style: TextStyle(
+                color: AppColors.primaryRed,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
           ),
         ],
       ),
@@ -247,7 +266,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  UserAvatar(userId: _userId, name: name, size: 100, fontSize: 38),
+                  UserAvatar(
+                    userId: _userId,
+                    name: name,
+                    size: 100,
+                    fontSize: 38,
+                  ),
                   Positioned(
                     right: -2,
                     bottom: -2,
@@ -257,10 +281,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.background, width: 3),
+                        border: Border.all(
+                          color: AppColors.background,
+                          width: 3,
+                        ),
                       ),
-                      child: const Icon(Icons.camera_alt_rounded,
-                          size: 16, color: Colors.white),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -271,9 +301,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           Center(
             child: TextButton(
               onPressed: _showPhotoOptions,
-              child: Text('Change photo',
-                  style: TextStyle(
-                      color: AppColors.primaryRed, fontWeight: FontWeight.w700)),
+              child: Text(
+                'Change photo',
+                style: TextStyle(
+                  color: AppColors.primaryRed,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -310,60 +344,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 18),
 
           _label('Major'),
-          _field(
-            controller: _majorCtrl,
-            hint: 'e.g. Computer Science',
-            maxLength: 48,
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final f in kFaculties)
-                if ((f['name'] as String) != 'Undecided')
-                  _suggestionChip(f['name'] as String, () {
-                    setState(() => _majorCtrl.text = f['name'] as String);
-                  }),
-            ],
+          AcademicProgramField(
+            value: _major,
+            hint: 'Select your major',
+            onTap: () async {
+              final result = await showAcademicProgramPicker(
+                context: context,
+                title: 'Select major',
+                selected: _major == null ? const [] : [_major!],
+              );
+              if (result == null || !mounted) return;
+              setState(() => _major = result.firstOrNull);
+            },
           ),
           const SizedBox(height: 18),
 
           _label('Double major'),
-          _listEditor(
-            controller: _doubleMajorCtrl,
+          _programListEditor(
             items: _doubleMajors,
-            hint: 'Add a double major program',
+            hint: 'Select a double major',
           ),
           const SizedBox(height: 18),
 
           _label('Minor'),
-          _listEditor(
-            controller: _minorCtrl,
-            items: _minors,
-            hint: 'Add a minor program',
-          ),
+          _programListEditor(items: _minors, hint: 'Select a minor'),
           const SizedBox(height: 18),
 
           _label('Interests'),
           Wrap(
             spacing: 9,
             runSpacing: 10,
-            children: <String>[
-              ...kInterests,
-              ..._interests.where((i) => !kInterests.contains(i)),
-            ].map((topic) {
-              final on = _interests.contains(topic);
-              return _choiceChip(topic, on, () {
-                setState(() {
-                  if (on) {
-                    _interests.remove(topic);
-                  } else {
-                    _interests.add(topic);
-                  }
-                });
-              });
-            }).toList(),
+            children:
+                <String>[
+                  ...kInterests,
+                  ..._interests.where((i) => !kInterests.contains(i)),
+                ].map((topic) {
+                  final on = _interests.contains(topic);
+                  return _choiceChip(topic, on, () {
+                    setState(() {
+                      if (on) {
+                        _interests.remove(topic);
+                      } else {
+                        _interests.add(topic);
+                      }
+                    });
+                  });
+                }).toList(),
           ),
           const SizedBox(height: 28),
 
@@ -375,10 +401,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 backgroundColor: AppColors.primaryRed,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: const Text('Save changes',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Save changes',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ],
@@ -388,14 +417,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // ── Reusable pieces ─────────────────────────────────────────────────────────
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8, left: 2),
-        child: Text(text,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-                color: AppColors.secondaryText)),
-      );
+    padding: const EdgeInsets.only(bottom: 8, left: 2),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.2,
+        color: AppColors.secondaryText,
+      ),
+    ),
+  );
 
   Widget _field({
     required TextEditingController controller,
@@ -415,8 +447,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         hintStyle: TextStyle(color: AppColors.secondaryText),
         filled: true,
         fillColor: AppColors.card,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: AppColors.divider),
@@ -443,83 +477,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           color: on ? AppColors.primaryRed : AppColors.card,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-              color: on ? AppColors.primaryRed : AppColors.divider),
+            color: on ? AppColors.primaryRed : AppColors.divider,
+          ),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: on ? Colors.white : AppColors.text)),
-      ),
-    );
-  }
-
-  Widget _suggestionChip(String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.add, size: 13, color: AppColors.secondaryText),
-            const SizedBox(width: 4),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.secondaryText)),
-          ],
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: on ? Colors.white : AppColors.text,
+          ),
         ),
       ),
     );
   }
 
-  /// Text field + "Add" button, with the added entries shown as removable chips.
-  Widget _listEditor({
-    required TextEditingController controller,
+  Widget _programListEditor({
     required List<String> items,
     required String hint,
   }) {
-    void add() {
-      final v = controller.text.trim();
-      if (v.isEmpty) return;
-      if (!items.contains(v)) setState(() => items.add(v));
-      controller.clear();
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _field(
-                controller: controller,
-                hint: hint,
-                maxLength: 48,
-                onChanged: null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: add,
-              child: Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.add_rounded, color: Colors.white),
-              ),
-            ),
-          ],
+        AcademicProgramField(
+          value: null,
+          hint: hint,
+          onTap: () async {
+            final result = await showAcademicProgramPicker(
+              context: context,
+              title: hint,
+              selected: items,
+              allowsMultiple: true,
+            );
+            if (result == null || !mounted) return;
+            setState(() {
+              items
+                ..clear()
+                ..addAll(result);
+            });
+          },
         ),
         if (items.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -527,32 +523,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             spacing: 8,
             runSpacing: 8,
             children: items
-                .map((item) => Container(
-                      padding:
-                          const EdgeInsets.only(left: 14, right: 6, top: 7, bottom: 7),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                            color: AppColors.primaryRed.withValues(alpha: 0.3)),
+                .map(
+                  (item) => Container(
+                    padding: const EdgeInsets.only(
+                      left: 14,
+                      right: 6,
+                      top: 7,
+                      bottom: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: AppColors.primaryRed.withValues(alpha: 0.3),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(item,
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primaryRed)),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: () => setState(() => items.remove(item)),
-                            child: Icon(Icons.close_rounded,
-                                size: 16, color: AppColors.primaryRed),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryRed,
                           ),
-                        ],
-                      ),
-                    ))
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => setState(() => items.remove(item)),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: AppColors.primaryRed,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ],
