@@ -31,7 +31,6 @@ class _ExploreScreenState extends State<ExploreScreen>
   // Clubs tab state
   final _clubSearchController = TextEditingController();
   String _clubQuery = '';
-  String _selectedCategory = 'All';
 
   // People tab state
   final _peopleSearchController = TextEditingController();
@@ -39,18 +38,6 @@ class _ExploreScreenState extends State<ExploreScreen>
   String? _peopleFeedback;
   bool _peopleFeedbackIsFollowing = false;
   int _peopleFeedbackVersion = 0;
-  final List<String> _peopleSuggestionIds = [];
-  final Set<String> _pendingSuggestionReplacements = {};
-
-  static const List<String> _categories = [
-    'All',
-    'Sports',
-    'Arts',
-    'Engineering',
-    'Business',
-    'Social',
-    'Academic',
-  ];
 
   // Palette for the colored monograms (mirrors the design's per-item hues).
   static const List<Color> _hues = [
@@ -148,11 +135,8 @@ class _ExploreScreenState extends State<ExploreScreen>
       final matchesQuery =
           q.isEmpty ||
           c.name.toLowerCase().contains(q) ||
-          c.description.toLowerCase().contains(q) ||
-          categoryFor(c).toLowerCase().contains(q);
-      final matchesCategory =
-          _selectedCategory == 'All' || categoryFor(c) == _selectedCategory;
-      return matchesQuery && matchesCategory;
+          c.description.toLowerCase().contains(q);
+      return matchesQuery;
     }).toList();
   }
 
@@ -180,85 +164,39 @@ class _ExploreScreenState extends State<ExploreScreen>
         .toList();
   }
 
-  int _mutualFriendCount(User other) {
-    return other.followingUserIds
-        .where(userState.followedUserIds.contains)
-        .length;
+  int _personSearchScore(User person, String query) {
+    final name = userState.displayNameFor(person.id, person.name).toLowerCase();
+    final words = name.split(RegExp(r'\s+'));
+    if (name == query) return 0;
+    if (words.any((word) => word == query)) return 1;
+    if (name.startsWith(query)) return 2;
+    if (words.any((word) => word.startsWith(query))) return 3;
+    return 4;
   }
 
-  List<User> _rankedSuggestionCandidates() {
-    final candidates = users
-        .where((u) => u.id != _myId && !userState.isFollowingUser(u.id))
-        .toList();
-    final mutualConnections =
-        candidates.where((u) => _mutualFriendCount(u) > 0).toList()
-          ..sort((a, b) {
-            final mutuals = _mutualFriendCount(
-              b,
-            ).compareTo(_mutualFriendCount(a));
-            return mutuals != 0 ? mutuals : a.name.compareTo(b.name);
-          });
-    final strangers =
-        candidates.where((u) => _mutualFriendCount(u) == 0).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
-
-    return [...mutualConnections, ...strangers];
-  }
-
-  List<User> _suggestedPeople() {
-    final ranked = _rankedSuggestionCandidates();
-    final rankedById = {for (final person in ranked) person.id: person};
-
-    if (_peopleSuggestionIds.isEmpty) {
-      _peopleSuggestionIds.addAll(ranked.take(10).map((person) => person.id));
-    } else {
-      for (var i = 0; i < _peopleSuggestionIds.length; i++) {
-        final id = _peopleSuggestionIds[i];
-        if (rankedById.containsKey(id) ||
-            _pendingSuggestionReplacements.contains(id)) {
-          continue;
-        }
-        final replacement = ranked.cast<User?>().firstWhere(
-          (person) => !_peopleSuggestionIds.contains(person!.id),
-          orElse: () => null,
-        );
-        if (replacement == null) {
-          _peopleSuggestionIds.removeAt(i--);
-        } else {
-          _peopleSuggestionIds[i] = replacement.id;
-        }
-      }
-      for (final person in ranked) {
-        if (_peopleSuggestionIds.length >= 10) break;
-        if (!_peopleSuggestionIds.contains(person.id)) {
-          _peopleSuggestionIds.add(person.id);
-        }
-      }
-    }
-
-    return _peopleSuggestionIds
-        .map(
-          (id) => users.cast<User?>().firstWhere(
-            (person) => person?.id == id,
-            orElse: () => null,
-          ),
-        )
-        .whereType<User>()
-        .toList();
-  }
-
-  /// Search by first or last name. Without a query, suggest at most ten people:
-  /// mutual-friend connections first, then strangers to fill the list.
+  /// Search by first name, surname, or display name, with strongest matches first.
   List<User> get _filteredPeople {
     final q = _peopleQuery.toLowerCase().trim();
-    if (q.isNotEmpty) {
-      return users.where((u) {
-        if (u.id == _myId) return false;
-        return u.name.toLowerCase().contains(q);
-      }).toList();
-    }
+    if (q.isEmpty) return const [];
 
-    return _suggestedPeople();
+    final matches = users.where((person) {
+      if (person.id == _myId) return false;
+      final name = userState
+          .displayNameFor(person.id, person.name)
+          .toLowerCase();
+      return name.contains(q);
+    }).toList();
+    matches.sort((a, b) {
+      final byRelevance = _personSearchScore(
+        a,
+        q,
+      ).compareTo(_personSearchScore(b, q));
+      if (byRelevance != 0) return byRelevance;
+      final aName = userState.displayNameFor(a.id, a.name);
+      final bName = userState.displayNameFor(b.id, b.name);
+      return aName.compareTo(bName);
+    });
+    return matches;
   }
 
   void _persist() => userPrefsService.save(_myId);
@@ -266,11 +204,6 @@ class _ExploreScreenState extends State<ExploreScreen>
   void _togglePersonFollow(User person) {
     final nowFollowing = !userState.isFollowingUser(person.id);
     final feedbackVersion = ++_peopleFeedbackVersion;
-    final isSuggestion = _peopleQuery.trim().isEmpty;
-
-    if (nowFollowing && isSuggestion) {
-      _pendingSuggestionReplacements.add(person.id);
-    }
 
     userState.toggleFollowUser(person.id);
     _persist();
@@ -278,34 +211,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     setState(() {
       _peopleFeedbackIsFollowing = nowFollowing;
       _peopleFeedback = nowFollowing
-          ? isSuggestion
-                ? 'Following ${person.name}. New suggestion added.'
-                : 'You are now following ${person.name}.'
+          ? 'You are now following ${person.name}.'
           : 'You unfollowed ${person.name}.';
     });
-
-    if (nowFollowing && isSuggestion) {
-      Future.delayed(const Duration(milliseconds: 420), () {
-        if (!mounted) return;
-        final index = _peopleSuggestionIds.indexOf(person.id);
-        _pendingSuggestionReplacements.remove(person.id);
-        if (index < 0 || !userState.isFollowingUser(person.id)) return;
-
-        final replacement = _rankedSuggestionCandidates()
-            .cast<User?>()
-            .firstWhere(
-              (candidate) => !_peopleSuggestionIds.contains(candidate!.id),
-              orElse: () => null,
-            );
-        setState(() {
-          if (replacement == null) {
-            _peopleSuggestionIds.removeAt(index);
-          } else {
-            _peopleSuggestionIds[index] = replacement.id;
-          }
-        });
-      });
-    }
 
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted || feedbackVersion != _peopleFeedbackVersion) return;
@@ -373,6 +281,12 @@ class _ExploreScreenState extends State<ExploreScreen>
                 isCollapsed: true,
                 filled: false,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
                 hintText: hint,
                 hintStyle: TextStyle(
                   color: AppColors.secondaryText,
@@ -499,7 +413,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   Widget _buildClubsTab() {
     final filtered = _filteredClubs;
-    final filtering = _clubQuery.isNotEmpty || _selectedCategory != 'All';
+    final filtering = _clubQuery.isNotEmpty;
     final label = filtering
         ? '${filtered.length} club${filtered.length == 1 ? '' : 's'}'
         : 'All clubs';
@@ -516,55 +430,13 @@ class _ExploreScreenState extends State<ExploreScreen>
                 value: _clubQuery,
                 onChanged: (v) => setState(() => _clubQuery = v),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 32,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 6),
-                  itemBuilder: (context, i) {
-                    final cat = _categories[i];
-                    final active = cat == _selectedCategory;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = cat),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: active ? AppColors.primaryRed : AppColors.card,
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                            color: active
-                                ? AppColors.primaryRed
-                                : AppColors.divider,
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Text(
-                          cat,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: active ? Colors.white : AppColors.text,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
             ],
           ),
         ),
         const SizedBox(height: 14),
         Expanded(
           child: filtered.isEmpty
-              ? _emptyState(
-                  'No clubs match',
-                  'Try a different filter or search term',
-                )
+              ? _emptyState('No clubs match', 'Try a different search term')
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   itemCount: filtered.length + 1,
@@ -606,9 +478,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final searching = _peopleQuery.trim().isNotEmpty;
     final people = _filteredPeople;
 
-    final label = searching
-        ? '${people.length} result${people.length == 1 ? '' : 's'}'
-        : 'Suggested for you';
+    final label = '${people.length} result${people.length == 1 ? '' : 's'}';
 
     return Column(
       children: [
@@ -689,11 +559,11 @@ class _ExploreScreenState extends State<ExploreScreen>
         ),
         const SizedBox(height: 14),
         Expanded(
-          child: people.isEmpty
+          child: !searching
+              ? const SizedBox.expand()
+              : people.isEmpty
               ? _emptyState(
-                  searching
-                      ? 'No one matches "$_peopleQuery"'
-                      : 'No people yet',
+                  'No one matches "$_peopleQuery"',
                   'Try a name or surname',
                 )
               : ListView.builder(

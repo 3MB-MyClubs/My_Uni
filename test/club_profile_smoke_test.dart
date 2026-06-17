@@ -65,18 +65,27 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Find People results use profile-photo-aware avatars', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Find People starts blank and searches with photo-aware avatars',
+    (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Find People'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Find People'));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(UserAvatar), findsWidgets);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.byType(UserAvatar), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search by name or surname…'),
+        users.first.name.split(' ').first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(UserAvatar), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('ProfileScreen renders in light mode for a logged-in user', (
     tester,

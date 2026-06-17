@@ -7,6 +7,7 @@ import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
+import 'screens/theme_choice_screen.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
 import 'services/app_colors.dart';
@@ -97,13 +98,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _onLogin() {
+    final currentUserId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id;
+    // First-time accounts are always presented in light and asked to pick a
+    // theme (handled in build); force light before the picker appears.
+    if (currentUserId != null && !themeService.hasChosenTheme(currentUserId)) {
+      themeService.setDark(false);
+    }
     setState(() {
       _loggedIn = true;
       _showLogin = false;
       _showSignUp = false;
     });
-    final currentUserId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
       messageService.setCurrentUserId(currentUserId);
       userPrefsService.load(currentUserId);
@@ -257,17 +263,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
           }
-          homeWidget = MainNavScreen(
-            isAdmin: isAdmin,
-            onLogout: () {
-              _savePrefs();
-              setState(() {
-                _loggedIn = false;
-                _showLogin = false;
-                _showSignUp = false;
-              });
-            },
-          );
+          if (currentUserId != null &&
+              !themeService.hasChosenTheme(currentUserId)) {
+            // First sign-in for this account → interactive light/dark picker.
+            homeWidget = ThemeChoiceScreen(
+              onChoose: (dark) =>
+                  themeService.markThemeChosen(currentUserId, dark),
+            );
+          } else {
+            homeWidget = MainNavScreen(
+              isAdmin: isAdmin,
+              onLogout: () {
+                _savePrefs();
+                setState(() {
+                  _loggedIn = false;
+                  _showLogin = false;
+                  _showSignUp = false;
+                });
+              },
+            );
+          }
         } else if (_showLogin) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),

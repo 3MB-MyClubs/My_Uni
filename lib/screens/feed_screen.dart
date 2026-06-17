@@ -32,7 +32,6 @@ import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'messages_screen.dart';
 import 'event_detail_screen.dart';
-import 'my_calendar_screen.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
 
@@ -406,30 +405,6 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            // My Calendar button
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
-              ),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.primaryRed.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  size: 18,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
             // Messages button
             GestureDetector(
               onTap: () =>

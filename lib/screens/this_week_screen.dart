@@ -304,6 +304,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
+  // Pull-to-refresh: re-pull the event list (same gesture as the home feed).
+  Future<void> _onRefresh() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
@@ -318,8 +324,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        color: AppColors.primaryRed,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           // ── Header: title + subtitle + bell ──
           SliverToBoxAdapter(
             child: Padding(
@@ -526,6 +536,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             child: SizedBox(height: MediaQuery.of(context).padding.bottom + 90),
           ),
         ],
+        ),
       ),
     );
   }
