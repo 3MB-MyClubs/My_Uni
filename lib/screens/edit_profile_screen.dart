@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../services/app_colors.dart';
 import '../services/personalization_service.dart'
     show kAcademicPrograms, kInterests;
+import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
@@ -30,7 +31,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  static const List<String> _yearOptions = [
+  static const List<String> _fallbackYearOptions = [
     '1st Year',
     '2nd Year',
     '3rd Year',
@@ -47,8 +48,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late Set<String> _interests;
   late List<String> _doubleMajors;
   late List<String> _minors;
+  List<ProfileLookupItem> _majors = const [];
+  List<ProfileLookupItem> _academicYears = const [];
+  List<ProfileLookupItem> _interestOptions = const [];
+  bool _isLoadingRemote = true;
+  bool _isSaving = false;
+  String? _loadError;
 
   String get _userId => widget.userId;
+  List<String> get _majorNames =>
+      _majors.isEmpty ? kAcademicPrograms : _majors.map((m) => m.name).toList();
+  List<String> get _yearOptions => _academicYears.isEmpty
+      ? _fallbackYearOptions
+      : _academicYears.map((year) => year.name).toList();
+  List<String> get _interestNames => _interestOptions.isEmpty
+      ? kInterests
+      : _interestOptions.map((interest) => interest.name).toList();
 
   @override
   void initState() {
@@ -63,11 +78,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _year = (y != null && y.isNotEmpty) ? y : null;
     _interests = {...?userState.interests[_userId]};
     _doubleMajors = [
-      ...?userState.doubleMajors[_userId]?.where(kAcademicPrograms.contains),
+      ...?userState.doubleMajors[_userId],
     ];
     _minors = [
-      ...?userState.minors[_userId]?.where(kAcademicPrograms.contains),
+      ...?userState.minors[_userId],
     ];
+    _loadRemoteData();
   }
 
   @override
@@ -78,8 +94,76 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
+  Future<void> _loadRemoteData() async {
+    try {
+      final results = await Future.wait([
+        studentProfileService.fetchMajors(),
+        studentProfileService.fetchAcademicYears(),
+        studentProfileService.fetchInterests(),
+        studentProfileService.fetchProfile(_userId),
+      ]);
+      if (!mounted) return;
+
+      final profile = results[3] as StudentProfileData?;
+      setState(() {
+        _majors = results[0] as List<ProfileLookupItem>;
+        _academicYears = results[1] as List<ProfileLookupItem>;
+        _interestOptions = results[2] as List<ProfileLookupItem>;
+        if (profile != null) {
+          if (profile.fullName.isNotEmpty) _nameCtrl.text = profile.fullName;
+          _bioCtrl.text = profile.bio ?? '';
+          _major = profile.majorName;
+          _year = profile.academicYearName;
+          _interests = profile.interestNames.toSet();
+          _doubleMajors = [...profile.doubleMajorNames];
+          _minors = [...profile.minorNames];
+        }
+        _isLoadingRemote = false;
+        _loadError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingRemote = false;
+        _loadError = 'Could not load profile options from Supabase.';
+      });
+    }
+  }
+
   Future<void> _save() async {
+    if (_isSaving) return;
     final name = _nameCtrl.text.trim();
+    setState(() => _isSaving = true);
+
+    try {
+      if (_majors.isNotEmpty || _academicYears.isNotEmpty) {
+        await studentProfileService.updateProfile(
+          UpdateStudentProfileInput(
+            userId: _userId,
+            fullName: name.isEmpty ? widget.realName : name,
+            bio: _bioCtrl.text,
+            majorId: _idForName(_majors, _major),
+            academicYearId: _idForName(_academicYears, _year),
+            interestIds: _idsForNames(_interestOptions, _interests),
+            doubleMajorIds: _idsForNames(_majors, _doubleMajors),
+            minorIds: _idsForNames(_majors, _minors),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not save profile to Supabase'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+
     // Treat the name field as the display name (username). Clearing it or
     // matching the real account name reverts to the real name.
     if (name.isEmpty || name == widget.realName) {
@@ -95,6 +179,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     userState.setMinors(_userId, _minors);
     await userPrefsService.save(_userId);
     if (!mounted) return;
+    setState(() => _isSaving = false);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -105,6 +190,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
       );
     Navigator.pop(context);
+  }
+
+  String? _idForName(List<ProfileLookupItem> items, String? name) {
+    if (name == null || name.trim().isEmpty) return null;
+    for (final item in items) {
+      if (item.name == name) return item.id;
+    }
+    return null;
+  }
+
+  List<String> _idsForNames(
+    List<ProfileLookupItem> items,
+    Iterable<String> names,
+  ) {
+    final selected = names.toSet();
+    return items
+        .where((item) => selected.contains(item.name))
+        .map((item) => item.id)
+        .toList();
   }
 
   // ── Photo ─────────────────────────────────────────────────────────────────
@@ -244,9 +348,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: _save,
+            onPressed: _isSaving ? null : _save,
             child: Text(
-              'Save',
+              _isSaving ? 'Saving...' : 'Save',
               style: TextStyle(
                 color: AppColors.primaryRed,
                 fontWeight: FontWeight.w800,
@@ -259,6 +363,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
+          if (_isLoadingRemote) ...[
+            LinearProgressIndicator(
+              color: AppColors.primaryRed,
+              backgroundColor: AppColors.lightRed,
+              minHeight: 2,
+            ),
+            const SizedBox(height: 16),
+          ] else if (_loadError != null) ...[
+            Text(
+              _loadError!,
+              style: TextStyle(color: AppColors.secondaryText, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+          ],
           // Photo
           Center(
             child: GestureDetector(
@@ -352,6 +470,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 context: context,
                 title: 'Select major',
                 selected: _major == null ? const [] : [_major!],
+                programs: _majorNames,
               );
               if (result == null || !mounted) return;
               setState(() => _major = result.firstOrNull);
@@ -376,8 +495,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             runSpacing: 10,
             children:
                 <String>[
-                  ...kInterests,
-                  ..._interests.where((i) => !kInterests.contains(i)),
+                  ..._interestNames,
+                  ..._interests.where((i) => !_interestNames.contains(i)),
                 ].map((topic) {
                   final on = _interests.contains(topic);
                   return _choiceChip(topic, on, () {
@@ -396,7 +515,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: _save,
+              onPressed: _isSaving ? null : _save,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
                 foregroundColor: Colors.white,
@@ -404,8 +523,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: const Text(
-                'Save changes',
+              child: Text(
+                _isSaving ? 'Saving...' : 'Save changes',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
@@ -508,6 +627,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               title: hint,
               selected: items,
               allowsMultiple: true,
+              programs: _majorNames,
             );
             if (result == null || !mounted) return;
             setState(() {

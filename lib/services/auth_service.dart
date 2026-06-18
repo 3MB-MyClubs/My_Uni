@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/user.dart';
 import '../models/app_admin.dart';
 import 'mock_data.dart';
+import 'student_profile_service.dart';
 import 'supabase_config.dart';
 
 // ...existing code...
@@ -68,13 +69,12 @@ class AuthService {
         final authUser = response.user;
         if (authUser == null) return false;
 
-        Map<String, dynamic>? profile;
+        StudentProfileData? profile;
         try {
-          profile = await Supabase.instance.client
-              .from('profiles')
-              .select('full_name, email, role')
-              .eq('id', authUser.id)
-              .maybeSingle();
+          profile = await studentProfileService.fetchProfile(authUser.id);
+          if (profile != null) {
+            studentProfileService.applyToUserState(profile);
+          }
         } catch (_) {
           profile = null;
         }
@@ -82,12 +82,12 @@ class AuthService {
         _currentUser = User(
           id: authUser.id,
           name:
-              (profile?['full_name'] as String?) ??
+              profile?.fullName ??
               (authUser.userMetadata?['full_name'] as String?) ??
               normalizedEmail,
-          email: (profile?['email'] as String?) ?? normalizedEmail,
+          email: profile?.email ?? normalizedEmail,
           password: '',
-          role: (profile?['role'] as String?) ?? 'student',
+          role: profile?.role ?? 'student',
           subscribedClubIds: const [],
         );
         _currentAdmin = null;

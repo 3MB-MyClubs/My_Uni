@@ -96,6 +96,17 @@ class UserState extends ChangeNotifier {
     if (profilePhotoPaths.remove(userId) != null) notifyListeners();
   }
 
+  /// Sets a remote profile photo URL for [userId] and notifies all listeners.
+  void setProfilePhotoUrl(String userId, String url) {
+    final value = url.trim();
+    if (value.isEmpty) {
+      mockPhotoUrls.remove(userId);
+    } else {
+      mockPhotoUrls[userId] = value;
+    }
+    notifyListeners();
+  }
+
   /// Sets the profile cover path for [userId] and notifies all listeners.
   void setCoverPhoto(String userId, String path) {
     coverPhotoPaths[userId] = path;

@@ -58,6 +58,7 @@ Future<List<String>?> showAcademicProgramPicker({
   required String title,
   required Iterable<String> selected,
   bool allowsMultiple = false,
+  Iterable<String>? programs,
 }) {
   return showModalBottomSheet<List<String>>(
     context: context,
@@ -68,6 +69,7 @@ Future<List<String>?> showAcademicProgramPicker({
       title: title,
       selected: selected.toSet(),
       allowsMultiple: allowsMultiple,
+      programs: programs?.toList() ?? kAcademicPrograms,
     ),
   );
 }
@@ -76,11 +78,13 @@ class _AcademicProgramPickerSheet extends StatefulWidget {
   final String title;
   final Set<String> selected;
   final bool allowsMultiple;
+  final List<String> programs;
 
   const _AcademicProgramPickerSheet({
     required this.title,
     required this.selected,
     required this.allowsMultiple,
+    required this.programs,
   });
 
   @override
@@ -143,7 +147,7 @@ class _AcademicProgramPickerSheetState
 
   @override
   Widget build(BuildContext context) {
-    final matches = kAcademicPrograms.where(_matches).toList();
+    final matches = widget.programs.where(_matches).toList();
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return FractionallySizedBox(
