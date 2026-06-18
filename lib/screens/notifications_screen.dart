@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/club_avatar.dart';
 import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -117,6 +118,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Color _colorForClub(String clubId) {
     final idx = clubs.indexWhere((c) => c.id == clubId);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+  }
+
+  /// The club a notification is "from", if any — so its uploaded profile photo
+  /// can be shown as the row avatar (clubs are visible app-wide this way).
+  dynamic _clubForNotification(AppNotification n) {
+    String? clubId;
+    switch (n.targetType) {
+      case 'club':
+      case 'board_member_request':
+        clubId = n.targetId;
+      case 'post':
+        final id = n.targetId;
+        final idx = id == null ? -1 : newsPosts.indexWhere((p) => p.id == id);
+        if (idx >= 0) clubId = newsPosts[idx].clubId;
+      case 'event':
+        final id = n.targetId;
+        final idx = id == null ? -1 : events.indexWhere((e) => e.id == id);
+        if (idx >= 0) clubId = events[idx].clubId;
+    }
+    if (clubId == null) return null;
+    final ci = clubs.indexWhere((c) => c.id == clubId);
+    return ci >= 0 ? clubs[ci] : null;
   }
 
   void _openTarget(AppNotification n) {
@@ -405,6 +428,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final (icon, accent) = _tileStyle(n);
     final prefix = _boldPrefix(n);
     final pending = _isPending(n);
+    final club = _clubForNotification(n);
 
     return InkWell(
       onTap: () => _onRowTap(n),
@@ -417,17 +441,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Type-colored icon tile
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: accent.withValues(alpha: 0.20)),
+            // Leading: the club's profile photo (with a type-icon badge) when
+            // the alert is from a club; otherwise a type-colored icon tile.
+            if (club != null)
+              SizedBox(
+                width: 46,
+                height: 46,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClubAvatar(
+                      clubId: club.id as String,
+                      clubName: club.name as String,
+                      color: accent,
+                      size: 46,
+                      fontSize: 20,
+                      borderRadius: 14,
+                    ),
+                    Positioned(
+                      right: -3,
+                      bottom: -3,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: AppColors.card,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(icon, size: 11, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accent.withValues(alpha: 0.20)),
+                ),
+                child: Icon(icon, size: 22, color: accent),
               ),
-              child: Icon(icon, size: 22, color: accent),
-            ),
             const SizedBox(width: 13),
             Expanded(
               child: Column(

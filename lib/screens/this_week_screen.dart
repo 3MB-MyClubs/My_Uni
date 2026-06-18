@@ -337,6 +337,22 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (Navigator.canPop(context)) ...[
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        margin: const EdgeInsets.only(right: 10, top: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.lightGray,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.arrow_back_ios_new_rounded,
+                            size: 18, color: AppColors.text),
+                      ),
+                    ),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

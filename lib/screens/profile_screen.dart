@@ -312,17 +312,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _graduationLabel(String? year) {
-    const yearsUntilGraduation = {
-      '1st Year': 3,
-      '2nd Year': 2,
-      '3rd Year': 1,
-      '4th Year': 0,
-      '5th Year': 0,
-    };
-    final offset = yearsUntilGraduation[year];
-    if (offset == null) return 'KOÇ UNIVERSITY';
-    final graduationYear = (DateTime.now().year + offset) % 100;
-    return "KOÇ '${graduationYear.toString().padLeft(2, '0')}";
+    final value = year?.trim();
+    return value == null || value.isEmpty ? '' : value.toUpperCase();
   }
 
   Event? _nextUpcomingEvent(String userId) {
@@ -374,125 +365,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Text("$name's profile link copied to clipboard"),
         behavior: SnackBarBehavior.floating,
       ),
-    );
-  }
-
-  void _editVibes(String userId) {
-    final current = {...?userState.interests[userId]};
-    final options = <String>[
-      ...kInterests,
-      ...current.where((c) => !kInterests.contains(c)),
-    ];
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        final selected = {...current};
-        return StatefulBuilder(
-          builder: (context, setSheetState) => Padding(
-            padding: EdgeInsets.fromLTRB(
-              22,
-              18,
-              22,
-              MediaQuery.of(context).viewInsets.bottom + 28,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Your vibe',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.text,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Pick the topics that describe you.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 9,
-                  runSpacing: 10,
-                  children: options.map((topic) {
-                    final isOn = selected.contains(topic);
-                    return GestureDetector(
-                      onTap: () => setSheetState(() {
-                        if (isOn) {
-                          selected.remove(topic);
-                        } else {
-                          selected.add(topic);
-                        }
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 15,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isOn
-                              ? AppColors.primaryRed
-                              : AppColors.lightGray,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: isOn
-                                ? AppColors.primaryRed
-                                : AppColors.divider,
-                          ),
-                        ),
-                        child: Text(
-                          topic,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isOn ? Colors.white : AppColors.text,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      userState.setInterests(userId, selected.toList());
-                      userPrefsService.save(userId);
-                      Navigator.pop(sheetContext);
-                      if (mounted) setState(() {});
-                    },
-                    child: const Text('Save'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -918,7 +790,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (mounted) setState(() {});
                 }),
             onShare: () => _shareProfile(user.id, name),
-            onEditVibes: () => _editVibes(user.id),
             onSeeAllEvents: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const MyCalendarScreen()),

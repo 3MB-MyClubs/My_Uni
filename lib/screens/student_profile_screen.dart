@@ -75,7 +75,6 @@ class StudentProfileScreen extends StatelessWidget {
   final VoidCallback? onEditBio;
   final VoidCallback? onEditProfile;
   final VoidCallback? onShare;
-  final VoidCallback? onEditVibes;
   final VoidCallback? onSeeAllEvents;
   final VoidCallback? onEventTap;
   final VoidCallback? onFollowersTap;
@@ -91,7 +90,6 @@ class StudentProfileScreen extends StatelessWidget {
     this.onEditBio,
     this.onEditProfile,
     this.onShare,
-    this.onEditVibes,
     this.onSeeAllEvents,
     this.onEventTap,
     this.onFollowersTap,
@@ -200,7 +198,7 @@ class StudentProfileScreen extends StatelessWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: _InterestsCard(vibes: data.vibes, onEdit: onEditVibes),
+                child: _InterestsCard(vibes: data.vibes),
               ),
             ),
 
@@ -376,7 +374,6 @@ class StudentProfileScreen extends StatelessWidget {
     );
   }
 }
-
 
 // ─── Header icon button (share / settings) ────────────────────────────────────
 
@@ -599,7 +596,9 @@ class _AcademicTag extends StatelessWidget {
         color: filled ? accent.withValues(alpha: 0.12) : Colors.transparent,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: filled ? accent.withValues(alpha: 0.35) : StudentProfileScreen._hair,
+          color: filled
+              ? accent.withValues(alpha: 0.35)
+              : StudentProfileScreen._hair,
         ),
       ),
       child: RichText(
@@ -860,9 +859,8 @@ class _AboutCard extends StatelessWidget {
 
 class _InterestsCard extends StatelessWidget {
   final List<String> vibes;
-  final VoidCallback? onEdit;
 
-  const _InterestsCard({required this.vibes, this.onEdit});
+  const _InterestsCard({required this.vibes});
 
   @override
   Widget build(BuildContext context) {
@@ -870,68 +868,22 @@ class _InterestsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardLabel(
-            title: 'Interests',
-            trailing: vibes.isNotEmpty
-                ? GestureDetector(
-                    onTap: onEdit,
-                    child: const Text(
-                      'Edit',
-                      style: TextStyle(
-                        color: StudentProfileScreen._burgundy,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  )
-                : null,
-          ),
+          _CardLabel(title: 'Interests'),
           const SizedBox(height: 12),
           if (vibes.isEmpty)
-            _ScaleTap(
-              onTap: onEdit,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(100),
-                  border: Border.all(
-                    color: StudentProfileScreen._burgundy.withValues(
-                      alpha: 0.3,
-                    ),
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
-                      Icons.add_rounded,
-                      size: 15,
-                      color: StudentProfileScreen._burgundy,
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      'Add your interests',
-                      style: TextStyle(
-                        color: StudentProfileScreen._burgundy,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+            Text(
+              'Use Edit profile to add interests.',
+              style: TextStyle(
+                color: StudentProfileScreen._secondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             )
           else
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: vibes
-                  .map((v) => InterestTag(label: v, onTap: onEdit))
-                  .toList(),
+              children: vibes.map((v) => InterestTag(label: v)).toList(),
             ),
         ],
       ),
@@ -1048,26 +1000,14 @@ class _ClubRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Club monogram
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Center(
-                child: Text(
-                  detail.club.name.isNotEmpty
-                      ? detail.club.name[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+            // Club avatar (uploaded photo or monogram fallback)
+            ClubAvatar(
+              clubId: detail.club.id,
+              clubName: detail.club.name,
+              color: color,
+              size: 42,
+              fontSize: 18,
+              borderRadius: 13,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1156,23 +1096,13 @@ class _ClubRowFallback extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Center(
-                child: Text(
-                  club.name.isNotEmpty ? club.name[0].toUpperCase() : '?',
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+            ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: color,
+              size: 42,
+              fontSize: 18,
+              borderRadius: 13,
             ),
             const SizedBox(width: 12),
             Expanded(

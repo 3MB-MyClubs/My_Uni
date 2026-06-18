@@ -529,22 +529,13 @@ class _SharedPostBubble extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                   child: Row(
                     children: [
-                      Container(
-                        width: 26,
-                        height: 26,
-                        decoration:
-                            BoxDecoration(color: color, shape: BoxShape.circle),
-                        child: Center(
-                          child: Text(
-                            clubName.isNotEmpty
-                                ? clubName[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12),
-                          ),
-                        ),
+                      ClubAvatar(
+                        clubId: post.clubId,
+                        clubName: clubName,
+                        color: color,
+                        size: 26,
+                        fontSize: 12,
+                        shape: 'circle',
                       ),
                       const SizedBox(width: 8),
                       Expanded(
