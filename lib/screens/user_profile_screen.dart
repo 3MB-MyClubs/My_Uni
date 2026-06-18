@@ -19,7 +19,6 @@ import 'saved_posts_screen.dart';
 const _burgundy = Color(0xFF8C1D40);
 const _burgundyDeep = Color(0xFF6E1422);
 const _burgundySoft = Color(0xFFF2DDE0);
-const _inkSubtle = Color(0xFF8F857C);
 const _forest = Color(0xFF3F6B4E);
 
 class UserProfileScreen extends StatefulWidget {
@@ -486,31 +485,41 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.school_outlined,
-                          size: 14,
-                          color: _burgundy,
-                        ),
-                        const SizedBox(width: 4),
-                        if (major != null) ...[
-                          Text(
-                            major,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: _burgundy,
-                            ),
+                    if (major != null || year != null)
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.school_outlined,
+                            size: 14,
+                            color: _burgundy,
                           ),
-                          if (year != null) ...[
+                          const SizedBox(width: 4),
+                          if (major != null) ...[
                             Text(
-                              '  ·  ',
-                              style: TextStyle(
+                              major,
+                              style: const TextStyle(
                                 fontSize: 13,
-                                color: AppColors.secondaryText,
+                                fontWeight: FontWeight.bold,
+                                color: _burgundy,
                               ),
                             ),
+                            if (year != null) ...[
+                              Text(
+                                '  ·  ',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                              Text(
+                                year,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                            ],
+                          ] else if (year != null) ...[
                             Text(
                               year,
                               style: TextStyle(
@@ -519,16 +528,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ),
                           ],
-                        ] else
-                          Text(
-                            year ?? 'Koç University',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -944,15 +945,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   // ── Footer ────────────────────────────────────────────────────────────────────
 
   Widget _buildFooter() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      child: Center(
-        child: Text(
-          'Koç University · kulife',
-          style: TextStyle(fontSize: 11, color: _inkSubtle, letterSpacing: 0.2),
-        ),
-      ),
-    );
+    return const SizedBox(height: 28);
   }
 }
 
@@ -968,7 +961,6 @@ class _HeroBanner extends StatelessWidget {
       listenable: userState,
       builder: (_, _) {
         final year = userState.years[user.id];
-        final badgeLabel = year != null ? "KOÇ '$year" : 'KOÇ';
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -1024,46 +1016,47 @@ class _HeroBanner extends StatelessWidget {
                 ),
 
                 // Year badge top-right
-                Positioned(
-                  top: 10,
-                  right: 12,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.school_outlined,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              badgeLabel,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                if (year != null && year.isNotEmpty)
+                  Positioned(
+                    top: 10,
+                    right: 12,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.school_outlined,
+                                size: 14,
                                 color: Colors.white,
-                                letterSpacing: 0.5,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 5),
+                              Text(
+                                year.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
 
                 // Avatar (overlapping banner bottom)
                 Positioned(

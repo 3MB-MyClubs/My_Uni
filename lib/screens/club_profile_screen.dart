@@ -55,7 +55,6 @@ class ClubProfileScreen extends StatefulWidget {
 class _ClubProfileScreenState extends State<ClubProfileScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final List<({String emoji, String label})> _clubHighlights = [];
 
   @override
   void initState() {
@@ -437,92 +436,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         ),
       ),
     );
-  }
-
-  void _addHighlight() {
-    final emojiController = TextEditingController();
-    final labelController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _clubPagePanel(ctx),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'New Highlight',
-          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w700),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: emojiController,
-              decoration: InputDecoration(
-                hintText: 'Emoji (e.g. 🎤)',
-                hintStyle: TextStyle(color: AppColors.secondaryText),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: _clubPageBorder(ctx)),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.primaryRed),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              style: TextStyle(color: AppColors.text),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: labelController,
-              decoration: InputDecoration(
-                hintText: 'Label (e.g. Gallery)',
-                hintStyle: TextStyle(color: AppColors.secondaryText),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: _clubPageBorder(ctx)),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.primaryRed),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              style: TextStyle(color: AppColors.text),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.secondaryText),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () {
-              final emoji = emojiController.text.trim();
-              final label = labelController.text.trim();
-              Navigator.pop(ctx);
-              if (emoji.isNotEmpty && label.isNotEmpty) {
-                setState(
-                  () => _clubHighlights.add((emoji: emoji, label: label)),
-                );
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    ).then((_) {
-      emojiController.dispose();
-      labelController.dispose();
-    });
   }
 
   void _openBoardManagement() {
@@ -967,13 +880,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                           const SizedBox(height: 16),
                         ],
                       ),
-                    ),
-
-                    // Highlights rail
-                    _HighlightsRail(
-                      clubColor: widget.color,
-                      highlights: _clubHighlights,
-                      onAdd: _isThisClubAdmin ? _addHighlight : null,
                     ),
 
                     // Section divider
@@ -2906,139 +2812,6 @@ class _IconTab extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Highlights rail ──────────────────────────────────────────────────────────
-
-class _HighlightsRail extends StatelessWidget {
-  final Color clubColor;
-  final List<({String emoji, String label})> highlights;
-  final VoidCallback? onAdd;
-
-  const _HighlightsRail({
-    required this.clubColor,
-    required this.highlights,
-    this.onAdd,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = AppColors.background;
-    final solid = _clubPagePanel(context);
-    final borderColor = _clubPageStrongBorder(context);
-    // Always show the "+" circle so the rail is never absent.
-    final totalItems = highlights.length + 1;
-
-    return SizedBox(
-      height: 112,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        itemCount: totalItems,
-        itemBuilder: (_, i) {
-          // "+" add button — always rendered; tappable only for the club admin
-          if (i == highlights.length) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 13),
-              child: GestureDetector(
-                onTap:
-                    onAdd, // null for non-admins → visually present but inert
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: solid,
-                        border: Border.all(color: borderColor, width: 1.5),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.add_rounded,
-                          color: AppColors.text,
-                          size: 30,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    SizedBox(
-                      width: 70,
-                      child: Text(
-                        'New',
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final (:emoji, :label) = highlights[i];
-          return Padding(
-            padding: const EdgeInsets.only(right: 13),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: SweepGradient(
-                      colors: [clubColor, AppColors.primaryRed, clubColor],
-                      stops: const [0.0, 0.54, 1.0],
-                    ),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 66,
-                      height: 66,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: solid,
-                        border: Border.all(color: bg, width: 2.5),
-                      ),
-                      child: Center(
-                        child: Text(
-                          emoji,
-                          style: const TextStyle(fontSize: 26),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 7),
-                SizedBox(
-                  width: 70,
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
       ),
     );
   }
