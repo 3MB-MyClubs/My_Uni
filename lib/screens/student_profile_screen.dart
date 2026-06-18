@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/user_avatar.dart';
 
 // ─── Data classes ──────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ class StudentClubDetail {
 }
 
 class StudentProfileData {
+  final String userId;
   final String initials;
   final String name;
   final String graduation;
@@ -35,6 +37,7 @@ class StudentProfileData {
   final List<StudentClubDetail> clubDetails;
 
   const StudentProfileData({
+    required this.userId,
     required this.initials,
     required this.name,
     required this.graduation,
@@ -160,6 +163,8 @@ class StudentProfileScreen extends StatelessWidget {
                     const SizedBox(height: 18),
                     // Avatar + Edit profile row
                     _AvatarEditRow(
+                      userId: data.userId,
+                      name: data.name,
                       initials: data.initials,
                       onEditProfile: onEditProfile,
                     ),
@@ -404,10 +409,17 @@ class _HeaderIconButton extends StatelessWidget {
 // ─── Avatar + Edit profile row ────────────────────────────────────────────────
 
 class _AvatarEditRow extends StatelessWidget {
+  final String userId;
+  final String name;
   final String initials;
   final VoidCallback? onEditProfile;
 
-  const _AvatarEditRow({required this.initials, this.onEditProfile});
+  const _AvatarEditRow({
+    required this.userId,
+    required this.name,
+    required this.initials,
+    this.onEditProfile,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -436,24 +448,16 @@ class _AvatarEditRow extends StatelessWidget {
             ],
           ),
           child: Container(
-            decoration: BoxDecoration(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(26)),
+            child: UserAvatar(
+              userId: userId,
+              name: name.isEmpty ? initials : name,
+              size: 84,
+              fontSize: 32,
               borderRadius: BorderRadius.circular(26),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFEDD5D8), Color(0xFFE0C4C0)],
-              ),
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: StudentProfileScreen._burgundyDeep,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                ),
-              ),
+              backgroundColor: const Color(0xFFE8CFD2),
+              textColor: StudentProfileScreen._burgundyDeep,
             ),
           ),
         ),

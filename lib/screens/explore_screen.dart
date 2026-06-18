@@ -4,6 +4,7 @@ import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../widgets/user_avatar.dart';
@@ -38,6 +39,9 @@ class _ExploreScreenState extends State<ExploreScreen>
   String? _peopleFeedback;
   bool _peopleFeedbackIsFollowing = false;
   int _peopleFeedbackVersion = 0;
+  List<User> _people = const [];
+  bool _peopleLoading = false;
+  String? _peopleError;
 
   // Palette for the colored monograms (mirrors the design's per-item hues).
   static const List<Color> _hues = [
@@ -51,7 +55,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     Color(0xFFAD1457),
   ];
 
-  Color _hueFor(int index) => _hues[index % _hues.length];
+  Color _hueFor(int index) => _hues[index.abs() % _hues.length];
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -61,6 +65,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _loadPeople();
   }
 
   @override
@@ -177,16 +182,22 @@ class _ExploreScreenState extends State<ExploreScreen>
   /// Search by first name, surname, or display name, with strongest matches first.
   List<User> get _filteredPeople {
     final q = _peopleQuery.toLowerCase().trim();
-    if (q.isEmpty) return const [];
 
-    final matches = users.where((person) {
+    final matches = _people.where((person) {
       if (person.id == _myId) return false;
+      if (q.isEmpty) return true;
       final name = userState
           .displayNameFor(person.id, person.name)
           .toLowerCase();
-      return name.contains(q);
+      final email = person.email.toLowerCase();
+      return name.contains(q) || email.contains(q);
     }).toList();
     matches.sort((a, b) {
+      if (q.isEmpty) {
+        final aFollowing = userState.isFollowingUser(a.id);
+        final bFollowing = userState.isFollowingUser(b.id);
+        if (aFollowing != bFollowing) return aFollowing ? 1 : -1;
+      }
       final byRelevance = _personSearchScore(
         a,
         q,
@@ -201,7 +212,32 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   void _persist() => userPrefsService.save(_myId);
 
-  void _togglePersonFollow(User person) {
+  Future<void> _loadPeople() async {
+    if (_peopleLoading) return;
+    setState(() {
+      _peopleLoading = true;
+      _peopleError = null;
+    });
+
+    try {
+      await peopleService.hydrateFollowing(_myId);
+      final people = await peopleService.fetchPeople(excludeId: _myId);
+      if (!mounted) return;
+      setState(() {
+        _people = people;
+        _peopleLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _people = const [];
+        _peopleLoading = false;
+        _peopleError = 'Could not load people from profiles.';
+      });
+    }
+  }
+
+  Future<void> _togglePersonFollow(User person) async {
     final nowFollowing = !userState.isFollowingUser(person.id);
     final feedbackVersion = ++_peopleFeedbackVersion;
 
@@ -214,6 +250,24 @@ class _ExploreScreenState extends State<ExploreScreen>
           ? 'You are now following ${person.name}.'
           : 'You unfollowed ${person.name}.';
     });
+
+    try {
+      await peopleService.setFollowing(
+        followerId: _myId,
+        followingId: person.id,
+        follow: nowFollowing,
+      );
+      _persist();
+    } catch (_) {
+      userState.toggleFollowUser(person.id);
+      _persist();
+      if (!mounted) return;
+      setState(() {
+        _peopleFeedbackIsFollowing = !nowFollowing;
+        _peopleFeedback = 'Could not update follow. Please try again.';
+      });
+      return;
+    }
 
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted || feedbackVersion != _peopleFeedbackVersion) return;
@@ -478,7 +532,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     final searching = _peopleQuery.trim().isNotEmpty;
     final people = _filteredPeople;
 
-    final label = '${people.length} result${people.length == 1 ? '' : 's'}';
+    final label = searching
+        ? '${people.length} result${people.length == 1 ? '' : 's'}'
+        : 'People you might know';
 
     return Column(
       children: [
@@ -492,6 +548,35 @@ class _ExploreScreenState extends State<ExploreScreen>
                 value: _peopleQuery,
                 onChanged: (v) => setState(() => _peopleQuery = v),
               ),
+              if (_peopleLoading || _peopleError != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (_peopleLoading) ...[
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        _peopleLoading
+                            ? 'Loading people...'
+                            : _peopleError ?? '',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               AnimatedSize(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
@@ -559,54 +644,65 @@ class _ExploreScreenState extends State<ExploreScreen>
         ),
         const SizedBox(height: 14),
         Expanded(
-          child: !searching
-              ? const SizedBox.expand()
-              : people.isEmpty
-              ? _emptyState(
-                  'No one matches "$_peopleQuery"',
-                  'Try a name or surname',
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  itemCount: people.length + 1,
-                  itemBuilder: (context, i) {
-                    if (i == 0) {
-                      return _sectionLabel(label);
-                    }
-                    final person = people[i - 1];
-                    return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 380),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        final slide = Tween<Offset>(
-                          begin: const Offset(0.08, 0),
-                          end: Offset.zero,
-                        ).animate(animation);
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(position: slide, child: child),
-                        );
-                      },
-                      child: _PersonRow(
-                        key: ValueKey(person.id),
-                        user: person,
-                        subtitle: _personSubtitle(person),
-                        sharedTags: _sharedClubNames(person),
-                        color: _hueFor(users.indexOf(person)),
-                        following: userState.isFollowingUser(person.id),
-                        onFollow: () => _togglePersonFollow(person),
-                        onOpen: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: person),
-                          ),
-                        ),
-                        pillBuilder: _pill,
-                      ),
-                    );
-                  },
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            physics: const AlwaysScrollableScrollPhysics(),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            itemCount: people.isEmpty ? 2 : people.length + 1,
+            itemBuilder: (context, i) {
+              if (i == 0) {
+                return _sectionLabel(label);
+              }
+              if (people.isEmpty) {
+                return SizedBox(
+                  height: 340,
+                  child: _emptyState(
+                    searching
+                        ? 'No one matches "$_peopleQuery"'
+                        : 'No profiles yet',
+                    searching
+                        ? 'Try a name, surname, or email'
+                        : 'Profiles will appear here after users sign up',
+                  ),
+                );
+              }
+              final person = people[i - 1];
+              final personIndex = _people.indexWhere(
+                (candidate) => candidate.id == person.id,
+              );
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 380),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final slide = Tween<Offset>(
+                    begin: const Offset(0.08, 0),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
+                child: _PersonRow(
+                  key: ValueKey(person.id),
+                  user: person,
+                  subtitle: _personSubtitle(person),
+                  sharedTags: _sharedClubNames(person),
+                  color: _hueFor(personIndex),
+                  following: userState.isFollowingUser(person.id),
+                  onFollow: () => _togglePersonFollow(person),
+                  onOpen: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen(user: person),
+                    ),
+                  ),
+                  pillBuilder: _pill,
                 ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -618,11 +714,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (major != null && major.isNotEmpty) {
       return year != null && year.isNotEmpty ? '$major · $year' : major;
     }
-    final clubCount = u.subscribedClubIds.length;
-    final followerCount = users
-        .where((o) => o.followingUserIds.contains(u.id))
-        .length;
-    return '$clubCount clubs · $followerCount followers';
+    return u.email.isNotEmpty ? u.email : 'Student profile';
   }
 }
 

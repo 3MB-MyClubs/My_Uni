@@ -192,8 +192,15 @@ class _StepProfileState extends State<StepProfile> {
       return;
     }
 
+    final nameParts = name.split(RegExp(r'\s+')).where((part) {
+      return part.isNotEmpty;
+    }).toList();
+
     if (name.isEmpty) {
       setState(() => _nameError = 'Please enter your full name.');
+      hasError = true;
+    } else if (nameParts.length < 2) {
+      setState(() => _nameError = 'Please enter your first and last name.');
       hasError = true;
     } else {
       setState(() => _nameError = null);

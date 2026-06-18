@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -18,6 +20,7 @@ import 'services/content_store.dart';
 import 'services/user_state.dart';
 import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
+import 'services/people_service.dart';
 import 'services/theme_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
@@ -114,6 +117,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       messageService.setCurrentUserId(currentUserId);
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
+      unawaited(peopleService.hydrateFollowing(currentUserId));
     }
   }
 

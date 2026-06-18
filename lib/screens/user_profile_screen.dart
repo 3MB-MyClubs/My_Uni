@@ -5,6 +5,7 @@ import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/people_service.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -30,6 +31,8 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
+  bool _connectionsLoading = false;
+  String? _connectionsError;
   static const List<Color> _clubColors = [
     Color(0xFF8C1D40),
     Color(0xFF1565C0),
@@ -50,15 +53,85 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return widget.user.id == myId;
   }
 
-  List<User> get _following => widget.user.followingUserIds
-      .map(
-        (id) => users.firstWhere((u) => u.id == id, orElse: () => users.first),
-      )
-      .where((u) => widget.user.followingUserIds.contains(u.id))
-      .toList();
+  Map<String, User> get _knownPeopleById {
+    final knownPeople = <String, User>{
+      for (final user in users) user.id: user,
+      for (final user in peopleService.cachedPeople) user.id: user,
+    };
+    final currentUser = authService.currentUser;
+    if (currentUser != null) knownPeople[currentUser.id] = currentUser;
+    return knownPeople;
+  }
 
-  List<User> get _followers =>
-      users.where((u) => u.followingUserIds.contains(widget.user.id)).toList();
+  List<User> get _following {
+    if (_isOwnProfile) {
+      final knownPeople = _knownPeopleById;
+      return userState.followedUserIds
+          .map((id) => knownPeople[id])
+          .whereType<User>()
+          .toList();
+    }
+
+    final liveFollowing = peopleService.followingFor(widget.user.id);
+    if (liveFollowing.isNotEmpty) return liveFollowing;
+
+    final knownPeople = _knownPeopleById;
+    return widget.user.followingUserIds
+        .map((id) => knownPeople[id])
+        .whereType<User>()
+        .toList();
+  }
+
+  List<User> get _followers {
+    final liveFollowers = peopleService.followersFor(widget.user.id);
+    final followers = <String, User>{
+      for (final user in liveFollowers) user.id: user,
+      for (final user in users.where(
+        (u) => u.followingUserIds.contains(widget.user.id),
+      ))
+        user.id: user,
+    };
+
+    final currentUser = authService.currentUser;
+    if (!_isOwnProfile &&
+        currentUser != null &&
+        userState.isFollowingUser(widget.user.id)) {
+      followers[currentUser.id] = currentUser;
+    }
+
+    return followers.values.toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateConnections();
+  }
+
+  @override
+  void didUpdateWidget(covariant UserProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id) _hydrateConnections();
+  }
+
+  Future<void> _hydrateConnections() async {
+    setState(() {
+      _connectionsLoading = true;
+      _connectionsError = null;
+    });
+    try {
+      await peopleService.hydrateConnectionsFor(widget.user.id);
+      if (mounted) {
+        setState(() => _connectionsLoading = false);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _connectionsLoading = false;
+        _connectionsError = 'Could not load connections.';
+      });
+    }
+  }
 
   List<Club> get _subscribedClubs => widget.user.subscribedClubIds
       .map(
@@ -100,6 +173,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (isFollowing && !isPending) {
       setState(() => userState.toggleFollowUser(user.id));
       _persist();
+      try {
+        await peopleService.setFollowing(
+          followerId: _myId,
+          followingId: user.id,
+          follow: false,
+        );
+      } catch (_) {
+        setState(() => userState.toggleFollowUser(user.id));
+        _persist();
+      }
       return;
     }
     if (isPending) {
@@ -112,6 +195,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
     setState(() => userState.followedUserIds.add(user.id));
     _persist();
+    try {
+      await peopleService.setFollowing(
+        followerId: _myId,
+        followingId: user.id,
+        follow: true,
+      );
+    } catch (_) {
+      setState(() => userState.followedUserIds.remove(user.id));
+      _persist();
+    }
   }
 
   void _openUserProfile(User u) {
@@ -335,7 +428,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Padding(
                   padding: const EdgeInsets.all(32),
                   child: Text(
-                    'No one here yet.',
+                    _connectionsLoading
+                        ? 'Loading connections...'
+                        : _connectionsError ?? 'No one here yet.',
                     style: TextStyle(color: AppColors.secondaryText),
                   ),
                 )

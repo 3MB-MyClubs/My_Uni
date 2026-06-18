@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_config.dart';
@@ -188,6 +190,42 @@ class StudentProfileService {
     final profile = await fetchProfile(input.userId);
     if (profile != null) applyToUserState(profile);
     return profile;
+  }
+
+  Future<String?> uploadAvatar({
+    required String userId,
+    required Uint8List bytes,
+  }) async {
+    final client = _client;
+    if (client == null || userId.isEmpty) return null;
+
+    const objectPath = 'avatar.jpg';
+    final path = '$userId/$objectPath';
+    await client.storage
+        .from('avatars')
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'image/jpeg',
+          ),
+        );
+
+    final publicUrl = client.storage.from('avatars').getPublicUrl(path);
+    final cacheBustedUrl =
+        '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+
+    await client
+        .from('profiles')
+        .update({
+          'avatar_url': cacheBustedUrl,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', userId);
+
+    userState.setProfilePhotoUrl(userId, cacheBustedUrl);
+    return cacheBustedUrl;
   }
 
   Future<void> hydrateUserState(String userId) async {

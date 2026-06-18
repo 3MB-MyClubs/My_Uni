@@ -14,6 +14,8 @@ import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
+import '../services/people_service.dart';
+import '../services/student_profile_service.dart' as remote_profile;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
@@ -49,6 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
 
   int _contentTab = 0; // 0 = Posts, 1 = Events
+  String? _hydratedConnectionsForUserId;
   static const List<String> _yearOptions = [
     '1st Year',
     '2nd Year',
@@ -75,29 +78,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ),
   );
 
-  Future<void> _pickProfilePhoto(String userId, ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
-    if (picked == null || !mounted) return;
+  Future<void> _hydrateMyConnections(String userId) async {
+    if (userId.isEmpty || _hydratedConnectionsForUserId == userId) return;
+    _hydratedConnectionsForUserId = userId;
+    try {
+      await peopleService.hydrateConnectionsFor(userId);
+      if (mounted) setState(() {});
+    } catch (_) {
+      _hydratedConnectionsForUserId = null;
+    }
+  }
 
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Photo',
-          aspectRatioLockEnabled: true,
-          resetAspectRatioEnabled: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: true,
-        ),
-      ],
-    );
+  Future<void> _pickProfilePhoto(String userId, ImageSource source) async {
+    CroppedFile? cropped;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 85);
+      if (picked == null || !mounted) return;
+
+      cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        maxWidth: 512,
+        maxHeight: 512,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 82,
+        uiSettings: [
+          IOSUiSettings(
+            title: 'Crop Photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Photo',
+            toolbarColor: AppColors.primaryRed,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+          ),
+        ],
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not open photo cropper.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
     if (cropped == null || !mounted) return;
+    final croppedFile = cropped;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -108,9 +142,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'Use this photo?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.file(File(cropped.path), fit: BoxFit.cover),
+        content: Center(
+          heightFactor: 1,
+          child: ClipOval(
+            child: Image.file(
+              File(croppedFile.path),
+              width: 180,
+              height: 180,
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         actions: [
@@ -140,15 +181,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // Copy from temp dir to permanent app documents dir so the file
       // survives app restarts (temp files are cleared by the OS).
       final docsDir = await getApplicationDocumentsDirectory();
-      final ext = cropped.path.contains('.')
-          ? cropped.path.substring(cropped.path.lastIndexOf('.'))
+      final ext = croppedFile.path.contains('.')
+          ? croppedFile.path.substring(croppedFile.path.lastIndexOf('.'))
           : '.jpg';
       final permanentPath = '${docsDir.path}/profile_$userId$ext';
-      await File(cropped.path).copy(permanentPath);
+      await File(croppedFile.path).copy(permanentPath);
 
       if (!mounted) return;
       userState.setProfilePhoto(userId, permanentPath);
       userPrefsService.save(userId);
+      try {
+        await remote_profile.studentProfileService.uploadAvatar(
+          userId: userId,
+          bytes: await File(permanentPath).readAsBytes(),
+        );
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Photo saved locally, but upload failed.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+        }
+      }
       setState(() {});
     }
   }
@@ -288,6 +346,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   List<User> _followersForUser(String userId) {
+    final liveFollowers = peopleService.followersFor(userId);
+    if (liveFollowers.isNotEmpty) return liveFollowers;
     return users
         .where(
           (user) => user.id != userId && user.followingUserIds.contains(userId),
@@ -296,8 +356,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   List<User> _followingUsers() {
-    return users
-        .where((user) => userState.followedUserIds.contains(user.id))
+    final peopleById = {
+      for (final user in users) user.id: user,
+      for (final user in peopleService.cachedPeople) user.id: user,
+    };
+    return userState.followedUserIds
+        .map(
+          (id) =>
+              peopleById[id] ??
+              User(
+                id: id,
+                name: 'Student profile',
+                email: '',
+                password: '',
+                role: 'student',
+                subscribedClubIds: const [],
+              ),
+        )
         .toList();
   }
 
@@ -727,6 +802,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isAdmin = admin != null;
 
     if (user != null && !isAdmin) {
+      _hydrateMyConnections(user.id);
       return ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
@@ -755,6 +831,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           return StudentProfileScreen(
             data: StudentProfileData(
+              userId: user.id,
               initials: _initialsFor(name),
               name: name,
               graduation: _graduationLabel(year),
@@ -1267,10 +1344,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final year = (userState.years[userId] ?? '').trim();
     final bio = (userState.bios[userId] ?? '').trim();
 
-    final photoPath = userState.profilePhotoPaths[userId];
-    final photoFile = photoPath != null ? File(photoPath) : null;
-    final hasPhoto = photoFile != null && photoFile.existsSync();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1371,15 +1444,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: const Color(0xFFF2DDE0),
                       border: Border.all(color: AppColors.background, width: 4),
                     ),
-                    child: hasPhoto
-                        ? Image.file(
-                            photoFile,
-                            width: 90,
-                            height: 90,
-                            fit: BoxFit.cover,
-                            errorBuilder: (ctx2, e, st) => _initialAvatar(name),
-                          )
-                        : _initialAvatar(name),
+                    child: UserAvatar(
+                      userId: userId,
+                      name: name,
+                      size: 90,
+                      fontSize: 32,
+                      backgroundColor: const Color(0xFFF2DDE0),
+                      textColor: AppColors.primaryRed,
+                    ),
                   ),
                 ),
               ),
