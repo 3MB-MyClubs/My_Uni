@@ -36,9 +36,6 @@ class UserState extends ChangeNotifier {
     'u14': 'https://i.pravatar.cc/150?img=58',
   };
 
-  // Profile cover photo image paths keyed by user/admin id.
-  final Map<String, String> coverPhotoPaths = {};
-
   // Student bios keyed by user id.
   final Map<String, String> bios = {};
 
@@ -60,8 +57,9 @@ class UserState extends ChangeNotifier {
   // Club profile photo paths keyed by club id.
   final Map<String, String> clubPhotoPaths = {};
 
-  // Club banner/cover image paths keyed by club id.
-  final Map<String, String> clubBannerPaths = {};
+  /// Notifies listeners after a club's editable info (e.g. description) changed
+  /// in place, so every screen showing the club rebuilds.
+  void bumpClubInfo() => notifyListeners();
 
   /// Sets the club photo path for [clubId] and notifies all listeners.
   void setClubPhoto(String clubId, String path) {
@@ -69,18 +67,6 @@ class UserState extends ChangeNotifier {
     // bitmap so every ClubAvatar immediately displays the newly edited photo.
     PaintingBinding.instance.imageCache.evict(FileImage(File(path)));
     clubPhotoPaths[clubId] = path;
-    notifyListeners();
-  }
-
-  /// Sets the club banner image path for [clubId] and notifies all listeners.
-  void setClubBanner(String clubId, String path) {
-    clubBannerPaths[clubId] = path;
-    notifyListeners();
-  }
-
-  /// Removes the club banner for [clubId].
-  void removeClubBanner(String clubId) {
-    clubBannerPaths.remove(clubId);
     notifyListeners();
   }
 
@@ -107,11 +93,6 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sets the profile cover path for [userId] and notifies all listeners.
-  void setCoverPhoto(String userId, String path) {
-    coverPhotoPaths[userId] = path;
-    notifyListeners();
-  }
 
   /// Sets the student bio for [userId] and notifies all listeners.
   void setBio(String userId, String bio) {
@@ -330,6 +311,16 @@ class UserState extends ChangeNotifier {
       const Duration(seconds: 4),
       () => incomingMessageNotifier.value = null,
     );
+  }
+
+  // ── Pinned club posts (global; set by a club's admin) ───────────────────────
+  final Set<String> pinnedPostIds = {};
+
+  bool isPostPinned(String postId) => pinnedPostIds.contains(postId);
+
+  void togglePinnedPost(String postId) {
+    if (!pinnedPostIds.remove(postId)) pinnedPostIds.add(postId);
+    notifyListeners();
   }
 
   // ── Likes / saves ─────────────────────────────────────────────────────────────

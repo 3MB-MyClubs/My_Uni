@@ -7,6 +7,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../models/news_post.dart';
 import '../widgets/content_image_uploader.dart';
+import '../widgets/mention_text_field.dart';
 
 // ── Template definitions ─────────────────────────────────────────────────────
 
@@ -189,6 +190,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
   _ClubOption? _selectedClub;
   late final List<_ClubOption> _myClubs;
+  final Set<String> _selectedTaggedClubIds = {};
+  final Set<String> _selectedTaggedUserIds = {};
 
   // Image state
   String? _imagePath; // null | "tpl:N" | file path
@@ -213,16 +216,66 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     super.dispose();
   }
 
+  String _mentionKey(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  }
+
+  bool _containsMention(String content, String label) {
+    final lower = content.toLowerCase();
+    final firstWordMention = '@${label.split(' ').first.toLowerCase()}';
+    final fullNameMention = '@${label.toLowerCase()}';
+    final compactContent = _mentionKey(content);
+    final compactMention = _mentionKey('@$label');
+    return lower.contains(firstWordMention) ||
+        lower.contains(fullNameMention) ||
+        compactContent.contains(compactMention);
+  }
+
   List<String> _extractTaggedClubIds(String content) {
-    final tagged = <String>[];
+    final tagged = <String>{..._selectedTaggedClubIds};
     final lower = content.toLowerCase();
     for (final club in clubs) {
       if (club.id == _selectedClub?.id) continue;
-      final mention = '@${club.name.split(' ').first.toLowerCase()}';
-      if (lower.contains(mention)) tagged.add(club.id);
+      if (_containsMention(lower, club.name)) {
+        tagged.add(club.id);
+      }
     }
-    return tagged;
+    return tagged.toList();
   }
+
+  List<String> _extractTaggedUserIds(String content) {
+    final tagged = <String>{..._selectedTaggedUserIds};
+    for (final user in users) {
+      if (_containsMention(content, user.name)) {
+        tagged.add(user.id);
+      }
+    }
+    return tagged.toList();
+  }
+
+  void _rememberMention(MentionOption option) {
+    if (option.type == MentionType.club) {
+      if (option.id != _selectedClub?.id) {
+        _selectedTaggedClubIds.add(option.id);
+      }
+    } else {
+      _selectedTaggedUserIds.add(option.id);
+    }
+  }
+
+  List<MentionOption> get _mentionOptions => [
+    ...clubs.map(
+      (club) =>
+          MentionOption(id: club.id, label: club.name, type: MentionType.club),
+    ),
+    ...users.map(
+      (user) => MentionOption(
+        id: user.id,
+        label: user.name,
+        type: MentionType.student,
+      ),
+    ),
+  ];
 
   void _post() {
     final content = _contentController.text.trim();
@@ -236,6 +289,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       content: content,
       createdAt: DateTime.now(),
       taggedClubIds: _extractTaggedClubIds(content),
+      taggedUserIds: _extractTaggedUserIds(content),
       imagePath: _imagePath,
     );
     newsPosts.insert(0, post);
@@ -471,7 +525,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                     ),
                     SizedBox(width: 4),
                     Text(
-                      'Use @ClubName to tag a collaborating club',
+                      'Type @ to tag a club or student',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.secondaryText,
@@ -482,8 +536,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 const SizedBox(height: 8),
 
                 // Content
-                TextField(
+                MentionTextField(
                   controller: _contentController,
+                  options: _mentionOptions,
+                  onMentionSelected: _rememberMention,
                   onChanged: (_) => setState(() {}),
                   style: TextStyle(
                     fontSize: 15,

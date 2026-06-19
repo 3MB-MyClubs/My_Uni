@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import 'mock_data.dart';
 import 'user_state.dart';
 
 /// Persists UserState to a Hive box so settings survive logout / app restarts.
@@ -23,7 +24,6 @@ class UserPrefsService {
 
     await _box.putAll({
       'profilePhotoPath_$userId': s.profilePhotoPaths[userId],
-      'coverPhotoPath_$userId': s.coverPhotoPaths[userId],
       'bio_$userId': s.bios[userId],
       'major_$userId': s.majors[userId],
       'year_$userId': s.years[userId],
@@ -55,20 +55,36 @@ class UserPrefsService {
         final uid = k.substring('profilePhotoPath_'.length);
         final path = _box.get(k);
         if (path != null) userState.profilePhotoPaths[uid] = path as String;
-      } else if (k.startsWith('coverPhotoPath_')) {
-        final uid = k.substring('coverPhotoPath_'.length);
-        final path = _box.get(k);
-        if (path != null) userState.coverPhotoPaths[uid] = path as String;
       } else if (k.startsWith('clubPhotoPath_')) {
         final cid = k.substring('clubPhotoPath_'.length);
         final path = _box.get(k);
         if (path != null) userState.clubPhotoPaths[cid] = path as String;
-      } else if (k.startsWith('clubBannerPath_')) {
-        final cid = k.substring('clubBannerPath_'.length);
-        final path = _box.get(k);
-        if (path != null) userState.clubBannerPaths[cid] = path as String;
+      } else if (k.startsWith('clubDesc_')) {
+        final cid = k.substring('clubDesc_'.length);
+        final desc = _box.get(k);
+        final idx = clubs.indexWhere((c) => c.id == cid);
+        if (desc != null && idx >= 0) clubs[idx].description = desc as String;
       }
     }
+    // Pinned club posts (global, set by club admins).
+    final pinned = _box.get('pinnedPostIds');
+    if (pinned != null) {
+      userState.pinnedPostIds
+        ..clear()
+        ..addAll(List<String>.from(pinned as List));
+    }
+  }
+
+  /// Persists a club's description globally (visible to everyone).
+  Future<void> saveClubDescription(String clubId, String description) async {
+    if (!_initialized) return;
+    await _box.put('clubDesc_$clubId', description);
+  }
+
+  /// Persists the set of pinned club post ids globally.
+  Future<void> savePinnedPosts() async {
+    if (!_initialized) return;
+    await _box.put('pinnedPostIds', userState.pinnedPostIds.toList());
   }
 
   // ── Load ────────────────────────────────────────────────────────────────────
@@ -79,11 +95,6 @@ class UserPrefsService {
 
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
-
-    final coverPhotoPath = _box.get('coverPhotoPath_$userId');
-    if (coverPhotoPath != null) {
-      s.coverPhotoPaths[userId] = coverPhotoPath as String;
-    }
 
     final bio = _box.get('bio_$userId');
     if (bio != null) s.bios[userId] = bio as String;
@@ -159,18 +170,6 @@ class UserPrefsService {
   Future<void> saveClubPhoto(String clubId, String path) async {
     if (!_initialized) return;
     await _box.put('clubPhotoPath_$clubId', path);
-  }
-
-  /// Persists a club's banner/cover image path globally.
-  Future<void> saveClubBanner(String clubId, String path) async {
-    if (!_initialized) return;
-    await _box.put('clubBannerPath_$clubId', path);
-  }
-
-  /// Removes the club banner from storage.
-  Future<void> removeClubBanner(String clubId) async {
-    if (!_initialized) return;
-    await _box.delete('clubBannerPath_$clubId');
   }
 
   /// Removes a specific board request entry from the stored prefs of [userId]

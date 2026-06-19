@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/personalization_service.dart';
@@ -22,6 +23,140 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  /// The club this account administers (null for students and the super admin).
+  Club? get _managedClub {
+    final adminId = authService.currentAdmin?.id;
+    if (adminId == null || adminId == 'admin1') return null;
+    final idx = clubs.indexWhere((c) => c.adminUserIds.contains(adminId));
+    return idx >= 0 ? clubs[idx] : null;
+  }
+
+  void _openClubDescriptionSheet(Club club) {
+    final controller = TextEditingController(text: club.description);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final value = controller.text.trim();
+          final canSave = value.isNotEmpty && value != club.description;
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Club Description',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'This appears on ${club.name}’s profile across the app.',
+                    style:
+                        TextStyle(fontSize: 13, color: AppColors.secondaryText),
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    maxLength: 240,
+                    maxLines: 4,
+                    style: TextStyle(color: AppColors.text, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'What is this club about?',
+                      hintStyle: TextStyle(color: AppColors.secondaryText),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            BorderSide(color: AppColors.primaryRed, width: 1.5),
+                      ),
+                      counterStyle: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 11,
+                      ),
+                    ),
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text('Cancel',
+                              style:
+                                  TextStyle(color: AppColors.secondaryText)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: canSave
+                                ? AppColors.primaryRed
+                                : AppColors.divider,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: canSave
+                              ? () {
+                                  club.description = value;
+                                  userPrefsService.saveClubDescription(
+                                      club.id, value);
+                                  userState.bumpClubInfo();
+                                  Navigator.pop(ctx);
+                                  setState(() {});
+                                }
+                              : null,
+                          child: Text('Save',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   void _openUsernameSheet() {
     final userId = _userId;
@@ -271,6 +406,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: _openUsernameSheet,
             ),
           ),
+
+          // ── Club section (club admins only) ──────────────────────────────
+          if (_managedClub != null) ...[
+            const SizedBox(height: 24),
+            _SectionHeader(title: 'Club'),
+            ListenableBuilder(
+              listenable: userState,
+              builder: (context, _) {
+                final club = _managedClub!;
+                return Container(
+                  color: AppColors.card,
+                  child: ListTile(
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.lightRed,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.description_outlined,
+                        color: AppColors.primaryRed,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      'Club Description',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    subtitle: Text(
+                      club.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.secondaryText,
+                    ),
+                    onTap: () => _openClubDescriptionSheet(club),
+                  ),
+                );
+              },
+            ),
+          ],
 
           const SizedBox(height: 24),
 

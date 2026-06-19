@@ -12,24 +12,21 @@ class ClubAdminAuthScreen extends StatefulWidget {
 }
 
 class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
-  final _clubNameController = TextEditingController();
   final _clubEmailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _error;
 
   void _handleAdminLogin() {
-    final clubName = _clubNameController.text.trim();
     final clubEmail = _clubEmailController.text.trim();
     final password = _passwordController.text.trim();
-    if (clubName.isEmpty || clubEmail.isEmpty || password.isEmpty) {
-      setState(() => _error = 'All fields are required');
+    if (clubEmail.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Email and password are required');
       return;
     }
     final allAdmins = [appAdmin, ...clubAdmins];
     final matched = allAdmins.any(
-      (a) =>
-          a.name == clubName && a.email == clubEmail && a.password == password,
+      (a) => a.email == clubEmail && a.password == password,
     );
     if (matched) {
       authService.login(clubEmail, password);
@@ -41,7 +38,6 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
 
   @override
   void dispose() {
-    _clubNameController.dispose();
     _clubEmailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -100,13 +96,6 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               ),
               const SizedBox(height: 32),
 
-              _buildField(
-                controller: _clubNameController,
-                label: 'Club Name',
-                hint: 'e.g. Robotics Club',
-                icon: Icons.groups_outlined,
-              ),
-              const SizedBox(height: 14),
               _buildField(
                 controller: _clubEmailController,
                 label: 'Club Email',

@@ -7,6 +7,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import 'dart:io';
 import '../widgets/content_image_uploader.dart';
+import '../widgets/mention_text_field.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
@@ -99,6 +100,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return null;
     }
   }
+
+  List<MentionOption> get _mentionOptions => [
+    ...clubs.map(
+      (club) =>
+          MentionOption(id: club.id, label: club.name, type: MentionType.club),
+    ),
+    ...users.map(
+      (user) => MentionOption(
+        id: user.id,
+        label: user.name,
+        type: MentionType.student,
+      ),
+    ),
+  ];
 
   Future<void> _pickDate(bool isStart) async {
     final initial = isStart ? _startDate : _endDate;
@@ -367,6 +382,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   label: 'Description',
                   hint: 'Tell people what this event is about...',
                   maxLines: 4,
+                  mentionOptions: _mentionOptions,
                   onChanged: (_) => setState(() {}),
                 ),
               ],
@@ -1289,6 +1305,7 @@ class _Field extends StatelessWidget {
   final String label;
   final String hint;
   final int maxLines;
+  final List<MentionOption>? mentionOptions;
   final ValueChanged<String>? onChanged;
 
   const _Field({
@@ -1296,26 +1313,38 @@ class _Field extends StatelessWidget {
     required this.label,
     required this.hint,
     this.maxLines = 1,
+    this.mentionOptions,
     this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final decoration = InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
+      hintText: hint,
+      hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
+      border: InputBorder.none,
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        onChanged: onChanged,
-        style: TextStyle(fontSize: 14, color: AppColors.text),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-          hintText: hint,
-          hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-          border: InputBorder.none,
-        ),
-      ),
+      child: mentionOptions == null
+          ? TextField(
+              controller: controller,
+              maxLines: maxLines,
+              onChanged: onChanged,
+              style: TextStyle(fontSize: 14, color: AppColors.text),
+              decoration: decoration,
+            )
+          : MentionTextField(
+              controller: controller,
+              options: mentionOptions!,
+              maxLines: maxLines,
+              onChanged: onChanged,
+              style: TextStyle(fontSize: 14, color: AppColors.text),
+              decoration: decoration,
+            ),
     );
   }
 }

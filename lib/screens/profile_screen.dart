@@ -822,6 +822,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
+    // A club account (any admin except the super admin) sees its OWN club
+    // profile page — the same v2 layout every visitor sees — as the Profile
+    // tab, with a settings gear for logout. Only the super admin keeps the
+    // all-clubs dashboard below.
+    if (admin != null && admin.id != 'admin1') {
+      final adminId = admin.id;
+      final managed = clubs.firstWhere(
+        (c) => c.adminUserIds.contains(adminId),
+        orElse: () => clubs.first,
+      );
+      return ClubProfileScreen(
+        club: managed,
+        color: _clubColor(clubs.indexOf(managed)),
+        onSettings: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SettingsScreen(onLogout: widget.onLogout ?? () {}),
+          ),
+        ),
+      );
+    }
+
     final myClubs = isAdmin
         ? clubs
         : clubs.where((c) => userState.isFollowing(c.id)).toList();

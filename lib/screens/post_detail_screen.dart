@@ -9,6 +9,7 @@ import '../models/like.dart';
 import '../models/comment.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/mention_text_field.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 
 class PostDetailScreen extends StatefulWidget {
@@ -32,6 +33,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
 
   bool get _isOwner => widget.post.authorId == _loggedInId;
+
+  List<MentionOption> get _mentionOptions => [
+    ...clubs.map(
+      (club) =>
+          MentionOption(id: club.id, label: club.name, type: MentionType.club),
+    ),
+    ...users.map(
+      (user) => MentionOption(
+        id: user.id,
+        label: user.name,
+        type: MentionType.student,
+      ),
+    ),
+  ];
 
   @override
   void dispose() {
@@ -407,8 +422,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: MentionTextField(
                       controller: _commentController,
+                      options: _mentionOptions,
                       maxLines: null,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(

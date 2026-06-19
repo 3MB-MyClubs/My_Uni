@@ -438,12 +438,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ? <String>[]
         : (searching ? clubDmIds.where(matchId).toList() : clubDmIds);
     // Clubs I can start a NEW direct message with (Clubs tab, search only).
+    // A club admin can't DM their own club (no X-club → X-club messages).
     final messageableClubs = (searching && !showStudents)
         ? clubs
               .where(
                 (c) =>
                     c.name.toLowerCase().contains(q) &&
-                    !clubDmIds.contains(c.id),
+                    !clubDmIds.contains(c.id) &&
+                    !c.adminUserIds.contains(_myId),
               )
               .map((c) => c.id)
               .toList()

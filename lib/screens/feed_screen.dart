@@ -26,6 +26,7 @@ import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
+import '../widgets/mention_text_field.dart';
 import '../services/group_chat_service.dart';
 import 'group_chat_screen.dart';
 import 'notifications_screen.dart';
@@ -2849,6 +2850,20 @@ class _CommentsSheet extends StatefulWidget {
 class _CommentsSheetState extends State<_CommentsSheet> {
   final _controller = TextEditingController();
 
+  List<MentionOption> get _mentionOptions => [
+    ...clubs.map(
+      (club) =>
+          MentionOption(id: club.id, label: club.name, type: MentionType.club),
+    ),
+    ...users.map(
+      (user) => MentionOption(
+        id: user.id,
+        label: user.name,
+        type: MentionType.student,
+      ),
+    ),
+  ];
+
   @override
   void dispose() {
     _controller.dispose();
@@ -3030,8 +3045,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
+                    child: MentionTextField(
                       controller: _controller,
+                      options: _mentionOptions,
                       decoration: InputDecoration(
                         hintText: 'Add a comment...',
                         hintStyle: TextStyle(

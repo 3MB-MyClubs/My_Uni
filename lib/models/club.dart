@@ -1,7 +1,9 @@
 class Club {
   final String id;
   final String name;
-  final String description;
+  // Editable by the club's own admin from Settings. Mutable so an edit shows
+  // everywhere the club is displayed; persisted globally and re-applied at start.
+  String description;
   final List<String> adminUserIds;
   // Regular users promoted to board member — restricted to 1 club like admins.
   final List<String> boardMemberIds;
