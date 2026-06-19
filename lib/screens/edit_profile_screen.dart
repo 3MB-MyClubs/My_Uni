@@ -77,12 +77,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final y = userState.years[_userId];
     _year = (y != null && y.isNotEmpty) ? y : null;
     _interests = {...?userState.interests[_userId]};
-    _doubleMajors = [
-      ...?userState.doubleMajors[_userId],
-    ];
-    _minors = [
-      ...?userState.minors[_userId],
-    ];
+    _doubleMajors = [...?userState.doubleMajors[_userId]];
+    _minors = [...?userState.minors[_userId]];
     _loadRemoteData();
   }
 
@@ -294,27 +290,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
-    if (picked == null || !mounted) return;
+    CroppedFile? cropped;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 85);
+      if (picked == null || !mounted) return;
 
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Photo',
-          aspectRatioLockEnabled: true,
-          resetAspectRatioEnabled: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: true,
-        ),
-      ],
-    );
+      cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        maxWidth: 512,
+        maxHeight: 512,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 82,
+        uiSettings: [
+          IOSUiSettings(
+            title: 'Crop Photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Photo',
+            toolbarColor: AppColors.primaryRed,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+          ),
+        ],
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not open photo cropper.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
     if (cropped == null || !mounted) return;
 
     final docsDir = await getApplicationDocumentsDirectory();
@@ -326,6 +341,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!mounted) return;
     userState.setProfilePhoto(_userId, permanentPath);
     userPrefsService.save(_userId);
+    try {
+      await studentProfileService.uploadAvatar(
+        userId: _userId,
+        bytes: await File(permanentPath).readAsBytes(),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Photo saved locally, but upload failed.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
     setState(() {});
   }
 

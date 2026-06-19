@@ -4,6 +4,7 @@ import '../services/app_colors.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
+import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
@@ -109,21 +110,49 @@ class _FeedScreenState extends State<FeedScreen> {
     return items;
   }
 
-  // Users the logged-in person doesn't follow yet, sorted by shared club overlap.
+  bool _loadingPeopleDirectory = false;
+
+  // Profile users to suggest in the feed. Prefer people who follow me but I do
+  // not follow back, then other unfollowed profiles. If that leaves the rail
+  // empty, show people I already follow, then a random-looking profile fallback.
   List<User> _suggestedUsers() {
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final myFollowing = userState.followedUserIds;
-    final myClubs = userState.followedClubIds;
+    final myFollowers = peopleService.cachedFollowerIds;
+    final profiles = peopleService.cachedPeople
+        .where((user) => user.id != myId)
+        .toList();
+    final suggested = <String, User>{};
 
-    return users
-        .where((u) => u.id != myId && !myFollowing.contains(u.id))
-        .toList()
-      ..sort((a, b) {
-        final aOverlap = a.subscribedClubIds.where(myClubs.contains).length;
-        final bOverlap = b.subscribedClubIds.where(myClubs.contains).length;
-        return bOverlap.compareTo(aOverlap);
-      });
+    void addAll(Iterable<User> candidates) {
+      for (final user in candidates) {
+        suggested.putIfAbsent(user.id, () => user);
+      }
+    }
+
+    addAll(
+      profiles.where(
+        (user) =>
+            myFollowers.contains(user.id) && !myFollowing.contains(user.id),
+      ),
+    );
+
+    addAll(
+      peopleService
+          .randomProfiles(excludeId: myId)
+          .where((user) => !myFollowing.contains(user.id)),
+    );
+
+    if (suggested.isEmpty) {
+      addAll(profiles.where((user) => myFollowing.contains(user.id)));
+    }
+
+    if (suggested.isEmpty) {
+      addAll(peopleService.randomProfiles(excludeId: myId));
+    }
+
+    return suggested.values.toList();
   }
 
   // Clubs the user doesn't follow yet, ranked by how well they match the
@@ -192,6 +221,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPeopleDirectory();
   }
 
   @override
@@ -200,8 +230,23 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _onRefresh() async {
-    await Future.delayed(const Duration(milliseconds: 600));
+    await _loadPeopleDirectory();
     setState(() {});
+  }
+
+  Future<void> _loadPeopleDirectory() async {
+    if (_loadingPeopleDirectory) return;
+    _loadingPeopleDirectory = true;
+    final myId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    try {
+      await peopleService.refreshPeopleDirectory(excludeId: myId);
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep the feed usable; the card simply won't render until profiles load.
+    } finally {
+      _loadingPeopleDirectory = false;
+    }
   }
 
   @override
@@ -891,14 +936,27 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                       UserFollowButton(
                         userId: u.id,
                         size: 'small',
-                        onTap: () {
-                          userState.toggleFollowUser(u.id);
-                          userPrefsService.save(
-                            authService.currentUser?.id ??
-                                authService.currentAdmin?.id ??
-                                '',
-                          );
+                        onTap: () async {
+                          final myId =
+                              authService.currentUser?.id ??
+                              authService.currentAdmin?.id ??
+                              '';
+                          final follow = !userState.isFollowingUser(u.id);
+                          userState.setFollowingUser(u.id, follow);
+                          userPrefsService.save(myId);
                           widget.onFollowed();
+                          try {
+                            await peopleService.setFollowing(
+                              followerId: myId,
+                              followingId: u.id,
+                              follow: follow,
+                            );
+                            userPrefsService.save(myId);
+                          } catch (_) {
+                            userState.setFollowingUser(u.id, !follow);
+                            userPrefsService.save(myId);
+                            widget.onFollowed();
+                          }
                         },
                       ),
                     ],

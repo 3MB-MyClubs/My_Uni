@@ -374,6 +374,23 @@ class UserState extends ChangeNotifier {
 
   bool isFollowingUser(String userId) => followedUserIds.contains(userId);
 
+  void replaceFollowedUsers(Iterable<String> userIds) {
+    followedUserIds
+      ..clear()
+      ..addAll(userIds);
+    notifyListeners();
+  }
+
+  void setFollowingUser(String userId, bool follow) {
+    if (follow) {
+      followedUserIds.add(userId);
+    } else {
+      followedUserIds.remove(userId);
+      pendingFollowRequests.remove(userId);
+    }
+    notifyListeners();
+  }
+
   void toggleFollowUser(String userId) {
     if (followedUserIds.contains(userId)) {
       followedUserIds.remove(userId);
