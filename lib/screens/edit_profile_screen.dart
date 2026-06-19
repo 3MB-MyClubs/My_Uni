@@ -209,6 +209,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // ── Photo ─────────────────────────────────────────────────────────────────
   void _showPhotoOptions() {
+    final hasPhoto = userState.hasProfilePhoto(_userId);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -245,14 +246,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   _pickPhoto(ImageSource.gallery);
                 },
               ),
-              if (userState.profilePhotoPaths[_userId] != null) ...[
+              if (hasPhoto) ...[
                 Divider(height: 1, indent: 16, color: AppColors.divider),
-                _photoOption(Icons.delete_outline_rounded, 'Remove photo', () {
-                  Navigator.pop(context);
-                  userState.removeProfilePhoto(_userId);
-                  userPrefsService.save(_userId);
-                  setState(() {});
-                }, danger: true),
+                _photoOption(
+                  Icons.delete_outline_rounded,
+                  'Remove photo',
+                  () async {
+                    Navigator.pop(context);
+                    await _removePhoto();
+                  },
+                  danger: true,
+                ),
               ],
             ],
           ),
@@ -287,6 +291,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       onTap: onTap,
     );
+  }
+
+  Future<void> _removePhoto() async {
+    userState.removeProfilePhoto(_userId);
+    await userPrefsService.save(_userId);
+    try {
+      await studentProfileService.removeAvatar(_userId);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Photo removed locally, but remote delete failed.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickPhoto(ImageSource source) async {

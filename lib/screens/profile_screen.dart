@@ -695,6 +695,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showProfilePhotoOptions(BuildContext context, String userId) {
+    final hasPhoto = userState.hasProfilePhoto(userId);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -786,10 +787,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _pickProfilePhoto(userId, ImageSource.gallery);
               },
             ),
+            if (hasPhoto) ...[
+              Divider(height: 1, indent: 16, color: AppColors.divider),
+              ListTile(
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade400.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.red.shade400,
+                  ),
+                ),
+                title: Text(
+                  'Remove photo',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade400,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _removeProfilePhoto(userId);
+                },
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _removeProfilePhoto(String userId) async {
+    userState.removeProfilePhoto(userId);
+    await userPrefsService.save(userId);
+    try {
+      await remote_profile.studentProfileService.removeAvatar(userId);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Photo removed locally, but remote delete failed.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+    if (mounted) setState(() {});
   }
 
   @override

@@ -79,7 +79,9 @@ class UserState extends ChangeNotifier {
 
   /// Removes the profile photo for [userId] and notifies all listeners.
   void removeProfilePhoto(String userId) {
-    if (profilePhotoPaths.remove(userId) != null) notifyListeners();
+    final removedLocal = profilePhotoPaths.remove(userId) != null;
+    final removedRemote = mockPhotoUrls.remove(userId) != null;
+    if (removedLocal || removedRemote) notifyListeners();
   }
 
   /// Sets a remote profile photo URL for [userId] and notifies all listeners.
@@ -93,6 +95,8 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool hasProfilePhoto(String userId) =>
+      profilePhotoPaths[userId] != null || mockPhotoUrls[userId] != null;
 
   /// Sets the student bio for [userId] and notifies all listeners.
   void setBio(String userId, String bio) {
