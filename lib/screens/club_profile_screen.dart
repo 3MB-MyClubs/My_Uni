@@ -593,8 +593,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               club: widget.club,
               onBoardChanged: () {
                 if (!mounted) return;
+                // Refresh the header stats but stay on the BOARD tab so editing
+                // a member's role doesn't bounce the admin back to Posts.
                 setState(() {});
-                _tabController.animateTo(0);
               },
             ),
           ],
@@ -1972,49 +1973,11 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
 
   Future<void> _editTitleInSheet(dynamic u) async {
     final current = widget.club.boardMemberTitles[u.id] ?? '';
-    final controller = TextEditingController(text: current);
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text(
-          'Set title for ${u.name}',
-          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          style: TextStyle(color: AppColors.text),
-          decoration: InputDecoration(
-            hintText: 'e.g. President, Secretary…',
-            hintStyle: TextStyle(color: AppColors.secondaryText),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.secondaryText),
-            ),
-          ),
-          if (current.isNotEmpty)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ''),
-              child: Text(
-                'Remove title',
-                style: TextStyle(color: AppColors.primaryRed),
-              ),
-            ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Save'),
-          ),
-        ],
-      ),
+      builder: (_) =>
+          _BoardTitleDialog(memberName: u.name, initialTitle: current),
     );
-    controller.dispose();
     if (result == null || !mounted) return;
     if (result.isEmpty) {
       widget.club.boardMemberTitles.remove(u.id);
@@ -2023,7 +1986,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
     }
     await contentStore.saveBoardMemberTitles();
     if (!mounted) return;
-    Navigator.of(context).pop(true);
+    setState(() {});
   }
 
   Future<void> _removeMember(dynamic u) async {
@@ -2410,49 +2373,11 @@ class _BoardTabState extends State<_BoardTab> {
 
   Future<void> _editTitle(dynamic u) async {
     final current = widget.club.boardMemberTitles[u.id] ?? '';
-    final controller = TextEditingController(text: current);
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text(
-          'Set title for ${u.name}',
-          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          style: TextStyle(color: AppColors.text),
-          decoration: InputDecoration(
-            hintText: 'e.g. President, Secretary…',
-            hintStyle: TextStyle(color: AppColors.secondaryText),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.secondaryText),
-            ),
-          ),
-          if (current.isNotEmpty)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ''),
-              child: Text(
-                'Remove title',
-                style: TextStyle(color: AppColors.primaryRed),
-              ),
-            ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text('Save'),
-          ),
-        ],
-      ),
+      builder: (_) =>
+          _BoardTitleDialog(memberName: u.name, initialTitle: current),
     );
-    controller.dispose();
     if (result == null || !mounted) return;
     setState(() {
       if (result.isEmpty) {
@@ -2732,6 +2657,77 @@ class _BoardTabState extends State<_BoardTab> {
               ],
             );
           }),
+      ],
+    );
+  }
+}
+
+// ─── Board title dialog ───────────────────────────────────────────────────────
+// Owns its TextEditingController so it is disposed only when the dialog route is
+// fully gone — avoids "TextEditingController used after being disposed" crashes
+// that happen if the caller disposes the controller during the close animation.
+// Pops with: null (cancel), '' (remove title), or the trimmed title (save).
+
+class _BoardTitleDialog extends StatefulWidget {
+  final String memberName;
+  final String initialTitle;
+
+  const _BoardTitleDialog({
+    required this.memberName,
+    required this.initialTitle,
+  });
+
+  @override
+  State<_BoardTitleDialog> createState() => _BoardTitleDialogState();
+}
+
+class _BoardTitleDialogState extends State<_BoardTitleDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialTitle,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.card,
+      title: Text(
+        'Set title for ${widget.memberName}',
+        style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 40,
+        style: TextStyle(color: AppColors.text),
+        onSubmitted: (v) => Navigator.pop(context, v.trim()),
+        decoration: InputDecoration(
+          hintText: 'e.g. President, Secretary…',
+          hintStyle: TextStyle(color: AppColors.secondaryText),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+        ),
+        if (widget.initialTitle.isNotEmpty)
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: Text(
+              'Remove title',
+              style: TextStyle(color: AppColors.primaryRed),
+            ),
+          ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: Text('Save'),
+        ),
       ],
     );
   }
