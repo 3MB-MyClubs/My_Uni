@@ -4,16 +4,17 @@ import '../services/app_colors.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
+import '../services/lazy_content_loader.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
+import '../services/post_like_helper.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/user_follow_button.dart';
 import '../models/comment.dart';
-import '../models/like.dart';
 import '../models/share.dart';
 import '../models/message.dart';
 import '../models/news_post.dart';
@@ -221,6 +222,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    _loadFeedContent();
     _loadPeopleDirectory();
   }
 
@@ -230,8 +232,22 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _onRefresh() async {
+    try {
+      await lazyContentLoader.refreshContent();
+    } catch (_) {
+      // Keep currently loaded content if the network request fails.
+    }
     await _loadPeopleDirectory();
     setState(() {});
+  }
+
+  Future<void> _loadFeedContent() async {
+    try {
+      await lazyContentLoader.ensureContentLoaded();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep local seed data visible if Supabase content is unreachable.
+    }
   }
 
   Future<void> _loadPeopleDirectory() async {
@@ -370,7 +386,11 @@ class _FeedScreenState extends State<FeedScreen> {
                   return _buildFeedCard(item as _FeedItem, i);
                 }, childCount: mixed.length),
               ),
-              SliverToBoxAdapter(child: SizedBox(height: 16)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.of(context).padding.bottom + 112,
+                ),
+              ),
             ],
           ],
         ),
@@ -1562,39 +1582,14 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _doubleTapLike() {
-    if (!userState.isLiked(widget.post.id)) {
-      userState.toggleLike(widget.post.id);
-      likes.add(
-        Like(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          postId: widget.post.id,
-          userId: authService.currentUser?.id ?? 'guest',
-        ),
-      );
-      contentStore.saveLikes();
-    }
+    ensurePostLiked(widget.post.id);
     setState(() => _showHeart = true);
     _heartController.forward();
     widget.onUpdate();
   }
 
   void _toggleLike() {
-    final postId = widget.post.id;
-    final userId = authService.currentUser?.id ?? 'guest';
-    if (userState.isLiked(postId)) {
-      userState.toggleLike(postId);
-      likes.removeWhere((l) => l.postId == postId && l.userId == userId);
-    } else {
-      userState.toggleLike(postId);
-      likes.add(
-        Like(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          postId: postId,
-          userId: userId,
-        ),
-      );
-    }
-    contentStore.saveLikes();
+    togglePostLike(widget.post.id);
     setState(() {});
     widget.onUpdate();
   }

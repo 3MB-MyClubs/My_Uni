@@ -4,6 +4,7 @@ import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/post_like_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
@@ -1050,7 +1051,7 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
                           : Icons.favorite_border_rounded,
                       label: '$likeCount',
                       color: liked ? _kLiveRed : AppColors.secondaryText,
-                      onTap: () => userState.toggleLike(postId),
+                      onTap: () => togglePostLike(postId),
                     ),
                     const SizedBox(width: 22),
                     _ActionPill(
@@ -2714,7 +2715,10 @@ class _BoardTitleDialogState extends State<_BoardTitleDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('Cancel', style: TextStyle(color: AppColors.secondaryText)),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: AppColors.secondaryText),
+          ),
         ),
         if (widget.initialTitle.isNotEmpty)
           TextButton(

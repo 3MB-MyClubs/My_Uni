@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/club_follow_service.dart';
 import '../services/personalization_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -74,6 +75,10 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         userState.toggleFollow(clubId);
       }
     }
+    await clubFollowService.setFollowedClubIds(
+      userId: uid,
+      clubIds: userState.followedClubIds,
+    );
     await userPrefsService.save(uid);
     if (mounted) Navigator.pop(context);
   }

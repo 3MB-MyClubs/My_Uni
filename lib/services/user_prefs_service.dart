@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'mock_data.dart';
+import 'supabase_config.dart';
 import 'user_state.dart';
 
 /// Persists UserState to a Hive box so settings survive logout / app restarts.
@@ -125,17 +126,21 @@ class UserPrefsService {
       fallback: {'u1', 'u4'},
     );
 
-    _restoreSet(
-      s.followedClubIds,
-      _box.get('followedClubIds_$userId'),
-      fallback: {'c1'},
-    );
+    if (!SupabaseConfig.isConfigured) {
+      _restoreSet(
+        s.followedClubIds,
+        _box.get('followedClubIds_$userId'),
+        fallback: {'c1'},
+      );
+    }
 
-    _restoreSet(
-      s.likedPostIds,
-      _box.get('likedPostIds_$userId'),
-      fallback: {'n1'},
-    );
+    if (!SupabaseConfig.isConfigured) {
+      _restoreSet(
+        s.likedPostIds,
+        _box.get('likedPostIds_$userId'),
+        fallback: {'n1'},
+      );
+    }
 
     _restoreSet(s.savedPostIds, _box.get('savedPostIds_$userId'));
 

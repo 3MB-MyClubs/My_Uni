@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../models/user.dart';
 import '../models/app_admin.dart';
 import 'mock_data.dart';
+import 'club_follow_service.dart';
+import 'rsvp_store.dart';
 import 'student_profile_service.dart';
+import 'supabase_interaction_service.dart';
 import 'supabase_config.dart';
+import 'user_state.dart';
 
 // ...existing code...
 
@@ -91,6 +97,7 @@ class AuthService {
           subscribedClubIds: const [],
         );
         _currentAdmin = null;
+        unawaited(_hydrateStudentState(authUser.id));
         return true;
       } on AuthException {
         return false;
@@ -100,6 +107,32 @@ class AuthService {
     }
 
     return login(email, password);
+  }
+
+  Future<void> _hydrateStudentState(String userId) async {
+    try {
+      final userStateResults = await Future.wait<Set<String>>([
+        clubFollowService
+            .fetchFollowedClubIds(userId)
+            .catchError((_) => <String>{}),
+        supabaseInteractionService
+            .fetchLikedPostIds(userId)
+            .catchError((_) => <String>{}),
+        supabaseInteractionService
+            .fetchRsvpEventIds(userId)
+            .catchError((_) => <String>{}),
+      ]);
+      final followedClubIds = userStateResults[0];
+      userState.replaceFollowedClubs(followedClubIds);
+      for (final clubId in followedClubIds) {
+        final current = supabaseClubMemberCounts[clubId] ?? 0;
+        if (current < 1) supabaseClubMemberCounts[clubId] = 1;
+      }
+      userState.replaceLikedPosts(userStateResults[1]);
+      rsvpStore.replaceForUser(userStateResults[2], userId);
+    } catch (_) {
+      // Auth already succeeded; interaction hydration should never block login.
+    }
   }
 
   bool signUp(String name, String email, String password) {

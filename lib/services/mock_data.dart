@@ -6105,10 +6105,15 @@ double eventScore(String eventId) {
   return (uniqueAttendees * 1.5) + (shareCount * 2.0) + upcomingBonus;
 }
 
+final Map<String, int> supabaseClubMemberCounts = {};
+final Map<String, int> supabasePostLikeCounts = {};
+
 int clubMemberCount(String clubId) =>
+    supabaseClubMemberCounts[clubId] ??
     subscriptions.where((s) => s.clubId == clubId).length;
 
 int postLikeCount(String postId) =>
+    supabasePostLikeCounts[postId] ??
     likes.where((l) => l.postId == postId).length;
 
 int postShareCount(String targetId) =>

@@ -64,7 +64,6 @@ class _RsvpButtonState extends State<RsvpButton> {
 
   Widget _build(BuildContext context, bool attending, bool pending) {
     void onToggle() {
-      if (pending) return;
       final wasAttending = rsvpStore.isAttending(widget.eventId);
       rsvpStore.toggle(widget.eventId, _userId);
       if (!wasAttending && widget.event != null) {
@@ -83,15 +82,15 @@ class _RsvpButtonState extends State<RsvpButton> {
               label: '✓ Going',
               icon: Icons.check_circle_rounded,
               active: true,
-              enabled: !pending,
+              enabled: true,
               color: widget.color,
               onTap: onToggle,
             ),
             const SizedBox(width: 6),
             GestureDetector(
-              onTap: pending ? null : onToggle,
+              onTap: onToggle,
               child: AnimatedOpacity(
-                opacity: pending ? 0.4 : 1.0,
+                opacity: 1.0,
                 duration: const Duration(milliseconds: 150),
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -125,7 +124,7 @@ class _RsvpButtonState extends State<RsvpButton> {
         label: 'RSVP',
         icon: Icons.how_to_reg_rounded,
         active: false,
-        enabled: !pending,
+        enabled: true,
         color: widget.color,
         onTap: onToggle,
       );
@@ -143,7 +142,10 @@ class _RsvpButtonState extends State<RsvpButton> {
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [widget.color, Color.lerp(widget.color, Colors.black, 0.15)!],
+                    colors: [
+                      widget.color,
+                      Color.lerp(widget.color, Colors.black, 0.15)!,
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -186,9 +188,9 @@ class _RsvpButtonState extends State<RsvpButton> {
               width: 88,
               height: 56,
               child: GestureDetector(
-                onTap: pending ? null : onToggle,
+                onTap: onToggle,
                 child: AnimatedOpacity(
-                  opacity: pending ? 0.4 : 1.0,
+                  opacity: 1.0,
                   duration: const Duration(milliseconds: 150),
                   child: Container(
                     decoration: BoxDecoration(
@@ -231,14 +233,17 @@ class _RsvpButtonState extends State<RsvpButton> {
       height: 56,
       width: double.infinity,
       child: GestureDetector(
-        onTap: pending ? null : onToggle,
+        onTap: onToggle,
         child: AnimatedOpacity(
-          opacity: pending ? 0.65 : 1.0,
+          opacity: 1.0,
           duration: const Duration(milliseconds: 150),
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [widget.color, Color.lerp(widget.color, Colors.black, 0.18)!],
+                colors: [
+                  widget.color,
+                  Color.lerp(widget.color, Colors.black, 0.18)!,
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

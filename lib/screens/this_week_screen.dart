@@ -3,6 +3,7 @@ import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/event_access.dart';
+import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
@@ -124,6 +125,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   @override
   void initState() {
     super.initState();
+    _loadEventContent();
     final now = DateTime.now();
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -136,6 +138,15 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadEventContent() async {
+    try {
+      await lazyContentLoader.ensureContentLoaded();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep local seed events visible if Supabase content is unreachable.
+    }
   }
 
   DateTime get _today {
@@ -330,228 +341,235 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          // ── Header: title + subtitle + bell ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, topPad + 14, 16, 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (Navigator.canPop(context)) ...[
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        margin: const EdgeInsets.only(right: 10, top: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightGray,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.arrow_back_ios_new_rounded,
-                            size: 18, color: AppColors.text),
-                      ),
-                    ),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Discover events',
-                          style: TextStyle(
-                            fontSize: 27,
-                            fontWeight: FontWeight.w800,
+            // ── Header: title + subtitle + bell ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(20, topPad + 14, 16, 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (Navigator.canPop(context)) ...[
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          margin: const EdgeInsets.only(right: 10, top: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.lightGray,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 18,
                             color: AppColors.text,
-                            letterSpacing: -0.9,
-                            height: 1.0,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _showPastWeek
-                              ? 'Events that finished during the last 7 days.'
-                              : "What's on across campus — next 3 weeks.",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.secondaryText,
-                            letterSpacing: -0.1,
+                      ),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Discover events',
+                            style: TextStyle(
+                              fontSize: 27,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.text,
+                              letterSpacing: -0.9,
+                              height: 1.0,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            _showPastWeek
+                                ? 'Events that finished during the last 7 days.'
+                                : "What's on across campus — next 3 weeks.",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.secondaryText,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  _HeaderIconBtn(
-                    icon: Icons.notifications_outlined,
-                    badgeCount: newEventCount,
-                    onTap: _openNewEventNotifications,
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    _HeaderIconBtn(
+                      icon: Icons.notifications_outlined,
+                      badgeCount: newEventCount,
+                      onTap: _openNewEventNotifications,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // ── Search bar ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-              child: _SearchBar(
-                controller: _searchController,
-                onChanged: (v) => setState(() => _query = v),
-                onClear: () => setState(() {
-                  _query = '';
-                  _searchController.clear();
-                }),
+            // ── Search bar ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+                child: _SearchBar(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  onClear: () => setState(() {
+                    _query = '';
+                    _searchController.clear();
+                  }),
+                ),
               ),
             ),
-          ),
 
-          // ── Filter bar: audience · date (multi) · live · past · clear ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-              child: Row(
-                children: [
-                  // Audience
-                  _FilterPillBtn(
-                    label: _audience == 'following' ? 'Following' : 'All',
-                    icon: _audience == 'following'
-                        ? Icons.favorite_outline_rounded
-                        : Icons.people_outline_rounded,
-                    active: _audience == 'following',
-                    onTap: _showAudienceSheet,
-                  ),
-                  const SizedBox(width: 8),
-                  // Date (multi-select)
-                  Expanded(
-                    child: _FilterPillBtn(
-                      label: _dateFilters.isEmpty
-                          ? 'Any date'
-                          : _dateFilters.length == 1
-                          ? _shortDay(_dayKeyToDate(_dateFilters.first))
-                          : '${_dateFilters.length} days',
-                      icon: Icons.calendar_today_outlined,
-                      active: _dateFilters.isNotEmpty,
-                      onTap: _showDateSheet,
-                      expand: true,
+            // ── Filter bar: audience · date (multi) · live · past · clear ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                child: Row(
+                  children: [
+                    // Audience
+                    _FilterPillBtn(
+                      label: _audience == 'following' ? 'Following' : 'All',
+                      icon: _audience == 'following'
+                          ? Icons.favorite_outline_rounded
+                          : Icons.people_outline_rounded,
+                      active: _audience == 'following',
+                      onTap: _showAudienceSheet,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Live toggle
-                  _LiveToggleBtn(
-                    active: _showLive,
-                    onTap: () => setState(() => _showLive = !_showLive),
-                  ),
-                  const SizedBox(width: 8),
-                  // Past week toggle
-                  _FilterPillBtn(
-                    label: 'Past',
-                    icon: Icons.history_rounded,
-                    active: _showPastWeek,
-                    showChevron: false,
-                    horizontalPadding: 10,
-                    onTap: () => setState(() {
-                      _showPastWeek = !_showPastWeek;
-                      if (_showPastWeek) _dateFilters = {};
-                    }),
-                  ),
-                  // Clear all filters
-                  if (hasFilter && !searching) ...[
                     const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _resetFilters,
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryRed.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(
-                            color: AppColors.primaryRed.withValues(alpha: 0.25),
+                    // Date (multi-select)
+                    Expanded(
+                      child: _FilterPillBtn(
+                        label: _dateFilters.isEmpty
+                            ? 'Any date'
+                            : _dateFilters.length == 1
+                            ? _shortDay(_dayKeyToDate(_dateFilters.first))
+                            : '${_dateFilters.length} days',
+                        icon: Icons.calendar_today_outlined,
+                        active: _dateFilters.isNotEmpty,
+                        onTap: _showDateSheet,
+                        expand: true,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Live toggle
+                    _LiveToggleBtn(
+                      active: _showLive,
+                      onTap: () => setState(() => _showLive = !_showLive),
+                    ),
+                    const SizedBox(width: 8),
+                    // Past week toggle
+                    _FilterPillBtn(
+                      label: 'Past',
+                      icon: Icons.history_rounded,
+                      active: _showPastWeek,
+                      showChevron: false,
+                      horizontalPadding: 10,
+                      onTap: () => setState(() {
+                        _showPastWeek = !_showPastWeek;
+                        if (_showPastWeek) _dateFilters = {};
+                      }),
+                    ),
+                    // Clear all filters
+                    if (hasFilter && !searching) ...[
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _resetFilters,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryRed.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(
+                              color: AppColors.primaryRed.withValues(
+                                alpha: 0.25,
+                              ),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 15,
+                            color: AppColors.primaryRed,
                           ),
                         ),
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 15,
-                          color: AppColors.primaryRed,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Count header ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '${results.length} ${results.length == 1 ? 'event' : 'events'}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _contextLabel(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.secondaryText,
                         ),
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
             ),
-          ),
 
-          // ── Count header ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    '${results.length} ${results.length == 1 ? 'event' : 'events'}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.text,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _contextLabel(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.secondaryText,
+            // ── Results / empty ──
+            if (results.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _EmptyState(
+                  searching: searching || hasFilter,
+                  onReset: _resetFilters,
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((ctx, i) {
+                    final ev = results[i];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: i < results.length - 1 ? 12 : 0,
                       ),
-                    ),
-                  ),
-                ],
+                      child: _WeekEventRow(
+                        key: ValueKey(ev.id),
+                        event: ev,
+                        color: _clubColor(ev.clubId),
+                        onTap: () => _openEvent(ev),
+                      ),
+                    );
+                  }, childCount: results.length),
+                ),
+              ),
+
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: MediaQuery.of(context).padding.bottom + 90,
               ),
             ),
-          ),
-
-          // ── Results / empty ──
-          if (results.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _EmptyState(
-                searching: searching || hasFilter,
-                onReset: _resetFilters,
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((ctx, i) {
-                  final ev = results[i];
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: i < results.length - 1 ? 12 : 0,
-                    ),
-                    child: _WeekEventRow(
-                      key: ValueKey(ev.id),
-                      event: ev,
-                      color: _clubColor(ev.clubId),
-                      onTap: () => _openEvent(ev),
-                    ),
-                  );
-                }, childCount: results.length),
-              ),
-            ),
-
-          SliverToBoxAdapter(
-            child: SizedBox(height: MediaQuery.of(context).padding.bottom + 90),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -1489,9 +1507,8 @@ class _WeekRsvpPill extends StatelessWidget {
         final userId =
             authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
         final attending = rsvpStore.isAttending(event.id);
-        final pending = rsvpStore.isPending(event.id);
         return GestureDetector(
-          onTap: pending || userId.isEmpty
+          onTap: userId.isEmpty
               ? null
               : () => rsvpStore.toggle(event.id, userId),
           child: AnimatedContainer(
@@ -1515,42 +1532,29 @@ class _WeekRsvpPill extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (pending)
-                  SizedBox(
-                    width: 13,
-                    height: 13,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.6,
-                      color: attending ? AppColors.primaryRed : Colors.white,
-                    ),
-                  )
-                else ...[
-                  if (attending) ...[
-                    Icon(
-                      Icons.check_rounded,
-                      size: 13,
-                      color: AppColors.primaryRed,
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        attending ? 'Going' : 'RSVP',
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.1,
-                          color: attending
-                              ? AppColors.primaryRed
-                              : Colors.white,
-                        ),
+                if (attending) ...[
+                  Icon(
+                    Icons.check_rounded,
+                    size: 13,
+                    color: AppColors.primaryRed,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      attending ? 'Going' : 'RSVP',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                        color: attending ? AppColors.primaryRed : Colors.white,
                       ),
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
