@@ -37,7 +37,6 @@ class UserPrefsService {
       'pendingFollowRequests_$userId': s.pendingFollowRequests.toList(),
       'shownFollowNotice_$userId': s.shownFollowNotice.toList(),
       'acceptedMessageRequests_$userId': s.acceptedMessageRequests.toList(),
-      'pendingBoardRequests_$userId': s.pendingBoardRequests.toList(),
       // usernames are global (visible to everyone).
       'usernames': s.usernames.map((k, v) => MapEntry(k, v)),
     });
@@ -152,11 +151,6 @@ class UserPrefsService {
       _box.get('acceptedMessageRequests_$userId'),
     );
 
-    _restoreSet(
-      s.pendingBoardRequests,
-      _box.get('pendingBoardRequests_$userId'),
-    );
-
     final storedUsernames = _box.get('usernames');
     if (storedUsernames != null) {
       s.usernames.clear();
@@ -170,18 +164,6 @@ class UserPrefsService {
   Future<void> saveClubPhoto(String clubId, String path) async {
     if (!_initialized) return;
     await _box.put('clubPhotoPath_$clubId', path);
-  }
-
-  /// Removes a specific board request entry from the stored prefs of [userId]
-  /// without overwriting other fields (used when declining a request while
-  /// logged in as a different user).
-  Future<void> removeBoardRequest(String userId, String clubId) async {
-    if (!_initialized) return;
-    final key = 'pendingBoardRequests_$userId';
-    final raw = _box.get(key);
-    final existing = raw != null ? List<String>.from(raw as List) : <String>[];
-    existing.remove('$userId:$clubId');
-    await _box.put(key, existing);
   }
 
   void _restoreSet(

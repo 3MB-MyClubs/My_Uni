@@ -6,10 +6,8 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
-import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-import '../widgets/academic_program_picker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
@@ -211,171 +209,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => UserProfileScreen(user: u)),
-    );
-  }
-
-  static const List<String> _yearOptions = [
-    '1st Year',
-    '2nd Year',
-    '3rd Year',
-    '4th Year',
-    '5th Year',
-  ];
-
-  void _editProfile() {
-    final id = _myId;
-    final bioController = TextEditingController(text: userState.bios[id] ?? '');
-    final savedMajor = userState.majors[id];
-    String? selectedMajor = kAcademicPrograms.contains(savedMajor)
-        ? savedMajor
-        : null;
-    var selectedYear = userState.years[id];
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            22,
-            18,
-            22,
-            MediaQuery.of(context).viewInsets.bottom + 28,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Edit profile',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.text,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Bio',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.secondaryText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: bioController,
-                maxLines: 3,
-                maxLength: 160,
-                decoration: const InputDecoration(
-                  hintText: 'Tell people a bit about yourself',
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Major',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.secondaryText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              AcademicProgramField(
-                value: selectedMajor,
-                hint: 'Select your major',
-                onTap: () async {
-                  final result = await showAcademicProgramPicker(
-                    context: context,
-                    title: 'Select major',
-                    selected: selectedMajor == null
-                        ? const []
-                        : [selectedMajor!],
-                  );
-                  if (result == null || !context.mounted) return;
-                  setSheetState(
-                    () => selectedMajor = result.isEmpty ? null : result.first,
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Year',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.secondaryText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _yearOptions.map((year) {
-                  final isOn = selectedYear == year;
-                  return GestureDetector(
-                    onTap: () =>
-                        setSheetState(() => selectedYear = isOn ? null : year),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 9,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isOn ? _burgundy : AppColors.lightGray,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: isOn ? _burgundy : AppColors.divider,
-                        ),
-                      ),
-                      child: Text(
-                        year,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isOn ? Colors.white : AppColors.text,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () {
-                    userState.setBio(id, bioController.text.trim());
-                    userState.setMajor(id, selectedMajor ?? '');
-                    userState.setYear(id, selectedYear ?? '');
-                    _persist();
-                    Navigator.pop(sheetContext);
-                    if (mounted) setState(() {});
-                  },
-                  child: const Text('Save'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -633,31 +466,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               if (_isOwnProfile)
                 Column(
                   children: [
-                    SizedBox(
-                      height: 34,
-                      child: ElevatedButton(
-                        onPressed: _editProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _burgundy,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Edit profile',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
                     SizedBox(
                       height: 34,
                       width: 34,

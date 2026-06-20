@@ -7,6 +7,7 @@ import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
@@ -764,22 +765,13 @@ class _ClubRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                club.name.characters.first.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
+            ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: color,
+              size: 48,
+              fontSize: 20,
+              borderRadius: 14,
             ),
             const SizedBox(width: 12),
             Expanded(

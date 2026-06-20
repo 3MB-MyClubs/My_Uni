@@ -1,5 +1,4 @@
 import 'package:hive/hive.dart';
-import '../models/board_member_request.dart';
 import '../models/comment.dart';
 import '../models/event.dart';
 import '../models/like.dart';
@@ -124,26 +123,6 @@ class ContentStore {
         .toList();
   }
 
-  // ── Board member requests ────────────────────────────────────────────────────
-
-  Future<void> saveBoardMemberRequests() async => _box.put(
-    'boardRequests',
-    boardMemberRequests.map((r) => r.toMap()).toList(),
-  );
-
-  void loadBoardMemberRequests() {
-    final raw = _box.get('boardRequests');
-    if (raw == null) return;
-    boardMemberRequests
-      ..clear()
-      ..addAll(
-        (raw as List).map(
-          (m) =>
-              BoardMemberRequest.fromMap(Map<String, dynamic>.from(m as Map)),
-        ),
-      );
-  }
-
   // ── Club board member IDs ────────────────────────────────────────────────────
   // Only the mutable boardMemberIds list is persisted; static club data stays
   // in mock_data.dart as the source of truth for names/descriptions etc.
@@ -238,7 +217,6 @@ class ContentStore {
       saveLikes(),
       saveShares(),
       saveDynamicNotifications(dynamicNotifs),
-      saveBoardMemberRequests(),
       saveBoardMemberIds(),
       saveBoardMemberTitles(),
     ]);

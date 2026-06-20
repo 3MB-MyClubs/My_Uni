@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/user_state.dart';
 import '../services/app_colors.dart';
+import 'profile_photo_viewer.dart';
 
 /// Shows a user's profile photo if they have one, otherwise their initial.
 /// Used everywhere a user avatar appears so photo changes are visible app-wide.
@@ -41,14 +42,22 @@ class UserAvatar extends StatelessWidget {
         if (photoPath != null) {
           final file = File(photoPath);
           if (file.existsSync()) {
-            return ClipRRect(
-              borderRadius: clip,
-              child: Image.file(
-                file,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
+            final imageProvider = FileImage(file);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => showProfilePhotoViewer(
+                context: context,
+                imageProvider: imageProvider,
+              ),
+              child: ClipRRect(
+                borderRadius: clip,
+                child: Image(
+                  image: imageProvider,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
+                ),
               ),
             );
           }
@@ -56,16 +65,24 @@ class UserAvatar extends StatelessWidget {
 
         // Fall back to mock network photo for demo users
         if (mockUrl != null) {
-          return ClipRRect(
-            borderRadius: clip,
-            child: Image.network(
-              mockUrl,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
-              loadingBuilder: (ctx, child, progress) =>
-                  progress == null ? child : _initial(bg, fg, isCircle),
+          final imageProvider = NetworkImage(mockUrl);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => showProfilePhotoViewer(
+              context: context,
+              imageProvider: imageProvider,
+            ),
+            child: ClipRRect(
+              borderRadius: clip,
+              child: Image(
+                image: imageProvider,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
+                loadingBuilder: (ctx, child, progress) =>
+                    progress == null ? child : _initial(bg, fg, isCircle),
+              ),
             ),
           );
         }

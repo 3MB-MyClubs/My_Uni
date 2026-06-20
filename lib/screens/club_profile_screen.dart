@@ -1,12 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
-import 'package:image_cropper/image_cropper.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import '../models/board_member_request.dart';
 import '../models/club.dart';
-import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
@@ -120,178 +114,17 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return widget.club.adminUserIds.contains(admin.id);
   }
 
-  Future<void> _pickClubPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
-    if (picked == null || !mounted) return;
-
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Photo',
-          aspectRatioLockEnabled: true,
-          resetAspectRatioEnabled: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: true,
-        ),
-      ],
-    );
-    if (cropped == null || !mounted) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Use this photo?',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
-        ),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.file(File(cropped.path), fit: BoxFit.cover),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.secondaryText),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Use Photo'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      final docsDir = await getApplicationDocumentsDirectory();
-      final ext = cropped.path.contains('.')
-          ? cropped.path.substring(cropped.path.lastIndexOf('.'))
-          : '.jpg';
-      final permanentPath = '${docsDir.path}/club_${widget.club.id}$ext';
-      await File(cropped.path).copy(permanentPath);
-      if (!mounted) return;
-      userState.setClubPhoto(widget.club.id, permanentPath);
-      await userPrefsService.saveClubPhoto(widget.club.id, permanentPath);
-      setState(() {});
-    }
-  }
-
-  void _showClubPhotoOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Change Club Photo',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.camera_alt_outlined,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-              title: Text(
-                'Take a Photo',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _pickClubPhoto(ImageSource.camera);
-              },
-            ),
-            Divider(height: 1, indent: 16),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.photo_library_outlined,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-              title: Text(
-                'Choose from Library',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _pickClubPhoto(ImageSource.gallery);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _openBoardManagement() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _BoardManagementSheet(club: widget.club),
-    ).then((_) => setState(() {}));
+    ).then((changed) {
+      if (!mounted) return;
+      setState(() {});
+      if (changed == true) _tabController.animateTo(0);
+    });
   }
 
   String _handleFor(String name) {
@@ -403,8 +236,11 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               if (widget.onSettings != null)
                 // Owner's Profile tab: one ⋯ menu with board management + settings.
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_horiz_rounded,
-                      color: panelText, size: 22),
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    color: panelText,
+                    size: 22,
+                  ),
                   color: AppColors.card,
                   onSelected: (v) {
                     if (v == 'board') _openBoardManagement();
@@ -415,11 +251,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                       value: 'board',
                       child: Row(
                         children: [
-                          Icon(Icons.manage_accounts_outlined,
-                              size: 20, color: AppColors.text),
+                          Icon(
+                            Icons.manage_accounts_outlined,
+                            size: 20,
+                            color: AppColors.text,
+                          ),
                           const SizedBox(width: 12),
-                          Text('Manage board members',
-                              style: TextStyle(color: AppColors.text)),
+                          Text(
+                            'Manage board members',
+                            style: TextStyle(color: AppColors.text),
+                          ),
                         ],
                       ),
                     ),
@@ -427,11 +268,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                       value: 'settings',
                       child: Row(
                         children: [
-                          Icon(Icons.settings_outlined,
-                              size: 20, color: AppColors.text),
+                          Icon(
+                            Icons.settings_outlined,
+                            size: 20,
+                            color: AppColors.text,
+                          ),
                           const SizedBox(width: 12),
-                          Text('Settings',
-                              style: TextStyle(color: AppColors.text)),
+                          Text(
+                            'Settings',
+                            style: TextStyle(color: AppColors.text),
+                          ),
                         ],
                       ),
                     ),
@@ -477,80 +323,43 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              GestureDetector(
-                                onTap: _isThisClubAdmin
-                                    ? _showClubPhotoOptions
-                                    : null,
-                                child: Stack(
-                                  children: [
-                                    Container(
-                                      width: 104,
-                                      height: 104,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(28),
-                                        gradient: LinearGradient(
-                                          begin: const Alignment(-0.8, -0.8),
-                                          end: const Alignment(0.8, 0.8),
-                                          colors: [
-                                            widget.color.withValues(
-                                              alpha: 0.23,
-                                            ),
-                                            widget.color.withValues(
-                                              alpha: 0.44,
-                                            ),
-                                          ],
-                                        ),
-                                        border: Border.all(
-                                          color: widget.color.withValues(
-                                            alpha: 0.40,
-                                          ),
-                                          width: 2,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: widget.color.withValues(
-                                              alpha: 0.10,
-                                            ),
-                                            blurRadius: 0,
-                                            spreadRadius: 4,
-                                          ),
-                                        ],
+                              Container(
+                                width: 104,
+                                height: 104,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(28),
+                                  gradient: LinearGradient(
+                                    begin: const Alignment(-0.8, -0.8),
+                                    end: const Alignment(0.8, 0.8),
+                                    colors: [
+                                      widget.color.withValues(alpha: 0.23),
+                                      widget.color.withValues(alpha: 0.44),
+                                    ],
+                                  ),
+                                  border: Border.all(
+                                    color: widget.color.withValues(alpha: 0.40),
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: widget.color.withValues(
+                                        alpha: 0.10,
                                       ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(26),
-                                        child: ClubAvatar(
-                                          clubId: widget.club.id,
-                                          clubName: widget.club.name,
-                                          color: widget.color,
-                                          size: 104,
-                                          fontSize: 46,
-                                          borderRadius: 28,
-                                        ),
-                                      ),
+                                      blurRadius: 0,
+                                      spreadRadius: 4,
                                     ),
-                                    if (_isThisClubAdmin)
-                                      Positioned(
-                                        right: 2,
-                                        bottom: 2,
-                                        child: Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primaryRed,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: bg,
-                                              width: 2,
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.edit,
-                                            color: panelText,
-                                            size: 11,
-                                          ),
-                                        ),
-                                      ),
                                   ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(26),
+                                  child: ClubAvatar(
+                                    clubId: widget.club.id,
+                                    clubName: widget.club.name,
+                                    color: widget.color,
+                                    size: 104,
+                                    fontSize: 46,
+                                    borderRadius: 28,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 22),
@@ -753,7 +562,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                   _IconTab(icon: Icons.assignment_outlined, label: 'BOARD'),
                 ],
               ),
-              backgroundColor: bg,
+              backgroundColor: AppColors.card,
+              borderColor: borderColor,
               height: 58,
             ),
           ),
@@ -779,7 +589,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               clubColor: widget.color,
               timeAgo: _timeAgo,
             ),
-            _BoardTab(club: widget.club),
+            _BoardTab(
+              club: widget.club,
+              onBoardChanged: () {
+                if (!mounted) return;
+                setState(() {});
+                _tabController.animateTo(0);
+              },
+            ),
           ],
         ),
       ),
@@ -811,20 +628,29 @@ class _PostsTab extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 32),
             child: Column(
               children: [
-                Icon(Icons.article_outlined,
-                    size: 46,
-                    color: AppColors.secondaryText.withValues(alpha: 0.6)),
+                Icon(
+                  Icons.article_outlined,
+                  size: 46,
+                  color: AppColors.secondaryText.withValues(alpha: 0.6),
+                ),
                 const SizedBox(height: 12),
-                Text('No posts yet.',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text)),
+                Text(
+                  'No posts yet.',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text("When ${club.name} posts, it'll show up here.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.secondaryText)),
+                Text(
+                  "When ${club.name} posts, it'll show up here.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
               ],
             ),
           ),
@@ -838,31 +664,52 @@ class _PostsTab extends StatelessWidget {
       listenable: userState,
       builder: (context, _) {
         final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-        final pinned =
-            posts.where((p) => userState.isPostPinned(p.id as String)).toList();
+        final pinned = posts
+            .where((p) => userState.isPostPinned(p.id as String))
+            .toList();
         final pinnedIds = pinned.map((p) => p.id as String).toSet();
         final fresh = posts
-            .where((p) =>
-                !pinnedIds.contains(p.id) &&
-                (p.createdAt as DateTime).isAfter(weekAgo))
+            .where(
+              (p) =>
+                  !pinnedIds.contains(p.id) &&
+                  (p.createdAt as DateTime).isAfter(weekAgo),
+            )
             .toList();
         final earlier = posts
-            .where((p) =>
-                !pinnedIds.contains(p.id) &&
-                !(p.createdAt as DateTime).isAfter(weekAgo))
+            .where(
+              (p) =>
+                  !pinnedIds.contains(p.id) &&
+                  !(p.createdAt as DateTime).isAfter(weekAgo),
+            )
             .toList();
         final newThisWeek = [...pinned, ...fresh];
 
         final children = <Widget>[];
         if (newThisWeek.isNotEmpty) {
           children.add(const _FeedLabel('NEW THIS WEEK'));
-          children.addAll(newThisWeek.map((p) => _ClubFeedCard(
-              post: p, club: club, clubColor: clubColor, isAdmin: isAdmin)));
+          children.addAll(
+            newThisWeek.map(
+              (p) => _ClubFeedCard(
+                post: p,
+                club: club,
+                clubColor: clubColor,
+                isAdmin: isAdmin,
+              ),
+            ),
+          );
         }
         if (earlier.isNotEmpty) {
           children.add(const _FeedLabel('EARLIER'));
-          children.addAll(earlier.map((p) => _ClubFeedCard(
-              post: p, club: club, clubColor: clubColor, isAdmin: isAdmin)));
+          children.addAll(
+            earlier.map(
+              (p) => _ClubFeedCard(
+                post: p,
+                club: club,
+                clubColor: clubColor,
+                isAdmin: isAdmin,
+              ),
+            ),
+          );
         }
         return ListView(
           padding: const EdgeInsets.only(bottom: 90),
@@ -884,12 +731,15 @@ class _FeedLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 13, 16, 9),
       child: Row(
         children: [
-          Text(text,
-              style: TextStyle(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                  color: AppColors.secondaryText)),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+              color: AppColors.secondaryText,
+            ),
+          ),
           const SizedBox(width: 9),
           Expanded(child: Container(height: 1, color: AppColors.divider)),
         ],
@@ -946,12 +796,12 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
   }
 
   void _openDetail() => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              PostDetailScreen(post: widget.post, clubColor: widget.clubColor),
-        ),
-      );
+    context,
+    MaterialPageRoute(
+      builder: (_) =>
+          PostDetailScreen(post: widget.post, clubColor: widget.clubColor),
+    ),
+  );
 
   // Admin-only: long-press a post to pin / unpin it to the top of the feed.
   void _showPinOptions() {
@@ -983,11 +833,17 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading:
-                  Icon(Icons.push_pin_rounded, color: AppColors.primaryRed),
-              title: Text(pinned ? 'Unpin from top' : 'Pin to top',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600, color: AppColors.text)),
+              leading: Icon(
+                Icons.push_pin_rounded,
+                color: AppColors.primaryRed,
+              ),
+              title: Text(
+                pinned ? 'Unpin from top' : 'Pin to top',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
               subtitle: Text(
                 pinned
                     ? 'Remove this post from the top of the feed.'
@@ -1073,28 +929,40 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
                                 ),
                               ),
                               const SizedBox(width: 5),
-                              Icon(Icons.verified_rounded,
-                                  size: 13, color: AppColors.primaryRed),
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 13,
+                                color: AppColors.primaryRed,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 1),
                           Row(
                             children: [
-                              Text('@$handle',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.secondaryText)),
-                              Text('  •  ',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.secondaryText)),
+                              Text(
+                                '@$handle',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                              Text(
+                                '  •  ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
                               Flexible(
-                                child: Text(_timeAgo(post.createdAt as DateTime),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.secondaryText)),
+                                child: Text(
+                                  _timeAgo(post.createdAt as DateTime),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -1105,7 +973,9 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 3),
+                          horizontal: 9,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.lightRed,
                           borderRadius: BorderRadius.circular(999),
@@ -1113,15 +983,21 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.push_pin_rounded,
-                                size: 11, color: AppColors.primaryRed),
+                            Icon(
+                              Icons.push_pin_rounded,
+                              size: 11,
+                              color: AppColors.primaryRed,
+                            ),
                             const SizedBox(width: 4),
-                            Text('PINNED',
-                                style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                    color: AppColors.primaryRed)),
+                            Text(
+                              'PINNED',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1225,9 +1101,14 @@ class _ActionPill extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w600, color: color)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -1267,11 +1148,13 @@ class _EventsTabState extends State<_EventsTab> {
   List _withStatus(String status) {
     final list = widget.events.where((e) => _statusOf(e) == status).toList();
     if (status == 'past') {
-      list.sort((a, b) =>
-          (b.dateTime as DateTime).compareTo(a.dateTime as DateTime));
+      list.sort(
+        (a, b) => (b.dateTime as DateTime).compareTo(a.dateTime as DateTime),
+      );
     } else {
-      list.sort((a, b) =>
-          (a.dateTime as DateTime).compareTo(b.dateTime as DateTime));
+      list.sort(
+        (a, b) => (a.dateTime as DateTime).compareTo(b.dateTime as DateTime),
+      );
     }
     return list;
   }
@@ -1300,7 +1183,9 @@ class _EventsTabState extends State<_EventsTab> {
             child: Row(
               children: segments.map((seg) {
                 final active = _filter == seg.$1;
-                final n = widget.events.where((e) => _statusOf(e) == seg.$1).length;
+                final n = widget.events
+                    .where((e) => _statusOf(e) == seg.$1)
+                    .length;
                 return Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _filter = seg.$1),
@@ -1309,7 +1194,9 @@ class _EventsTabState extends State<_EventsTab> {
                       height: 32,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: active ? AppColors.primaryRed : Colors.transparent,
+                        color: active
+                            ? AppColors.primaryRed
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -1320,7 +1207,9 @@ class _EventsTabState extends State<_EventsTab> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: active ? Colors.white : AppColors.secondaryText,
+                              color: active
+                                  ? Colors.white
+                                  : AppColors.secondaryText,
                             ),
                           ),
                           const SizedBox(width: 5),
@@ -1331,7 +1220,9 @@ class _EventsTabState extends State<_EventsTab> {
                               fontWeight: FontWeight.w700,
                               color: active
                                   ? Colors.white.withValues(alpha: 0.85)
-                                  : AppColors.secondaryText.withValues(alpha: 0.6),
+                                  : AppColors.secondaryText.withValues(
+                                      alpha: 0.6,
+                                    ),
                             ),
                           ),
                         ],
@@ -1351,26 +1242,31 @@ class _EventsTabState extends State<_EventsTab> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          vertical: 44, horizontal: 20),
+                        vertical: 44,
+                        horizontal: 20,
+                      ),
                       child: Column(
                         children: [
                           Text(
                             'Nothing here right now.',
                             style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             _filter == 'now'
                                 ? 'No event is live at the moment.'
                                 : _filter == 'past'
-                                    ? 'No past events to show.'
-                                    : 'Check back soon for new events.',
+                                ? 'No past events to show.'
+                                : 'Check back soon for new events.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                                fontSize: 12, color: AppColors.secondaryText),
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
                           ),
                         ],
                       ),
@@ -1426,13 +1322,13 @@ class _EventCardV2 extends StatelessWidget {
     final timeLabel = isLive
         ? 'Today · ${_clock(dt)}'
         : isPast
-            ? '${monthAbbr(dt.month)} ${dt.day} · ${_clock(dt)}'
-            : _clock(dt);
+        ? '${monthAbbr(dt.month)} ${dt.day} · ${_clock(dt)}'
+        : _clock(dt);
     final countLabel = isPast
         ? 'attended'
         : isLive
-            ? 'attending'
-            : 'going';
+        ? 'attending'
+        : 'going';
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -1449,7 +1345,8 @@ class _EventCardV2 extends StatelessWidget {
           decoration: BoxDecoration(
             color: cardColor,
             border: Border.all(
-                color: isLive ? _green.withValues(alpha: 0.4) : borderColor),
+              color: isLive ? _green.withValues(alpha: 0.4) : borderColor,
+            ),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -1466,18 +1363,24 @@ class _EventCardV2 extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(monthAbbr(dt.month),
-                        style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: isPast ? AppColors.secondaryText : accent,
-                            letterSpacing: 0.5)),
-                    Text('${dt.day}',
-                        style: TextStyle(
-                            fontSize: 23,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.text,
-                            height: 1.1)),
+                    Text(
+                      monthAbbr(dt.month),
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: isPast ? AppColors.secondaryText : accent,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      '${dt.day}',
+                      style: TextStyle(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.text,
+                        height: 1.1,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1489,22 +1392,30 @@ class _EventCardV2 extends StatelessWidget {
                     // Status pill
                     _statusPill(),
                     const SizedBox(height: 6),
-                    Text(event.title as String,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            color: AppColors.text,
-                            letterSpacing: -0.2)),
+                    Text(
+                      event.title as String,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.text,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     _infoRow(Icons.access_time_rounded, timeLabel),
                     const SizedBox(height: 4),
-                    _infoRow(Icons.location_on_outlined, event.location as String),
+                    _infoRow(
+                      Icons.location_on_outlined,
+                      event.location as String,
+                    ),
                     if (canViewEventAttendance(event)) ...[
                       const SizedBox(height: 4),
-                      _infoRow(Icons.people_outline,
-                          '${(event.attendeeUserIds as List).length} $countLabel'),
+                      _infoRow(
+                        Icons.people_outline,
+                        '${(event.attendeeUserIds as List).length} $countLabel',
+                      ),
                     ],
                   ],
                 ),
@@ -1514,16 +1425,21 @@ class _EventCardV2 extends StatelessWidget {
               Align(
                 alignment: Alignment.center,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: isPast ? Colors.transparent : accent,
-                    border:
-                        isPast ? Border.all(color: strongBorder) : null,
+                    border: isPast ? Border.all(color: strongBorder) : null,
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Text(
-                    isLive ? 'Join' : isPast ? 'Recap' : 'RSVP',
+                    isLive
+                        ? 'Join'
+                        : isPast
+                        ? 'Recap'
+                        : 'RSVP',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -1552,12 +1468,15 @@ class _EventCardV2 extends StatelessWidget {
           children: [
             const _LiveDot(color: _green),
             const SizedBox(width: 5),
-            Text('HAPPENING NOW',
-                style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                    color: _green)),
+            Text(
+              'HAPPENING NOW',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+                color: _green,
+              ),
+            ),
           ],
         ),
       );
@@ -1570,12 +1489,15 @@ class _EventCardV2 extends StatelessWidget {
         color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(isPast ? 'PAST' : 'UPCOMING',
-          style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
-              color: c)),
+      child: Text(
+        isPast ? 'PAST' : 'UPCOMING',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+          color: c,
+        ),
+      ),
     );
   }
 
@@ -1585,10 +1507,12 @@ class _EventCardV2 extends StatelessWidget {
         Icon(icon, size: 11, color: AppColors.secondaryText),
         const SizedBox(width: 5),
         Flexible(
-          child: Text(text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: AppColors.secondaryText)),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+          ),
         ),
       ],
     );
@@ -1632,7 +1556,10 @@ class _LiveDotState extends State<_LiveDot>
         child: Container(
           width: 6,
           height: 6,
-          decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: widget.color,
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );
@@ -1955,10 +1882,12 @@ class _CollaborationsTab extends StatelessWidget {
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
   final Color backgroundColor;
+  final Color borderColor;
   final double height;
   const _StickyTabBarDelegate(
     this.tabBar, {
     required this.backgroundColor,
+    required this.borderColor,
     this.height = 0,
   });
 
@@ -1975,17 +1904,30 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return ColoredBox(
-      color: backgroundColor,
-      child: SizedBox(
-        height: _h,
-        child: Center(child: tabBar),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        border: Border(
+          top: BorderSide(color: borderColor, width: 0.6),
+          bottom: BorderSide(color: borderColor, width: 0.6),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          height: _h,
+          child: Center(child: tabBar),
+        ),
       ),
     );
   }
 
   @override
-  bool shouldRebuild(_StickyTabBarDelegate old) => false;
+  bool shouldRebuild(_StickyTabBarDelegate old) =>
+      old.tabBar != tabBar ||
+      old.backgroundColor != backgroundColor ||
+      old.borderColor != borderColor ||
+      old.height != height;
 }
 
 // ─── Board Management Sheet ───────────────────────────────────────────────────
@@ -2017,15 +1959,15 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
   List get _currentBoardMembers =>
       users.where((u) => widget.club.boardMemberIds.contains(u.id)).toList();
 
-  void _addMember(String userId) {
-    setState(() {
-      if (!widget.club.boardMemberIds.contains(userId)) {
-        widget.club.boardMemberIds.add(userId);
-      }
-      _searchController.clear();
-      _query = '';
-    });
-    contentStore.saveBoardMemberIds();
+  Future<void> _addMember(String userId) async {
+    if (!widget.club.boardMemberIds.contains(userId)) {
+      widget.club.boardMemberIds.add(userId);
+    }
+    _searchController.clear();
+    _query = '';
+    await contentStore.saveBoardMemberIds();
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
   }
 
   Future<void> _editTitleInSheet(dynamic u) async {
@@ -2074,14 +2016,14 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
     );
     controller.dispose();
     if (result == null || !mounted) return;
-    setState(() {
-      if (result.isEmpty) {
-        widget.club.boardMemberTitles.remove(u.id);
-      } else {
-        widget.club.boardMemberTitles[u.id] = result;
-      }
-    });
-    contentStore.saveBoardMemberTitles();
+    if (result.isEmpty) {
+      widget.club.boardMemberTitles.remove(u.id);
+    } else {
+      widget.club.boardMemberTitles[u.id] = result;
+    }
+    await contentStore.saveBoardMemberTitles();
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
   }
 
   Future<void> _removeMember(dynamic u) async {
@@ -2152,8 +2094,12 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
     );
     if (second != true || !mounted) return;
 
-    setState(() => widget.club.boardMemberIds.remove(u.id));
-    contentStore.saveBoardMemberIds();
+    widget.club.boardMemberIds.remove(u.id);
+    widget.club.boardMemberTitles.remove(u.id);
+    await contentStore.saveBoardMemberIds();
+    await contentStore.saveBoardMemberTitles();
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
   }
 
   @override
@@ -2444,7 +2390,9 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
 
 class _BoardTab extends StatefulWidget {
   final Club club;
-  const _BoardTab({required this.club});
+  final VoidCallback onBoardChanged;
+
+  const _BoardTab({required this.club, required this.onBoardChanged});
 
   @override
   State<_BoardTab> createState() => _BoardTabState();
@@ -2513,74 +2461,9 @@ class _BoardTabState extends State<_BoardTab> {
         widget.club.boardMemberTitles[u.id] = result;
       }
     });
-    contentStore.saveBoardMemberTitles();
-  }
-
-  List<BoardMemberRequest> get _pendingRequests => boardMemberRequests
-      .where((r) => r.clubId == widget.club.id && r.status == 'pending')
-      .toList();
-
-  void _approve(BoardMemberRequest req) {
-    setState(() {
-      if (!widget.club.boardMemberIds.contains(req.userId)) {
-        widget.club.boardMemberIds.add(req.userId);
-      }
-      userState.pendingBoardRequests.remove('${req.userId}:${req.clubId}');
-      req.status = 'approved';
-    });
-
-    contentStore.saveBoardMemberRequests();
-    contentStore.saveBoardMemberIds();
-    userPrefsService.removeBoardRequest(req.userId, req.clubId);
-
-    userState.addMessageNotification(
-      AppNotification(
-        id: 'board_approved_${req.userId}_${req.clubId}_${DateTime.now().millisecondsSinceEpoch}',
-        userId: req.userId,
-        message:
-            'Your board member request for ${widget.club.name} was approved!',
-        createdAt: DateTime.now(),
-        targetType: 'club',
-        targetId: req.clubId,
-      ),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${req.userName} approved as board member.'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF2E7D32),
-      ),
-    );
-  }
-
-  void _decline(BoardMemberRequest req) {
-    setState(() {
-      userState.pendingBoardRequests.remove('${req.userId}:${req.clubId}');
-      req.status = 'declined';
-    });
-
-    contentStore.saveBoardMemberRequests();
-    userPrefsService.removeBoardRequest(req.userId, req.clubId);
-
-    userState.addMessageNotification(
-      AppNotification(
-        id: 'board_declined_${req.userId}_${req.clubId}_${DateTime.now().millisecondsSinceEpoch}',
-        userId: req.userId,
-        message:
-            'Your board member request for ${widget.club.name} was declined. You may reapply at any time.',
-        createdAt: DateTime.now(),
-        targetType: 'club',
-        targetId: req.clubId,
-      ),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${req.userName}\'s request was declined.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    await contentStore.saveBoardMemberTitles();
+    if (!mounted) return;
+    widget.onBoardChanged();
   }
 
   Future<void> _confirmRemove(dynamic u) async {
@@ -2653,8 +2536,13 @@ class _BoardTabState extends State<_BoardTab> {
     );
     if (second != true || !mounted) return;
 
-    setState(() => widget.club.boardMemberIds.remove(u.id));
-    contentStore.saveBoardMemberIds();
+    setState(() {
+      widget.club.boardMemberIds.remove(u.id);
+      widget.club.boardMemberTitles.remove(u.id);
+    });
+    await contentStore.saveBoardMemberIds();
+    await contentStore.saveBoardMemberTitles();
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -2662,6 +2550,7 @@ class _BoardTabState extends State<_BoardTab> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+    widget.onBoardChanged();
   }
 
   @override
@@ -2669,151 +2558,15 @@ class _BoardTabState extends State<_BoardTab> {
     final members = users
         .where((u) => widget.club.boardMemberIds.contains(u.id))
         .toList();
-    final pending = _pendingRequests;
     final authorized = _isClubAdmin;
     final cardColor = _clubPageCard(context);
     final borderColor = _clubPageBorder(context);
     final panelText = AppColors.text;
     final mutedText = AppColors.secondaryText;
 
-    // Request-to-join button state for regular users
-    final currentUser = authService.currentUser;
-    final isAlreadyMember =
-        currentUser != null &&
-        widget.club.boardMemberIds.contains(currentUser.id);
-    final hasPendingRequest =
-        currentUser != null &&
-        userState.hasPendingBoardRequest(currentUser.id, widget.club.id);
-
     return ListView(
       padding: const EdgeInsets.only(bottom: 80),
       children: [
-        // ── Pending Requests (admin/board only) ───────────────────────────────
-        if (authorized && pending.isNotEmpty) ...[
-          Container(
-            color: cardColor,
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.pending_actions_outlined,
-                  color: Color(0xFFF57C00),
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Pending Requests',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: panelText,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0x1EF57C00),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${pending.length}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFF57C00),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ...pending.map((req) {
-            final requester = users
-                .where((u) => u.id == req.userId)
-                .firstOrNull;
-            return Container(
-              color: cardColor,
-              margin: const EdgeInsets.only(bottom: 1),
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Row(
-                children: [
-                  UserAvatar(
-                    userId: req.userId,
-                    name: req.userName,
-                    size: 44,
-                    fontSize: 18,
-                    backgroundColor: const Color(0xFFFFF3E0),
-                    textColor: const Color(0xFFF57C00),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: requester == null
-                          ? null
-                          : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    UserProfileScreen(user: requester),
-                              ),
-                            ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            req.userName,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: panelText,
-                            ),
-                          ),
-                          Text(
-                            req.userEmail,
-                            style: TextStyle(fontSize: 12, color: mutedText),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Requested ${_timeAgoFromDate(req.requestedAt)}',
-                            style: TextStyle(fontSize: 11, color: mutedText),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Decline
-                  IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: AppColors.primaryRed,
-                      size: 22,
-                    ),
-                    tooltip: 'Decline',
-                    onPressed: () => _decline(req),
-                  ),
-                  // Approve
-                  IconButton(
-                    icon: Icon(
-                      Icons.check_rounded,
-                      color: Color(0xFF2E7D32),
-                      size: 22,
-                    ),
-                    tooltip: 'Approve',
-                    onPressed: () => _approve(req),
-                  ),
-                ],
-              ),
-            );
-          }),
-          Divider(height: 1),
-          const SizedBox(height: 8),
-        ],
-
         // ── Board Members header ───────────────────────────────────────────────
         Container(
           width: double.infinity,
@@ -2871,7 +2624,7 @@ class _BoardTabState extends State<_BoardTab> {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Approved requests will appear here.',
+                  'Club admins can add members from Manage board members.',
                   style: TextStyle(fontSize: 12, color: mutedText),
                 ),
               ],
@@ -2979,75 +2732,8 @@ class _BoardTabState extends State<_BoardTab> {
               ],
             );
           }),
-
-        // ── Request to Join Board (regular users only) ────────────────────────
-        if (!authorized && currentUser != null && !isAlreadyMember)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-            child: GestureDetector(
-              onTap: hasPendingRequest ? null : _requestJoinBoard,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: hasPendingRequest
-                      ? Colors.transparent
-                      : AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: hasPendingRequest
-                        ? AppColors.divider
-                        : AppColors.primaryRed,
-                  ),
-                ),
-                child: Text(
-                  hasPendingRequest ? 'Request Sent' : 'Request to Join Board',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: hasPendingRequest ? mutedText : Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
-  }
-
-  void _requestJoinBoard() {
-    final currentUser = authService.currentUser;
-    if (currentUser == null) return;
-
-    final req = BoardMemberRequest(
-      id: 'req_${currentUser.id}_${widget.club.id}_${DateTime.now().millisecondsSinceEpoch}',
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      clubId: widget.club.id,
-      requestedAt: DateTime.now(),
-    );
-    setState(() {
-      boardMemberRequests.add(req);
-      userState.sendBoardRequest(currentUser.id, widget.club.id);
-    });
-    contentStore.saveBoardMemberRequests();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Board membership request sent!'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Color(0xFF2E7D32),
-      ),
-    );
-  }
-
-  String _timeAgoFromDate(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
   }
 }
 

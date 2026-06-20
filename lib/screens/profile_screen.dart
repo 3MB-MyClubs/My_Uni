@@ -19,9 +19,9 @@ import '../services/student_profile_service.dart' as remote_profile;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
+import '../widgets/profile_photo_viewer.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
-import 'edit_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'my_calendar_screen.dart';
 import 'rsvp_list_screen.dart';
@@ -99,15 +99,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
         compressFormat: ImageCompressFormat.jpg,
         compressQuality: 82,
         uiSettings: [
           IOSUiSettings(
             title: 'Crop Photo',
             aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
+            resetAspectRatioEnabled: true,
+            aspectRatioPickerButtonHidden: true,
+            cropStyle: CropStyle.circle,
           ),
           AndroidUiSettings(
             toolbarTitle: 'Crop Photo',
@@ -115,6 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: true,
             hideBottomControls: false,
+            cropStyle: CropStyle.circle,
           ),
         ],
       );
@@ -903,17 +904,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     SettingsScreen(onLogout: widget.onLogout ?? () {}),
               ),
             ),
-            onEditBio: () => _editBio(context, user.id),
-            onEditProfile: () =>
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        EditProfileScreen(userId: user.id, realName: user.name),
-                  ),
-                ).then((_) {
-                  if (mounted) setState(() {});
-                }),
             onShare: () => _shareProfile(user.id, name),
             onSeeAllEvents: () => Navigator.push(
               context,
@@ -1145,14 +1135,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ? File(photoPath)
                                 : null;
                             if (file != null && file.existsSync()) {
+                              final imageProvider = FileImage(file);
                               return ClipOval(
-                                child: Image.file(
-                                  file,
-                                  fit: BoxFit.cover,
-                                  width: 88,
-                                  height: 88,
-                                  errorBuilder: (ctx, e, st) =>
-                                      _initialAvatar(name),
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => showProfilePhotoViewer(
+                                    context: context,
+                                    imageProvider: imageProvider,
+                                  ),
+                                  child: Image(
+                                    image: imageProvider,
+                                    fit: BoxFit.cover,
+                                    width: 88,
+                                    height: 88,
+                                    errorBuilder: (ctx, e, st) =>
+                                        _initialAvatar(name),
+                                  ),
                                 ),
                               );
                             }
@@ -1279,122 +1277,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showEditProfileSheet(BuildContext context, String userId) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Edit Profile',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.camera_alt_outlined,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-              title: Text(
-                'Change photo',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _showProfilePhotoOptions(context, userId);
-              },
-            ),
-            Divider(height: 1, indent: 16, color: AppColors.divider),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.school_outlined,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-              title: Text(
-                'Major & Year',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _editMajorAndYear(context, userId);
-              },
-            ),
-            Divider(height: 1, indent: 16, color: AppColors.divider),
-            ListTile(
-              leading: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.edit_note_rounded,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-              title: Text(
-                'Bio',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _editBio(context, userId);
-              },
             ),
           ],
         ),
@@ -1686,62 +1568,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
-
-        // ── Edit profile / camera row ──────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-          child: Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _showEditProfileSheet(context, userId),
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryRed,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryRed.withValues(alpha: 0.4),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Edit profile',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: () => _showProfilePhotoOptions(context, userId),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.card,
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Icon(
-                    Icons.camera_alt_outlined,
-                    size: 20,
-                    color: AppColors.text,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -1757,11 +1583,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final boardMembers = managedClub != null
         ? users.where((u) => managedClub.boardMemberIds.contains(u.id)).toList()
         : <dynamic>[];
-    final pendingCount = managedClub != null
-        ? boardMemberRequests
-              .where((r) => r.clubId == managedClub.id && r.status == 'pending')
-              .length
-        : 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1980,38 +1801,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       ),
-                      if (pendingCount > 0) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0x1AF57C00),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.pending_actions_outlined,
-                                size: 12,
-                                color: Color(0xFFF57C00),
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                '$pendingCount pending',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFF57C00),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                       const Spacer(),
                       Icon(
                         Icons.chevron_right_rounded,

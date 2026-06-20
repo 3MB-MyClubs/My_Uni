@@ -270,21 +270,6 @@ class UserState extends ChangeNotifier {
     contentStore.saveDynamicNotifications(dynamicNotifications);
   }
 
-  // ── Board member requests ─────────────────────────────────────────────────────
-
-  /// Pending board-member requests sent by this user, stored as "userId:clubId".
-  /// Removed when the request is approved or declined.
-  final Set<String> pendingBoardRequests = {};
-
-  bool hasPendingBoardRequest(String userId, String clubId) =>
-      pendingBoardRequests.contains('$userId:$clubId');
-
-  void sendBoardRequest(String userId, String clubId) =>
-      pendingBoardRequests.add('$userId:$clubId');
-
-  void removeBoardRequest(String userId, String clubId) =>
-      pendingBoardRequests.remove('$userId:$clubId');
-
   // ── Message requests ──────────────────────────────────────────────────────────
 
   /// Accepted message request pairs stored as "myId:theirId".

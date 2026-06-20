@@ -1,37 +1,39 @@
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../features/calendar/widgets/add_to_calendar_button.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/calendar_rsvp_helper.dart';
 import '../services/content_store.dart';
-import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
-import '../widgets/club_follow_button.dart';
 import '../widgets/rsvp_button.dart';
+import 'club_profile_screen.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Event detail — recreation of the "Event Information" design handoff.
+// Full-bleed hero photo, ticket-style date/time/location card, host card,
+// registration link, about, tags, programme timeline, speakers and a sticky
+// register / add-to-calendar CTA.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
   final Color color;
 
-  const EventDetailScreen({
-    super.key,
-    required this.event,
-    required this.color,
-  });
+  const EventDetailScreen({super.key, required this.event, required this.color});
 
   @override
   State<EventDetailScreen> createState() => _EventDetailScreenState();
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
-  bool _programmeExpanded = false;
+  bool _saved = false;
 
   String get _loggedInId =>
       authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
@@ -40,13 +42,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       widget.event.createdByUserId != null &&
       widget.event.createdByUserId == _loggedInId;
 
-  bool get _canViewAttendance => canViewEventAttendance(widget.event);
-
   bool get _isLive {
     final now = DateTime.now();
     return !widget.event.dateTime.isAfter(now) &&
         widget.event.endTime.isAfter(now);
   }
+
+  bool get _isPast => !widget.event.endTime.isAfter(DateTime.now());
 
   @override
   void initState() {
@@ -59,6 +61,38 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final viewerId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     viewTracker.recordView(widget.event.id, viewerId);
+  }
+
+  Color get _accent => widget.event.accentColorHex != null
+      ? Color(int.parse('FF${widget.event.accentColorHex}', radix: 16))
+      : widget.color;
+
+  // ── Actions ─────────────────────────────────────────────────────────────────
+  void _toggleSaved() {
+    setState(() => _saved = !_saved);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(_saved ? 'Saved to your events' : 'Removed from saved'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _saved ? _accent : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+  }
+
+  void _shareEvent() {
+    Clipboard.setData(ClipboardData(text: 'kuclubs://event/${widget.event.id}'));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Event link copied to clipboard'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
   }
 
   void _confirmDelete() {
@@ -117,432 +151,431 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return 'In ${diff.inDays} days';
   }
 
+  void _openClub() {
+    final club = clubs.firstWhere(
+      (c) => c.id == widget.event.clubId,
+      orElse: () => clubs.first,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubProfileScreen(club: club, color: _accent),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = widget.event;
-    // Use creator-chosen accent color if set, otherwise fall back to club color
-    final color = event.accentColorHex != null
-        ? Color(int.parse('FF${event.accentColorHex}', radix: 16))
-        : widget.color;
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
-    final isPast = !event.endTime.isAfter(DateTime.now());
-    final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
+    final accent = _accent;
+    final hasReg =
+        event.registrationUrl != null &&
+        event.registrationUrl!.trim().isNotEmpty;
+    final hasProgramme = event.schedule != null && event.schedule!.isNotEmpty;
+    final hasSpeakers = event.speakers.isNotEmpty;
+    final hasCapacity = event.capacity != null && event.capacity! > 0;
+    final showCta = !_isPast;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          // ── Hero ──────────────────────────────────────────────────────────
-          SliverAppBar(
-            backgroundColor: color,
-            surfaceTintColor: Colors.transparent,
-            pinned: true,
-            expandedHeight: 280,
-            leading: Padding(
-              padding: const EdgeInsets.all(8),
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.28),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              if (_isOwner)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: _confirmDelete,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.28),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.parallax,
-              background: Stack(
-                fit: StackFit.expand,
+      body: Stack(
+        children: [
+          // ── Scrollable content ──────────────────────────────────────────
+          Positioned.fill(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.only(bottom: showCta ? 168 : 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Image or gradient background
-                  if (hasImage)
-                    Image.file(
-                      File(event.imagePath!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (ctx, e, s) => _GradientHero(color: color),
-                    )
-                  else
-                    _GradientHero(color: color),
+                  // Hero photo + nav + status + title
+                  _Hero(
+                    event: event,
+                    accent: accent,
+                    isLive: _isLive,
+                    isPast: _isPast,
+                    saved: _saved,
+                    isOwner: _isOwner,
+                    onBack: () => Navigator.pop(context),
+                    onToggleSaved: _toggleSaved,
+                    onShare: _shareEvent,
+                    onDelete: _confirmDelete,
+                  ),
 
-                  // Bottom scrim for text legibility
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: 180,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.72),
-                          ],
+                  // Ticket-style date / time / location (+ capacity)
+                  Transform.translate(
+                    offset: const Offset(0, -6),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: ListenableBuilder(
+                        listenable: rsvpStore,
+                        builder: (_, _) => _TicketCard(
+                          event: event,
+                          accent: accent,
+                          countdown: _countdownLabel(),
+                          showCapacity: hasCapacity,
+                          takenSeats:
+                              event.attendeeUserIds.length +
+                              (rsvpStore.isAttending(event.id) &&
+                                      !event.attendeeUserIds.contains(
+                                        _loggedInId,
+                                      )
+                                  ? 1
+                                  : 0),
                         ),
                       ),
                     ),
                   ),
 
-                  // Hero content: countdown chip + title + club badge
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 20,
+                  // Host
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _HostCard(
+                      event: event,
+                      accent: accent,
+                      onView: _openClub,
+                    ),
+                  ),
+
+                  // Registration link
+                  if (hasReg)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _RegistrationCard(
+                        url: event.registrationUrl!.trim(),
+                        accent: accent,
+                      ),
+                    ),
+
+                  // About
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Status chip row
-                        Row(
-                          children: [
-                            _HeroChip(
-                              label: _countdownLabel(),
-                              isLive: _isLive,
-                              color: color,
-                            ),
-                            if (event.tags.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              ...event.tags
-                                  .take(2)
-                                  .map(
-                                    (t) => Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: _HeroTagPill(label: t),
-                                    ),
-                                  ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        // Title
+                        const _SecHead('About this event'),
+                        const SizedBox(height: 12),
                         Text(
-                          event.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                            height: 1.15,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black45,
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
+                          event.description,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.65,
+                            color: AppColors.text.withValues(alpha: 0.86),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Club badge
-                        Row(
-                          children: [
-                            ClubAvatar(
-                              clubId: club.id,
-                              clubName: club.name,
-                              color: color,
-                              size: 26,
-                              fontSize: 11,
-                              borderRadius: 8,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                club.name,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
 
-          // ── Body ──────────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Quick info card ──────────────────────────────────────
-                  _QuickInfoCard(
-                    event: event,
-                    color: color,
-                    showAttendance: _canViewAttendance,
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // ── About ────────────────────────────────────────────────
-                  _SectionLabel('About this event'),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.divider, width: 0.5),
-                    ),
-                    child: Text(
-                      event.description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.text,
-                        height: 1.65,
-                      ),
-                    ),
-                  ),
-
-                  // ── Tags ─────────────────────────────────────────────────
-                  if (event.tags.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: event.tags
-                            .map(
-                              (tag) => Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.10),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: color.withValues(alpha: 0.22),
-                                  ),
-                                ),
-                                child: Text(
-                                  tag,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: color,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-                  ],
-
-                  // ── Guest speaker ─────────────────────────────────────────
-                  if (event.guestSpeaker != null) ...[
-                    const SizedBox(height: 20),
-                    _SectionLabel('Featured Guest'),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: AppColors.accentGold.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
+                  // Tags
+                  if (event.tags.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: AppColors.accentGold.withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(
-                              Icons.mic_rounded,
-                              color: AppColors.accentGold,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Guest Speaker',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.secondaryText,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  event.guestSpeaker!,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.text,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.star_rounded,
-                            color: AppColors.accentGold,
-                            size: 20,
+                          const _SecHead('Tags'),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final tag in event.tags)
+                                _Tag(label: tag, accent: accent),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                  ],
 
-                  // ── Programme ─────────────────────────────────────────────
-                  if (event.schedule != null && event.schedule!.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _SectionLabel('Programme'),
-                    const SizedBox(height: 8),
-                    _ProgrammeCard(
-                      event: event,
-                      color: color,
-                      expanded: _programmeExpanded,
-                      onToggle: () => setState(
-                        () => _programmeExpanded = !_programmeExpanded,
-                      ),
-                    ),
-                  ],
-
-                  // ── Organised by ──────────────────────────────────────────
-                  const SizedBox(height: 20),
-                  _SectionLabel('Organised by'),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.divider, width: 0.5),
-                    ),
-                    child: Row(
-                      children: [
-                        ClubAvatar(
-                          clubId: club.id,
-                          clubName: club.name,
-                          color: color,
-                          size: 52,
-                          fontSize: 22,
-                          borderRadius: 14,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                club.name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.text,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                club.description,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.secondaryText,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
+                  // Programme
+                  if (hasProgramme)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _SecHead('Programme'),
+                          const SizedBox(height: 12),
+                          _ProgrammeTimeline(
+                            slots: event.schedule!,
+                            accent: accent,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        ClubFollowButton(clubId: club.id, size: 'small'),
-                      ],
-                    ),
-                  ),
-
-                  // ── Attending count (admin only) ───────────────────────────
-                  if (_canViewAttendance) ...[
-                    const SizedBox(height: 16),
-                    ListenableBuilder(
-                      listenable: rsvpStore,
-                      builder: (_, child) => _AttendeeBar(
-                        count: event.attendeeUserIds.length,
-                        color: color,
+                        ],
                       ),
                     ),
+
+                  // Speakers
+                  if (hasSpeakers) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 24, 16, 0),
+                      child: _SecHead('Speakers'),
+                    ),
+                    const SizedBox(height: 12),
+                    _SpeakersRow(speakers: event.speakers),
                   ],
 
-                  const SizedBox(height: 80),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
-        ],
-      ),
 
-      // ── RSVP bottom panel ────────────────────────────────────────────────
-      bottomNavigationBar: _RsvpPanel(
-        event: event,
-        color: color,
-        isPast: isPast,
-        showAttendance: _canViewAttendance,
+          // ── Sticky CTA ──────────────────────────────────────────────────
+          if (showCta)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _StickyCta(event: event, accent: accent),
+            ),
+        ],
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero background gradient
+// Hero
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _Hero extends StatelessWidget {
+  final Event event;
+  final Color accent;
+  final bool isLive;
+  final bool isPast;
+  final bool saved;
+  final bool isOwner;
+  final VoidCallback onBack;
+  final VoidCallback onToggleSaved;
+  final VoidCallback onShare;
+  final VoidCallback onDelete;
+
+  const _Hero({
+    required this.event,
+    required this.accent,
+    required this.isLive,
+    required this.isPast,
+    required this.saved,
+    required this.isOwner,
+    required this.onBack,
+    required this.onToggleSaved,
+    required this.onShare,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColors.background;
+    final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return SizedBox(
+      height: 360,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Photo / gradient
+          if (hasImage)
+            Image.file(
+              File(event.imagePath!),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _GradientHero(color: accent),
+            )
+          else
+            _GradientHero(color: accent),
+
+          // Scrim — dark at top for buttons, fades into the page bg at bottom
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.24, 0.5, 0.86, 1.0],
+                    colors: [
+                      Colors.black.withValues(alpha: 0.45),
+                      Colors.transparent,
+                      Colors.transparent,
+                      bg.withValues(alpha: 0.86),
+                      bg,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Nav row
+          Positioned(
+            top: topInset + 8,
+            left: 14,
+            right: 14,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _GlassButton(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack),
+                Row(
+                  children: [
+                    if (isOwner) ...[
+                      _GlassButton(
+                        icon: Icons.delete_outline_rounded,
+                        onTap: onDelete,
+                      ),
+                      const SizedBox(width: 9),
+                    ],
+                    _GlassButton(
+                      icon: saved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_outline_rounded,
+                      active: saved,
+                      activeColor: accent,
+                      onTap: onToggleSaved,
+                    ),
+                    const SizedBox(width: 9),
+                    _GlassButton(icon: Icons.ios_share_rounded, onTap: onShare),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Status pill + title
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _StatusPill(isLive: isLive, isPast: isPast, accent: accent),
+                const SizedBox(height: 11),
+                Text(
+                  event.title,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                    height: 1.12,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black26,
+                        blurRadius: 12,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final bool isLive;
+  final bool isPast;
+  final Color accent;
+  const _StatusPill({
+    required this.isLive,
+    required this.isPast,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLive) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFD43A3A),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            _PulseDot(color: Colors.white),
+            SizedBox(width: 6),
+            Text(
+              'HAPPENING NOW',
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final label = isPast ? 'PAST' : 'UPCOMING';
+    final bg = isPast ? Colors.black.withValues(alpha: 0.55) : accent;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassButton extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final Color? activeColor;
+  final VoidCallback onTap;
+  const _GlassButton({
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+    this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: active
+                  ? (activeColor ?? Colors.white)
+                  : Colors.black.withValues(alpha: 0.42),
+              border: Border.all(
+                color: active
+                    ? (activeColor ?? Colors.white)
+                    : Colors.white.withValues(alpha: 0.22),
+              ),
+            ),
+            child: Icon(icon, size: 18, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _GradientHero extends StatelessWidget {
   final Color color;
@@ -553,223 +586,204 @@ class _GradientHero extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color, Color.lerp(color, Colors.black, 0.35)!],
+          colors: [color, Color.lerp(color, Colors.black, 0.4)!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
       child: Stack(
         children: [
-          // Decorative circles
           Positioned(
             top: -40,
             right: -40,
-            child: Container(
-              width: 180,
-              height: 180,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.07),
-              ),
-            ),
+            child: _circle(180, 0.07),
           ),
-          Positioned(
-            bottom: 20,
-            left: -30,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 60,
-            left: 80,
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.04),
-              ),
-            ),
-          ),
+          Positioned(bottom: 30, left: -30, child: _circle(120, 0.05)),
+          Positioned(top: 80, left: 90, child: _circle(60, 0.04)),
         ],
       ),
     );
   }
+
+  Widget _circle(double size, double alpha) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white.withValues(alpha: alpha),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero chips
+// Ticket-style date / time / location card (+ capacity)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HeroChip extends StatelessWidget {
-  final String label;
-  final bool isLive;
-  final Color color;
-  const _HeroChip({
-    required this.label,
-    required this.isLive,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: isLive
-            ? const Color(0xFFEF5350).withValues(alpha: 0.18)
-            : Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isLive
-              ? const Color(0xFFEF5350).withValues(alpha: 0.5)
-              : Colors.white.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isLive) ...[
-            _PulseDot(color: const Color(0xFFEF5350)),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isLive ? const Color(0xFFEF5350) : Colors.white,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroTagPill extends StatelessWidget {
-  final String label;
-  const _HeroTagPill({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Quick info card (date · time · location in one card)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _QuickInfoCard extends StatelessWidget {
+class _TicketCard extends StatelessWidget {
   final Event event;
-  final Color color;
-  final bool showAttendance;
-  const _QuickInfoCard({
-    required this.event,
-    required this.color,
-    required this.showAttendance,
-  });
+  final Color accent;
+  final String countdown;
+  final bool showCapacity;
+  final int takenSeats;
 
-  String _pad(int n) => n.toString().padLeft(2, '0');
-  String _fmtTime(DateTime dt) => '${_pad(dt.hour)}:${_pad(dt.minute)}';
+  const _TicketCard({
+    required this.event,
+    required this.accent,
+    required this.countdown,
+    required this.showCapacity,
+    required this.takenSeats,
+  });
 
   static const _months = [
     '',
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
-  static const _wdays = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _wdays = [
+    '',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  String _two(int n) => n.toString().padLeft(2, '0');
 
   @override
   Widget build(BuildContext context) {
-    final dateStr =
-        '${_wdays[event.dateTime.weekday]}, ${_months[event.dateTime.month]} ${event.dateTime.day}';
-    final timeStr = '${_fmtTime(event.dateTime)} – ${_fmtTime(event.endTime)}';
-    final attendeeCount = event.attendeeUserIds.toSet().length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dt = event.dateTime;
+    final bg = AppColors.background;
+    final hairB = AppColors.divider.withValues(alpha: isDark ? 1 : 0.9);
+    final timeStr =
+        '${_two(dt.hour)}:${_two(dt.minute)} – '
+        '${_two(event.endTime.hour)}:${_two(event.endTime.minute)}';
 
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Column(
         children: [
-          _InfoRow(
-            icon: Icons.calendar_today_rounded,
-            label: 'Date',
-            value: dateStr,
-            color: color,
+          // Date stub + info, with vertical tear + perforations
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Date block
+                    SizedBox(
+                      width: 90,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _months[dt.month],
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: accent,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${dt.day}',
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.text,
+                                height: 1,
+                                letterSpacing: -1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _wdays[dt.weekday],
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Tear line
+                    CustomPaint(
+                      size: const Size(1, double.infinity),
+                      painter: _DashedVLinePainter(color: hairB),
+                    ),
+                    // Time + location
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _IconLine(
+                              icon: Icons.schedule_rounded,
+                              accent: accent,
+                              title: timeStr,
+                              subtitle: '$countdown · ${dt.year}',
+                            ),
+                            const SizedBox(height: 12),
+                            _IconLine(
+                              icon: Icons.place_outlined,
+                              accent: accent,
+                              title: event.location,
+                              subtitle: null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Perforation notches on the tear line
+              Positioned(left: 81, top: -9, child: _Notch(color: bg)),
+              Positioned(left: 81, bottom: -9, child: _Notch(color: bg)),
+            ],
           ),
-          Divider(
-            height: 1,
-            indent: 16,
-            endIndent: 16,
-            color: AppColors.divider,
-          ),
-          _InfoRow(
-            icon: Icons.schedule_rounded,
-            label: 'Time',
-            value: timeStr,
-            color: color,
-          ),
-          Divider(
-            height: 1,
-            indent: 16,
-            endIndent: 16,
-            color: AppColors.divider,
-          ),
-          _InfoRow(
-            icon: Icons.location_on_rounded,
-            label: 'Location',
-            value: event.location,
-            color: color,
-          ),
-          if (showAttendance) ...[
-            Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: AppColors.divider,
-            ),
-            _InfoRow(
-              icon: Icons.people_outline_rounded,
-              label: 'Attending',
-              value:
-                  '$attendeeCount ${attendeeCount == 1 ? 'person' : 'people'} going',
-              color: color,
+
+          // Capacity
+          if (showCapacity) ...[
+            Divider(height: 1, color: AppColors.divider),
+            _CapacityBar(
+              taken: takenSeats,
+              capacity: event.capacity!,
+              accent: accent,
             ),
           ],
         ],
@@ -778,32 +792,197 @@ class _QuickInfoCard extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
+class _IconLine extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-  const _InfoRow({
+  final Color accent;
+  final String title;
+  final String? subtitle;
+  const _IconLine({
     required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
+    required this.accent,
+    required this.title,
+    required this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 16, color: accent),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: subtitle == null ? 13.5 : 15,
+                  fontWeight: subtitle == null
+                      ? FontWeight.w700
+                      : FontWeight.w800,
+                  color: AppColors.text,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 1),
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Notch extends StatelessWidget {
+  final Color color;
+  const _Notch({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _DashedVLinePainter extends CustomPainter {
+  final Color color;
+  _DashedVLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    const dash = 4.0, gap = 4.0;
+    double y = 6;
+    while (y < size.height - 6) {
+      canvas.drawLine(Offset(0.5, y), Offset(0.5, y + dash), paint);
+      y += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedVLinePainter old) => old.color != color;
+}
+
+class _CapacityBar extends StatelessWidget {
+  final int taken;
+  final int capacity;
+  final Color accent;
+  const _CapacityBar({
+    required this.taken,
+    required this.capacity,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (capacity == 0 ? 0 : (taken / capacity * 100))
+        .clamp(0, 100)
+        .round();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(18, 13, 18, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.text.withValues(alpha: 0.8),
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '$taken',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    TextSpan(text: ' of $capacity seats taken'),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$pct% full',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: pct / 100,
+              minHeight: 6,
+              backgroundColor: AppColors.divider.withValues(alpha: 0.6),
+              valueColor: AlwaysStoppedAnimation(accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Host card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HostCard extends StatelessWidget {
+  final Event event;
+  final Color accent;
+  final VoidCallback onView;
+  const _HostCard({
+    required this.event,
+    required this.accent,
+    required this.onView,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final club = clubs.firstWhere(
+      (c) => c.id == event.clubId,
+      orElse: () => clubs.first,
+    );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
       child: Row(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.09),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 16, color: color),
+          ClubAvatar(
+            clubId: club.id,
+            clubName: club.name,
+            color: accent,
+            size: 46,
+            fontSize: 16,
+            borderRadius: 14,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -811,60 +990,59 @@ class _InfoRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label.toUpperCase(),
+                  'HOSTED BY',
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
                     color: AppColors.secondaryText,
-                    letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        club.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.text,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Icon(Icons.verified_rounded, size: 13, color: accent),
+                  ],
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Attendee bar (admin view)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AttendeeBar extends StatelessWidget {
-  final int count;
-  final Color color;
-  const _AttendeeBar({required this.count, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.people_rounded, color: color, size: 18),
           const SizedBox(width: 10),
-          Text(
-            '$count ${count == 1 ? 'person has' : 'people have'} RSVP\'d',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: color,
+          GestureDetector(
+            onTap: onView,
+            child: Container(
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: AppColors.divider.withValues(alpha: 0.9),
+                  width: 1.5,
+                ),
+              ),
+              child: Text(
+                'View',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                ),
+              ),
             ),
           ),
         ],
@@ -874,304 +1052,193 @@ class _AttendeeBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section label
+// Registration link card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SectionLabel extends StatelessWidget {
+class _RegistrationCard extends StatelessWidget {
+  final String url;
+  final Color accent;
+  const _RegistrationCard({required this.url, required this.accent});
+
+  String get _pretty => url.replaceFirst(RegExp(r'^https?://'), '');
+
+  Uri? _uri() {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return null;
+    final withScheme = trimmed.startsWith(RegExp(r'https?://'))
+        ? trimmed
+        : 'https://$trimmed';
+    final uri = Uri.tryParse(withScheme);
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri;
+  }
+
+  Future<void> _open(BuildContext context) async {
+    final uri = _uri();
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text("Couldn't open the registration form"),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: accent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _open(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: accent.withValues(alpha: 0.3), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.link_rounded, color: accent, size: 19),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Registration',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.text,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.open_in_new_rounded,
+                        size: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Sign up on the club's form · $_pretty",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: accent, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section header
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SecHead extends StatelessWidget {
   final String text;
-  const _SectionLabel(this.text);
+  const _SecHead(this.text);
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      text,
+      text.toUpperCase(),
       style: TextStyle(
-        fontSize: 13,
+        fontSize: 11.5,
         fontWeight: FontWeight.w700,
+        letterSpacing: 0.5,
         color: AppColors.secondaryText,
-        letterSpacing: 0.2,
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RSVP bottom panel
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _RsvpPanel extends StatelessWidget {
-  final Event event;
-  final Color color;
-  final bool isPast;
-  final bool showAttendance;
-
-  const _RsvpPanel({
-    required this.event,
-    required this.color,
-    required this.isPast,
-    required this.showAttendance,
-  });
+class _Tag extends StatelessWidget {
+  final String label;
+  final Color accent;
+  const _Tag({required this.label, required this.accent});
 
   @override
   Widget build(BuildContext context) {
-    if (isPast) return const SizedBox.shrink();
-
-    return ListenableBuilder(
-      listenable: rsvpStore,
-      builder: (context, _) {
-        final attending = rsvpStore.isAttending(event.id);
-        final count = event.attendeeUserIds.length;
-
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            border: Border(
-              top: BorderSide(color: AppColors.divider, width: 0.8),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 16,
-                offset: const Offset(0, -4),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showAttendance && !isPast && count > 0) ...[
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: (count.clamp(1, 4) * 20 + 12).toDouble(),
-                          height: 26,
-                          child: Stack(
-                            children: List.generate(count.clamp(1, 4), (i) {
-                              final hue = (i * 60.0) % 360;
-                              return Positioned(
-                                left: i * 20.0,
-                                child: Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: HSLColor.fromAHSL(
-                                      1,
-                                      hue,
-                                      0.55,
-                                      0.42,
-                                    ).toColor(),
-                                    border: Border.all(
-                                      color: AppColors.card,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    String.fromCharCode(65 + i),
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            attending
-                                ? 'You + ${count - 1} ${count - 1 == 1 ? 'other' : 'others'} going'
-                                : '$count ${count == 1 ? 'person' : 'people'} going — join them!',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: attending
-                                  ? color.withValues(alpha: 0.9)
-                                  : AppColors.secondaryText,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  RsvpButton(eventId: event.id, color: color, isPast: isPast, event: event),
-                  if (!isPast) ...[
-                    const SizedBox(height: 8),
-                    AddToCalendarButton(event: event, color: color),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Programme card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ProgrammeCard extends StatelessWidget {
-  final Event event;
-  final Color color;
-  final bool expanded;
-  final VoidCallback onToggle;
-
-  const _ProgrammeCard({
-    required this.event,
-    required this.color,
-    required this.expanded,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final schedule = event.schedule!;
-    final isRsvpd = rsvpStore.isAttending(event.id);
-    final isPast = !event.endTime.isAfter(DateTime.now());
-    final locked = event.scheduleGated && !isRsvpd && !isPast;
-
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider, width: 0.5),
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
       ),
-      clipBehavior: Clip.hardEdge,
-      child: Column(
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: accent,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Programme timeline
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProgrammeTimeline extends StatelessWidget {
+  final List<EventSlot> slots;
+  final Color accent;
+  const _ProgrammeTimeline({required this.slots, required this.accent});
+
+  String _fmt(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Stack(
         children: [
-          if (!expanded || locked)
-            InkWell(
-              onTap: locked ? null : onToggle,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: locked
-                    ? Row(
-                        children: [
-                          Icon(
-                            Icons.lock_outline_rounded,
-                            size: 18,
-                            color: AppColors.secondaryText,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'RSVP to unlock the full programme',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ListenableBuilder(
-                            listenable: rsvpStore,
-                            builder: (ctx, _) => _InlineRsvpButton(
-                              eventId: event.id,
-                              color: color,
-                              event: event,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          Icon(
-                            Icons.format_list_bulleted_rounded,
-                            size: 16,
-                            color: color,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${schedule.length} sessions',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: color,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Show programme',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: color,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 18,
-                            color: color,
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          if (expanded && !locked) ...[
-            GestureDetector(
-              onTap: onToggle,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.format_list_bulleted_rounded,
-                      size: 16,
-                      color: color,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${schedule.length} sessions',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Hide',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: color,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_up_rounded,
-                      size: 18,
-                      color: color,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            for (int i = 0; i < schedule.length; i++) ...[
-              if (i > 0)
-                Divider(
-                  height: 1,
-                  indent: 16,
-                  endIndent: 16,
-                  color: AppColors.divider,
-                ),
-              _SlotRow(slot: schedule[i], color: color),
+          // Vertical rail
+          Positioned(
+            left: 5,
+            top: 10,
+            bottom: 16,
+            child: Container(width: 2, color: AppColors.divider),
+          ),
+          Column(
+            children: [
+              for (final slot in slots)
+                _SlotRow(slot: slot, accent: accent, fmt: _fmt),
             ],
-            const SizedBox(height: 10),
-          ],
+          ),
         ],
       ),
     );
@@ -1180,40 +1247,64 @@ class _ProgrammeCard extends StatelessWidget {
 
 class _SlotRow extends StatelessWidget {
   final EventSlot slot;
-  final Color color;
-  const _SlotRow({required this.slot, required this.color});
-
-  String _fmtTime(DateTime dt) =>
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  final Color accent;
+  final String Function(DateTime) fmt;
+  const _SlotRow({required this.slot, required this.accent, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: slot.isHighlighted
-          ? color.withValues(alpha: 0.06)
-          : Colors.transparent,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    final key = slot.isHighlighted;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Dot
           SizedBox(
-            width: 44,
-            child: Text(
-              _fmtTime(slot.time),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: slot.isHighlighted ? color : AppColors.secondaryText,
+            width: 12,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Center(
+                child: Container(
+                  width: key ? 12 : 9,
+                  height: key ? 12 : 9,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: key ? accent : AppColors.background,
+                    border: Border.all(
+                      color: key
+                          ? accent
+                          : AppColors.divider.withValues(alpha: 0.9),
+                      width: 2,
+                    ),
+                    boxShadow: key
+                        ? [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.13),
+                              blurRadius: 0,
+                              spreadRadius: 4,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
               ),
             ),
           ),
-          Container(
-            width: 3,
-            height: slot.subtitle != null ? 36 : 18,
-            margin: const EdgeInsets.only(right: 12, top: 2),
-            decoration: BoxDecoration(
-              color: slot.isHighlighted ? color : color.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(2),
+          const SizedBox(width: 14),
+          SizedBox(
+            width: 40,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                fmt(slot.time),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: key ? accent : AppColors.secondaryText,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -1223,25 +1314,19 @@ class _SlotRow extends StatelessWidget {
                 Text(
                   slot.title,
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: slot.isHighlighted
-                        ? FontWeight.bold
-                        : FontWeight.w500,
+                    fontSize: 13.5,
+                    fontWeight: key ? FontWeight.w800 : FontWeight.w600,
                     color: AppColors.text,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                if (slot.subtitle != null) ...[
-                  const SizedBox(height: 2),
+                if (slot.subtitle != null && slot.subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 1),
                   Text(
                     slot.subtitle!,
                     style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: slot.isHighlighted
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      color: slot.isHighlighted
-                          ? color
-                          : AppColors.secondaryText,
+                      fontSize: 11.5,
+                      color: AppColors.secondaryText,
                     ),
                   ),
                 ],
@@ -1254,67 +1339,237 @@ class _SlotRow extends StatelessWidget {
   }
 }
 
-class _InlineRsvpButton extends StatefulWidget {
-  final String eventId;
-  final Color color;
-  final Event event;
-  const _InlineRsvpButton({
-    required this.eventId,
-    required this.color,
-    required this.event,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Speakers row
+// ─────────────────────────────────────────────────────────────────────────────
 
-  @override
-  State<_InlineRsvpButton> createState() => _InlineRsvpButtonState();
-}
+class _SpeakersRow extends StatelessWidget {
+  final List<EventSpeaker> speakers;
+  const _SpeakersRow({required this.speakers});
 
-class _InlineRsvpButtonState extends State<_InlineRsvpButton> {
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: rsvpStore,
-      builder: (ctx, _) {
-        final attending = rsvpStore.isAttending(widget.eventId);
-        return GestureDetector(
-          onTap: () {
-            final userId =
-                authService.currentUser?.id ??
-                authService.currentAdmin?.id ??
-                '';
-            final wasAttending = rsvpStore.isAttending(widget.eventId);
-            rsvpStore.toggle(widget.eventId, userId);
-            if (!wasAttending) {
-              syncRsvpToDeviceCalendar(ctx, widget.event);
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: attending ? Colors.transparent : widget.color,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: attending
-                    ? AppColors.secondaryText.withValues(alpha: 0.4)
-                    : widget.color,
-              ),
-            ),
-            child: Text(
-              attending ? 'Going ✓' : 'RSVP',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: attending ? AppColors.secondaryText : Colors.white,
-              ),
+  static const List<int> _hues = [220, 300, 35, 155, 265, 10];
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    return parts.take(2).map((w) => w[0].toUpperCase()).join();
+  }
+
+  Uri? _linkedinUri(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final withScheme = trimmed.startsWith(RegExp(r'https?://'))
+        ? trimmed
+        : 'https://$trimmed';
+    final uri = Uri.tryParse(withScheme);
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri;
+  }
+
+  Future<void> _openLinkedIn(BuildContext context, EventSpeaker s) async {
+    final uri = _linkedinUri(s.linkedin ?? '');
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text("Couldn't open ${s.name}'s LinkedIn"),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         );
-      },
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 150,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+        itemCount: speakers.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final s = speakers[i];
+          final hue = _hues[i % _hues.length].toDouble();
+          final avatarBg = HSLColor.fromAHSL(1, hue, 0.45, 0.9).toColor();
+          final avatarFg = HSLColor.fromAHSL(1, hue, 0.5, 0.38).toColor();
+          final hasLink = s.linkedin != null && s.linkedin!.trim().isNotEmpty;
+          return GestureDetector(
+            onTap: hasLink ? () => _openLinkedIn(context, s) : null,
+            child: Container(
+              width: 110,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: avatarBg,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _initials(s.name),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: avatarFg,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    s.name,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                      height: 1.2,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  if (s.role.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      s.role,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pulsing dot (live indicator)
+// Sticky CTA — reminder bell + RSVP + add to calendar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StickyCta extends StatefulWidget {
+  final Event event;
+  final Color accent;
+  const _StickyCta({required this.event, required this.accent});
+
+  @override
+  State<_StickyCta> createState() => _StickyCtaState();
+}
+
+class _StickyCtaState extends State<_StickyCta> {
+  bool _remind = false;
+
+  void _toggleRemind() {
+    setState(() => _remind = !_remind);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            _remind
+                ? "Reminder set — we'll alert you before it starts"
+                : 'Reminder removed',
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _remind ? widget.accent : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColors.background;
+    final accent = widget.accent;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.32],
+          colors: [bg.withValues(alpha: 0.0), bg],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: _toggleRemind,
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: _remind
+                            ? accent.withValues(alpha: 0.14)
+                            : AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: _remind
+                              ? accent
+                              : AppColors.divider.withValues(alpha: 0.9),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Icon(
+                        _remind
+                            ? Icons.notifications_active_rounded
+                            : Icons.notifications_none_rounded,
+                        color: _remind ? accent : AppColors.text,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: RsvpButton(
+                      eventId: widget.event.id,
+                      color: accent,
+                      isPast: false,
+                      event: widget.event,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 9),
+              AddToCalendarButton(event: widget.event, color: accent),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pulsing dot (live status indicator)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PulseDot extends StatefulWidget {
@@ -1327,21 +1582,14 @@ class _PulseDot extends StatefulWidget {
 
 class _PulseDotState extends State<_PulseDot>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(
-      begin: 0.4,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+  late final Animation<double> _anim = Tween<double>(
+    begin: 0.35,
+    end: 1.0,
+  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
 
   @override
   void dispose() {
@@ -1351,15 +1599,12 @@ class _PulseDotState extends State<_PulseDot>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, child) => Container(
-        width: 7,
-        height: 7,
-        decoration: BoxDecoration(
-          color: widget.color.withValues(alpha: _anim.value),
-          shape: BoxShape.circle,
-        ),
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/user_state.dart';
+import 'profile_photo_viewer.dart';
 
 /// Shows a club's profile photo if one has been set, otherwise falls back to
 /// the first letter of the club name on a colored background.
@@ -39,16 +40,24 @@ class ClubAvatar extends StatelessWidget {
         final isCircle = shape == 'circle';
 
         if (file != null && file.existsSync()) {
-          return ClipRRect(
-            borderRadius: isCircle
-                ? BorderRadius.circular(size / 2)
-                : BorderRadius.circular(borderRadius),
-            child: Image.file(
-              file,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (ctx, e, st) => _initial(isCircle),
+          final imageProvider = FileImage(file);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => showProfilePhotoViewer(
+              context: context,
+              imageProvider: imageProvider,
+            ),
+            child: ClipRRect(
+              borderRadius: isCircle
+                  ? BorderRadius.circular(size / 2)
+                  : BorderRadius.circular(borderRadius),
+              child: Image(
+                image: imageProvider,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, e, st) => _initial(isCircle),
+              ),
             ),
           );
         }

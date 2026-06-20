@@ -183,10 +183,10 @@ class CreatePostScreen extends StatefulWidget {
   State<CreatePostScreen> createState() => _CreatePostScreenState();
 }
 
-class _CreatePostScreenState extends State<CreatePostScreen>
-    with SingleTickerProviderStateMixin {
+class _CreatePostScreenState extends State<CreatePostScreen> {
   final _contentController = TextEditingController();
   bool _isPosting = false;
+  bool _requiresPhoto = false;
 
   _ClubOption? _selectedClub;
   late final List<_ClubOption> _myClubs;
@@ -194,13 +194,16 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   final Set<String> _selectedTaggedUserIds = {};
 
   // Image state
-  String? _imagePath; // null | "tpl:N" | file path
-  late final TabController _mediaTabController;
+  String? _imagePath;
+
+  bool get _hasUploadedPhoto =>
+      _imagePath != null &&
+      _imagePath!.isNotEmpty &&
+      !_imagePath!.startsWith('tpl:');
 
   @override
   void initState() {
     super.initState();
-    _mediaTabController = TabController(length: 2, vsync: this);
     final adminId = authService.currentAdmin?.id ?? '';
     _myClubs = clubs
         .where((c) => c.adminUserIds.contains(adminId))
@@ -212,7 +215,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   @override
   void dispose() {
     _contentController.dispose();
-    _mediaTabController.dispose();
     super.dispose();
   }
 
@@ -280,6 +282,17 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   void _post() {
     final content = _contentController.text.trim();
     if (content.isEmpty || _selectedClub == null) return;
+    if (_requiresPhoto && !_hasUploadedPhoto) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Please upload a photo before posting.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
     setState(() => _isPosting = true);
 
     final post = NewsPost(
@@ -290,7 +303,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       createdAt: DateTime.now(),
       taggedClubIds: _extractTaggedClubIds(content),
       taggedUserIds: _extractTaggedUserIds(content),
-      imagePath: _imagePath,
+      imagePath: _requiresPhoto ? _imagePath : null,
     );
     newsPosts.insert(0, post);
     contentStore.saveNewsPosts();
@@ -300,21 +313,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   }
 
   bool get _canPost =>
-      _contentController.text.trim().isNotEmpty && _selectedClub != null;
-
-  Color get _clubColor {
-    if (_selectedClub == null) return AppColors.primaryRed;
-    final idx = clubs.indexWhere((c) => c.id == _selectedClub!.id);
-    const colors = [
-      Color(0xFFB41C18),
-      Color(0xFF1565C0),
-      Color(0xFF2E7D32),
-      Color(0xFF6A1B9A),
-      Color(0xFFE65100),
-      Color(0xFF00838F),
-    ];
-    return colors[(idx < 0 ? 0 : idx) % colors.length];
-  }
+      _contentController.text.trim().isNotEmpty &&
+      _selectedClub != null &&
+      (!_requiresPhoto || _hasUploadedPhoto);
 
   @override
   Widget build(BuildContext context) {
@@ -367,61 +368,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // ── Cover image preview ──────────────────────────────────────────
-          buildPostBanner(
-            imagePath: _imagePath,
-            fallbackColor: _clubColor,
-            fallbackLetter: adminName.isNotEmpty ? adminName[0] : 'C',
-            height: 220,
-          ),
-
-          // ── Media picker panel ───────────────────────────────────────────
-          Container(
-            color: AppColors.card,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TabBar(
-                  controller: _mediaTabController,
-                  labelColor: AppColors.primaryRed,
-                  unselectedLabelColor: AppColors.secondaryText,
-                  indicatorColor: AppColors.primaryRed,
-                  tabs: [
-                    Tab(text: 'Templates'),
-                    Tab(text: 'Gallery'),
-                  ],
-                ),
-                SizedBox(
-                  height: 210,
-                  child: TabBarView(
-                    controller: _mediaTabController,
-                    children: [
-                      // Templates
-                      _TemplatesRow(
-                        selected: _imagePath,
-                        onSelect: (id) => setState(() => _imagePath = id),
-                      ),
-                      // Gallery
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: ContentImageUploader(
-                          imagePath:
-                              _imagePath != null &&
-                                  !_imagePath!.startsWith('tpl:')
-                              ? _imagePath
-                              : null,
-                          onChanged: (p) => setState(() => _imagePath = p),
-                          height: 190,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1),
-              ],
-            ),
-          ),
-
           // ── Form fields ──────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -515,6 +461,20 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   const SizedBox(height: 16),
                 ],
 
+                _PhotoUploadChoice(
+                  enabled: _requiresPhoto,
+                  imagePath: _imagePath,
+                  hasUploadedPhoto: _hasUploadedPhoto,
+                  onEnabledChanged: (value) {
+                    setState(() {
+                      _requiresPhoto = value;
+                      if (!value) _imagePath = null;
+                    });
+                  },
+                  onImageChanged: (path) => setState(() => _imagePath = path),
+                ),
+                const SizedBox(height: 16),
+
                 // Tag hint
                 Row(
                   children: [
@@ -569,77 +529,110 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   }
 }
 
-// ── Templates row ────────────────────────────────────────────────────────────
+// ── Photo upload choice ──────────────────────────────────────────────────────
 
-class _TemplatesRow extends StatelessWidget {
-  final String? selected;
-  final ValueChanged<String> onSelect;
+class _PhotoUploadChoice extends StatelessWidget {
+  final bool enabled;
+  final String? imagePath;
+  final bool hasUploadedPhoto;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<String?> onImageChanged;
 
-  const _TemplatesRow({required this.selected, required this.onSelect});
+  const _PhotoUploadChoice({
+    required this.enabled,
+    required this.imagePath,
+    required this.hasUploadedPhoto,
+    required this.onEnabledChanged,
+    required this.onImageChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      itemCount: _templates.length,
-      itemBuilder: (_, i) {
-        final tpl = _templates[i];
-        final isSelected = selected == tpl.id;
-        return GestureDetector(
-          onTap: () => onSelect(tpl.id),
-          child: Container(
-            width: 68,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: tpl.colors,
-                begin: tpl.begin,
-                end: tpl.end,
-              ),
-              borderRadius: BorderRadius.circular(10),
-              border: isSelected
-                  ? Border.all(color: Colors.white, width: 3)
-                  : null,
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: tpl.colors.first.withValues(alpha: 0.5),
-                        blurRadius: 8,
-                      ),
-                    ]
-                  : [],
-            ),
-            child: Stack(
-              children: [
-                if (isSelected)
-                  Center(
-                    child: Icon(
-                      Icons.check_circle,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                Positioned(
-                  bottom: 4,
-                  left: 0,
-                  right: 0,
-                  child: Text(
-                    tpl.label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
-                    ),
-                  ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: enabled ? AppColors.primaryRed : AppColors.divider,
+          width: enabled ? 1.4 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.lightRed,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
+                child: Icon(
+                  enabled
+                      ? Icons.add_photo_alternate_rounded
+                      : Icons.notes_rounded,
+                  color: AppColors.primaryRed,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      enabled ? 'Photo post' : 'Text update',
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      enabled
+                          ? hasUploadedPhoto
+                                ? 'Photo attached. This post will include it.'
+                                : 'Upload a photo to unlock posting.'
+                          : 'No photo needed. This will publish as an update.',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 12.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: enabled,
+                activeThumbColor: AppColors.primaryRed,
+                onChanged: onEnabledChanged,
+              ),
+            ],
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: enabled
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: ContentImageUploader(
+                imagePath: imagePath,
+                onChanged: onImageChanged,
+                height: 180,
+                emptyTitle: 'Upload photo (required)',
+                emptySubtitle: 'Tap to choose from camera or library',
+              ),
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

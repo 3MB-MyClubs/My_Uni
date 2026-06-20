@@ -65,7 +65,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'event':
         return 'events';
       case 'club':
-      case 'board_member_request':
         return 'clubs';
       case 'message':
       case 'user':
@@ -77,7 +76,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return 'you';
   }
 
-  bool _passes(AppNotification n) => _filter == 'all' || _category(n) == _filter;
+  bool _passes(AppNotification n) =>
+      _filter == 'all' || _category(n) == _filter;
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
@@ -126,7 +126,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     String? clubId;
     switch (n.targetType) {
       case 'club':
-      case 'board_member_request':
         clubId = n.targetId;
       case 'post':
         final id = n.targetId;
@@ -146,22 +145,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final type = n.targetType;
     final id = n.targetId;
 
-    if (type == 'board_member_request') {
-      final clubId = id ?? '';
-      final club = clubs.firstWhere(
-        (c) => c.id == clubId,
-        orElse: () => clubs.first,
-      );
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              ClubProfileScreen(club: club, color: _colorForClub(clubId)),
-        ),
-      );
-      return;
-    }
-
     if (type == null || id == null) return;
     switch (type) {
       case 'post':
@@ -172,8 +155,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                PostDetailScreen(post: post, clubColor: _colorForClub(post.clubId)),
+            builder: (_) => PostDetailScreen(
+              post: post,
+              clubColor: _colorForClub(post.clubId),
+            ),
           ),
         );
       case 'club':
@@ -248,8 +233,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return (Icons.how_to_reg_rounded, AppColors.primaryRed);
       case 'user':
         return (Icons.person_add_alt_1_rounded, const Color(0xFF6A1B9A));
-      case 'board_member_request':
-        return (Icons.shield_moon_rounded, const Color(0xFF6A1B9A));
       case 'club':
         if (msg.contains('photo')) {
           return (Icons.photo_rounded, const Color(0xFFE65100));
@@ -350,31 +333,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       padding: const EdgeInsets.only(right: 4),
                       child: GestureDetector(
                         onTap: () => Navigator.maybePop(context),
-                        child: Icon(Icons.arrow_back_ios_new_rounded,
-                            size: 20, color: AppColors.text),
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 20,
+                          color: AppColors.text,
+                        ),
                       ),
                     ),
-                  Text('Notifications',
-                      style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.6,
-                          color: AppColors.text)),
+                  Text(
+                    'Notifications',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.6,
+                      color: AppColors.text,
+                    ),
+                  ),
                   const SizedBox(width: 9),
                   if (totalUnread > 0)
                     Container(
                       constraints: const BoxConstraints(minWidth: 20),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text('$totalUnread',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white)),
+                      child: Text(
+                        '$totalUnread',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   const Spacer(),
                   GestureDetector(
@@ -387,8 +382,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.divider),
                       ),
-                      child: Icon(Icons.done_all_rounded,
-                          size: 19, color: AppColors.primaryRed),
+                      child: Icon(
+                        Icons.done_all_rounded,
+                        size: 19,
+                        color: AppColors.primaryRed,
+                      ),
                     ),
                   ),
                 ],
@@ -404,9 +402,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         label: f.l,
                         active: _filter == f.k,
                         count: _allNotifs
-                            .where((n) =>
-                                (f.k == 'all' || _category(n) == f.k) &&
-                                _isUnread(n))
+                            .where(
+                              (n) =>
+                                  (f.k == 'all' || _category(n) == f.k) &&
+                                  _isUnread(n),
+                            )
                             .length,
                         onTap: () => setState(() => _filter = f.k),
                       ),
@@ -499,11 +499,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 children: [
                   _messageText(n, prefix, unread),
                   const SizedBox(height: 4),
-                  Text(_timeAgo(n.createdAt),
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText)),
+                  Text(
+                    _timeAgo(n.createdAt),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
                   if (pending) ...[
                     const SizedBox(height: 10),
                     _followActions(n),
@@ -585,11 +588,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               color: AppColors.primaryRed,
               borderRadius: BorderRadius.circular(100),
             ),
-            child: const Text('Accept',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
+            child: const Text(
+              'Accept',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -606,11 +612,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               borderRadius: BorderRadius.circular(100),
               border: Border.all(color: AppColors.divider),
             ),
-            child: Text('Decline',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondaryText)),
+            child: Text(
+              'Decline',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.secondaryText,
+              ),
+            ),
           ),
         ),
       ],
@@ -629,12 +638,15 @@ class _Sec extends StatelessWidget {
       width: double.infinity,
       color: AppColors.background,
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-      child: Text(label.toUpperCase(),
-          style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
-              color: AppColors.secondaryText)),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.5,
+          color: AppColors.secondaryText,
+        ),
+      ),
     );
   }
 }
@@ -663,16 +675,20 @@ class _FilterChipB extends StatelessWidget {
           color: active ? AppColors.primaryRed : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: active ? AppColors.primaryRed : AppColors.divider),
+            color: active ? AppColors.primaryRed : AppColors.divider,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: active ? Colors.white : AppColors.secondaryText)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: active ? Colors.white : AppColors.secondaryText,
+              ),
+            ),
             if (count > 0) ...[
               const SizedBox(width: 6),
               Container(
@@ -682,13 +698,16 @@ class _FilterChipB extends StatelessWidget {
                   color: active ? Colors.white : AppColors.primaryRed,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('$count',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontSize: 10.5,
-                        height: 1.5,
-                        fontWeight: FontWeight.w800,
-                        color: active ? AppColors.primaryRed : Colors.white)),
+                child: Text(
+                  '$count',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.5,
+                    fontWeight: FontWeight.w800,
+                    color: active ? AppColors.primaryRed : Colors.white,
+                  ),
+                ),
               ),
             ],
           ],
@@ -719,21 +738,30 @@ class _BEmpty extends StatelessWidget {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Icon(Icons.done_all_rounded,
-                  size: 36, color: AppColors.primaryRed),
+              child: Icon(
+                Icons.done_all_rounded,
+                size: 36,
+                color: AppColors.primaryRed,
+              ),
             ),
             const SizedBox(height: 16),
-            Text('Nothing here',
-                style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.text)),
+            Text(
+              'Nothing here',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppColors.text,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               'No ${label}notifications right now. We\'ll let you know when something happens.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 13.5, height: 1.5, color: AppColors.secondaryText),
+                fontSize: 13.5,
+                height: 1.5,
+                color: AppColors.secondaryText,
+              ),
             ),
           ],
         ),

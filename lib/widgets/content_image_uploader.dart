@@ -13,12 +13,16 @@ class ContentImageUploader extends StatefulWidget {
   final String? imagePath;
   final ValueChanged<String?> onChanged;
   final double height;
+  final String emptyTitle;
+  final String emptySubtitle;
 
   const ContentImageUploader({
     super.key,
     required this.imagePath,
     required this.onChanged,
     this.height = 180,
+    this.emptyTitle = 'Add cover photo (optional)',
+    this.emptySubtitle = 'Tap to pick from camera or library',
   });
 
   @override
@@ -189,7 +193,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add cover photo (optional)',
+                    widget.emptyTitle,
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 13,
@@ -197,7 +201,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tap to pick from camera or library',
+                    widget.emptySubtitle,
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 11,

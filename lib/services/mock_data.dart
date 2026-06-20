@@ -9,7 +9,6 @@ import '../models/subscription.dart';
 import '../models/notification.dart';
 import '../models/app_admin.dart';
 import '../models/message.dart';
-import '../models/board_member_request.dart';
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
@@ -464,12 +463,6 @@ final clubs = [
   ),
 ];
 
-// ─── Board Member Requests ────────────────────────────────────────────────────
-
-/// All board-member applications, past and present.
-/// Persisted via ContentStore; starts empty (no seed requests needed).
-final boardMemberRequests = <BoardMemberRequest>[];
-
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 final events = [
@@ -529,7 +522,6 @@ final events = [
     },
     imagePath: 'https://picsum.photos/seed/hackku2025/800/500',
     tags: ['Hackathon', 'Free Food', 'Prizes', 'All Night'],
-    scheduleGated: true,
     schedule: [
       EventSlot(
         time: DateTime.now().add(const Duration(days: 5)),
@@ -1237,7 +1229,6 @@ final events = [
     imagePath: 'https://picsum.photos/seed/mckinsey_case/800/500',
     tags: ['Workshop', 'Case Study', 'Career', 'Consulting'],
     guestSpeaker: 'McKinsey Istanbul Consulting Team',
-    scheduleGated: true,
     schedule: [
       EventSlot(
         time: DateTime.now().add(const Duration(days: 5, hours: 7)),
@@ -5817,7 +5808,8 @@ final messages = <Message>[
     id: 'msgcdm_3',
     senderId: 'c13',
     receiverId: 'u5',
-    content: 'There\'s also a golden-hour campus walk this Saturday if you want a taste 🌅',
+    content:
+        'There\'s also a golden-hour campus walk this Saturday if you want a taste 🌅',
     sentAt: DateTime.now().subtract(const Duration(hours: 6, minutes: 44)),
   ),
 ];

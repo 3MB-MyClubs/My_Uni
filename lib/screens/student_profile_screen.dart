@@ -75,8 +75,6 @@ class StudentEventData {
 
 class StudentProfileScreen extends StatelessWidget {
   final VoidCallback onSettings;
-  final VoidCallback? onEditBio;
-  final VoidCallback? onEditProfile;
   final VoidCallback? onShare;
   final VoidCallback? onSeeAllEvents;
   final VoidCallback? onEventTap;
@@ -90,8 +88,6 @@ class StudentProfileScreen extends StatelessWidget {
     super.key,
     required this.onSettings,
     required this.data,
-    this.onEditBio,
-    this.onEditProfile,
     this.onShare,
     this.onSeeAllEvents,
     this.onEventTap,
@@ -161,12 +157,11 @@ class StudentProfileScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    // Avatar + Edit profile row
-                    _AvatarEditRow(
+                    // Avatar row
+                    _AvatarRow(
                       userId: data.userId,
                       name: data.name,
                       initials: data.initials,
-                      onEditProfile: onEditProfile,
                     ),
                     const SizedBox(height: 16),
                     // Name + major + year + double major / minor tags
@@ -195,7 +190,7 @@ class StudentProfileScreen extends StatelessWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: _AboutCard(bio: data.bio, onEdit: onEditBio),
+                child: _AboutCard(bio: data.bio),
               ),
             ),
 
@@ -406,26 +401,22 @@ class _HeaderIconButton extends StatelessWidget {
   }
 }
 
-// ─── Avatar + Edit profile row ────────────────────────────────────────────────
+// ─── Avatar row ───────────────────────────────────────────────────────────────
 
-class _AvatarEditRow extends StatelessWidget {
+class _AvatarRow extends StatelessWidget {
   final String userId;
   final String name;
   final String initials;
-  final VoidCallback? onEditProfile;
 
-  const _AvatarEditRow({
+  const _AvatarRow({
     required this.userId,
     required this.name,
     required this.initials,
-    this.onEditProfile,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // Avatar: white-padded rounded rectangle with gradient fill
         Container(
@@ -458,32 +449,6 @@ class _AvatarEditRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(26),
               backgroundColor: const Color(0xFFE8CFD2),
               textColor: StudentProfileScreen._burgundyDeep,
-            ),
-          ),
-        ),
-        // Edit profile pill button
-        _ScaleTap(
-          onTap: onEditProfile,
-          child: Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            decoration: BoxDecoration(
-              color: StudentProfileScreen._card,
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(
-                color: StudentProfileScreen._burgundy.withValues(alpha: 0.25),
-                width: 1.5,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: const Text(
-              'Edit profile',
-              style: TextStyle(
-                color: StudentProfileScreen._burgundy,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.1,
-              ),
             ),
           ),
         ),
@@ -793,9 +758,8 @@ class _StatCell extends StatelessWidget {
 
 class _AboutCard extends StatelessWidget {
   final String bio;
-  final VoidCallback? onEdit;
 
-  const _AboutCard({required this.bio, this.onEdit});
+  const _AboutCard({required this.bio});
 
   @override
   Widget build(BuildContext context) {
@@ -804,22 +768,7 @@ class _AboutCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardLabel(
-            title: 'About',
-            trailing: hasBio
-                ? GestureDetector(
-                    onTap: onEdit,
-                    child: const Text(
-                      'Edit',
-                      style: TextStyle(
-                        color: StudentProfileScreen._burgundy,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  )
-                : null,
-          ),
+          const _CardLabel(title: 'About'),
           const SizedBox(height: 10),
           if (hasBio)
             Text(
@@ -832,25 +781,12 @@ class _AboutCard extends StatelessWidget {
               ),
             )
           else
-            _ScaleTap(
-              onTap: onEdit,
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.add_rounded,
-                    size: 16,
-                    color: StudentProfileScreen._burgundy,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Add a bio',
-                    style: TextStyle(
-                      color: StudentProfileScreen._burgundy,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+            Text(
+              'No bio yet. Go to Settings to add one.',
+              style: TextStyle(
+                color: StudentProfileScreen._secondary,
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
               ),
             ),
         ],
@@ -876,7 +812,7 @@ class _InterestsCard extends StatelessWidget {
           const SizedBox(height: 12),
           if (vibes.isEmpty)
             Text(
-              'Use Edit profile to add interests.',
+              'Go to Settings to add interests.',
               style: TextStyle(
                 color: StudentProfileScreen._secondary,
                 fontSize: 13,

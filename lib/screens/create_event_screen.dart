@@ -1,4 +1,12 @@
+import 'package:flutter/cupertino.dart'
+    show
+        CupertinoDatePicker,
+        CupertinoDatePickerMode,
+        CupertinoTheme,
+        CupertinoThemeData;
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -6,7 +14,6 @@ import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import 'dart:io';
-import '../widgets/content_image_uploader.dart';
 import '../widgets/mention_text_field.dart';
 
 class CreateEventScreen extends StatefulWidget {
@@ -16,35 +23,6 @@ class CreateEventScreen extends StatefulWidget {
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
 }
-
-const _kLocationChips = [
-  'SCI',
-  'ENG',
-  'SNA',
-  'Henry Çimleri',
-  'Kurucular Salonu',
-  'SOS',
-  'Odeon',
-  'CASE',
-];
-
-const _kTagSuggestions = [
-  'Free entry',
-  'Free food',
-  'Workshop',
-  'Talk',
-  'Panel',
-  'Networking',
-  'Career',
-  'Competition',
-  'Social',
-  'Arts',
-  'Music',
-  'Film',
-  'Tech',
-  'Academic',
-  'Volunteer',
-];
 
 class _ScheduleEntry {
   TimeOfDay time;
@@ -64,16 +42,23 @@ class _ScheduleEntry {
   }
 }
 
+class _SpeakerEntry {
+  final TextEditingController nameCtrl = TextEditingController();
+  final TextEditingController roleCtrl = TextEditingController();
+  final TextEditingController linkedinCtrl = TextEditingController();
+
+  void dispose() {
+    nameCtrl.dispose();
+    roleCtrl.dispose();
+    linkedinCtrl.dispose();
+  }
+}
+
 class _CreateEventScreenState extends State<CreateEventScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _locationController = TextEditingController();
-  final _speakerController = TextEditingController();
   String? _imagePath;
-  String? _selectedLocationChip;
-
-  // Hero customization
-  String? _accentColorHex; // null = auto (club color)
 
   // Tags
   final List<String> _selectedTags = [];
@@ -81,7 +66,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   // Schedule
   final List<_ScheduleEntry> _scheduleEntries = [];
-  bool _scheduleGated = false;
+
+  // Registration (external sign-up link)
+  bool _externalReg = false;
+  final _regUrlCtrl = TextEditingController();
+
+  // Speakers (name / role / LinkedIn)
+  final List<_SpeakerEntry> _speakers = [];
 
   DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
   DateTime _endDate = DateTime.now().add(const Duration(hours: 3));
@@ -115,89 +106,172 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     ),
   ];
 
-  Future<void> _pickDate(bool isStart) async {
+  // Single, fast iOS-style wheel for both the date and the time — one scroll
+  // sets everything (replaces the fiddly Material calendar + analog clock).
+  Future<void> _pickDateTime(bool isStart) async {
+    final now = DateTime.now();
     final initial = isStart ? _startDate : _endDate;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primaryRed),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      if (isStart) {
-        _startDate = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          _startDate.hour,
-          _startDate.minute,
-        );
-      } else {
-        _endDate = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          _endDate.hour,
-          _endDate.minute,
-        );
-      }
-    });
-  }
+    // Cupertino requires initialDateTime >= minimumDate.
+    final minDate = isStart
+        ? now.subtract(const Duration(days: 1))
+        : _startDate;
+    var temp = initial.isBefore(minDate) ? minDate : initial;
 
-  Future<void> _pickTime(bool isStart) async {
-    final initial = isStart ? _startDate : _endDate;
-    final picked = await showTimePicker(
+    final result = await showModalBottomSheet<DateTime>(
       context: context,
-      initialTime: TimeOfDay(hour: initial.hour, minute: initial.minute),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primaryRed),
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header: Cancel · Starts/Ends · Done
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: AppColors.secondaryText),
+                    ),
+                  ),
+                  Text(
+                    isStart ? 'Starts' : 'Ends',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, temp),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: AppColors.divider),
+            // The wheel — date + time together, 24-hour.
+            SizedBox(
+              height: 232,
+              child: CupertinoTheme(
+                data: CupertinoThemeData(
+                  brightness: Theme.of(context).brightness,
+                ),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.dateAndTime,
+                  initialDateTime: temp,
+                  minimumDate: minDate,
+                  maximumDate: now.add(const Duration(days: 365)),
+                  use24hFormat: true,
+                  onDateTimeChanged: (d) => temp = d,
+                ),
+              ),
+            ),
+          ],
         ),
-        child: child!,
       ),
     );
-    if (picked == null || !mounted) return;
+
+    if (result == null || !mounted) return;
     setState(() {
       if (isStart) {
-        _startDate = DateTime(
-          _startDate.year,
-          _startDate.month,
-          _startDate.day,
-          picked.hour,
-          picked.minute,
-        );
+        _startDate = result;
+        // Keep the end after the start automatically.
+        if (!_endDate.isAfter(_startDate)) {
+          _endDate = _startDate.add(const Duration(hours: 1));
+        }
       } else {
-        _endDate = DateTime(
-          _endDate.year,
-          _endDate.month,
-          _endDate.day,
-          picked.hour,
-          picked.minute,
-        );
+        _endDate = result;
       }
     });
   }
 
   Future<void> _pickSlotTime(_ScheduleEntry entry) async {
-    final picked = await showTimePicker(
+    final now = DateTime.now();
+    var temp = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      entry.time.hour,
+      entry.time.minute,
+    );
+    final result = await showModalBottomSheet<TimeOfDay>(
       context: context,
-      initialTime: entry.time,
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primaryRed),
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: AppColors.secondaryText),
+                    ),
+                  ),
+                  Text(
+                    'Time',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, TimeOfDay.fromDateTime(temp)),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: AppColors.divider),
+            SizedBox(
+              height: 200,
+              child: CupertinoTheme(
+                data: CupertinoThemeData(
+                  brightness: Theme.of(context).brightness,
+                ),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.time,
+                  initialDateTime: temp,
+                  use24hFormat: true,
+                  onDateTimeChanged: (d) => temp = d,
+                ),
+              ),
+            ),
+          ],
         ),
-        child: child!,
       ),
     );
-    if (picked == null || !mounted) return;
-    setState(() => entry.time = picked);
+    if (result == null || !mounted) return;
+    setState(() => entry.time = result);
   }
 
   void _addScheduleEntry() {
@@ -256,7 +330,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }).toList();
     }
 
-    final speaker = _speakerController.text.trim();
+    final speakers = _speakers
+        .where((s) => s.nameCtrl.text.trim().isNotEmpty)
+        .map(
+          (s) => EventSpeaker(
+            name: s.nameCtrl.text.trim(),
+            role: s.roleCtrl.text.trim(),
+            linkedin: s.linkedinCtrl.text.trim().isEmpty
+                ? null
+                : s.linkedinCtrl.text.trim(),
+          ),
+        )
+        .toList();
+
+    final regUrl = _regUrlCtrl.text.trim();
 
     final newEvent = Event(
       id: 'ev_${DateTime.now().millisecondsSinceEpoch}',
@@ -270,10 +357,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       imagePath: _imagePath,
       createdByUserId: authService.currentAdmin?.id,
       tags: List.from(_selectedTags),
-      guestSpeaker: speaker.isEmpty ? null : speaker,
       schedule: schedule,
-      scheduleGated: _scheduleGated && schedule != null,
-      accentColorHex: _accentColorHex,
+      registrationUrl: (_externalReg && regUrl.isNotEmpty) ? regUrl : null,
+      speakers: speakers,
     );
 
     events.add(newEvent);
@@ -288,10 +374,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _titleController.dispose();
     _descController.dispose();
     _locationController.dispose();
-    _speakerController.dispose();
     _customTagCtrl.dispose();
+    _regUrlCtrl.dispose();
     for (final e in _scheduleEntries) {
       e.dispose();
+    }
+    for (final s in _speakers) {
+      s.dispose();
     }
     super.dispose();
   }
@@ -341,13 +430,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Hero preview + customization ─────────────────────────────────
+          // ── Hero preview + optional image ────────────────────────────────
           _HeroEditor(
             imagePath: _imagePath,
-            accentColorHex: _accentColorHex,
             titleText: _titleController.text.trim(),
             onImageChanged: (p) => setState(() => _imagePath = p),
-            onColorChanged: (hex) => setState(() => _accentColorHex = hex),
           ),
           const SizedBox(height: 16),
 
@@ -363,18 +450,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   onChanged: (_) => setState(() {}),
                 ),
                 const Divider(height: 1),
-                _LocationPicker(
+                _Field(
                   controller: _locationController,
-                  selectedChip: _selectedLocationChip,
-                  onChipTap: (chip, selected) => setState(() {
-                    _selectedLocationChip = selected ? null : chip;
-                    _locationController.text = selected ? '' : chip;
-                  }),
-                  onTextChanged: (v) => setState(() {
-                    if (!_kLocationChips.contains(v.trim())) {
-                      _selectedLocationChip = null;
-                    }
-                  }),
+                  label: 'Location',
+                  hint: 'Write the event location',
+                  onChanged: (_) => setState(() {}),
                 ),
                 const Divider(height: 1),
                 _Field(
@@ -398,15 +478,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 _DateTimeRow(
                   label: 'Starts',
                   dateTime: _startDate,
-                  onDateTap: () => _pickDate(true),
-                  onTimeTap: () => _pickTime(true),
+                  onTap: () => _pickDateTime(true),
                 ),
                 const Divider(height: 1),
                 _DateTimeRow(
                   label: 'Ends',
                   dateTime: _endDate,
-                  onDateTap: () => _pickDate(false),
-                  onTimeTap: () => _pickTime(false),
+                  onTap: () => _pickDateTime(false),
                   error: !_endDate.isAfter(_startDate)
                       ? 'End must be after start'
                       : null,
@@ -421,7 +499,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           _SectionHeader(
             icon: Icons.label_outline_rounded,
             label: 'Tags',
-            subtitle: 'Help people discover your event',
+            subtitle: 'Create your own tags for discovery',
           ),
           const SizedBox(height: 8),
           _SectionCard(
@@ -430,64 +508,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _kTagSuggestions.map((tag) {
-                      final selected = _selectedTags.contains(tag);
-                      return GestureDetector(
-                        onTap: () => setState(() {
-                          if (selected) {
-                            _selectedTags.remove(tag);
-                          } else {
-                            _selectedTags.add(tag);
-                          }
-                        }),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.primaryRed
-                                : AppColors.surfaceAlt,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: selected
-                                  ? AppColors.primaryRed
-                                  : AppColors.divider,
-                            ),
-                          ),
-                          child: Text(
-                            tag,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: selected
-                                  ? Colors.white
-                                  : AppColors.secondaryText,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
                   if (_selectedTags.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Divider(color: AppColors.divider, height: 1),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Selected: ${_selectedTags.join(', ')}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryText,
-                      ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _selectedTags.map((tag) {
+                        return InputChip(
+                          label: Text(tag),
+                          onDeleted: () =>
+                              setState(() => _selectedTags.remove(tag)),
+                          backgroundColor: AppColors.surfaceAlt,
+                          deleteIconColor: AppColors.secondaryText,
+                          labelStyle: TextStyle(
+                            color: AppColors.text,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          side: BorderSide(color: AppColors.divider),
+                        );
+                      }).toList(),
                     ),
+                    const SizedBox(height: 12),
                   ],
-                  const SizedBox(height: 10),
-                  // Custom tag input
                   Row(
                     children: [
                       Expanded(
@@ -571,19 +613,134 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
           const SizedBox(height: 16),
 
-          // ── Guest speaker ─────────────────────────────────────────────────
+          // ── Speakers ──────────────────────────────────────────────────────
           _SectionHeader(
-            icon: Icons.mic_rounded,
-            label: 'Guest Speaker',
-            subtitle: 'Optional — adds a featured speaker card',
+            icon: Icons.groups_2_rounded,
+            label: 'Speakers',
+            subtitle: 'Optional — add speaker name, role & LinkedIn',
           ),
           const SizedBox(height: 8),
           _SectionCard(
-            child: _Field(
-              controller: _speakerController,
-              label: 'Speaker name',
-              hint: 'e.g. Dr. Ayşe Yılmaz, CEO of ...',
-              onChanged: (_) => setState(() {}),
+            child: Column(
+              children: [
+                for (int i = 0; i < _speakers.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      color: AppColors.divider,
+                      indent: 16,
+                      endIndent: 16,
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _Field(
+                                controller: _speakers[i].nameCtrl,
+                                label: 'Speaker name',
+                                hint: 'e.g. Prof. Elif Yıldız',
+                              ),
+                              _Field(
+                                controller: _speakers[i].roleCtrl,
+                                label: 'Role / department',
+                                hint: 'e.g. History',
+                              ),
+                              _Field(
+                                controller: _speakers[i].linkedinCtrl,
+                                label: 'LinkedIn (optional)',
+                                hint: 'linkedin.com/in/…',
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.remove_circle_outline,
+                            color: AppColors.secondaryText,
+                            size: 22,
+                          ),
+                          onPressed: () => setState(() {
+                            _speakers[i].dispose();
+                            _speakers.removeAt(i);
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          setState(() => _speakers.add(_SpeakerEntry())),
+                      icon: Icon(
+                        Icons.add_rounded,
+                        color: AppColors.primaryRed,
+                      ),
+                      label: Text(
+                        'Add speaker',
+                        style: TextStyle(color: AppColors.primaryRed),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.divider),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Registration ──────────────────────────────────────────────────
+          _SectionHeader(
+            icon: Icons.link_rounded,
+            label: 'Registration',
+            subtitle: 'Send attendees to your own sign-up form',
+          ),
+          const SizedBox(height: 8),
+          _SectionCard(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  activeThumbColor: AppColors.primaryRed,
+                  title: Text(
+                    'External sign-up link',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Attendees register on your form (Google Form, Eventbrite…)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  value: _externalReg,
+                  onChanged: (v) => setState(() => _externalReg = v),
+                ),
+                if (_externalReg)
+                  _Field(
+                    controller: _regUrlCtrl,
+                    label: 'Sign-up URL',
+                    hint: 'https://forms.gle/…',
+                    onChanged: (_) => setState(() {}),
+                  ),
+              ],
             ),
           ),
 
@@ -652,57 +809,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ),
                   ),
                 ),
-
-                // Gate toggle
-                if (_scheduleEntries.isNotEmpty) ...[
-                  Divider(height: 1, color: AppColors.divider),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.lock_outline_rounded,
-                          size: 16,
-                          color: AppColors.secondaryText,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Require RSVP to see programme',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.text,
-                                ),
-                              ),
-                              Text(
-                                'Programme only visible to confirmed attendees',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Switch(
-                          value: _scheduleGated,
-                          onChanged: (v) => setState(() => _scheduleGated = v),
-                          activeThumbColor: AppColors.primaryRed,
-                          activeTrackColor: AppColors.primaryRed.withValues(
-                            alpha: 0.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -715,286 +821,124 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero preview + customization (photo + color palette)
+// Hero preview + optional photo
 // ─────────────────────────────────────────────────────────────────────────────
-
-const _kPaletteColors = [
-  // null = auto (uses club color)
-  '8C1D40', // KU burgundy
-  'EF5350', // red
-  'E65100', // deep orange
-  'F9A825', // amber
-  '2E7D32', // green
-  '00838F', // teal
-  '1565C0', // blue
-  '4527A0', // deep purple
-  '6A1B9A', // purple
-  '283593', // navy
-  '4E342E', // brown
-  '37474F', // dark slate
-];
 
 class _HeroEditor extends StatelessWidget {
   final String? imagePath;
-  final String? accentColorHex;
   final String titleText;
   final ValueChanged<String?> onImageChanged;
-  final ValueChanged<String?> onColorChanged;
 
   const _HeroEditor({
     required this.imagePath,
-    required this.accentColorHex,
     required this.titleText,
     required this.onImageChanged,
-    required this.onColorChanged,
   });
-
-  Color get _previewColor => accentColorHex != null
-      ? Color(int.parse('FF$accentColorHex', radix: 16))
-      : AppColors.primaryRed;
 
   @override
   Widget build(BuildContext context) {
     final hasImage = imagePath != null;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Live preview ──────────────────────────────────────────────────
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: SizedBox(
-            height: 200,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Background: image or gradient
-                if (hasImage)
-                  Image.file(File(imagePath!), fit: BoxFit.cover)
-                else
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          _previewColor,
-                          Color.lerp(_previewColor, Colors.black, 0.35)!,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 200,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasImage)
+              Image.file(File(imagePath!), fit: BoxFit.cover)
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.image_outlined,
+                        size: 34,
+                        color: AppColors.secondaryText.withValues(alpha: 0.75),
                       ),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          top: -30,
-                          right: -30,
-                          child: Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.07),
-                            ),
-                          ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No event image selected',
+                        style: TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                        Positioned(
-                          bottom: 10,
-                          left: -20,
-                          child: Container(
-                            width: 90,
-                            height: 90,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.05),
-                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Add an image or keep this event imageless',
+                        style: TextStyle(
+                          color: AppColors.secondaryText.withValues(
+                            alpha: 0.75,
                           ),
+                          fontSize: 11,
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            if (hasImage)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 110,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.65),
                       ],
                     ),
                   ),
-
-                // Color tint overlay when image + color chosen
-                if (hasImage && accentColorHex != null)
-                  Container(color: _previewColor.withValues(alpha: 0.35)),
-
-                // Bottom scrim
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 110,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.65),
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
-
-                // Title preview
-                Positioned(
-                  left: 14,
-                  right: 14,
-                  bottom: 14,
-                  child: Text(
-                    titleText.isEmpty ? 'Event title preview' : titleText,
-                    style: TextStyle(
-                      color: titleText.isEmpty
-                          ? Colors.white.withValues(alpha: 0.4)
-                          : Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.5,
-                      height: 1.15,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-
-                // Photo edit button (top-right)
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: _PhotoEditButton(
-                    hasImage: hasImage,
-                    imagePath: imagePath,
-                    onChanged: onImageChanged,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // ── Color palette ─────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.palette_outlined,
-                    size: 15,
-                    color: AppColors.secondaryText,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Background colour',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    accentColorHex == null
-                        ? 'Auto (club colour)'
-                        : '#$accentColorHex',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  // "Auto" swatch
-                  _ColorSwatch(
-                    color: AppColors.primaryRed,
-                    isSelected: accentColorHex == null,
-                    isAuto: true,
-                    onTap: () => onColorChanged(null),
+
+            if (hasImage)
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 14,
+                child: Text(
+                  titleText.isEmpty ? 'Event title preview' : titleText,
+                  style: TextStyle(
+                    color: titleText.isEmpty
+                        ? Colors.white.withValues(alpha: 0.4)
+                        : Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    height: 1.15,
                   ),
-                  ..._kPaletteColors.map((hex) {
-                    final c = Color(int.parse('FF$hex', radix: 16));
-                    return _ColorSwatch(
-                      color: c,
-                      isSelected: accentColorHex == hex,
-                      isAuto: false,
-                      onTap: () => onColorChanged(hex),
-                    );
-                  }),
-                ],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
-class _ColorSwatch extends StatelessWidget {
-  final Color color;
-  final bool isSelected;
-  final bool isAuto;
-  final VoidCallback onTap;
-
-  const _ColorSwatch({
-    required this.color,
-    required this.isSelected,
-    required this.isAuto,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? Colors.white : Colors.transparent,
-            width: 2.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: isSelected ? 0.55 : 0.25),
-              blurRadius: isSelected ? 10 : 4,
-              spreadRadius: isSelected ? 2 : 0,
+            Positioned(
+              top: 10,
+              right: 10,
+              child: _PhotoEditButton(
+                hasImage: hasImage,
+                imagePath: imagePath,
+                onChanged: onImageChanged,
+              ),
             ),
           ],
         ),
-        child: isAuto
-            ? Center(
-                child: Text(
-                  'A',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                  ),
-                ),
-              )
-            : isSelected
-            ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
-            : null,
       ),
     );
   }
@@ -1011,17 +955,39 @@ class _PhotoEditButton extends StatelessWidget {
     required this.onChanged,
   });
 
+  Future<void> _pickFromGallery(BuildContext context) async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
+    if (picked == null || !context.mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      uiSettings: [
+        IOSUiSettings(
+          title: 'Crop Photo',
+          resetAspectRatioEnabled: true,
+          rotateButtonsHidden: false,
+        ),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Photo',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: false,
+          showCropGrid: true,
+        ),
+      ],
+    );
+    if (cropped != null && context.mounted) {
+      onChanged(cropped.path);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: Colors.transparent,
-          builder: (_) =>
-              _PhotoPickerSheet(hasImage: hasImage, onChanged: onChanged),
-        );
-      },
+      onTap: () => _pickFromGallery(context),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -1048,24 +1014,6 @@ class _PhotoEditButton extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PhotoPickerSheet extends StatelessWidget {
-  final bool hasImage;
-  final ValueChanged<String?> onChanged;
-
-  const _PhotoPickerSheet({required this.hasImage, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return ContentImageUploader(
-      imagePath: null,
-      onChanged: (p) {
-        Navigator.pop(context);
-        onChanged(p);
-      },
     );
   }
 }
@@ -1349,118 +1297,16 @@ class _Field extends StatelessWidget {
   }
 }
 
-class _LocationPicker extends StatelessWidget {
-  final TextEditingController controller;
-  final String? selectedChip;
-  final void Function(String chip, bool currentlySelected) onChipTap;
-  final ValueChanged<String> onTextChanged;
-
-  const _LocationPicker({
-    required this.controller,
-    required this.selectedChip,
-    required this.onChipTap,
-    required this.onTextChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-          child: Row(
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 18,
-                color: AppColors.secondaryText,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Location',
-                style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            itemCount: _kLocationChips.length,
-            separatorBuilder: (_, i) => const SizedBox(width: 8),
-            itemBuilder: (ctx, i) {
-              final chip = _kLocationChips[i];
-              final selected = selectedChip == chip;
-              return GestureDetector(
-                onTap: () => onChipTap(chip, selected),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppColors.primaryRed
-                        : AppColors.background,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: selected
-                          ? AppColors.primaryRed
-                          : AppColors.divider,
-                    ),
-                  ),
-                  child: Text(
-                    chip,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? Colors.white : AppColors.secondaryText,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
-          child: TextField(
-            controller: controller,
-            style: TextStyle(fontSize: 14, color: AppColors.text),
-            onChanged: onTextChanged,
-            decoration: InputDecoration(
-              hintText: 'Or type a custom location…',
-              hintStyle: TextStyle(
-                color: AppColors.secondaryText,
-                fontSize: 13,
-              ),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _DateTimeRow extends StatelessWidget {
   final String label;
   final DateTime dateTime;
-  final VoidCallback onDateTap;
-  final VoidCallback onTimeTap;
+  final VoidCallback onTap;
   final String? error;
 
   const _DateTimeRow({
     required this.label,
     required this.dateTime,
-    required this.onDateTap,
-    required this.onTimeTap,
+    required this.onTap,
     this.error,
   });
 
@@ -1482,12 +1328,8 @@ class _DateTimeRow extends StatelessWidget {
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 
-  String _fmtTime(DateTime dt) {
-    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final m = dt.minute.toString().padLeft(2, '0');
-    final period = dt.hour < 12 ? 'AM' : 'PM';
-    return '$h:$m $period';
-  }
+  String _fmtTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -1511,7 +1353,7 @@ class _DateTimeRow extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               GestureDetector(
-                onTap: onDateTap,
+                onTap: onTap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -1533,7 +1375,7 @@ class _DateTimeRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: onTimeTap,
+                onTap: onTap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,

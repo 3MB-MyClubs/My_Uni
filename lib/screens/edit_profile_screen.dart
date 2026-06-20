@@ -40,7 +40,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     'Graduate',
   ];
 
-  late final TextEditingController _nameCtrl;
   late final TextEditingController _bioCtrl;
 
   String? _year;
@@ -68,9 +67,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(
-      text: userState.usernameFor(_userId) ?? widget.realName,
-    );
     _bioCtrl = TextEditingController(text: userState.bios[_userId] ?? '');
     final savedMajor = userState.majors[_userId];
     _major = kAcademicPrograms.contains(savedMajor) ? savedMajor : null;
@@ -84,7 +80,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
     _bioCtrl.dispose();
     super.dispose();
   }
@@ -106,7 +101,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _academicYears = results[1] as List<ProfileLookupItem>;
         _interestOptions = results[2] as List<ProfileLookupItem>;
         if (profile != null) {
-          if (profile.fullName.isNotEmpty) _nameCtrl.text = profile.fullName;
           _bioCtrl.text = profile.bio ?? '';
           _major = profile.majorName;
           _year = profile.academicYearName;
@@ -128,7 +122,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
-    final name = _nameCtrl.text.trim();
     setState(() => _isSaving = true);
 
     try {
@@ -136,7 +129,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await studentProfileService.updateProfile(
           UpdateStudentProfileInput(
             userId: _userId,
-            fullName: name.isEmpty ? widget.realName : name,
+            fullName: widget.realName,
             bio: _bioCtrl.text,
             majorId: _idForName(_majors, _major),
             academicYearId: _idForName(_academicYears, _year),
@@ -160,13 +153,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    // Treat the name field as the display name (username). Clearing it or
-    // matching the real account name reverts to the real name.
-    if (name.isEmpty || name == widget.realName) {
-      userState.clearUsername(_userId);
-    } else {
-      userState.setUsername(_userId, name);
-    }
     userState.setBio(_userId, _bioCtrl.text);
     userState.setMajor(_userId, _major ?? '');
     userState.setYear(_userId, _year ?? '');
@@ -322,15 +308,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
         compressFormat: ImageCompressFormat.jpg,
         compressQuality: 82,
         uiSettings: [
           IOSUiSettings(
             title: 'Crop Photo',
             aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
+            resetAspectRatioEnabled: true,
+            aspectRatioPickerButtonHidden: true,
+            cropStyle: CropStyle.circle,
           ),
           AndroidUiSettings(
             toolbarTitle: 'Crop Photo',
@@ -338,6 +324,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: true,
             hideBottomControls: false,
+            cropStyle: CropStyle.circle,
           ),
         ],
       );
@@ -386,9 +373,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final name = _nameCtrl.text.trim().isEmpty
-        ? widget.realName
-        : _nameCtrl.text.trim();
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -440,7 +424,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 children: [
                   UserAvatar(
                     userId: _userId,
-                    name: name,
+                    name: widget.realName,
                     size: 100,
                     fontSize: 38,
                   ),
@@ -483,15 +467,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
-          _label('Display name'),
-          _field(
-            controller: _nameCtrl,
-            hint: 'How your name appears',
-            maxLength: 40,
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 18),
 
           _label('Bio'),
           _field(

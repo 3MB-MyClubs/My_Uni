@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'screens/auth_choice_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
@@ -45,7 +44,6 @@ void main() async {
   await calendarSyncService.initialize();
   await tutorialService.initialize();
   contentStore.applyToLists();
-  contentStore.loadBoardMemberRequests();
   contentStore.loadBoardMemberIds();
   contentStore.loadBoardMemberTitles();
   // Restore any dynamic notifications that were generated at runtime.
@@ -66,7 +64,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  bool _showLogin = false;
   bool _showSignUp = false;
   bool _loggedIn = false;
   String _signupEmail = '';
@@ -110,7 +107,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     setState(() {
       _loggedIn = true;
-      _showLogin = false;
       _showSignUp = false;
     });
     if (currentUserId != null) {
@@ -122,22 +118,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _onSignUp(String email) {
+    // Sign-up complete → return to the root Login Screen with the email
+    // pre-filled so the student can log straight in.
     setState(() {
       _signupEmail = email;
       _showSignUp = false;
-      _showLogin = true;
     });
   }
 
-  // Helper for custom back navigation
+  // Custom back navigation from the sign-up flow → root Login Screen.
   void handleBack() {
-    setState(() {
-      if (_showLogin) {
-        _showLogin = false;
-      } else if (_showSignUp) {
-        _showSignUp = false;
-      }
-    });
+    setState(() => _showSignUp = false);
   }
 
   ThemeData _buildTheme(bool isDark) {
@@ -281,28 +272,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 _savePrefs();
                 setState(() {
                   _loggedIn = false;
-                  _showLogin = false;
                   _showSignUp = false;
                 });
               },
             );
           }
-        } else if (_showLogin) {
-          homeWidget = AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            child: LoginScreen(
-              onLogin: _onLogin,
-              onBack: handleBack,
-              initialEmail: _signupEmail,
-            ),
-            transitionBuilder: (child, animation) => SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1, 0),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          );
         } else if (_showSignUp) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
@@ -316,12 +290,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             ),
           );
         } else {
+          // Root entry: the Login Screen. "Sign up" hands off to the
+          // multi-step sign-up flow; club-admin sign-in is reached from its
+          // footer link.
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
-            child: AuthChoiceScreen(
-              onLogin: () => setState(() => _showLogin = true),
+            child: LoginScreen(
+              onLogin: _onLogin,
               onSignUp: () => setState(() => _showSignUp = true),
               onAdminLogin: _onLogin,
+              initialEmail: _signupEmail,
             ),
             transitionBuilder: (child, animation) =>
                 FadeTransition(opacity: animation, child: child),

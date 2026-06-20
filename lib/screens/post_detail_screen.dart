@@ -170,6 +170,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
     final isLiked = userState.isLiked(widget.post.id);
     final likeCount = postLikeCount(widget.post.id);
+    final hasImage =
+        widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
     final postComments =
         comments.where((c) => c.postId == widget.post.id).toList()
           ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -243,17 +245,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ),
 
                   // ── Banner image ──
-                  buildPostBanner(
-                    imagePath: widget.post.imagePath,
-                    fallbackColor: widget.clubColor,
-                    fallbackLetter: clubs
-                        .firstWhere(
-                          (c) => c.id == widget.post.clubId,
-                          orElse: () => clubs.first,
-                        )
-                        .name[0],
-                    height: 220,
-                  ),
+                  if (hasImage)
+                    buildPostBanner(
+                      imagePath: widget.post.imagePath,
+                      fallbackColor: widget.clubColor,
+                      fallbackLetter: club.name[0],
+                      height: 220,
+                    ),
 
                   // ── Like + comment counts ──
                   Container(

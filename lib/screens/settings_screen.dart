@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -10,6 +14,7 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/tutorial_service.dart';
+import '../widgets/club_avatar.dart';
 import 'saved_posts_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -32,6 +37,158 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return idx >= 0 ? clubs[idx] : null;
   }
 
+  // ── Club photo ──────────────────────────────────────────────────────────────
+  void _showClubPhotoOptions(Club club) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Change Club Photo',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _clubPhotoOption(Icons.camera_alt_outlined, 'Take a Photo', () {
+                Navigator.pop(context);
+                _pickClubPhoto(club, ImageSource.camera);
+              }),
+              Divider(height: 1, indent: 16, color: AppColors.divider),
+              _clubPhotoOption(
+                Icons.photo_library_outlined,
+                'Choose from Library',
+                () {
+                  Navigator.pop(context);
+                  _pickClubPhoto(club, ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _clubPhotoOption(IconData icon, String label, VoidCallback onTap) {
+    return ListTile(
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: AppColors.lightRed,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: AppColors.primaryRed),
+      ),
+      title: Text(
+        label,
+        style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Future<void> _pickClubPhoto(Club club, ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked == null || !mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        IOSUiSettings(
+          title: 'Crop Photo',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: true,
+          aspectRatioPickerButtonHidden: true,
+        ),
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Photo',
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: true,
+          hideBottomControls: false,
+        ),
+      ],
+    );
+    if (cropped == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Use this photo?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(File(cropped.path), fit: BoxFit.cover),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Use Photo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final ext = cropped.path.contains('.')
+          ? cropped.path.substring(cropped.path.lastIndexOf('.'))
+          : '.jpg';
+      final permanentPath = '${docsDir.path}/club_${club.id}$ext';
+      await File(cropped.path).copy(permanentPath);
+      if (!mounted) return;
+      userState.setClubPhoto(club.id, permanentPath);
+      await userPrefsService.saveClubPhoto(club.id, permanentPath);
+      setState(() {});
+    }
+  }
+
   void _openClubDescriptionSheet(Club club) {
     final controller = TextEditingController(text: club.description);
     showModalBottomSheet(
@@ -43,7 +200,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final value = controller.text.trim();
           final canSave = value.isNotEmpty && value != club.description;
           return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.card,
@@ -76,8 +235,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'This appears on ${club.name}’s profile across the app.',
-                    style:
-                        TextStyle(fontSize: 13, color: AppColors.secondaryText),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.secondaryText,
+                    ),
                   ),
                   const SizedBox(height: 18),
                   TextField(
@@ -97,8 +258,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            BorderSide(color: AppColors.primaryRed, width: 1.5),
+                        borderSide: BorderSide(
+                          color: AppColors.primaryRed,
+                          width: 1.5,
+                        ),
                       ),
                       counterStyle: TextStyle(
                         color: AppColors.secondaryText,
@@ -113,9 +276,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Expanded(
                         child: TextButton(
                           onPressed: () => Navigator.pop(ctx),
-                          child: Text('Cancel',
-                              style:
-                                  TextStyle(color: AppColors.secondaryText)),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(color: AppColors.secondaryText),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -136,15 +300,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ? () {
                                   club.description = value;
                                   userPrefsService.saveClubDescription(
-                                      club.id, value);
+                                    club.id,
+                                    value,
+                                  );
                                   userState.bumpClubInfo();
                                   Navigator.pop(ctx);
                                   setState(() {});
                                 }
                               : null,
-                          child: Text('Save',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          child: Text(
+                            'Save',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -157,184 +327,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
-
-  void _openUsernameSheet() {
-    final userId = _userId;
-    final current = userState.usernameFor(userId) ?? '';
-    final controller = TextEditingController(text: current);
-    String? errorText;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            final value = controller.text.trim();
-            final isValid = value.isEmpty || _isValidUsername(value);
-            final isTaken =
-                isValid &&
-                value.isNotEmpty &&
-                userState.isUsernameTaken(value, excludeId: userId);
-            final canSave = value != current && isValid && !isTaken;
-
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppColors.divider,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Set Username',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Choose how others see you. Your real name stays for search.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: controller,
-                      autofocus: true,
-                      maxLength: 30,
-                      style: TextStyle(color: AppColors.text),
-                      decoration: InputDecoration(
-                        prefixText: '@',
-                        prefixStyle: TextStyle(
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                        hintText: 'your_username',
-                        hintStyle: TextStyle(color: AppColors.secondaryText),
-                        errorText: isTaken
-                            ? 'This username is already taken'
-                            : (!isValid && value.isNotEmpty)
-                            ? 'Only letters, numbers, underscores and dots'
-                            : errorText,
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: AppColors.primaryRed,
-                            width: 1.5,
-                          ),
-                        ),
-                        counterStyle: TextStyle(
-                          color: AppColors.secondaryText,
-                          fontSize: 11,
-                        ),
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[a-zA-Z0-9_.À-öø-ÿ]'),
-                        ),
-                      ],
-                      onChanged: (_) => setSheetState(() {}),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Letters, numbers, underscores and dots. Leave blank to use your real name.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(color: AppColors.secondaryText),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: canSave
-                                  ? AppColors.primaryRed
-                                  : AppColors.divider,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            onPressed: canSave
-                                ? () {
-                                    final newVal = value;
-                                    if (newVal.isEmpty) {
-                                      userState.clearUsername(userId);
-                                    } else {
-                                      userState.setUsername(userId, newVal);
-                                    }
-                                    userPrefsService.save(userId);
-                                    Navigator.pop(ctx);
-                                    setState(() {});
-                                  }
-                                : null,
-                            child: Text(
-                              'Save',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  bool _isValidUsername(String value) =>
-      RegExp(r'^[a-zA-Z0-9_.À-öø-ÿ]{1,30}$').hasMatch(value);
 
   Future<void> _replayTutorial() async {
     await tutorialService.reset(_userId);
@@ -368,45 +360,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const SizedBox(height: 12),
 
-          // ── Username section ─────────────────────────────────────────────
-          _SectionHeader(title: 'Profile'),
-          Container(
-            color: AppColors.card,
-            child: ListTile(
-              leading: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.alternate_email_rounded,
-                  color: AppColors.primaryRed,
-                  size: 20,
-                ),
-              ),
-              title: Text(
-                'Username',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              subtitle: Text(
-                userState.usernameFor(_userId) != null
-                    ? '@${userState.usernameFor(_userId)}'
-                    : 'Not set — tap to choose one',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.secondaryText,
-              ),
-              onTap: _openUsernameSheet,
-            ),
-          ),
-
           // ── Club section (club admins only) ──────────────────────────────
           if (_managedClub != null) ...[
             const SizedBox(height: 24),
@@ -417,41 +370,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final club = _managedClub!;
                 return Container(
                   color: AppColors.card,
-                  child: ListTile(
-                    leading: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.lightRed,
-                        borderRadius: BorderRadius.circular(10),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: ClubAvatar(
+                            clubId: club.id,
+                            clubName: club.name,
+                            color: AppColors.primaryRed,
+                            size: 36,
+                            fontSize: 16,
+                            borderRadius: 10,
+                          ),
+                        ),
+                        title: Text(
+                          'Club Photo',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Tap to change your club logo',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: () => _showClubPhotoOptions(club),
                       ),
-                      child: Icon(
-                        Icons.description_outlined,
-                        color: AppColors.primaryRed,
-                        size: 20,
+                      Divider(height: 1, indent: 56, color: AppColors.divider),
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.description_outlined,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Club Description',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          club.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: () => _openClubDescriptionSheet(club),
                       ),
-                    ),
-                    title: Text(
-                      'Club Description',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    subtitle: Text(
-                      club.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                    trailing: Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.secondaryText,
-                    ),
-                    onTap: () => _openClubDescriptionSheet(club),
+                    ],
                   ),
                 );
               },
