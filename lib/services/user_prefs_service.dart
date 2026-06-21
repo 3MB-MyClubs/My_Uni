@@ -111,12 +111,22 @@ class UserPrefsService {
 
     final minors = _box.get('minors_$userId');
     if (minors != null) {
-      s.minors[userId] = List<String>.from(minors as List);
+      final values = List<String>.from(minors as List)
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .take(1)
+          .toList();
+      if (values.isNotEmpty) s.minors[userId] = values;
     }
 
     final doubleMajors = _box.get('doubleMajors_$userId');
     if (doubleMajors != null) {
-      s.doubleMajors[userId] = List<String>.from(doubleMajors as List);
+      final values = List<String>.from(doubleMajors as List)
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .take(1)
+          .toList();
+      if (values.isNotEmpty) s.doubleMajors[userId] = values;
     }
 
     _restoreSet(

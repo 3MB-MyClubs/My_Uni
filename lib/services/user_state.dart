@@ -144,9 +144,13 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sets the student minor program(s) for [userId] and notifies all listeners.
+  /// Sets the student's minor program for [userId] and notifies all listeners.
   void setMinors(String userId, List<String> values) {
-    final v = values.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final v = values
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .take(1)
+        .toList();
     if (v.isEmpty) {
       minors.remove(userId);
     } else {
@@ -155,9 +159,13 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Sets the student double-major program(s) for [userId] and notifies listeners.
+  /// Sets the student's double-major program for [userId] and notifies listeners.
   void setDoubleMajors(String userId, List<String> values) {
-    final v = values.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final v = values
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .take(1)
+        .toList();
     if (v.isEmpty) {
       doubleMajors.remove(userId);
     } else {

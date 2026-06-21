@@ -232,6 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       hint: 'Enter your password',
                       icon: Icons.lock_outline_rounded,
                       obscureText: _obscurePassword,
+                      keyboardType: TextInputType.number,
                       onChanged: (_) => setState(() => _error = null),
                       onSubmitted: (_) => _handleLogin(),
                       trailing: GestureDetector(

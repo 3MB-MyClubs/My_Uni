@@ -15,6 +15,7 @@ import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/club_avatar.dart';
+import 'edit_profile_screen.dart';
 import 'saved_posts_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -359,6 +360,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         children: [
           const SizedBox(height: 12),
+
+          // ── Profile section (students only) ──────────────────────────────
+          // Clubs and the super admin edit via the Club section / dashboard,
+          // so the personal profile editor is shown for student accounts only.
+          if (authService.currentUser != null) ...[
+            _SectionHeader(title: 'Profile'),
+            Container(
+              color: AppColors.card,
+              child: ListTile(
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightRed,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+                subtitle: Text(
+                  'Name, photo, bio, major, year & interests',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.secondaryText,
+                ),
+                onTap: () {
+                  final user = authService.currentUser;
+                  if (user == null) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditProfileScreen(
+                        userId: user.id,
+                        realName: user.name,
+                      ),
+                    ),
+                  ).then((_) {
+                    if (mounted) setState(() {});
+                  });
+                },
+              ),
+            ),
+          ],
 
           // ── Club section (club admins only) ──────────────────────────────
           if (_managedClub != null) ...[

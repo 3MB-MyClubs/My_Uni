@@ -45,8 +45,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _year;
   String? _major;
   late Set<String> _interests;
-  late List<String> _doubleMajors;
-  late List<String> _minors;
+  String? _doubleMajor;
+  String? _minor;
   List<ProfileLookupItem> _majors = const [];
   List<ProfileLookupItem> _academicYears = const [];
   List<ProfileLookupItem> _interestOptions = const [];
@@ -73,8 +73,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final y = userState.years[_userId];
     _year = (y != null && y.isNotEmpty) ? y : null;
     _interests = {...?userState.interests[_userId]};
-    _doubleMajors = [...?userState.doubleMajors[_userId]];
-    _minors = [...?userState.minors[_userId]];
+    _doubleMajor = userState.doubleMajors[_userId]?.firstOrNull;
+    _minor = userState.minors[_userId]?.firstOrNull;
     _loadRemoteData();
   }
 
@@ -105,8 +105,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _major = profile.majorName;
           _year = profile.academicYearName;
           _interests = profile.interestNames.toSet();
-          _doubleMajors = [...profile.doubleMajorNames];
-          _minors = [...profile.minorNames];
+          _doubleMajor = profile.doubleMajorNames.firstOrNull;
+          _minor = profile.minorNames.firstOrNull;
         }
         _isLoadingRemote = false;
         _loadError = null;
@@ -134,8 +134,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             majorId: _idForName(_majors, _major),
             academicYearId: _idForName(_academicYears, _year),
             interestIds: _idsForNames(_interestOptions, _interests),
-            doubleMajorIds: _idsForNames(_majors, _doubleMajors),
-            minorIds: _idsForNames(_majors, _minors),
+            doubleMajorIds: _idsForNames(_majors, _oneOrEmpty(_doubleMajor)),
+            minorIds: _idsForNames(_majors, _oneOrEmpty(_minor)),
           ),
         );
       }
@@ -157,8 +157,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     userState.setMajor(_userId, _major ?? '');
     userState.setYear(_userId, _year ?? '');
     userState.setInterests(_userId, _interests.toList());
-    userState.setDoubleMajors(_userId, _doubleMajors);
-    userState.setMinors(_userId, _minors);
+    userState.setDoubleMajors(
+      _userId,
+      _doubleMajor == null ? const [] : [_doubleMajor!],
+    );
+    userState.setMinors(_userId, _minor == null ? const [] : [_minor!]);
     await userPrefsService.save(_userId);
     if (!mounted) return;
     setState(() => _isSaving = false);
@@ -192,6 +195,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         .map((item) => item.id)
         .toList();
   }
+
+  List<String> _oneOrEmpty(String? value) =>
+      value == null || value.trim().isEmpty ? const [] : [value.trim()];
 
   // ── Photo ─────────────────────────────────────────────────────────────────
   void _showPhotoOptions() {
@@ -508,14 +514,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 18),
 
           _label('Double major'),
-          _programListEditor(
-            items: _doubleMajors,
+          _singleProgramEditor(
+            value: _doubleMajor,
             hint: 'Select a double major',
+            onChanged: (value) => setState(() => _doubleMajor = value),
           ),
           const SizedBox(height: 18),
 
           _label('Minor'),
-          _programListEditor(items: _minors, hint: 'Select a minor'),
+          _singleProgramEditor(
+            value: _minor,
+            hint: 'Select a minor',
+            onChanged: (value) => setState(() => _minor = value),
+          ),
           const SizedBox(height: 18),
 
           _label('Interests'),
@@ -640,80 +651,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _programListEditor({
-    required List<String> items,
+  Widget _singleProgramEditor({
+    required String? value,
     required String hint,
+    required ValueChanged<String?> onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AcademicProgramField(
-          value: null,
+          value: value,
           hint: hint,
           onTap: () async {
             final result = await showAcademicProgramPicker(
               context: context,
               title: hint,
-              selected: items,
-              allowsMultiple: true,
+              selected: value == null ? const [] : [value],
               programs: _majorNames,
             );
             if (result == null || !mounted) return;
-            setState(() {
-              items
-                ..clear()
-                ..addAll(result);
-            });
+            onChanged(result.firstOrNull);
           },
         ),
-        if (items.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: items
-                .map(
-                  (item) => Container(
-                    padding: const EdgeInsets.only(
-                      left: 14,
-                      right: 6,
-                      top: 7,
-                      bottom: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryRed.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: AppColors.primaryRed.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryRed,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () => setState(() => items.remove(item)),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 16,
-                            color: AppColors.primaryRed,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-                .toList(),
+        if (value != null && value.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => onChanged(null),
+              icon: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: AppColors.secondaryText,
+              ),
+              label: Text(
+                'Clear',
+                style: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
-        ],
       ],
     );
   }
