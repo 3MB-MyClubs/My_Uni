@@ -3,8 +3,10 @@ import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../widgets/club_avatar.dart';
@@ -66,6 +68,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _loadClubContent();
     _loadPeople();
   }
 
@@ -80,6 +83,15 @@ class _ExploreScreenState extends State<ExploreScreen>
   // ─── Category inference ──────────────────────────────────────────────────
   // The Club model has no category field, so we infer one from the name so the
   // filter chips do real work across every club.
+  Future<void> _loadClubContent() async {
+    try {
+      await lazyContentLoader.ensureContentLoaded();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep local seed clubs visible if Supabase content is unreachable.
+    }
+  }
+
   static String categoryFor(Club club) {
     final n = club.name.toLowerCase();
     bool has(List<String> keys) => keys.any(n.contains);
@@ -493,7 +505,12 @@ class _ExploreScreenState extends State<ExploreScreen>
           child: filtered.isEmpty
               ? _emptyState('No clubs match', 'Try a different search term')
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    MediaQuery.of(context).padding.bottom + 112,
+                  ),
                   itemCount: filtered.length + 1,
                   itemBuilder: (context, i) {
                     if (i == 0) return _sectionLabel(label);
@@ -504,10 +521,10 @@ class _ExploreScreenState extends State<ExploreScreen>
                       members: clubMemberCount(club.id),
                       color: _hueFor(clubs.indexOf(club)),
                       joined: userState.isFollowing(club.id),
-                      onJoin: () {
-                        userState.toggleFollow(club.id);
+                      onJoin: () => handleFollowTap(context, club.id, () {
                         _persist();
-                      },
+                        setState(() {});
+                      }),
                       onOpen: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -646,7 +663,12 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              MediaQuery.of(context).padding.bottom + 112,
+            ),
             physics: const AlwaysScrollableScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             itemCount: people.isEmpty ? 2 : people.length + 1,

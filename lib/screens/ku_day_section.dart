@@ -10,6 +10,7 @@ import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
+import '../services/club_follow_helper.dart';
 import '../services/personalization_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/user_state.dart';
@@ -847,12 +848,13 @@ class _ClubActionsState extends State<_ClubActions> {
     _following = userState.followedClubIds.contains(widget.club.id);
   }
 
-  void _toggleFollow() {
-    userState.toggleFollow(widget.club.id);
-    final uid = widget.userId;
-    if (uid.isNotEmpty) userPrefsService.save(uid);
-    setState(() => _following = !_following);
-    widget.onChanged();
+  Future<void> _toggleFollow() async {
+    await handleFollowTap(context, widget.club.id, () {
+      final uid = widget.userId;
+      if (uid.isNotEmpty) userPrefsService.save(uid);
+      setState(() => _following = userState.isFollowing(widget.club.id));
+      widget.onChanged();
+    });
   }
 
   @override

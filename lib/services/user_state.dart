@@ -324,6 +324,13 @@ class UserState extends ChangeNotifier {
 
   bool isLiked(String postId) => likedPostIds.contains(postId);
 
+  void replaceLikedPosts(Iterable<String> postIds) {
+    likedPostIds
+      ..clear()
+      ..addAll(postIds);
+    notifyListeners();
+  }
+
   void toggleLike(String postId) {
     if (likedPostIds.contains(postId)) {
       likedPostIds.remove(postId);
@@ -337,6 +344,13 @@ class UserState extends ChangeNotifier {
 
   String? get activeClubId =>
       followedClubIds.isEmpty ? null : followedClubIds.first;
+
+  void replaceFollowedClubs(Iterable<String> clubIds) {
+    followedClubIds
+      ..clear()
+      ..addAll(clubIds);
+    notifyListeners();
+  }
 
   void joinClub(String clubId, {bool exclusive = false}) {
     if (exclusive) followedClubIds.clear();

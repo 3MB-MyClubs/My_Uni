@@ -4,8 +4,8 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/post_like_helper.dart';
 import '../services/user_state.dart';
-import '../models/like.dart';
 import '../models/comment.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
@@ -126,23 +126,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   void _toggleLike() {
-    final userId = authService.currentUser?.id ?? 'guest';
-    if (userState.isLiked(widget.post.id)) {
-      userState.toggleLike(widget.post.id);
-      likes.removeWhere(
-        (l) => l.postId == widget.post.id && l.userId == userId,
-      );
-    } else {
-      userState.toggleLike(widget.post.id);
-      likes.add(
-        Like(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          postId: widget.post.id,
-          userId: userId,
-        ),
-      );
-    }
-    contentStore.saveLikes();
+    togglePostLike(widget.post.id);
     setState(() {});
   }
 
