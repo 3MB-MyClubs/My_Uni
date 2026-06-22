@@ -10,14 +10,12 @@ import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
-import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/club_avatar.dart';
 import 'edit_profile_screen.dart';
-import 'saved_posts_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -566,61 +564,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () => _openPreferencesSheet(times),
                     ),
                   ],
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Saved content section ───────────────────────────────────────
-          _SectionHeader(title: 'Your Content'),
-          ListenableBuilder(
-            listenable: userState,
-            builder: (context, _) {
-              final savedCount = newsPosts
-                  .where((post) => userState.isSaved(post.id))
-                  .length;
-              return Container(
-                color: AppColors.card,
-                child: ListTile(
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.lightRed,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.bookmark_rounded,
-                      color: AppColors.primaryRed,
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    'Saved Posts',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  subtitle: Text(
-                    savedCount == 0
-                        ? 'Posts you save will appear here'
-                        : '$savedCount saved post${savedCount == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.secondaryText,
-                  ),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
-                  ),
                 ),
               );
             },
