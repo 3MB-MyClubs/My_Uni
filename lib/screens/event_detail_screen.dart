@@ -26,7 +26,11 @@ class EventDetailScreen extends StatefulWidget {
   final Event event;
   final Color color;
 
-  const EventDetailScreen({super.key, required this.event, required this.color});
+  const EventDetailScreen({
+    super.key,
+    required this.event,
+    required this.color,
+  });
 
   @override
   State<EventDetailScreen> createState() => _EventDetailScreenState();
@@ -35,12 +39,13 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _saved = false;
 
-  String get _loggedInId =>
-      authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
+  String get _currentAdminId => authService.currentAdmin?.id ?? '';
 
-  bool get _isOwner =>
-      widget.event.createdByUserId != null &&
-      widget.event.createdByUserId == _loggedInId;
+  String get _currentSessionId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  bool get _canDeleteEvent =>
+      contentStore.canDeleteEvent(widget.event.id, _currentAdminId);
 
   bool get _isLive {
     final now = DateTime.now();
@@ -77,20 +82,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           content: Text(_saved ? 'Saved to your events' : 'Removed from saved'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: _saved ? _accent : null,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
   }
 
   void _shareEvent() {
-    Clipboard.setData(ClipboardData(text: 'kuclubs://event/${widget.event.id}'));
+    Clipboard.setData(
+      ClipboardData(text: 'kuclubs://event/${widget.event.id}'),
+    );
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: const Text('Event link copied to clipboard'),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
   }
@@ -132,7 +143,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ),
     ).then((confirmed) {
       if (confirmed != true || !mounted) return;
-      final ok = contentStore.deleteEvent(widget.event.id, _loggedInId);
+      final ok = contentStore.deleteEvent(widget.event.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context);
@@ -195,7 +206,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     isLive: _isLive,
                     isPast: _isPast,
                     saved: _saved,
-                    isOwner: _isOwner,
+                    canDelete: _canDeleteEvent,
                     onBack: () => Navigator.pop(context),
                     onToggleSaved: _toggleSaved,
                     onShare: _shareEvent,
@@ -218,7 +229,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               event.attendeeUserIds.length +
                               (rsvpStore.isAttending(event.id) &&
                                       !event.attendeeUserIds.contains(
-                                        _loggedInId,
+                                        _currentSessionId,
                                       )
                                   ? 1
                                   : 0),
@@ -345,7 +356,7 @@ class _Hero extends StatelessWidget {
   final bool isLive;
   final bool isPast;
   final bool saved;
-  final bool isOwner;
+  final bool canDelete;
   final VoidCallback onBack;
   final VoidCallback onToggleSaved;
   final VoidCallback onShare;
@@ -357,7 +368,7 @@ class _Hero extends StatelessWidget {
     required this.isLive,
     required this.isPast,
     required this.saved,
-    required this.isOwner,
+    required this.canDelete,
     required this.onBack,
     required this.onToggleSaved,
     required this.onShare,
@@ -415,10 +426,13 @@ class _Hero extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _GlassButton(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack),
+                _GlassButton(
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onTap: onBack,
+                ),
                 Row(
                   children: [
-                    if (isOwner) ...[
+                    if (canDelete) ...[
                       _GlassButton(
                         icon: Icons.delete_outline_rounded,
                         onTap: onDelete,
@@ -593,11 +607,7 @@ class _GradientHero extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
-            top: -40,
-            right: -40,
-            child: _circle(180, 0.07),
-          ),
+          Positioned(top: -40, right: -40, child: _circle(180, 0.07)),
           Positioned(bottom: 30, left: -30, child: _circle(120, 0.05)),
           Positioned(top: 80, left: 90, child: _circle(60, 0.04)),
         ],
@@ -1494,7 +1504,9 @@ class _StickyCtaState extends State<_StickyCta> {
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: _remind ? widget.accent : null,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
   }

@@ -36,33 +36,52 @@ class ClubAvatar extends StatelessWidget {
       listenable: userState,
       builder: (context, _) {
         final photoPath = userState.clubPhotoPaths[clubId];
-        final file = photoPath != null ? File(photoPath) : null;
+        final fallbackUrl = userState.mockClubPhotoUrls[clubId];
         final isCircle = shape == 'circle';
 
+        if (photoPath != null && _isNetworkImage(photoPath)) {
+          return _photo(context, NetworkImage(photoPath), isCircle);
+        }
+
+        final file = photoPath != null ? File(photoPath) : null;
         if (file != null && file.existsSync()) {
-          final imageProvider = FileImage(file);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => showProfilePhotoViewer(
-              context: context,
-              imageProvider: imageProvider,
-            ),
-            child: ClipRRect(
-              borderRadius: isCircle
-                  ? BorderRadius.circular(size / 2)
-                  : BorderRadius.circular(borderRadius),
-              child: Image(
-                image: imageProvider,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, e, st) => _initial(isCircle),
-              ),
-            ),
-          );
+          return _photo(context, FileImage(file), isCircle);
+        }
+
+        if (fallbackUrl != null) {
+          return _photo(context, NetworkImage(fallbackUrl), isCircle);
         }
         return _initial(isCircle);
       },
+    );
+  }
+
+  bool _isNetworkImage(String path) =>
+      path.startsWith('http://') || path.startsWith('https://');
+
+  Widget _photo(
+    BuildContext context,
+    ImageProvider imageProvider,
+    bool isCircle,
+  ) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => showProfilePhotoViewer(
+        context: context,
+        imageProvider: imageProvider,
+      ),
+      child: ClipRRect(
+        borderRadius: isCircle
+            ? BorderRadius.circular(size / 2)
+            : BorderRadius.circular(borderRadius),
+        child: Image(
+          image: imageProvider,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, e, st) => _initial(isCircle),
+        ),
+      ),
     );
   }
 

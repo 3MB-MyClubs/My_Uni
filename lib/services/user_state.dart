@@ -57,6 +57,14 @@ class UserState extends ChangeNotifier {
   // Club profile photo paths keyed by club id.
   final Map<String, String> clubPhotoPaths = {};
 
+  // Mock network photo URLs for demo clubs. Real uploaded club photos in
+  // [clubPhotoPaths] take priority; these make untouched club profiles feel
+  // more alive than initials-only avatars.
+  final Map<String, String> mockClubPhotoUrls = {
+    for (var i = 1; i <= 42; i++)
+      'c$i': 'https://picsum.photos/seed/unihub-club-c$i/300/300',
+  };
+
   /// Notifies listeners after a club's editable info (e.g. description) changed
   /// in place, so every screen showing the club rebuilds.
   void bumpClubInfo() => notifyListeners();

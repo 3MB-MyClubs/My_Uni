@@ -29,10 +29,10 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
 
-  String get _loggedInId =>
-      authService.currentAdmin?.id ?? authService.currentUser?.id ?? '';
+  String get _currentAdminId => authService.currentAdmin?.id ?? '';
 
-  bool get _isOwner => widget.post.authorId == _loggedInId;
+  bool get _canDeletePost =>
+      contentStore.canDeletePost(widget.post.id, _currentAdminId);
 
   List<MentionOption> get _mentionOptions => [
     ...clubs.map(
@@ -91,7 +91,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       ),
     ).then((confirmed) {
       if (confirmed != true || !mounted) return;
-      final ok = contentStore.deletePost(widget.post.id, _loggedInId);
+      final ok = contentStore.deletePost(widget.post.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context);
@@ -173,7 +173,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          if (_isOwner)
+          if (_canDeletePost)
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red),
               onPressed: _confirmDelete,

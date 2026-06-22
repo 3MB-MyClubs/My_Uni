@@ -289,109 +289,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         permission == CalendarPermissionState.restricted) {
       return;
     }
-    if (await service.hasShownInitialPermissionPrompt()) return;
-
-    await service.markInitialPermissionPromptShown();
-    if (!mounted) return;
-    final shouldRequest = await _showCalendarExplanationDialog();
-    if (!mounted) return;
-    if (shouldRequest) await service.requestPermission();
-  }
-
-  Future<bool> _showCalendarExplanationDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            backgroundColor: AppColors.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryRed.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.calendar_month_rounded,
-                    size: 32,
-                    color: AppColors.primaryRed,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Connect Your Calendar',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.text,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'My Clubs can add events you RSVP to directly into your phone\'s Calendar app, so you never miss anything.\n\nYour calendar data is only used to add events you choose.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.secondaryText,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-            actions: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.secondaryText,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: AppColors.divider),
-                        ),
-                      ),
-                      child: const Text(
-                        'Not Now',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: TextButton.styleFrom(
-                        backgroundColor: AppColors.primaryRed,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Continue',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    await service.requestPermission();
   }
 
   @override
@@ -458,79 +356,18 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   }
 
   void _openCreateChooser(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    showClubCreateSheet(
+      context,
+      onPost: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => CreatePostScreen(onPosted: () => setState(() {})),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Create',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _CreateOption(
-                    icon: Icons.edit_square,
-                    label: 'Post',
-                    subtitle: 'Share a photo or update',
-                    color: AppColors.primaryRed,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          fullscreenDialog: true,
-                          builder: (_) =>
-                              CreatePostScreen(onPosted: () => setState(() {})),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CreateOption(
-                    icon: Icons.event_rounded,
-                    label: 'Event',
-                    subtitle: 'Schedule a club event',
-                    color: const Color(0xFF1565C0),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          fullscreenDialog: true,
-                          builder: (_) => CreateEventScreen(
-                            onCreated: () => setState(() {}),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
+      ),
+      onEvent: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => CreateEventScreen(onCreated: () => setState(() {})),
         ),
       ),
     );
@@ -950,7 +787,88 @@ class _InAppMessageBannerState extends State<_InAppMessageBanner>
   }
 }
 
-class _CreateOption extends StatelessWidget {
+/// Bottom-sheet chooser shown when a club admin taps the central +.
+/// Pops itself before invoking [onPost] / [onEvent].
+void showClubCreateSheet(
+  BuildContext context, {
+  required VoidCallback onPost,
+  required VoidCallback onEvent,
+}) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Create',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Share something with your club',
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: _CreateOption(
+                    icon: Icons.edit_square,
+                    label: 'Post',
+                    subtitle: 'Update your community',
+                    color: AppColors.primaryRed,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      onPost();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CreateOption(
+                    icon: Icons.event_rounded,
+                    label: 'Event',
+                    subtitle: 'Create something inspiring',
+                    color: const Color(0xFF1565C0),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      onEvent();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _CreateOption extends StatefulWidget {
   final IconData icon;
   final String label;
   final String subtitle;
@@ -966,43 +884,82 @@ class _CreateOption extends StatelessWidget {
   });
 
   @override
+  State<_CreateOption> createState() => _CreateOptionState();
+}
+
+class _CreateOptionState extends State<_CreateOption> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final color = widget.color;
+    final deep = Color.lerp(color, Colors.black, 0.22)!;
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withValues(alpha: 0.12),
+                color.withValues(alpha: 0.04),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [color, deep],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Icon(widget.icon, color: Colors.white, size: 26),
               ),
-              child: Icon(icon, color: color, size: 26),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: color,
+              const SizedBox(height: 12),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: color,
+                ),
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
-            ),
-          ],
+              const SizedBox(height: 3),
+              Text(
+                widget.subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

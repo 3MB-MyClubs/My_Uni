@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
-import '../services/post_like_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
@@ -577,11 +575,18 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               club: widget.club,
               clubColor: widget.color,
               isAdmin: _isThisClubAdmin,
+              onChanged: () {
+                if (mounted) setState(() {});
+              },
             ),
             _EventsTab(
               events: _clubEvents,
               monthAbbr: _monthAbbr,
               clubColor: widget.color,
+              isAdmin: _isThisClubAdmin,
+              onChanged: () {
+                if (mounted) setState(() {});
+              },
             ),
             _CollaborationsTab(
               taggedPosts: _taggedPosts,
@@ -613,12 +618,14 @@ class _PostsTab extends StatelessWidget {
   final Club club;
   final Color clubColor;
   final bool isAdmin;
+  final VoidCallback onChanged;
 
   const _PostsTab({
     required this.posts,
     required this.club,
     required this.clubColor,
     required this.isAdmin,
+    required this.onChanged,
   });
 
   @override
@@ -691,11 +698,12 @@ class _PostsTab extends StatelessWidget {
           children.add(const _FeedLabel('NEW THIS WEEK'));
           children.addAll(
             newThisWeek.map(
-              (p) => _ClubFeedCard(
+              (p) => _ClubPostCompact(
                 post: p,
                 club: club,
                 clubColor: clubColor,
                 isAdmin: isAdmin,
+                onChanged: onChanged,
               ),
             ),
           );
@@ -704,11 +712,12 @@ class _PostsTab extends StatelessWidget {
           children.add(const _FeedLabel('EARLIER'));
           children.addAll(
             earlier.map(
-              (p) => _ClubFeedCard(
+              (p) => _ClubPostCompact(
                 post: p,
                 club: club,
                 clubColor: clubColor,
                 isAdmin: isAdmin,
+                onChanged: onChanged,
               ),
             ),
           );
@@ -750,41 +759,26 @@ class _FeedLabel extends StatelessWidget {
   }
 }
 
-// ─── Club feed post card ──────────────────────────────────────────────────────
+// ─── Club post card (compact) ─────────────────────────────────────────────────
 
-/// A single post rendered like the home feed: header (avatar, name, @handle ·
-/// time, optional PINNED), body, optional photo, and a like / comment / share
-/// row. Likes toggle inline; tapping the body or comment opens the full post.
-/// Club admins can long-press to pin / unpin a post to the top of the feed.
-class _ClubFeedCard extends StatefulWidget {
+/// Compact post row for the club profile — smaller than the home feed. Shows a
+/// thumbnail (or accent tile), time, a short snippet and like / comment counts;
+/// tapping opens the full post. The club's own admin gets a ⋯ menu to pin or
+/// delete the post.
+class _ClubPostCompact extends StatelessWidget {
   final dynamic post;
   final Club club;
   final Color clubColor;
   final bool isAdmin;
+  final VoidCallback onChanged;
 
-  const _ClubFeedCard({
+  const _ClubPostCompact({
     required this.post,
     required this.club,
     required this.clubColor,
     required this.isAdmin,
+    required this.onChanged,
   });
-
-  @override
-  State<_ClubFeedCard> createState() => _ClubFeedCardState();
-}
-
-class _ClubFeedCardState extends State<_ClubFeedCard> {
-  String _handleFor(String name) {
-    final words = name.split(RegExp(r'[\s\-]+'));
-    final initials = words
-        .where((w) => w.isNotEmpty && RegExp(r'[A-Za-z]').hasMatch(w[0]))
-        .map((w) => w[0])
-        .join()
-        .toLowerCase();
-    return initials.isEmpty
-        ? name.toLowerCase().replaceAll(RegExp(r'\s+'), '')
-        : initials;
-  }
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
@@ -797,94 +791,77 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
     return '${(diff.inDays / 7).floor()}w ago';
   }
 
-  void _openDetail() => Navigator.push(
+  void _openDetail(BuildContext context) => Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) =>
-          PostDetailScreen(post: widget.post, clubColor: widget.clubColor),
+      builder: (_) => PostDetailScreen(post: post, clubColor: clubColor),
     ),
   );
 
-  // Admin-only: long-press a post to pin / unpin it to the top of the feed.
-  void _showPinOptions() {
-    if (!widget.isAdmin) return;
-    final postId = widget.post.id as String;
-    final pinned = userState.isPostPinned(postId);
-    HapticFeedback.mediumImpact();
-    showModalBottomSheet(
+  void _togglePin() {
+    userState.togglePinnedPost(post.id as String);
+    userPrefsService.savePinnedPosts();
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await showDialog<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete post?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        content: Text(
+          'This post will be permanently removed from your club.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Icon(
-                Icons.push_pin_rounded,
-                color: AppColors.primaryRed,
-              ),
-              title: Text(
-                pinned ? 'Unpin from top' : 'Pin to top',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              subtitle: Text(
-                pinned
-                    ? 'Remove this post from the top of the feed.'
-                    : 'Keep this post at the top of the feed.',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-              ),
-              onTap: () {
-                userState.togglePinnedPost(postId);
-                userPrefsService.savePinnedPosts();
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
+    if (ok != true) return;
+    final uid = authService.currentAdmin?.id ?? '';
+    contentStore.deletePost(post.id as String, uid);
+    onChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
     final postId = post.id as String;
-    final content = post.content as String;
+    final content = (post.content as String).trim();
     final hasImage =
         post.imagePath != null && (post.imagePath as String).isNotEmpty;
-    final handle = _handleFor(widget.club.name);
 
     return ListenableBuilder(
       listenable: userState,
       builder: (context, _) {
-        final liked = userState.isLiked(postId);
         final pinned = userState.isPostPinned(postId);
         final likeCount = postLikeCount(postId);
         final commentCount = comments.where((c) => c.postId == postId).length;
-        final shareCount = postShareCount(postId);
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onLongPress: widget.isAdmin ? _showPinOptions : null,
+          onTap: () => _openDetail(context),
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.card,
@@ -895,224 +872,168 @@ class _ClubFeedCardState extends State<_ClubFeedCard> {
                 ),
               ),
             ),
-            padding: const EdgeInsets.fromLTRB(16, 15, 16, 13),
-            child: Column(
+            padding: EdgeInsets.fromLTRB(16, 12, isAdmin ? 4 : 16, 12),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
-                Row(
-                  children: [
-                    ClubAvatar(
-                      clubId: widget.club.id,
-                      clubName: widget.club.name,
-                      color: widget.clubColor,
-                      size: 42,
-                      fontSize: 18,
-                      borderRadius: 13,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // Thumbnail / accent tile
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: hasImage
+                        ? buildPostBanner(
+                            imagePath: post.imagePath as String?,
+                            fallbackColor: clubColor,
+                            fallbackLetter: club.name.isNotEmpty
+                                ? club.name[0]
+                                : '?',
+                            height: 52,
+                          )
+                        : ClubAvatar(
+                            clubId: club.id,
+                            clubName: club.name,
+                            color: clubColor,
+                            size: 52,
+                            fontSize: 22,
+                            borderRadius: 11,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  widget.club.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.text,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Icon(
-                                Icons.verified_rounded,
-                                size: 13,
-                                color: AppColors.primaryRed,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 1),
-                          Row(
-                            children: [
-                              Text(
-                                '@$handle',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                              Text(
-                                '  •  ',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                              Flexible(
-                                child: Text(
-                                  _timeAgo(post.createdAt as DateTime),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.secondaryText,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (pinned) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightRed,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
+                          if (pinned) ...[
                             Icon(
                               Icons.push_pin_rounded,
-                              size: 11,
+                              size: 12,
                               color: AppColors.primaryRed,
                             ),
                             const SizedBox(width: 4),
+                          ],
+                          Text(
+                            _timeAgo(post.createdAt as DateTime),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: pinned
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              color: pinned
+                                  ? AppColors.primaryRed
+                                  : AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (content.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          content,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: AppColors.text.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.favorite_border_rounded,
+                            size: 14,
+                            color: AppColors.secondaryText,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$likeCount',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 14,
+                            color: AppColors.secondaryText,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$commentCount',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (isAdmin)
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      color: AppColors.secondaryText,
+                      size: 20,
+                    ),
+                    color: AppColors.card,
+                    onSelected: (v) {
+                      if (v == 'pin') _togglePin();
+                      if (v == 'delete') _confirmDelete(context);
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'pin',
+                        child: Row(
+                          children: [
+                            Icon(
+                              pinned
+                                  ? Icons.push_pin_outlined
+                                  : Icons.push_pin_rounded,
+                              size: 19,
+                              color: AppColors.text,
+                            ),
+                            const SizedBox(width: 12),
                             Text(
-                              'PINNED',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
-                                color: AppColors.primaryRed,
-                              ),
+                              pinned ? 'Unpin from top' : 'Pin to top',
+                              style: TextStyle(color: AppColors.text),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              size: 19,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Delete post',
+                              style: TextStyle(color: Colors.red),
                             ),
                           ],
                         ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 11),
-
-                // Body
-                if (content.trim().isNotEmpty)
-                  GestureDetector(
-                    onTap: _openDetail,
-                    child: Text(
-                      content,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        height: 1.6,
-                        color: AppColors.text.withValues(alpha: 0.9),
-                      ),
-                    ),
                   ),
-
-                // Photo
-                if (hasImage) ...[
-                  const SizedBox(height: 11),
-                  GestureDetector(
-                    onTap: _openDetail,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: buildPostBanner(
-                        imagePath: post.imagePath as String?,
-                        fallbackColor: widget.clubColor,
-                        fallbackLetter: widget.club.name.isNotEmpty
-                            ? widget.club.name[0]
-                            : '?',
-                        height: 200,
-                      ),
-                    ),
-                  ),
-                ],
-
-                // Engagement
-                const SizedBox(height: 13),
-                Row(
-                  children: [
-                    _ActionPill(
-                      icon: liked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      label: '$likeCount',
-                      color: liked ? _kLiveRed : AppColors.secondaryText,
-                      onTap: () => togglePostLike(postId),
-                    ),
-                    const SizedBox(width: 22),
-                    _ActionPill(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: '$commentCount',
-                      color: AppColors.secondaryText,
-                      onTap: _openDetail,
-                    ),
-                    const SizedBox(width: 22),
-                    _ActionPill(
-                      icon: Icons.ios_share_rounded,
-                      label: '$shareCount',
-                      color: AppColors.secondaryText,
-                      onTap: _openDetail,
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
         );
       },
-    );
-  }
-}
-
-/// Live-red used for an active like (matches the design's heart fill).
-const Color _kLiveRed = Color(0xFFE53935);
-
-class _ActionPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionPill({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1123,11 +1044,15 @@ class _EventsTab extends StatefulWidget {
   final List events;
   final String Function(int) monthAbbr;
   final Color clubColor;
+  final bool isAdmin;
+  final VoidCallback onChanged;
 
   const _EventsTab({
     required this.events,
     required this.monthAbbr,
     required this.clubColor,
+    required this.isAdmin,
+    required this.onChanged,
   });
 
   @override
@@ -1284,6 +1209,8 @@ class _EventsTabState extends State<_EventsTab> {
                     status: _filter,
                     monthAbbr: widget.monthAbbr,
                     clubColor: widget.clubColor,
+                    isAdmin: widget.isAdmin,
+                    onChanged: widget.onChanged,
                   ),
                 ),
         ),
@@ -1301,14 +1228,63 @@ class _EventCardV2 extends StatelessWidget {
   final String Function(int) monthAbbr;
   final Color clubColor;
 
+  final bool isAdmin;
+  final VoidCallback onChanged;
+
   const _EventCardV2({
     required this.event,
     required this.status,
     required this.monthAbbr,
     required this.clubColor,
+    this.isAdmin = false,
+    this.onChanged = _noop,
   });
 
+  static void _noop() {}
+
   static const Color _green = Color(0xFF2E9E5B);
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete event?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          'This event will be permanently removed from your club.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final uid = authService.currentAdmin?.id ?? '';
+    contentStore.deleteEvent(event.id as String, uid);
+    onChanged();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1422,33 +1398,70 @@ class _EventCardV2 extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              // Action
-              Align(
-                alignment: Alignment.center,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isPast ? Colors.transparent : accent,
-                    border: isPast ? Border.all(color: strongBorder) : null,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    isLive
-                        ? 'Join'
-                        : isPast
-                        ? 'Recap'
-                        : 'RSVP',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isPast ? AppColors.text : Colors.white,
+              const SizedBox(width: 8),
+              // Action (+ admin delete menu on the club's own profile)
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isAdmin) ...[
+                    PopupMenuButton<String>(
+                      icon: Icon(
+                        Icons.more_horiz_rounded,
+                        color: AppColors.secondaryText,
+                        size: 20,
+                      ),
+                      color: AppColors.card,
+                      padding: EdgeInsets.zero,
+                      onSelected: (v) {
+                        if (v == 'delete') _confirmDelete(context);
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                size: 19,
+                                color: Colors.red,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Delete event',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isPast ? Colors.transparent : accent,
+                      border: isPast ? Border.all(color: strongBorder) : null,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Text(
+                      isLive
+                          ? 'Join'
+                          : isPast
+                          ? 'Recap'
+                          : 'RSVP',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isPast ? AppColors.text : Colors.white,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -1737,6 +1750,8 @@ class _CollaborationsTab extends StatelessWidget {
                 .where((c) => c.postId == post.id)
                 .length;
             final likeCount = postLikeCount(post.id as String);
+            final hasImage =
+                post.imagePath != null && (post.imagePath as String).isNotEmpty;
 
             return GestureDetector(
               onTap: () => Navigator.push(
@@ -1827,13 +1842,29 @@ class _CollaborationsTab extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Banner
-                    buildPostBanner(
-                      imagePath: post.imagePath as String?,
-                      fallbackColor: color,
-                      fallbackLetter: authorClub.name[0],
-                      height: 140,
-                    ),
+                    // Banner / club avatar fallback
+                    if (hasImage)
+                      buildPostBanner(
+                        imagePath: post.imagePath as String?,
+                        fallbackColor: color,
+                        fallbackLetter: authorClub.name[0],
+                        height: 140,
+                      )
+                    else
+                      Container(
+                        height: 140,
+                        width: double.infinity,
+                        color: color.withValues(alpha: 0.08),
+                        alignment: Alignment.center,
+                        child: ClubAvatar(
+                          clubId: authorClub.id,
+                          clubName: authorClub.name,
+                          color: color,
+                          size: 72,
+                          fontSize: 30,
+                          borderRadius: 20,
+                        ),
+                      ),
                     // Stats
                     Padding(
                       padding: const EdgeInsets.symmetric(
