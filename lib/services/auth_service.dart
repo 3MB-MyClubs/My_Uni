@@ -239,7 +239,11 @@ class AuthService {
 
   void logout() {
     if (SupabaseConfig.isConfigured) {
-      unawaited(Supabase.instance.client.auth.signOut());
+      try {
+        unawaited(Supabase.instance.client.auth.signOut());
+      } catch (_) {
+        // Tests may exercise logout without bootstrapping Supabase.
+      }
     }
     _currentUser = null;
     _currentAdmin = null;

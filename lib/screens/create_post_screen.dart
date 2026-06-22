@@ -406,13 +406,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                               color: AppColors.text,
                             ),
                           ),
-                          Text(
-                            'Club Admin',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
                         ],
                       ),
                     ),

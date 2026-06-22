@@ -92,6 +92,7 @@ class UserPrefsService {
   void load(String userId) {
     if (!_initialized) return;
     final s = userState;
+    final mockUser = _mockUserFor(userId);
 
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
@@ -133,16 +134,16 @@ class UserPrefsService {
     _restoreSet(
       s.followedUserIds,
       _box.get('followedUserIds_$userId'),
-      fallback: {'u1', 'u4'},
+      fallback: Set<String>.from(mockUser?.followingUserIds ?? const []),
     );
 
-    if (!SupabaseConfig.isConfigured) {
-      _restoreSet(
-        s.followedClubIds,
-        _box.get('followedClubIds_$userId'),
-        fallback: {'c1'},
-      );
-    }
+    _restoreSet(
+      s.followedClubIds,
+      _box.get('followedClubIds_$userId'),
+      fallback: SupabaseConfig.isConfigured
+          ? const {}
+          : Set<String>.from(mockUser?.subscribedClubIds ?? const []),
+    );
 
     if (!SupabaseConfig.isConfigured) {
       _restoreSet(
@@ -173,6 +174,13 @@ class UserPrefsService {
         (k, v) => s.usernames[k as String] = v as String,
       );
     }
+  }
+
+  dynamic _mockUserFor(String userId) {
+    for (final user in users) {
+      if (user.id == userId) return user;
+    }
+    return null;
   }
 
   /// Persists a club's profile photo path globally (not per-user).

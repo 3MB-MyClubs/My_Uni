@@ -195,10 +195,10 @@ class _ExploreScreenState extends State<ExploreScreen>
   /// Search by first name, surname, or display name, with strongest matches first.
   List<User> get _filteredPeople {
     final q = _peopleQuery.toLowerCase().trim();
+    if (q.isEmpty) return [];
 
     final matches = _people.where((person) {
       if (person.id == _myId) return false;
-      if (q.isEmpty) return true;
       final name = userState
           .displayNameFor(person.id, person.name)
           .toLowerCase();
@@ -206,11 +206,6 @@ class _ExploreScreenState extends State<ExploreScreen>
       return name.contains(q) || email.contains(q);
     }).toList();
     matches.sort((a, b) {
-      if (q.isEmpty) {
-        final aFollowing = userState.isFollowingUser(a.id);
-        final bFollowing = userState.isFollowingUser(b.id);
-        if (aFollowing != bFollowing) return aFollowing ? 1 : -1;
-      }
       final byRelevance = _personSearchScore(
         a,
         q,
@@ -243,7 +238,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _people = const [];
+        _people = users.where((user) => user.id != _myId).toList();
         _peopleLoading = false;
         _peopleError = 'Could not load people from profiles.';
       });
