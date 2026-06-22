@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'signup_theme.dart';
 
 class StepPassword extends StatefulWidget {
@@ -21,7 +22,10 @@ class _StepPasswordState extends State<StepPassword> {
   @override
   void initState() {
     super.initState();
-    _passwordController = TextEditingController(text: widget.initialValue);
+    final digitsOnly = widget.initialValue.replaceAll(RegExp(r'[^0-9]'), '');
+    _passwordController = TextEditingController(
+      text: digitsOnly.length > 6 ? digitsOnly.substring(0, 6) : digitsOnly,
+    );
     _confirmController = TextEditingController();
   }
 
@@ -94,6 +98,10 @@ class _StepPasswordState extends State<StepPassword> {
                   obscureText: _obscurePassword,
                   autofocus: true,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
                   maxLength: 6,
                   buildCounter:
                       (
@@ -128,6 +136,10 @@ class _StepPasswordState extends State<StepPassword> {
                   controller: _confirmController,
                   obscureText: _obscureConfirm,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
                   maxLength: 6,
                   buildCounter:
                       (

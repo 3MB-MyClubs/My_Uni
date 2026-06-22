@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/password_reset_service.dart';
 
@@ -43,7 +44,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  bool get _hasMinLength => _passwordController.text.trim().length >= 6;
+  bool get _isExactlySix => _passwordController.text.trim().length == 6;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
 
@@ -143,10 +144,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_isSubmitting) return;
     final password = _passwordController.text.trim();
     final confirm = _confirmPasswordController.text.trim();
-    if (!_hasMinLength) {
+    if (!_isExactlySix) {
       setState(() {
         _message = null;
-        _error = 'Password must be at least 6 numbers.';
+        _error = 'Password must be exactly 6 digits.';
       });
       return;
     }
@@ -289,7 +290,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       case _ResetStep.code:
         return 'Enter the one-time code sent to $_email.';
       case _ResetStep.password:
-        return 'Use a numbers-only password for future sign-ins.';
+        return 'Use a 6-digit numbers-only password for future sign-ins.';
       case _ResetStep.done:
         return 'You can now sign in with your new password.';
     }
@@ -383,10 +384,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               obscureText: _obscurePassword,
               autofocus: true,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
               onChanged: (_) => setState(() => _error = null),
               decoration: _fieldDecoration(
                 label: 'New password',
-                hint: 'Numbers only',
+                hint: '6-digit PIN',
                 icon: Icons.lock_outline,
                 errorText: _error,
                 suffixIcon: _visibilityButton(
@@ -400,11 +405,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               controller: _confirmPasswordController,
               obscureText: _obscureConfirm,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
               onChanged: (_) => setState(() => _error = null),
               onSubmitted: (_) => _updatePassword(),
               decoration: _fieldDecoration(
                 label: 'Confirm password',
-                hint: 'Re-enter numbers only',
+                hint: 'Re-enter 6-digit PIN',
                 icon: Icons.lock_outline,
                 suffixIcon: _visibilityButton(
                   _obscureConfirm,
@@ -413,7 +422,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            _RuleRow(label: 'At least 6 numbers', passed: _hasMinLength),
+            _RuleRow(label: 'Exactly 6 digits', passed: _isExactlySix),
             _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
           ],
         );

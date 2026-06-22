@@ -18,7 +18,7 @@ final users = [
     id: 'u1',
     name: 'Alice Yılmaz',
     email: 'alice@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c1', 'c4', 'c10', 'c13', 'c22', 'c35', 'c38'],
     followingUserIds: ['u2', 'u3', 'u4', 'u6', 'u11'],
@@ -28,7 +28,7 @@ final users = [
     id: 'u2',
     name: 'Can Serbester',
     email: 'can@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c4', 'c7', 'c15', 'c28', 'c36'],
     followingUserIds: ['u1', 'u4', 'u5', 'u9'],
@@ -38,7 +38,7 @@ final users = [
     id: 'u3',
     name: 'Emir Karaarslan',
     email: 'emir@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c5', 'c6', 'c27', 'c29'],
     followingUserIds: ['u1', 'u2', 'u7', 'u9', 'u14'],
@@ -48,7 +48,7 @@ final users = [
     id: 'u4',
     name: 'Deniz Kaya',
     email: 'deniz@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c3', 'c13', 'c15', 'c17', 'c34', 'c40'],
     followingUserIds: ['u1', 'u6', 'u8', 'u10'],
@@ -58,7 +58,7 @@ final users = [
     id: 'u5',
     name: 'Hakan Tuncay',
     email: 'htuncay23@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c4', 'c9', 'c11', 'c22'],
     followingUserIds: ['u1', 'u2', 'u3', 'u4', 'u6', 'u7'],
@@ -68,7 +68,7 @@ final users = [
     id: 'u6',
     name: 'Elif Şahin',
     email: 'esahin@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c1', 'c3', 'c9', 'c10', 'c34', 'c38'],
     followingUserIds: ['u4', 'u10', 'u12', 'u13'],
@@ -78,7 +78,7 @@ final users = [
     id: 'u7',
     name: 'Murat Özdemir',
     email: 'mozdemir@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c2', 'c3', 'c24', 'c25', 'c37'],
     followingUserIds: ['u1', 'u3', 'u9', 'u13', 'u15'],
@@ -88,7 +88,7 @@ final users = [
     id: 'u8',
     name: 'Selin Yıldız',
     email: 'syildiz@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c6', 'c12', 'c20', 'c29', 'c39', 'c41'],
     followingUserIds: ['u1', 'u4', 'u6', 'u12', 'u14'],
@@ -98,7 +98,7 @@ final users = [
     id: 'u9',
     name: 'Ahmet Korkmaz',
     email: 'akorkmaz@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c7', 'c8', 'c18', 'c32'],
     followingUserIds: ['u5', 'u7', 'u15'],
@@ -108,7 +108,7 @@ final users = [
     id: 'u10',
     name: 'Zeynep Aktaş',
     email: 'zaktas@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c3', 'c10', 'c14', 'c17', 'c33', 'c35'],
     followingUserIds: ['u1', 'u6', 'u11', 'u13'],
@@ -118,7 +118,7 @@ final users = [
     id: 'u11',
     name: 'Yunuscan Doğan',
     email: 'ydogan@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c5', 'c11', 'c22', 'c23', 'c36'],
     followingUserIds: ['u1', 'u5', 'u8', 'u9', 'u13', 'u15'],
@@ -128,7 +128,7 @@ final users = [
     id: 'u12',
     name: 'Ayşe Çelik',
     email: 'acelik@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c16', 'c19', 'c20', 'c21', 'c30', 'c38'],
     followingUserIds: ['u6', 'u8', 'u13', 'u14'],
@@ -138,7 +138,7 @@ final users = [
     id: 'u13',
     name: 'Emre Doğan',
     email: 'edogan@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c22', 'c24', 'c26', 'c28'],
     followingUserIds: ['u7', 'u12', 'u14', 'u15'],
@@ -148,7 +148,7 @@ final users = [
     id: 'u14',
     name: 'Leyla Kaplan',
     email: 'lkaplan@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c6', 'c8', 'c27', 'c31', 'c41'],
     followingUserIds: ['u8', 'u9', 'u13', 'u15'],
@@ -158,7 +158,7 @@ final users = [
     id: 'u15',
     name: 'Serkan Yılmaz',
     email: 'syilmaz@ku.edu.tr',
-    password: '11111111',
+    password: '111111',
     role: 'student',
     subscribedClubIds: ['c4', 'c5', 'c7', 'c21', 'c26'],
     followingUserIds: ['u7', 'u9', 'u11', 'u13'],
@@ -4523,7 +4523,7 @@ final newsPosts = [
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
 
-final comments = [
+final legacyComments = [
   Comment(
     id: 'cm1',
     postId: 'n1',
@@ -4873,6 +4873,8 @@ final comments = [
   ),
 ];
 
+final List<Comment> comments = [];
+
 // ─── Likes ────────────────────────────────────────────────────────────────────
 
 final likes = [
@@ -5178,7 +5180,7 @@ final notifications = [
   AppNotification(
     id: 'nt3',
     userId: 'u2',
-    message: 'Ceren Arslan commented: "This is exactly what we need! 🔥"',
+    message: 'Ceren Arslan liked your Hack-KU post',
     createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 15)),
     targetType: 'post',
     targetId: 'n1',
@@ -5194,7 +5196,7 @@ final notifications = [
   AppNotification(
     id: 'nt5',
     userId: 'u2',
-    message: 'Deniz Kaya liked your comment in KUDans',
+    message: 'Deniz Kaya liked your KUDans update',
     createdAt: DateTime.now().subtract(const Duration(hours: 5)),
     targetType: 'club',
     targetId: 'c6',
@@ -5234,7 +5236,7 @@ final notifications = [
   AppNotification(
     id: 'nt10',
     userId: 'u2',
-    message: 'Ceren Arslan commented on Münazara\'s championship post',
+    message: 'Ceren Arslan liked Münazara\'s championship post',
     createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 4)),
     targetType: 'club',
     targetId: 'c27',
@@ -5364,7 +5366,7 @@ final notifications = [
   AppNotification(
     id: 'nt30',
     userId: 'u5',
-    message: 'Elif Şahin commented on your KUACM post',
+    message: 'Elif Şahin liked your KUACM post',
     createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
     targetType: 'post',
     targetId: 'n1',
@@ -5399,7 +5401,7 @@ final notifications = [
   AppNotification(
     id: 'nt35',
     userId: 'u5',
-    message: 'Deniz Kaya mentioned you in a comment',
+    message: 'Deniz Kaya mentioned you in a post',
     createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
     targetType: 'post',
     targetId: 'n25',
@@ -5785,33 +5787,6 @@ final messages = <Message>[
     content: 'Just your jersey 💛💙 Club handles snacks. CMON FENERBAHÇE',
     sentAt: DateTime.now().subtract(const Duration(days: 4, hours: 21)),
   ),
-  // ── Direct message with a club account (u5 ↔ KUFoto / c13) ─────────────────
-  // Joint club discussions live in club_chat_service.dart; this is a private
-  // 1-on-1 DM with the club, shown under "Direct messages with clubs".
-  Message(
-    id: 'msgcdm_1',
-    senderId: 'u5',
-    receiverId: 'c13',
-    content:
-        'Hi! I\'m interested in joining KUFoto. Are you taking new members this semester?',
-    sentAt: DateTime.now().subtract(const Duration(hours: 7)),
-  ),
-  Message(
-    id: 'msgcdm_2',
-    senderId: 'c13',
-    receiverId: 'u5',
-    content:
-        'Hey! Absolutely 📸 We\'d love to have you. Next meeting is Thursday 17:00 at the studio — bring any camera, even your phone!',
-    sentAt: DateTime.now().subtract(const Duration(hours: 6, minutes: 45)),
-  ),
-  Message(
-    id: 'msgcdm_3',
-    senderId: 'c13',
-    receiverId: 'u5',
-    content:
-        'There\'s also a golden-hour campus walk this Saturday if you want a taste 🌅',
-    sentAt: DateTime.now().subtract(const Duration(hours: 6, minutes: 44)),
-  ),
 ];
 
 // ─── App Super Admin ─────────────────────────────────────────────────────────
@@ -6088,13 +6063,8 @@ double postScore(String postId) {
       .map((l) => l.userId)
       .toSet()
       .length;
-  final uniqueCommenters = comments
-      .where((c) => c.postId == postId)
-      .map((c) => c.userId)
-      .toSet()
-      .length;
   final shareCount = shares.where((s) => s.targetId == postId).length;
-  return uniqueLikers + (uniqueCommenters * 1.5) + (shareCount * 2.0);
+  return uniqueLikers + (shareCount * 2.0);
 }
 
 double eventScore(String eventId) {
@@ -6108,9 +6078,18 @@ double eventScore(String eventId) {
 final Map<String, int> supabaseClubMemberCounts = {};
 final Map<String, int> supabasePostLikeCounts = {};
 
+List<User> clubMembers(String clubId) {
+  final memberIds = <String>{
+    for (final subscription in subscriptions)
+      if (subscription.clubId == clubId) subscription.userId,
+    for (final user in users)
+      if (user.subscribedClubIds.contains(clubId)) user.id,
+  };
+  return users.where((user) => memberIds.contains(user.id)).toList();
+}
+
 int clubMemberCount(String clubId) =>
-    supabaseClubMemberCounts[clubId] ??
-    subscriptions.where((s) => s.clubId == clubId).length;
+    supabaseClubMemberCounts[clubId] ?? clubMembers(clubId).length;
 
 int postLikeCount(String postId) =>
     supabasePostLikeCounts[postId] ??

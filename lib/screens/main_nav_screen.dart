@@ -168,20 +168,21 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
           'Going events appear in your personal calendar view.',
         ],
       ),
-      AppTutorialStep(
-        eyebrow: 'Search',
-        title: 'Find people and clubs',
-        description:
-            'Search by a student’s first name, surname, or major, and search clubs by name. Suggested people prioritize useful campus connections.',
-        icon: Icons.manage_search_rounded,
-        targetKey: _contentKey,
-        tabIndex: 2,
-        tips: [
-          'Type a name or surname to find a specific student.',
-          'Open a profile before following to see clubs and interests.',
-          'Follow and unfollow directly from search results.',
-        ],
-      ),
+      if (!_isClubAdmin)
+        AppTutorialStep(
+          eyebrow: 'Search',
+          title: 'Find people and clubs',
+          description:
+              'Search by a student’s first name, surname, or major, and search clubs by name. Suggested people prioritize useful campus connections.',
+          icon: Icons.manage_search_rounded,
+          targetKey: _contentKey,
+          tabIndex: 2,
+          tips: [
+            'Type a name or surname to find a specific student.',
+            'Open a profile before following to see clubs and interests.',
+            'Follow and unfollow directly from search results.',
+          ],
+        ),
       AppTutorialStep(
         eyebrow: 'Alerts',
         title: 'Keep track of activity',
@@ -220,7 +221,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         tabIndex: 0,
         tips: [
           'Home is your personalized starting point.',
-          'Events and Search are for discovery and planning.',
+          _isClubAdmin
+              ? 'Events, Create, Alerts, and Profile are one tap away.'
+              : 'Events and Search are for discovery and planning.',
           'Alerts and Profile keep your activity and identity organized.',
         ],
       ),
@@ -464,14 +467,15 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 selected: _selectedIndex == 1,
                 onTap: () => setState(() => _selectedIndex = 1),
               ),
-              _NavItem(
-                key: _searchNavKey,
-                icon: Icons.search_outlined,
-                activeIcon: Icons.search_rounded,
-                label: 'Search',
-                selected: _selectedIndex == 2,
-                onTap: () => setState(() => _selectedIndex = 2),
-              ),
+              if (!_isClubAdmin)
+                _NavItem(
+                  key: _searchNavKey,
+                  icon: Icons.search_outlined,
+                  activeIcon: Icons.search_rounded,
+                  label: 'Search',
+                  selected: _selectedIndex == 2,
+                  onTap: () => setState(() => _selectedIndex = 2),
+                ),
               if (_isClubAdmin)
                 _CenterAddButton(key: _createNavKey, onTap: _onAddTap),
               _NavItem(

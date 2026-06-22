@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/club.dart';
+import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
@@ -12,7 +13,6 @@ import '../widgets/club_follow_button.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
-import 'chat_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 
@@ -113,6 +113,38 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return widget.club.adminUserIds.contains(admin.id);
   }
 
+  List<User> get _membersForThisClub {
+    final byId = <String, User>{
+      for (final member in clubMembers(widget.club.id)) member.id: member,
+    };
+    final currentUser = authService.currentUser;
+    if (currentUser != null && userState.isFollowing(widget.club.id)) {
+      byId[currentUser.id] = currentUser;
+    }
+    final members = byId.values.toList();
+    members.sort((a, b) {
+      final aBoard = widget.club.boardMemberIds.contains(a.id);
+      final bBoard = widget.club.boardMemberIds.contains(b.id);
+      if (aBoard != bBoard) return aBoard ? -1 : 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return members;
+  }
+
+  void _openMembersSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ClubMembersSheet(
+        club: widget.club,
+        color: widget.color,
+        members: _membersForThisClub,
+        totalCount: clubMemberCount(widget.club.id),
+      ),
+    );
+  }
+
   void _openBoardManagement() {
     showModalBottomSheet(
       context: context,
@@ -168,7 +200,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final memberCount = clubMemberCount(widget.club.id);
     final bg = AppColors.background;
     final borderColor = _clubPageBorder(context);
-    final borderBright = _clubPageStrongBorder(context);
     final subText = AppColors.secondaryText;
     final panelText = AppColors.text;
     final bodyText = _clubPageBodyText(context);
@@ -381,6 +412,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                       value: '$memberCount',
                                       label: 'Members',
                                       dark: true,
+                                      onTap: _openMembersSheet,
                                     ),
                                     Container(
                                       width: 1,
@@ -481,52 +513,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
 
                           const SizedBox(height: 14),
 
-                          // Action buttons (Follow | Message). Hidden on your
-                          // OWN club — you can't follow or message yourself.
+                          // Students can follow clubs, but clubs do not have
+                          // direct messages.
                           if (showFollowAction) ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 48,
-                                    child: ClubFollowButton(
-                                      clubId: widget.club.id,
-                                      size: 'large',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ChatScreen(
-                                          otherUserId: widget.club.id,
-                                          otherUserName: widget.club.name,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Container(
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: borderBright),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          'Message',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: panelText,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            SizedBox(
+                              height: 48,
+                              width: double.infinity,
+                              child: ClubFollowButton(
+                                clubId: widget.club.id,
+                                size: 'large',
+                              ),
                             ),
                             const SizedBox(height: 16),
                           ] else
@@ -762,9 +758,9 @@ class _FeedLabel extends StatelessWidget {
 // ─── Club post card (compact) ─────────────────────────────────────────────────
 
 /// Compact post row for the club profile — smaller than the home feed. Shows a
-/// thumbnail (or accent tile), time, a short snippet and like / comment counts;
-/// tapping opens the full post. The club's own admin gets a ⋯ menu to pin or
-/// delete the post.
+/// thumbnail (or accent tile), time, a short snippet and like count; tapping
+/// opens the full post. The club's own admin gets a ⋯ menu to pin or delete
+/// the post.
 class _ClubPostCompact extends StatelessWidget {
   final dynamic post;
   final Club club;
@@ -857,7 +853,6 @@ class _ClubPostCompact extends StatelessWidget {
       builder: (context, _) {
         final pinned = userState.isPostPinned(postId);
         final likeCount = postLikeCount(postId);
-        final commentCount = comments.where((c) => c.postId == postId).length;
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -954,20 +949,6 @@ class _ClubPostCompact extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text(
                             '$likeCount',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 14,
-                            color: AppColors.secondaryText,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$commentCount',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText,
@@ -1088,11 +1069,7 @@ class _EventsTabState extends State<_EventsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final segments = const [
-      ('past', 'Past'),
-      ('now', 'Now'),
-      ('upcoming', 'Upcoming'),
-    ];
+    final segments = const [('now', 'Now'), ('upcoming', 'Upcoming')];
     final shown = _withStatus(_filter);
     final panelColor = _clubPagePanel(context);
 
@@ -1746,9 +1723,6 @@ class _CollaborationsTab extends StatelessWidget {
               orElse: () => clubs.first,
             );
             final color = _colors[clubs.indexOf(authorClub) % _colors.length];
-            final commentCount = comments
-                .where((c) => c.postId == post.id)
-                .length;
             final likeCount = postLikeCount(post.id as String);
             final hasImage =
                 post.imagePath != null && (post.imagePath as String).isNotEmpty;
@@ -1877,20 +1851,6 @@ class _CollaborationsTab extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text(
                             '$likeCount',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Icon(
-                            Icons.chat_bubble_outline,
-                            size: 14,
-                            color: AppColors.secondaryText,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$commentCount',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText,
@@ -2774,15 +2734,17 @@ class _StatCell extends StatelessWidget {
   final String value;
   final String label;
   final bool dark;
+  final VoidCallback? onTap;
   const _StatCell({
     required this.value,
     required this.label,
     this.dark = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final content = Column(
       children: [
         Text(
           value,
@@ -2803,6 +2765,121 @@ class _StatCell extends StatelessWidget {
           ),
         ),
       ],
+    );
+
+    if (onTap == null) return content;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: content,
+      ),
+    );
+  }
+}
+
+// ─── Members sheet ───────────────────────────────────────────────────────────
+
+class _ClubMembersSheet extends StatelessWidget {
+  final Club club;
+  final Color color;
+  final List<User> members;
+  final int totalCount;
+
+  const _ClubMembersSheet({
+    required this.club,
+    required this.color,
+    required this.members,
+    required this.totalCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          border: Border(top: BorderSide(color: AppColors.divider)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 42,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Expanded(
+              child: members.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Text(
+                          'No members to show yet.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                      itemCount: members.length,
+                      separatorBuilder: (_, _) => Divider(
+                        height: 1,
+                        indent: 62,
+                        color: AppColors.divider.withValues(alpha: 0.8),
+                      ),
+                      itemBuilder: (context, index) {
+                        final member = members[index];
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 6,
+                          ),
+                          leading: UserAvatar(
+                            userId: member.id,
+                            name: member.name,
+                            size: 46,
+                            fontSize: 16,
+                          ),
+                          title: Text(
+                            member.name,
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(user: member),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

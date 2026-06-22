@@ -15,8 +15,12 @@ import 'post_detail_screen.dart';
 
 // Club color palette — same as feed_screen / notifications_screen
 const List<Color> _chatClubColors = [
-  Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-  Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
+  Color(0xFFB41C18),
+  Color(0xFF1565C0),
+  Color(0xFF2E7D32),
+  Color(0xFF6A1B9A),
+  Color(0xFFE65100),
+  Color(0xFF00838F),
 ];
 
 Color _colorForClubId(String clubId) {
@@ -48,24 +52,38 @@ class _ChatScreenState extends State<ChatScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   bool get _isClub => clubs.any((c) => c.id == widget.otherUserId);
+  bool get _isStudentChat =>
+      authService.currentUser != null &&
+      users.any((u) => u.id == _myId) &&
+      users.any((u) => u.id == widget.otherUserId);
 
   @override
   void initState() {
     super.initState();
     messageService.setCurrentUserId(_myId);
-    _loadConversation();
+    if (_isStudentChat) {
+      _loadConversation();
+    } else {
+      _loading = false;
+    }
   }
 
   Future<void> _loadConversation() async {
+    if (!_isStudentChat) {
+      setState(() => _loading = false);
+      return;
+    }
     setState(() => _loading = true);
     // Merge persisted (Hive) messages with the mock seed conversation so the
     // open thread matches the previews shown in the inbox.
     final hive = messageService.getConversation(_myId, widget.otherUserId);
     final hiveIds = hive.map((m) => m.id).toSet();
-    final seed = messages.where((m) =>
-        ((m.senderId == _myId && m.receiverId == widget.otherUserId) ||
-            (m.senderId == widget.otherUserId && m.receiverId == _myId)) &&
-        !hiveIds.contains(m.id));
+    final seed = messages.where(
+      (m) =>
+          ((m.senderId == _myId && m.receiverId == widget.otherUserId) ||
+              (m.senderId == widget.otherUserId && m.receiverId == _myId)) &&
+          !hiveIds.contains(m.id),
+    );
     _conversation = [...hive, ...seed]
       ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
     await messageService.markAsRead(_myId, widget.otherUserId);
@@ -78,8 +96,11 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!_scrollController.hasClients) return;
       final target = _scrollController.position.maxScrollExtent;
       if (animate) {
-        _scrollController.animateTo(target,
-            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       } else {
         _scrollController.jumpTo(target);
       }
@@ -87,6 +108,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _appendOwn(String content) {
+    if (!_isStudentChat) return;
     final msg = Message(
       id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
       senderId: _myId,
@@ -105,6 +127,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _sendMessage() {
+    if (!_isStudentChat) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
@@ -112,6 +135,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _onAttach() async {
+    if (!_isStudentChat) return;
     final choice = await showAttachSheet(context);
     if (choice == 'photo') {
       _appendOwn('kuphoto:campus_photo.jpg');
@@ -133,14 +157,16 @@ class _ChatScreenState extends State<ChatScreen> {
   ];
 
   Future<void> _simulateReply() async {
+    if (!_isStudentChat) return;
     // Show a live typing indicator (inbox + thread) before the reply lands.
     presenceService.startTyping(widget.otherUserId);
     await Future.delayed(const Duration(seconds: 3));
     presenceService.stopTyping(widget.otherUserId);
     if (!mounted) return;
 
-    final reply = _autoReplies[
-        DateTime.now().millisecondsSinceEpoch % _autoReplies.length];
+    final reply =
+        _autoReplies[DateTime.now().millisecondsSinceEpoch %
+            _autoReplies.length];
     final msg = Message(
       id: 'sim_${DateTime.now().millisecondsSinceEpoch}',
       senderId: widget.otherUserId,
@@ -167,6 +193,40 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isStudentChat) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _ChatHeader(
+                otherUserId: widget.otherUserId,
+                otherUserName: widget.otherUserName,
+                isClub: _isClub,
+                onBack: () => Navigator.pop(context),
+              ),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Messaging is only available between students.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -200,9 +260,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildMessageList() {
     if (_conversation.isEmpty) {
       return Center(
-        child: Text('No messages yet.\nSay hello!',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.secondaryText)),
+        child: Text(
+          'No messages yet.\nSay hello!',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
       );
     }
 
@@ -276,12 +338,12 @@ class _Row {
   final Message? message;
   final int originalIndex;
   _Row.divider(this.label)
-      : isDivider = true,
-        message = null,
-        originalIndex = -1;
+    : isDivider = true,
+      message = null,
+      originalIndex = -1;
   _Row.message(this.message, this.originalIndex)
-      : isDivider = false,
-        label = null;
+    : isDivider = false,
+      label = null;
 }
 
 // ─── Conversation header (presence + call) ──────────────────────────────────
@@ -301,7 +363,8 @@ class _ChatHeader extends StatelessWidget {
   Widget _avatar() {
     if (isClub) {
       final idx = clubs.indexWhere((c) => c.id == otherUserId);
-      final color = _chatClubColors[(idx < 0 ? 0 : idx) % _chatClubColors.length];
+      final color =
+          _chatClubColors[(idx < 0 ? 0 : idx) % _chatClubColors.length];
       return ClubAvatar(
         clubId: otherUserId,
         clubName: otherUserName,
@@ -312,7 +375,11 @@ class _ChatHeader extends StatelessWidget {
       );
     }
     return UserAvatar(
-        userId: otherUserId, name: otherUserName, size: 40, fontSize: 16);
+      userId: otherUserId,
+      name: otherUserName,
+      size: 40,
+      fontSize: 16,
+    );
   }
 
   @override
@@ -349,8 +416,11 @@ class _ChatHeader extends StatelessWidget {
             children: [
               IconButton(
                 onPressed: onBack,
-                icon: Icon(Icons.arrow_back_ios_new_rounded,
-                    color: AppColors.primaryRed, size: 22),
+                icon: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.primaryRed,
+                  size: 22,
+                ),
               ),
               Stack(
                 clipBehavior: Clip.none,
@@ -366,7 +436,10 @@ class _ChatHeader extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: kOnlineGreen,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.background, width: 2.5),
+                          border: Border.all(
+                            color: AppColors.background,
+                            width: 2.5,
+                          ),
                         ),
                       ),
                     ),
@@ -377,13 +450,16 @@ class _ChatHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(otherUserName,
-                        style: TextStyle(
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.text,
-                            letterSpacing: -0.2),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      otherUserName,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                        letterSpacing: -0.2,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 1),
                     Row(
                       children: [
@@ -392,17 +468,22 @@ class _ChatHeader extends StatelessWidget {
                             width: 6,
                             height: 6,
                             decoration: BoxDecoration(
-                                color: kOnlineGreen, shape: BoxShape.circle),
+                              color: kOnlineGreen,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                           const SizedBox(width: 5),
                         ],
                         Flexible(
-                          child: Text(presence,
-                              style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: presenceColor,
-                                  fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            presence,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: presenceColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -413,11 +494,13 @@ class _ChatHeader extends StatelessWidget {
                 onTap: () {
                   ScaffoldMessenger.of(context)
                     ..hideCurrentSnackBar()
-                    ..showSnackBar(SnackBar(
-                      content: Text('Calling $otherUserName…'),
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 2),
-                    ));
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text('Calling $otherUserName…'),
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
                 },
                 child: Container(
                   width: 38,
@@ -427,8 +510,11 @@ class _ChatHeader extends StatelessWidget {
                     color: AppColors.surfaceAlt,
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Icon(Icons.call_outlined,
-                      size: 18, color: AppColors.secondaryText),
+                  child: Icon(
+                    Icons.call_outlined,
+                    size: 18,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
               ),
             ],
@@ -477,8 +563,10 @@ class _SharedPostBubble extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.divider),
           ),
-          child: Text('Post no longer available',
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText)),
+          child: Text(
+            'Post no longer available',
+            style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+          ),
         ),
       );
     }
@@ -539,15 +627,21 @@ class _SharedPostBubble extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(clubName,
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: color),
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          clubName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      Icon(Icons.open_in_new_rounded,
-                          size: 14, color: AppColors.secondaryText),
+                      Icon(
+                        Icons.open_in_new_rounded,
+                        size: 14,
+                        color: AppColors.secondaryText,
+                      ),
                     ],
                   ),
                 ),
@@ -555,8 +649,9 @@ class _SharedPostBubble extends StatelessWidget {
                   buildPostBanner(
                     imagePath: post.imagePath,
                     fallbackColor: color,
-                    fallbackLetter:
-                        clubName.isNotEmpty ? clubName[0].toUpperCase() : '?',
+                    fallbackLetter: clubName.isNotEmpty
+                        ? clubName[0].toUpperCase()
+                        : '?',
                     height: 160,
                   )
                 else
@@ -565,44 +660,61 @@ class _SharedPostBubble extends StatelessWidget {
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                          colors: [color, color.withValues(alpha: 0.55)]),
+                        colors: [color, color.withValues(alpha: 0.55)],
+                      ),
                     ),
                     child: Center(
                       child: Text(
                         clubName.isNotEmpty ? clubName[0].toUpperCase() : '?',
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Text(caption,
-                      style: TextStyle(
-                          fontSize: 12.5, color: AppColors.text, height: 1.4),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    caption,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.text,
+                      height: 1.4,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(_timeLabel(sentAt),
-                          style: TextStyle(
-                              fontSize: 10, color: AppColors.secondaryText)),
+                      Text(
+                        _timeLabel(sentAt),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
                       Row(
                         children: [
-                          Text('View post',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: color,
-                                  fontWeight: FontWeight.w700)),
+                          Text(
+                            'View post',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(width: 3),
-                          Icon(Icons.arrow_forward_ios_rounded,
-                              size: 10, color: color),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 10,
+                            color: color,
+                          ),
                         ],
                       ),
                     ],

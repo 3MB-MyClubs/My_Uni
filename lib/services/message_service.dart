@@ -50,8 +50,15 @@ class MessageService {
     }
   }
 
+  bool _isStudentUserId(String userId) => users.any((u) => u.id == userId);
+
   /// Save a single message and show notification if it's from someone else.
   Future<void> saveMessage(Message message) async {
+    if (!_isStudentUserId(message.senderId) ||
+        !_isStudentUserId(message.receiverId)) {
+      return;
+    }
+
     await _messagesBox.put(message.id, message);
 
     // Show notification if message is received (not sent by current user).
@@ -80,6 +87,7 @@ class MessageService {
 
   /// Get conversation between two users
   List<Message> getConversation(String userId1, String userId2) {
+    if (!_isStudentUserId(userId1) || !_isStudentUserId(userId2)) return [];
     final allMessages = _messagesBox.values.toList();
     return allMessages
         .where(
@@ -93,7 +101,11 @@ class MessageService {
 
   /// Get all messages
   List<Message> getAllMessages() {
-    return _messagesBox.values.toList();
+    return _messagesBox.values
+        .where(
+          (m) => _isStudentUserId(m.senderId) && _isStudentUserId(m.receiverId),
+        )
+        .toList();
   }
 
   /// Mark a conversation as read for the given viewer up to now.

@@ -153,6 +153,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void _persist() => userPrefsService.save(_myId);
 
   void _tryOpenChat() {
+    if (authService.currentUser == null) return;
     final otherId = widget.user.id;
     final name = userState.displayNameFor(otherId, widget.user.name);
     Navigator.push(
@@ -516,29 +517,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                     const SizedBox(height: 6),
                     // Message button
-                    SizedBox(
-                      height: 34,
-                      child: OutlinedButton(
-                        onPressed: _tryOpenChat,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.text,
-                          side: BorderSide(color: AppColors.divider, width: 1),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                    if (authService.currentUser != null)
+                      SizedBox(
+                        height: 34,
+                        child: OutlinedButton(
+                          onPressed: _tryOpenChat,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.text,
+                            side: BorderSide(
+                              color: AppColors.divider,
+                              width: 1,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Message',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                          child: const Text(
+                            'Message',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
             ],

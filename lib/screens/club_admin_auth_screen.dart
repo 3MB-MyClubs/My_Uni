@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
@@ -17,13 +18,23 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
   bool _obscurePassword = true;
   String? _error;
 
+  static String _localPart(String email) {
+    final at = email.indexOf('@');
+    return at < 0 ? email : email.substring(0, at);
+  }
+
   void _handleAdminLogin() {
-    final clubEmail = _clubEmailController.text.trim();
+    final localPart = _localPart(_clubEmailController.text.trim());
     final password = _passwordController.text.trim();
-    if (clubEmail.isEmpty || password.isEmpty) {
+    if (localPart.isEmpty || password.isEmpty) {
       setState(() => _error = 'Email and password are required');
       return;
     }
+    if (!authService.isValidClubPassword(password)) {
+      setState(() => _error = 'Password must be numbers only, up to 8 digits');
+      return;
+    }
+    final clubEmail = '${localPart.toLowerCase()}@ku.edu.tr';
     final allAdmins = [appAdmin, ...clubAdmins];
     final matched = allAdmins.any(
       (a) => a.email == clubEmail && a.password == password,
@@ -99,9 +110,11 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               _buildField(
                 controller: _clubEmailController,
                 label: 'Club Email',
-                hint: 'club@ku.edu.tr',
+                hint: 'clubname',
                 icon: Icons.email_outlined,
-                keyboardType: TextInputType.emailAddress,
+                keyboardType: TextInputType.text,
+                suffixText: '@ku.edu.tr',
+                inputFormatters: [_NoDomainFormatter()],
                 errorText: _error,
               ),
               const SizedBox(height: 14),
@@ -111,9 +124,14 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(8),
+                ],
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
                   labelText: 'Password',
+                  hintText: 'Up to 8 digits',
                   prefixIcon: Icon(
                     Icons.lock_outline,
                     color: AppColors.secondaryText,
@@ -130,7 +148,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                         setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   filled: true,
-                  fillColor: AppColors.card,
+                  fillColor: Colors.transparent,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -141,10 +159,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: AppColors.primaryRed,
-                      width: 2,
-                    ),
+                    borderSide: BorderSide(color: AppColors.divider, width: 1),
                   ),
                 ),
               ),
@@ -183,18 +198,22 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
+    String? suffixText,
+    List<TextInputFormatter>? inputFormatters,
     String? errorText,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        suffixText: suffixText,
         prefixIcon: Icon(icon, color: AppColors.secondaryText),
         errorText: errorText,
         filled: true,
-        fillColor: AppColors.card,
+        fillColor: Colors.transparent,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -205,7 +224,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
+          borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -213,9 +232,25 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
+          borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
       ),
+    );
+  }
+}
+
+class _NoDomainFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final at = newValue.text.indexOf('@');
+    if (at < 0) return newValue;
+    final text = newValue.text.substring(0, at);
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

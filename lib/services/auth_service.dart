@@ -21,12 +21,25 @@ class AuthService {
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
 
+  static final RegExp _digitsOnly = RegExp(r'^[0-9]+$');
+
+  bool isValidStudentPassword(String password) {
+    return password.length == 6 && _digitsOnly.hasMatch(password);
+  }
+
+  bool isValidClubPassword(String password) {
+    return password.isNotEmpty &&
+        password.length <= 8 &&
+        _digitsOnly.hasMatch(password);
+  }
+
   bool isValidNumericPassword(String password) {
-    return password.length >= 6 && RegExp(r'^[0-9]+$').hasMatch(password);
+    return isValidStudentPassword(password);
   }
 
   bool login(String email, [String? password]) {
-    if (email == appAdmin.email) {
+    if (email == appAdmin.email &&
+        (password == null || appAdmin.password == password)) {
       _currentAdmin = appAdmin;
       return true;
     }
@@ -63,8 +76,10 @@ class AuthService {
         appAdmin.email.toLowerCase() == normalizedEmail ||
         clubAdmins.any((a) => a.email.toLowerCase() == normalizedEmail);
     if (isMockAdmin) {
-      return login(email, password);
+      return isValidClubPassword(password) && login(email, password);
     }
+
+    if (!isValidStudentPassword(password)) return false;
 
     if (SupabaseConfig.isConfigured) {
       try {
@@ -164,12 +179,10 @@ class AuthService {
   }
 
   bool resetAccountPassword(String email, String newPassword) {
-    if (!isValidNumericPassword(newPassword)) {
-      return false;
-    }
     final normalized = email.toLowerCase();
     final index = users.indexWhere((u) => u.email.toLowerCase() == normalized);
     if (index >= 0) {
+      if (!isValidStudentPassword(newPassword)) return false;
       final user = users[index];
       users[index] = User(
         id: user.id,
@@ -187,6 +200,7 @@ class AuthService {
     }
 
     if (appAdmin.email.toLowerCase() == normalized) {
+      if (!isValidClubPassword(newPassword)) return false;
       appAdmin = AppAdmin(
         id: appAdmin.id,
         name: appAdmin.name,
@@ -203,6 +217,7 @@ class AuthService {
       (a) => a.email.toLowerCase() == normalized,
     );
     if (adminIndex >= 0) {
+      if (!isValidClubPassword(newPassword)) return false;
       final admin = clubAdmins[adminIndex];
       clubAdmins[adminIndex] = AppAdmin(
         id: admin.id,

@@ -34,7 +34,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isSubmitting = false;
-  bool _done = false;
   String? _error;
 
   bool get _canSubmit =>
@@ -65,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (_isSubmitting || _done) return;
+    if (_isSubmitting) return;
     final localPart = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (localPart.isEmpty || password.isEmpty) {
@@ -75,6 +74,10 @@ class _LoginScreenState extends State<LoginScreen> {
     // Users type only the local part (e.g. "htuncay23"); the "@ku.edu.tr"
     // domain is appended automatically. Lower-cased so any casing logs in.
     final email = '${localPart.toLowerCase()}@ku.edu.tr';
+    if (!authService.isValidStudentPassword(password)) {
+      setState(() => _error = 'Student password must be exactly 6 digits.');
+      return;
+    }
     setState(() {
       _error = null;
       _isSubmitting = true;
@@ -82,14 +85,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final success = await authService.loginStudent(email, password);
     if (!mounted) return;
     if (success) {
-      // Brief success affirmation (matches the design's check-pop) before the
-      // parent swaps this screen out for the main app.
-      setState(() {
-        _isSubmitting = false;
-        _done = true;
-      });
-      await Future.delayed(const Duration(milliseconds: 650));
-      if (!mounted) return;
       widget.onLogin();
     } else {
       setState(() {
@@ -245,10 +240,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     _AuthField(
                       label: 'Password',
                       controller: _passwordController,
-                      hint: 'Enter your password',
+                      hint: '6-digit PIN',
                       icon: Icons.lock_outline_rounded,
                       obscureText: _obscurePassword,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(6),
+                      ],
                       onChanged: (_) => setState(() => _error = null),
                       onSubmitted: (_) => _handleLogin(),
                       trailing: GestureDetector(
@@ -319,7 +318,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     _SubmitButton(
                       enabled: _canSubmit,
                       submitting: _isSubmitting,
-                      done: _done,
                       onTap: _handleLogin,
                     ),
                   ],
@@ -568,23 +566,21 @@ class _NoDomainFormatter extends TextInputFormatter {
   }
 }
 
-// ─── Gradient submit button (enabled / disabled / submitting / done) ───────────
+// ─── Gradient submit button (enabled / disabled / submitting) ─────────────────
 class _SubmitButton extends StatelessWidget {
   final bool enabled;
   final bool submitting;
-  final bool done;
   final VoidCallback onTap;
 
   const _SubmitButton({
     required this.enabled,
     required this.submitting,
-    required this.done,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final active = enabled || submitting || done;
+    final active = enabled || submitting;
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
@@ -628,23 +624,8 @@ class _SubmitButton extends StatelessWidget {
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (done) ...[
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.6, end: 1),
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutBack,
-                      builder: (_, scale, child) =>
-                          Transform.scale(scale: scale, child: child),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
                   Text(
-                    done ? 'Welcome back!' : 'Log in',
+                    'Log in',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
