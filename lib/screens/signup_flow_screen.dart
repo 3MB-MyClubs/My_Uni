@@ -28,6 +28,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   String _major = '';
   String _academicYearId = '';
   String _year = '';
+  String? _profileImagePath;
   String _password = '';
   List<String> _interestIds = [];
 
@@ -90,6 +91,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     _major = majorName;
     _academicYearId = academicYearId;
     _year = academicYearName;
+    _profileImagePath = imagePath;
     _goTo(4);
   }
 
@@ -102,6 +104,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
       majorId: _majorId,
       academicYearId: _academicYearId,
       interestIds: _interestIds,
+      imagePath: _profileImagePath,
     );
     if (!result.success) return result.error;
     widget.onSignUp(_email);

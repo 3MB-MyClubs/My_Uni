@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'student_profile_service.dart';
 import 'supabase_config.dart';
 
 class SignupResult {
@@ -74,8 +77,9 @@ class SignupService {
     required String majorId,
     required String academicYearId,
     required List<String> interestIds,
+    String? imagePath,
   }) async {
-    return _invoke('complete-signup', {
+    final result = await _invoke('complete-signup', {
       'email': email,
       'password': password,
       'full_name': fullName,
@@ -83,6 +87,32 @@ class SignupService {
       'academic_year_id': academicYearId,
       'interest_ids': interestIds,
     });
+    if (!result.success || imagePath == null || imagePath.isEmpty) {
+      return result;
+    }
+
+    try {
+      final client = _client;
+      if (client == null) return result;
+      final authResponse = await client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      try {
+        final userId = authResponse.user?.id;
+        if (userId == null || userId.isEmpty) return result;
+        await studentProfileService.uploadAvatar(
+          userId: userId,
+          bytes: await File(imagePath).readAsBytes(),
+        );
+      } finally {
+        await client.auth.signOut();
+      }
+    } catch (_) {
+      // The account is already created. Do not block signup if the optional
+      // avatar upload fails; the user can add it later from Edit Profile.
+    }
+    return result;
   }
 
   Future<SignupResult> _invoke(
