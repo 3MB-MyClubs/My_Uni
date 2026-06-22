@@ -46,36 +46,64 @@ class ClubPasscodeAuthService {
 
     if (SupabaseConfig.isConfigured) {
       try {
-        final rows = await Supabase.instance.client.rpc(
-          'verify_club_passcode',
-          params: {
-            'p_email': normalizedEmail,
-            'p_passcode': normalizedPasscode,
-          },
+        final client = Supabase.instance.client;
+        final response = await client.auth.signInWithPassword(
+          email: normalizedEmail,
+          password: normalizedPasscode,
         );
-        final list = rows is List ? rows : const [];
-        if (list.isEmpty) {
+        final authUser = response.user;
+        if (authUser == null) {
           return ClubPasscodeAuthResult.failure(
             'Invalid club email or passcode',
           );
         }
-        final row = Map<String, dynamic>.from(list.first as Map);
-        final clubId = row['club_id']?.toString() ?? '';
-        final clubName = row['club_name']?.toString() ?? 'Club';
-        final clubEmail = row['club_email']?.toString() ?? normalizedEmail;
+
+        final accountRows = await client
+            .from('club_auth_accounts')
+            .select('club_id')
+            .eq('auth_user_id', authUser.id)
+            .limit(1);
+        final accounts = accountRows as List;
+        if (accounts.isEmpty) {
+          await client.auth.signOut();
+          return ClubPasscodeAuthResult.failure(
+            'This login is not linked to a club',
+          );
+        }
+
+        final account = Map<String, dynamic>.from(accounts.first as Map);
+        final clubId = account['club_id']?.toString() ?? '';
         if (clubId.isEmpty) {
+          await client.auth.signOut();
           return ClubPasscodeAuthResult.failure(
-            'Invalid club email or passcode',
+            'This login is not linked to a club',
           );
         }
+
+        final clubRows = await client
+            .from('clubs')
+            .select('id, name, email')
+            .eq('id', clubId)
+            .limit(1);
+        final linkedClubs = clubRows as List;
+        if (linkedClubs.isEmpty) {
+          await client.auth.signOut();
+          return ClubPasscodeAuthResult.failure('Linked club was not found');
+        }
+
+        final club = Map<String, dynamic>.from(linkedClubs.first as Map);
+        final clubName = club['name']?.toString() ?? 'Club';
+        final clubEmail = club['email']?.toString() ?? normalizedEmail;
         return ClubPasscodeAuthResult.success(
           AppAdmin(id: clubId, name: clubName, email: clubEmail, password: ''),
         );
+      } on AuthException {
+        return ClubPasscodeAuthResult.failure('Invalid club email or passcode');
       } catch (error, stackTrace) {
-        debugPrint('Club passcode login failed: $error');
+        debugPrint('Club Supabase Auth login failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         return ClubPasscodeAuthResult.failure(
-          'Club login is not ready. Check the Supabase passcode SQL.',
+          'Club login is not ready. Check club_auth_accounts in Supabase.',
         );
       }
     }

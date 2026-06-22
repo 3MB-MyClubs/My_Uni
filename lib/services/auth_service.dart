@@ -238,6 +238,9 @@ class AuthService {
   }
 
   void logout() {
+    if (SupabaseConfig.isConfigured) {
+      unawaited(Supabase.instance.client.auth.signOut());
+    }
     _currentUser = null;
     _currentAdmin = null;
   }
