@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
@@ -86,7 +87,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final admin = authService.currentAdmin;
     if (admin == null) return null;
     try {
-      return clubs.firstWhere((c) => c.adminUserIds.contains(admin.id)).id;
+      return clubs.firstWhere((c) => clubIsManagedByAdmin(c, admin.id)).id;
     } catch (_) {
       return null;
     }

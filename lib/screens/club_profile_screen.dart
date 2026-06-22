@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
@@ -110,7 +111,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   bool get _isThisClubAdmin {
     final admin = authService.currentAdmin;
     if (admin == null) return false;
-    return widget.club.adminUserIds.contains(admin.id);
+    return clubIsManagedByAdmin(widget.club, admin.id);
   }
 
   void _openBoardManagement() {
@@ -2399,7 +2400,7 @@ class _BoardTabState extends State<_BoardTab> {
   bool get _isClubAdmin {
     final adminId = authService.currentAdmin?.id ?? '';
     final userId = authService.currentUser?.id ?? '';
-    return widget.club.adminUserIds.contains(adminId) ||
+    return clubIsManagedByAdmin(widget.club, adminId) ||
         widget.club.adminUserIds.contains(userId);
   }
 

@@ -5,6 +5,7 @@ import '../models/like.dart';
 import '../models/news_post.dart';
 import '../models/notification.dart';
 import '../models/share.dart';
+import 'club_admin_access.dart';
 import 'mock_data.dart';
 
 /// Persists all user-generated content (posts, events, comments, likes, shares,
@@ -179,7 +180,7 @@ class ContentStore {
   // Only a club admin can delete posts/events, and only for their own club.
 
   bool _isClubAdmin(String clubId, String userId) =>
-      clubs.any((c) => c.id == clubId && c.adminUserIds.contains(userId));
+      clubs.any((c) => c.id == clubId && clubIsManagedByAdmin(c, userId));
 
   bool canDeleteEvent(String eventId, String requestingUserId) {
     return events.any(

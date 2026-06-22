@@ -4,6 +4,7 @@ import '../services/app_colors.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
@@ -1528,7 +1529,7 @@ bool _isOwnerOfClub(String clubId) {
     (c) => c.id == clubId,
     orElse: () => clubs.first,
   );
-  return (club.adminUserIds as List).contains(admin.id);
+  return clubIsManagedByAdmin(club, admin.id);
 }
 
 // ─── Post Card ────────────────────────────────────────────────────────────────

@@ -21,6 +21,11 @@ class AuthService {
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
 
+  void setClubAdmin(AppAdmin admin) {
+    _currentAdmin = admin;
+    _currentUser = null;
+  }
+
   bool isValidNumericPassword(String password) {
     return password.length >= 6 && RegExp(r'^[0-9]+$').hasMatch(password);
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
+import 'club_admin_access.dart';
 import 'club_follow_service.dart';
 import 'mock_data.dart';
 import 'user_prefs_service.dart';
@@ -20,11 +21,8 @@ Future<void> handleFollowTap(
 
   // A club admin cannot follow their own club.
   if (authService.currentAdmin != null) {
-    final myClub = clubs.firstWhere(
-      (c) => c.adminUserIds.contains(uid),
-      orElse: () => clubs.first,
-    );
-    if (myClub.id == clubId) return;
+    final myClub = managedClubForAdmin(uid);
+    if (myClub?.id == clubId) return;
   }
 
   final wasFollowing = userState.isFollowing(clubId);

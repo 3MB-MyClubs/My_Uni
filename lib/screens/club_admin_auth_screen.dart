@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
-import '../services/mock_data.dart';
 import '../services/auth_service.dart';
+import '../services/club_passcode_auth_service.dart';
 
 class ClubAdminAuthScreen extends StatefulWidget {
   final VoidCallback onAdminLogin;
@@ -17,22 +17,34 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
   bool _obscurePassword = true;
   String? _error;
 
-  void _handleAdminLogin() {
+  bool _isLoading = false;
+
+  Future<void> _handleAdminLogin() async {
     final clubEmail = _clubEmailController.text.trim();
-    final password = _passwordController.text.trim();
-    if (clubEmail.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Email and password are required');
+    final passcode = _passwordController.text.trim();
+    if (clubEmail.isEmpty || passcode.isEmpty) {
+      setState(() => _error = 'Club email and passcode are required');
       return;
     }
-    final allAdmins = [appAdmin, ...clubAdmins];
-    final matched = allAdmins.any(
-      (a) => a.email == clubEmail && a.password == password,
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final result = await clubPasscodeAuthService.login(
+      email: clubEmail,
+      passcode: passcode,
     );
-    if (matched) {
-      authService.login(clubEmail, password);
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result.success && result.admin != null) {
+      authService.setClubAdmin(result.admin!);
       widget.onAdminLogin();
     } else {
-      setState(() => _error = 'Invalid club admin credentials');
+      setState(() => _error = result.error ?? 'Invalid club email or passcode');
     }
   }
 
@@ -87,7 +99,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter your club admin credentials to manage your club.',
+                'Enter the club email and 8 digit passcode to manage your club.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.secondaryText,
@@ -113,7 +125,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 keyboardType: TextInputType.number,
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
-                  labelText: 'Password',
+                  labelText: '8 digit passcode',
                   prefixIcon: Icon(
                     Icons.lock_outline,
                     color: AppColors.secondaryText,
@@ -153,7 +165,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _handleAdminLogin,
+                  onPressed: _isLoading ? null : _handleAdminLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
@@ -164,10 +176,22 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                     elevation: 2,
                     shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
                   ),
-                  child: Text(
-                    'Sign In as Admin',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'Sign In as Admin',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],

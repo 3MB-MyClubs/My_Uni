@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/message.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/club_chat_service.dart';
 import '../services/group_chat_service.dart';
 import '../services/message_service.dart';
@@ -108,7 +109,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final me = _myId;
     final ids = <String>{...?authService.currentUser?.subscribedClubIds};
     for (final c in clubs) {
-      if (c.adminUserIds.contains(me) || c.boardMemberIds.contains(me)) {
+      if (clubIsManagedByAdmin(c, me) || c.boardMemberIds.contains(me)) {
         ids.add(c.id);
       }
     }
@@ -445,7 +446,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 (c) =>
                     c.name.toLowerCase().contains(q) &&
                     !clubDmIds.contains(c.id) &&
-                    !c.adminUserIds.contains(_myId),
+                    !clubIsManagedByAdmin(c, _myId),
               )
               .map((c) => c.id)
               .toList()

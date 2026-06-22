@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/mock_data.dart';
@@ -34,8 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Club? get _managedClub {
     final adminId = authService.currentAdmin?.id;
     if (adminId == null || adminId == 'admin1') return null;
-    final idx = clubs.indexWhere((c) => c.adminUserIds.contains(adminId));
-    return idx >= 0 ? clubs[idx] : null;
+    return managedClubForAdmin(adminId);
   }
 
   // ── Club photo ──────────────────────────────────────────────────────────────

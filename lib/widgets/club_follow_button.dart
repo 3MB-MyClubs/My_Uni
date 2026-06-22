@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/mock_data.dart';
+import '../services/club_admin_access.dart';
 import '../services/user_state.dart';
 import '../services/club_follow_helper.dart';
 
@@ -31,11 +31,8 @@ class ClubFollowButton extends StatelessWidget {
     // Club admins cannot follow their own club — hide button for own club.
     final adminId = authService.currentAdmin?.id ?? '';
     if (adminId.isNotEmpty) {
-      final myClub = clubs.firstWhere(
-        (c) => c.adminUserIds.contains(adminId),
-        orElse: () => clubs.first,
-      );
-      if (myClub.id == clubId) return const SizedBox.shrink();
+      final myClub = managedClubForAdmin(adminId);
+      if (myClub?.id == clubId) return const SizedBox.shrink();
     }
 
     return ListenableBuilder(
@@ -44,19 +41,19 @@ class ClubFollowButton extends StatelessWidget {
         final isFollowing = userState.isFollowing(clubId);
 
         final EdgeInsets padding = switch (size) {
-          'large'  => const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          'small'  => const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-          _        => const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+          'large' => const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          'small' => const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          _ => const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         };
         final double fontSize = switch (size) {
           'large' => 14.0,
           'small' => 12.0,
-          _       => 13.0,
+          _ => 13.0,
         };
         final double borderRadius = switch (size) {
           'large' => 10.0,
           'small' => 20.0,
-          _       => 8.0,
+          _ => 8.0,
         };
 
         Widget button = AnimatedContainer(

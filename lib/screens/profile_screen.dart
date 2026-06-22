@@ -11,6 +11,7 @@ import '../models/user.dart';
 import '../services/personalization_service.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
@@ -943,10 +944,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // all-clubs dashboard below.
     if (admin != null && admin.id != 'admin1') {
       final adminId = admin.id;
-      final managed = clubs.firstWhere(
-        (c) => c.adminUserIds.contains(adminId),
-        orElse: () => clubs.first,
-      );
+      final managed = managedClubForAdmin(adminId) ?? clubs.first;
       return ClubProfileScreen(
         club: managed,
         color: _clubColor(clubs.indexOf(managed)),
@@ -1051,12 +1049,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final following = !isAdmin ? _followingUsers() : const <User>[];
 
     // Stats for club admins: posts, events, board members
-    final Club? managedClub = isAdmin
-        ? clubs.cast<Club?>().firstWhere(
-            (c) => c!.adminUserIds.contains(myId),
-            orElse: () => null,
-          )
-        : null;
+    final Club? managedClub = isAdmin ? managedClubForAdmin(myId) : null;
     final int postCount = managedClub != null
         ? newsPosts.where((p) => p.clubId == managedClub.id).length
         : 0;
@@ -1574,12 +1567,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildMyClubsSection(List myClubs) {
     final adminId = authService.currentAdmin?.id ?? '';
-    final Club? managedClub = adminId.isNotEmpty
-        ? clubs.cast<Club?>().firstWhere(
-            (c) => c!.adminUserIds.contains(adminId),
-            orElse: () => null,
-          )
-        : null;
+    final Club? managedClub = managedClubForAdmin(adminId);
     final boardMembers = managedClub != null
         ? users.where((u) => managedClub.boardMemberIds.contains(u.id)).toList()
         : <dynamic>[];
@@ -1973,10 +1961,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── My Content section (admin only) ──────────────────────────────────────────
 
   Widget _buildMyContentSection(String adminId) {
-    final managedClub = clubs.cast<Club?>().firstWhere(
-      (c) => c!.adminUserIds.contains(adminId),
-      orElse: () => null,
-    );
+    final managedClub = managedClubForAdmin(adminId);
     if (managedClub == null) return const SizedBox.shrink();
 
     final clubIdx = clubs.indexOf(managedClub);

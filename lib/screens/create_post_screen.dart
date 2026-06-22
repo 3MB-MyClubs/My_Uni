@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
@@ -206,7 +207,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     super.initState();
     final adminId = authService.currentAdmin?.id ?? '';
     _myClubs = clubs
-        .where((c) => c.adminUserIds.contains(adminId))
+        .where((c) => clubIsManagedByAdmin(c, adminId))
         .map((c) => _ClubOption(id: c.id, name: c.name))
         .toList();
     if (_myClubs.length == 1) _selectedClub = _myClubs.first;

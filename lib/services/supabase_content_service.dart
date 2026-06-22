@@ -125,11 +125,14 @@ class SupabaseContentService {
   }
 
   Club _clubFromRow(Map<String, dynamic> row) {
+    final id = _string(row, ['id']);
+    final adminIds = _stringList(row['admin_user_ids'] ?? row['adminUserIds']);
+    if (adminIds.isEmpty && id.isNotEmpty) adminIds.add(id);
     return Club(
-      id: _string(row, ['id']),
+      id: id,
       name: _string(row, ['name', 'title'], fallback: 'Club'),
       description: _string(row, ['description', 'bio']),
-      adminUserIds: _stringList(row['admin_user_ids'] ?? row['adminUserIds']),
+      adminUserIds: adminIds,
       boardMemberIds: _stringList(
         row['board_member_ids'] ?? row['boardMemberIds'],
       ),
