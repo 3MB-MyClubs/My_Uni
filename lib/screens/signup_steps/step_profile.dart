@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/signup_service.dart';
 import 'signup_theme.dart';
@@ -155,15 +156,130 @@ class _StepProfileState extends State<StepProfile> {
     _majorFocus.unfocus();
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
+  void _showPhotoOptions() {
+    final hasPhoto = _imagePath != null;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: SC.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: SC.hair,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _photoOption(Icons.camera_alt_outlined, 'Take a photo', () {
+                Navigator.pop(context);
+                _pickPhoto(ImageSource.camera);
+              }),
+              Divider(height: 1, indent: 16, color: SC.hair),
+              _photoOption(
+                Icons.photo_library_outlined,
+                'Choose from library',
+                () {
+                  Navigator.pop(context);
+                  _pickPhoto(ImageSource.gallery);
+                },
+              ),
+              if (hasPhoto) ...[
+                Divider(height: 1, indent: 16, color: SC.hair),
+                _photoOption(Icons.delete_outline_rounded, 'Remove photo', () {
+                  Navigator.pop(context);
+                  setState(() => _imagePath = null);
+                }, danger: true),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
-    if (picked != null) {
-      setState(() => _imagePath = picked.path);
+  }
+
+  Widget _photoOption(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    bool danger = false,
+  }) {
+    final color = danger ? Colors.red.shade400 : SC.burgundy;
+    return ListTile(
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: danger ? color : SC.ink,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    CroppedFile? cropped;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 85);
+      if (picked == null || !mounted) return;
+
+      cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 82,
+        uiSettings: [
+          IOSUiSettings(
+            title: 'Crop Photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: true,
+            aspectRatioPickerButtonHidden: true,
+            cropStyle: CropStyle.circle,
+          ),
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Photo',
+            toolbarColor: SC.burgundy,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            cropStyle: CropStyle.circle,
+          ),
+        ],
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not open photo cropper.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
     }
+    if (cropped == null || !mounted) return;
+    setState(() => _imagePath = cropped!.path);
   }
 
   // ── Initials from name ─────────────────────────────────────────
@@ -301,7 +417,7 @@ class _StepProfileState extends State<StepProfile> {
                 // ── Avatar ─────────────────────────────────────
                 Center(
                   child: GestureDetector(
-                    onTap: _pickImage,
+                    onTap: _showPhotoOptions,
                     child: AnimatedBuilder(
                       animation: _nameController,
                       builder: (_, _) => Stack(
