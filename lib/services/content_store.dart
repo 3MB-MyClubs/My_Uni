@@ -1,5 +1,4 @@
 import 'package:hive/hive.dart';
-import '../models/comment.dart';
 import '../models/event.dart';
 import '../models/like.dart';
 import '../models/news_post.dart';
@@ -8,8 +7,8 @@ import '../models/share.dart';
 import 'club_admin_access.dart';
 import 'mock_data.dart';
 
-/// Persists all user-generated content (posts, events, comments, likes, shares,
-/// and dynamic notifications) to a Hive box.
+/// Persists user-generated content (posts, events, likes, shares, and dynamic
+/// notifications) to a Hive box.
 ///
 /// On first run the lists keep their seed data from mock_data.dart.
 /// Every subsequent run loads the last saved state.
@@ -43,12 +42,12 @@ class ContentStore {
     final storedVersion = _box.get('seedVersion') as int? ?? 0;
     final versionMatch = storedVersion == _seedVersion;
 
+    // Comments are disabled app-wide. Clear older persisted comments so they
+    // cannot reappear from previous simulator sessions.
+    comments.clear();
+    _box.delete('comments');
+
     // Always load user-generated interaction data (safe across versions)
-    _load(
-      'comments',
-      comments,
-      (m) => Comment.fromMap(Map<String, dynamic>.from(m as Map)),
-    );
     _load(
       'likes',
       likes,

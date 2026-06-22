@@ -2,18 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/message.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/club_admin_access.dart';
-import '../services/club_chat_service.dart';
 import '../services/group_chat_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
 import '../services/presence_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_widgets.dart';
-import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
-import 'club_channel_screen.dart';
 import 'group_chat_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -26,12 +22,15 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   final _searchController = TextEditingController();
   String _query = '';
-  String _contactFilter = 'students';
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
-  // All contacts: every user (except self) + every club
+  bool _isStudentUserId(String id) => users.any((u) => u.id == id);
+  bool get _canUseMessages =>
+      authService.currentUser != null && _isStudentUserId(_myId);
+
+  // All contacts: every student user except self.
   List<_Contact> get _allContacts {
     final myId = _myId;
     return [
@@ -41,15 +40,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
             (u) => _Contact(
               id: u.id,
               name: userState.displayNameFor(u.id, u.name),
-              isClub: false,
               isAdmin: u.role == 'admin',
             ),
           ),
-      ...clubs.map((c) => _Contact(id: c.id, name: c.name, isClub: true)),
     ];
   }
 
-  // All messages from both mock seed data and Hive-persisted messages
+  // All student-to-student messages from both mock seed data and Hive.
   List<Message> get _allMessages {
     final hiveMessages = messageService.getAllMessages();
     final hiveIds = hiveMessages.map((m) => m.id).toSet();
@@ -57,11 +54,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
     for (final m in messages) {
       if (!hiveIds.contains(m.id)) merged.add(m);
     }
-    return merged;
+    return merged
+        .where(
+          (m) => _isStudentUserId(m.senderId) && _isStudentUserId(m.receiverId),
+        )
+        .toList();
   }
 
   // Existing conversation partner IDs, sorted by last message time
   List<String> get _conversationPartnerIds {
+    if (!_isStudentUserId(_myId)) return [];
     final all = _allMessages;
     final ids = <String>{};
     for (final m in all) {
@@ -92,47 +94,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   String _nameFor(String otherId) {
     try {
-      return clubs.firstWhere((c) => c.id == otherId).name;
-    } catch (_) {}
-    try {
       final u = users.firstWhere((u) => u.id == otherId);
       return userState.displayNameFor(u.id, u.name);
     } catch (_) {}
     return 'Unknown';
   }
 
-  bool _isClub(String id) => clubs.any((c) => c.id == id);
-
-  // Clubs the current user belongs to (subscriber / admin / board member).
-  // Each of these has a joint discussion channel shown in the Clubs tab.
-  List<String> get _myClubIds {
-    final me = _myId;
-    final ids = <String>{...?authService.currentUser?.subscribedClubIds};
-    for (final c in clubs) {
-      if (clubIsManagedByAdmin(c, me) || c.boardMemberIds.contains(me)) {
-        ids.add(c.id);
-      }
-    }
-    final list = ids.toList();
-    // Most recently active discussions first.
-    list.sort((a, b) {
-      final ta = clubChatService.lastMessageFor(a)?.sentAt ?? DateTime(2000);
-      final tb = clubChatService.lastMessageFor(b)?.sentAt ?? DateTime(2000);
-      return tb.compareTo(ta);
-    });
-    return list;
-  }
-
-  String _firstName(String id) {
-    try {
-      final u = users.firstWhere((u) => u.id == id);
-      return userState.displayNameFor(u.id, u.name).split(' ').first;
-    } catch (_) {
-      return 'Member';
-    }
-  }
-
   void _openChat(String otherId, String otherName) {
+    if (!_isStudentUserId(_myId) || !_isStudentUserId(otherId)) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -195,8 +164,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   // ── Compose / new conversation ────────────────────────────────────────────
   void _openComposeSheet() async {
+    if (!_canUseMessages) return;
     final myId = _myId;
-    final contacts = _allContacts.where((c) => !c.isClub).toList();
+    final contacts = _allContacts;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -233,17 +203,31 @@ class _MessagesScreenState extends State<MessagesScreen> {
         child: Column(
           children: [
             _buildHeader(),
-            _buildSearch(),
-            _buildContactFilters(),
+            if (_canUseMessages) _buildSearch(),
             Expanded(
-              child: ListenableBuilder(
-                listenable: Listenable.merge([
-                  groupChatService,
-                  presenceService,
-                  userState,
-                ]),
-                builder: (context, _) => _buildBody(),
-              ),
+              child: _canUseMessages
+                  ? ListenableBuilder(
+                      listenable: Listenable.merge([
+                        groupChatService,
+                        presenceService,
+                        userState,
+                      ]),
+                      builder: (context, _) => _buildBody(),
+                    )
+                  : Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          'Messaging is only available between students.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -281,25 +265,28 @@ class _MessagesScreenState extends State<MessagesScreen> {
               letterSpacing: -0.3,
             ),
           ),
-          GestureDetector(
-            onTap: _openComposeSheet,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.primaryRed.withValues(alpha: 0.24),
+          if (_canUseMessages)
+            GestureDetector(
+              onTap: _openComposeSheet,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.primaryRed.withValues(alpha: 0.24),
+                  ),
+                ),
+                child: Icon(
+                  Icons.edit_outlined,
+                  size: 19,
+                  color: AppColors.primaryRed,
                 ),
               ),
-              child: Icon(
-                Icons.edit_outlined,
-                size: 19,
-                color: AppColors.primaryRed,
-              ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(width: 40, height: 40),
         ],
       ),
     );
@@ -334,9 +321,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: _contactFilter == 'students'
-                      ? 'Search students…'
-                      : 'Search clubs…',
+                  hintText: 'Search students…',
                   hintStyle: TextStyle(color: AppColors.secondaryText),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -366,111 +351,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  Widget _buildContactFilters() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          children: [
-            _contactFilterButton('students', 'Students'),
-            _contactFilterButton('clubs', 'Clubs'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _contactFilterButton(String value, String label) {
-    final selected = _contactFilter == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _contactFilter = value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.card : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: selected
-                ? Border.all(
-                    color: AppColors.primaryRed.withValues(alpha: 0.28),
-                  )
-                : null,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? AppColors.primaryRed : AppColors.secondaryText,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBody() {
     final q = _query.trim().toLowerCase();
     final searching = q.isNotEmpty;
-    final showStudents = _contactFilter == 'students';
-
     final partnerIds = _conversationPartnerIds;
-    final peopleIds = partnerIds.where((id) => !_isClub(id)).toList();
-    final clubDmIds = partnerIds.where((id) => _isClub(id)).toList();
     final groups = groupChatService.groupsForUser(_myId);
 
     bool matchId(String id) => _nameFor(id).toLowerCase().contains(q);
 
-    // ── Clubs tab ──
-    // Joint discussion channels for clubs I belong to.
-    final clubChannels = showStudents
-        ? <String>[]
-        : (searching ? _myClubIds.where(matchId).toList() : _myClubIds);
-    // 1-on-1 direct messages I've had with clubs.
-    final clubDms = showStudents
-        ? <String>[]
-        : (searching ? clubDmIds.where(matchId).toList() : clubDmIds);
-    // Clubs I can start a NEW direct message with (Clubs tab, search only).
-    // A club admin can't DM their own club (no X-club → X-club messages).
-    final messageableClubs = (searching && !showStudents)
-        ? clubs
-              .where(
-                (c) =>
-                    c.name.toLowerCase().contains(q) &&
-                    !clubDmIds.contains(c.id) &&
-                    !clubIsManagedByAdmin(c, _myId),
-              )
-              .map((c) => c.id)
-              .toList()
-        : <String>[];
+    final dmPeople = searching
+        ? partnerIds.where(matchId).toList()
+        : partnerIds;
+    final dmGroups = searching
+        ? groups.where((g) => _groupTitle(g).toLowerCase().contains(q)).toList()
+        : groups;
 
-    // ── Students tab: people DMs + my group chats ──
-    final dmPeople = showStudents
-        ? (searching ? peopleIds.where(matchId).toList() : peopleIds)
-        : <String>[];
-    final dmGroups = showStudents
-        ? (searching
-              ? groups
-                    .where((g) => _groupTitle(g).toLowerCase().contains(q))
-                    .toList()
-              : groups)
-        : <GroupChat>[];
-
-    // Students you could start a NEW chat with (students tab, search only).
+    // Students you could start a NEW chat with.
     final existing = {...partnerIds};
-    final newContacts = (searching && showStudents)
+    final newContacts = searching
         ? _allContacts
               .where(
                 (c) =>
-                    !c.isClub &&
                     !existing.contains(c.id) &&
                     c.name.toLowerCase().contains(q),
               )
@@ -481,26 +382,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
         searching &&
         dmPeople.isEmpty &&
         dmGroups.isEmpty &&
-        clubChannels.isEmpty &&
-        clubDms.isEmpty &&
-        messageableClubs.isEmpty &&
         newContacts.isEmpty;
 
     if (nothing) return _EmptyState(query: _query);
 
-    final onlinePeople = showStudents
-        ? users
-              .where((u) => u.id != _myId && presenceService.isOnline(u.id))
-              .toList()
-        : <dynamic>[];
+    final onlinePeople = users
+        .where((u) => u.id != _myId && presenceService.isOnline(u.id))
+        .toList();
 
-    final hasVisibleConversations = showStudents
-        ? peopleIds.isNotEmpty || groups.isNotEmpty
-        : clubChannels.isNotEmpty || clubDmIds.isNotEmpty;
+    final hasVisibleConversations = partnerIds.isNotEmpty || groups.isNotEmpty;
     if (!searching && !hasVisibleConversations) {
-      return showStudents
-          ? _ColdStart(onCompose: _openComposeSheet)
-          : const _NoClubs();
+      return _ColdStart(onCompose: _openComposeSheet);
     }
 
     return ListView(
@@ -514,23 +406,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
         if (dmGroups.isNotEmpty) ...[
           const _SectionLabel('Group chats'),
           ...dmGroups.map(_groupRow),
-        ],
-        if (clubChannels.isNotEmpty) ...[
-          _SectionLabel(searching ? 'Club discussions' : 'My club discussions'),
-          ...clubChannels.map(_clubChannelRow),
-        ],
-        if (clubDms.isNotEmpty) ...[
-          const _SectionLabel('Direct messages with clubs'),
-          ...clubDms.map(_clubDmRow),
-        ],
-        if (messageableClubs.isNotEmpty) ...[
-          const _SectionLabel('Message a club'),
-          ...messageableClubs.map(
-            (id) => _ContactResultTile(
-              contact: _Contact(id: id, name: _nameFor(id), isClub: true),
-              onTap: () => _openChat(id, _nameFor(id)),
-            ),
-          ),
         ],
         if (newContacts.isNotEmpty) ...[
           const _SectionLabel('Start a new chat'),
@@ -647,127 +522,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  // A 1-on-1 direct message with a club account (Clubs tab).
-  Widget _clubDmRow(String id) {
-    final name = _nameFor(id);
-    final last = _lastMessage(id);
-    final fromMe = last != null && last.senderId == _myId;
-    final all = _allMessages;
-    final unread =
-        !fromMe && last != null && messageService.hasUnread(_myId, id, all);
-    final unreadCount = unread ? messageService.unreadCount(_myId, id, all) : 0;
-    final idx = clubs.indexWhere((c) => c.id == id);
-    final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-
-    return _ConvoRow(
-      leading: ClubAvatar(
-        clubId: id,
-        clubName: name,
-        color: color,
-        size: 52,
-        fontSize: 20,
-        borderRadius: 17,
-      ),
-      name: name,
-      badge: 'Club',
-      preview: last == null
-          ? 'Tap to start chatting'
-          : _previewBody(last.content),
-      time: last == null ? '' : _timeLabel(last.sentAt),
-      fromMe: fromMe,
-      typing: presenceService.isTyping(id),
-      unread: unreadCount,
-      onTap: () => _openChat(id, name),
-    );
-  }
-
-  // A club's joint discussion channel (group chat for all members).
-  Widget _clubChannelRow(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
-    final name = idx >= 0 ? clubs[idx].name : 'Club';
-    final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-    final last = clubChatService.lastMessageFor(clubId);
-    final members = clubChatService.memberIdsFor(clubId);
-    final active = members.where((m) => presenceService.isOnline(m)).length;
-    final fromMe = last?.senderId == _myId;
-    final unread = clubChatService.unreadCount(clubId, _myId);
-
-    String preview;
-    if (last == null) {
-      preview = 'No messages yet — start the discussion';
-    } else {
-      final who = last.senderId == _myId ? 'You' : _firstName(last.senderId);
-      preview = '$who: ${_previewBody(last.content)}';
-    }
-
-    return _ConvoRow(
-      leading: _clubChannelLeading(clubId, name, color, active),
-      name: name,
-      badge: 'Club',
-      memberCount: members.length,
-      preview: preview,
-      time: last == null ? '' : _timeLabel(last.sentAt),
-      fromMe: fromMe,
-      typing: presenceService.isTyping('club_$clubId'),
-      unread: unread,
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              ClubChannelScreen(clubId: clubId, clubName: name, color: color),
-        ),
-      ).then((_) => setState(() {})),
-    );
-  }
-
-  // Club avatar + green "active members" badge.
-  Widget _clubChannelLeading(
-    String clubId,
-    String name,
-    Color color,
-    int active,
-  ) {
-    final avatar = ClubAvatar(
-      clubId: clubId,
-      clubName: name,
-      color: color,
-      size: 52,
-      fontSize: 20,
-      borderRadius: 17,
-    );
-    if (active == 0) return avatar;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        avatar,
-        Positioned(
-          right: -2,
-          bottom: -2,
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 18),
-            height: 18,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: kOnlineGreen,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: AppColors.background, width: 2),
-            ),
-            child: Center(
-              child: Text(
-                '$active',
-                style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _groupRow(GroupChat g) {
     final title = _groupTitle(g);
     final preview = _lastGroupPreview(g);
@@ -873,15 +627,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  static const _clubColors = [
-    Color(0xFF8C1D40),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
   String _timeLabel(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
@@ -941,7 +686,6 @@ class _SectionLabel extends StatelessWidget {
 class _ConvoRow extends StatefulWidget {
   final Widget leading;
   final String name;
-  final String? badge; // e.g. 'Club'
   final int? memberCount; // groups
   final String preview;
   final String time;
@@ -953,7 +697,6 @@ class _ConvoRow extends StatefulWidget {
   const _ConvoRow({
     required this.leading,
     required this.name,
-    this.badge,
     this.memberCount,
     required this.preview,
     required this.time,
@@ -1003,27 +746,6 @@ class _ConvoRowState extends State<_ConvoRow> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (widget.badge != null) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            widget.badge!,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.primaryRed,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
                       if (widget.memberCount != null) ...[
                         const SizedBox(width: 7),
                         Text(
@@ -1240,58 +962,13 @@ class _ColdStart extends StatelessWidget {
   }
 }
 
-// ─── No clubs joined (Clubs tab) ────────────────────────────────────────────
-class _NoClubs extends StatelessWidget {
-  const _NoClubs();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(40, 0, 40, 60),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.groups_outlined,
-              size: 72,
-              color: AppColors.secondaryText,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No club discussions yet',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Join a club to take part in its group discussion. Search above to find one.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.secondaryText),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─── Contact data class ────────────────────────────────────────────────────────
 class _Contact {
   final String id;
   final String name;
-  final bool isClub;
   final bool isAdmin;
 
-  const _Contact({
-    required this.id,
-    required this.name,
-    required this.isClub,
-    this.isAdmin = false,
-  });
+  const _Contact({required this.id, required this.name, this.isAdmin = false});
 }
 
 // ─── Contact result tile (search → start new chat) ──────────────────────────
@@ -1301,43 +978,15 @@ class _ContactResultTile extends StatelessWidget {
 
   const _ContactResultTile({required this.contact, required this.onTap});
 
-  static const _clubColors = [
-    Color(0xFF8C1D40),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final Widget avatar;
-    if (contact.isClub) {
-      final idx = clubs.indexWhere((c) => c.id == contact.id);
-      final color = _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-      avatar = ClubAvatar(
-        clubId: contact.id,
-        clubName: contact.name,
-        color: color,
-        size: 48,
-        fontSize: 18,
-        borderRadius: 14,
-      );
-    } else {
-      avatar = UserAvatar(
-        userId: contact.id,
-        name: contact.name,
-        size: 48,
-        fontSize: 18,
-      );
-    }
-
-    final badge = contact.isClub
-        ? 'Club'
-        : contact.isAdmin
-        ? 'Club Admin'
-        : null;
+    final avatar = UserAvatar(
+      userId: contact.id,
+      name: contact.name,
+      size: 48,
+      fontSize: 18,
+    );
+    final badge = contact.isAdmin ? 'Admin' : null;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),

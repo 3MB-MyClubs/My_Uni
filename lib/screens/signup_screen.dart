@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 
@@ -32,7 +33,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
     if (!authService.isValidNumericPassword(password)) {
-      setState(() => _error = 'Password must be at least 8 numbers.');
+      setState(() => _error = 'Password must be exactly 6 digits.');
       return;
     }
     final success = authService.signUp(name, email, password);
@@ -128,10 +129,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
                 onSubmitted: (_) => _handleSignUp(),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  hintText: 'At least 8 numbers',
+                  hintText: '6-digit PIN',
                   prefixIcon: Icon(
                     Icons.lock_outline,
                     color: AppColors.secondaryText,

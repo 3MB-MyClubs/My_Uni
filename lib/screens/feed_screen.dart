@@ -15,7 +15,6 @@ import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/user_follow_button.dart';
-import '../models/comment.dart';
 import '../models/share.dart';
 import '../models/message.dart';
 import '../models/news_post.dart';
@@ -29,7 +28,6 @@ import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
-import '../widgets/mention_text_field.dart';
 import '../services/group_chat_service.dart';
 import 'group_chat_screen.dart';
 import 'notifications_screen.dart';
@@ -406,8 +404,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   int get _unreadMessageCount {
-    final myId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final myId = authService.currentUser?.id ?? '';
     if (myId.isEmpty) return 0;
 
     final storedMessages = messageService.getAllMessages();
@@ -472,68 +469,70 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            // Messages button
-            GestureDetector(
-              onTap: () =>
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MessagesScreen()),
-                  ).then((_) {
-                    if (mounted) setState(() {});
-                  }),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Center(
-                      child: Icon(
-                        Icons.send_outlined,
-                        size: 20,
-                        color: AppColors.text,
+            if (authService.currentUser != null) ...[
+              // Messages button
+              GestureDetector(
+                onTap: () =>
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const MessagesScreen()),
+                    ).then((_) {
+                      if (mounted) setState(() {});
+                    }),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Center(
+                        child: Icon(
+                          Icons.send_outlined,
+                          size: 20,
+                          color: AppColors.text,
+                        ),
                       ),
-                    ),
-                    if (unreadMessages > 0)
-                      Positioned(
-                        top: -4,
-                        right: -4,
-                        child: Container(
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed,
-                            borderRadius: BorderRadius.circular(100),
-                            border: Border.all(
-                              color: AppColors.card,
-                              width: 1.5,
+                      if (unreadMessages > 0)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
                             ),
-                          ),
-                          child: Text(
-                            unreadMessages > 99 ? '99+' : '$unreadMessages',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed,
+                              borderRadius: BorderRadius.circular(100),
+                              border: Border.all(
+                                color: AppColors.card,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              unreadMessages > 99 ? '99+' : '$unreadMessages',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             // Bell button with unread badge
             ListenableBuilder(
               listenable: userState,
@@ -1731,18 +1730,8 @@ class _PostCardState extends State<_PostCard>
     final clubColor = _colorForClub(club.id);
     final likeCount = postLikeCount(widget.post.id);
     final shareCount = postShareCount(widget.post.id);
-    final uniqueCommenters = comments
-        .where((c) => c.postId == widget.post.id)
-        .map((c) => c.userId)
-        .toSet()
-        .length;
-    final postComments = comments
-        .where((c) => c.postId == widget.post.id)
-        .toList();
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
-
-    final commentCount = postComments.length;
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
 
@@ -1906,7 +1895,6 @@ class _PostCardState extends State<_PostCard>
                   const SizedBox(height: 10),
                   _EngagementBar(
                     likes: likeCount,
-                    commenters: uniqueCommenters,
                     shares: shareCount,
                     score: widget.score,
                     views: viewTracker.viewCount(widget.post.id),
@@ -1934,13 +1922,6 @@ class _PostCardState extends State<_PostCard>
                           ? AppColors.primaryRed
                           : AppColors.secondaryText,
                       onTap: _toggleLike,
-                    ),
-                    const SizedBox(width: 18),
-                    _twAction(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      count: commentCount > 0 ? '$commentCount' : null,
-                      color: AppColors.secondaryText,
-                      onTap: () => _openComments(context),
                     ),
                     const SizedBox(width: 18),
                     _twAction(
@@ -2012,16 +1993,6 @@ class _PostCardState extends State<_PostCard>
         ),
       ),
     );
-  }
-
-  void _openComments(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          _CommentsSheet(postId: widget.post.id, clubId: widget.post.clubId),
-    ).then((_) => setState(() {}));
   }
 }
 
@@ -2304,7 +2275,6 @@ class _EventCardState extends State<_EventCard> {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: _EngagementBar(
                   likes: 0,
-                  commenters: 0,
                   shares: shareCount,
                   score: widget.score,
                   views: viewTracker.viewCount(widget.event.id),
@@ -2378,7 +2348,6 @@ class _EventCardState extends State<_EventCard> {
 
 class _EngagementBar extends StatelessWidget {
   final int likes;
-  final int commenters;
   final int shares;
   final int views;
   final double score;
@@ -2386,7 +2355,6 @@ class _EngagementBar extends StatelessWidget {
 
   const _EngagementBar({
     required this.likes,
-    required this.commenters,
     required this.shares,
     required this.score,
     this.views = 0,
@@ -2432,15 +2400,6 @@ class _EngagementBar extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: AppColors.text,
             ),
-          ),
-        ],
-        if (commenters > 0) ...[
-          const SizedBox(width: 10),
-          Icon(Icons.chat_bubble, size: 13, color: Color(0xFF1565C0)),
-          const SizedBox(width: 3),
-          Text(
-            '$commenters ${commenters == 1 ? 'person' : 'people'} commented',
-            style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
           ),
         ],
         if (shares > 0) ...[
@@ -2879,260 +2838,6 @@ class _ShareSheetState extends State<_ShareSheet> {
                         ),
                       ],
                     ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Comments Bottom Sheet ────────────────────────────────────────────────────
-
-class _CommentsSheet extends StatefulWidget {
-  final String postId;
-  final String clubId;
-  const _CommentsSheet({required this.postId, required this.clubId});
-
-  @override
-  State<_CommentsSheet> createState() => _CommentsSheetState();
-}
-
-class _CommentsSheetState extends State<_CommentsSheet> {
-  final _controller = TextEditingController();
-
-  List<MentionOption> get _mentionOptions => [
-    ...clubs.map(
-      (club) =>
-          MentionOption(id: club.id, label: club.name, type: MentionType.club),
-    ),
-    ...users.map(
-      (user) => MentionOption(
-        id: user.id,
-        label: user.name,
-        type: MentionType.student,
-      ),
-    ),
-  ];
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _post() {
-    final user = authService.currentUser;
-    if (user == null) return;
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    comments.add(
-      Comment(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        postId: widget.postId,
-        userId: user.id,
-        content: text,
-        createdAt: DateTime.now(),
-      ),
-    );
-    contentStore.saveComments();
-    _controller.clear();
-    setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final postComments =
-        comments.where((c) => c.postId == widget.postId).toList()
-          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      builder: (context, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 6),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.lightGray,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Text(
-              _isOwnerOfClub(widget.clubId)
-                  ? 'Comments (${postComments.length})'
-                  : 'Comments',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            Divider(),
-            Expanded(
-              child: postComments.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No comments yet. Be the first!',
-                        style: TextStyle(color: AppColors.secondaryText),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: scrollController,
-                      itemCount: postComments.length,
-                      itemBuilder: (context, i) {
-                        final c = postComments[i];
-                        final commenter = users.firstWhere(
-                          (u) => u.id == c.userId,
-                          orElse: () => users.first,
-                        );
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: AppColors.lightRed,
-                                child: Text(
-                                  commenter.name[0],
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primaryRed,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    RichText(
-                                      text: TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: '${commenter.name}  ',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.text,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text: c.content,
-                                            style: TextStyle(
-                                              color: AppColors.text,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _timeAgo(c.createdAt),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.secondaryText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Admin-only delete button (own club only)
-                              if (_isOwnerOfClub(widget.clubId))
-                                GestureDetector(
-                                  onTap: () {
-                                    comments.removeWhere((x) => x.id == c.id);
-                                    contentStore.saveComments();
-                                    setState(() {});
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 8,
-                                      top: 2,
-                                    ),
-                                    child: Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Colors.red.shade300,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            Padding(
-              padding: EdgeInsets.only(
-                left: 12,
-                right: 12,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 12,
-                top: 8,
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppColors.lightRed,
-                    child: Text(
-                      (authService.currentUser?.name[0] ?? 'U').toUpperCase(),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryRed,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: MentionTextField(
-                      controller: _controller,
-                      options: _mentionOptions,
-                      decoration: InputDecoration(
-                        hintText: 'Add a comment...',
-                        hintStyle: TextStyle(
-                          color: AppColors.secondaryText,
-                          fontSize: 13,
-                        ),
-                        filled: true,
-                        fillColor: AppColors.lightGray,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      onSubmitted: (_) => _post(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _post,
-                    child: Text(
-                      'Post',
-                      style: TextStyle(
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
                   ),
                 ],
               ),

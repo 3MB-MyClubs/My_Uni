@@ -242,9 +242,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         if (msg.contains('lik')) {
           return (Icons.favorite_rounded, AppColors.primaryRed);
         }
-        if (msg.contains('comment') ||
-            msg.contains('replied') ||
-            msg.contains('mention')) {
+        if (msg.contains('mention')) {
           return (Icons.alternate_email_rounded, const Color(0xFF00838F));
         }
         return (Icons.article_rounded, const Color(0xFF2E7D32));
