@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import 'club_admin_auth_screen.dart';
@@ -40,10 +41,20 @@ class _LoginScreenState extends State<LoginScreen> {
       _emailController.text.trim().isNotEmpty &&
       _passwordController.text.isNotEmpty;
 
+  /// The campus-email field holds only the local part; "@ku.edu.tr" is a fixed
+  /// suffix, so strip any domain off an incoming value (e.g. a pre-filled email
+  /// after sign-up).
+  static String _localPart(String email) {
+    final at = email.indexOf('@');
+    return at < 0 ? email : email.substring(0, at);
+  }
+
   @override
   void initState() {
     super.initState();
-    _emailController = TextEditingController(text: widget.initialEmail);
+    _emailController = TextEditingController(
+      text: _localPart(widget.initialEmail),
+    );
   }
 
   @override
@@ -55,12 +66,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (_isSubmitting || _done) return;
-    final email = _emailController.text.trim();
+    final localPart = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) {
+    if (localPart.isEmpty || password.isEmpty) {
       setState(() => _error = 'Please enter your email and password');
       return;
     }
+    // Users type only the local part (e.g. "htuncay23"); the "@ku.edu.tr"
+    // domain is appended automatically. Lower-cased so any casing logs in.
+    final email = '${localPart.toLowerCase()}@ku.edu.tr';
     setState(() {
       _error = null;
       _isSubmitting = true;
@@ -178,16 +192,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     RichText(
                       text: TextSpan(
                         style: TextStyle(
-                          fontSize: 36,
+                          fontSize: 34,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -1.4,
-                          height: 1.05,
+                          letterSpacing: -1.2,
+                          height: 1.08,
                           color: AppColors.text,
                         ),
                         children: [
-                          const TextSpan(text: 'Your campus,\n'),
+                          const TextSpan(text: 'Welcome back to\n'),
                           TextSpan(
-                            text: 'in your pocket.',
+                            text: 'campus.',
                             style: TextStyle(color: AppColors.primaryRed),
                           ),
                         ],
@@ -217,11 +231,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _AuthField(
-                      label: 'Email',
+                      label: 'Campus email',
                       controller: _emailController,
-                      hint: 'you@ku.edu.tr',
+                      hint: 'yourname',
                       icon: Icons.mail_outline_rounded,
-                      keyboardType: TextInputType.emailAddress,
+                      keyboardType: TextInputType.text,
+                      suffixText: '@ku.edu.tr',
+                      inputFormatters: [_NoDomainFormatter()],
                       onChanged: (_) => setState(() => _error = null),
                       onSubmitted: (_) => _handleLogin(),
                     ),
@@ -317,30 +333,40 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Container(height: 1, color: AppColors.divider),
                     const SizedBox(height: 18),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          'New to campus? ',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            color: AppColors.secondaryText,
+                    // Sign up → hands off to the sign-up flow
+                    GestureDetector(
+                      onTap: widget.onSignUp,
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: AppColors.divider,
+                            width: 1.5,
                           ),
                         ),
-                        GestureDetector(
-                          onTap: widget.onSignUp,
-                          child: Text(
-                            'Sign up',
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.1,
-                              color: AppColors.primaryRed,
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Sign up',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.2,
+                                color: AppColors.text,
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 7),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 17,
+                              color: AppColors.text,
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 6),
                     TextButton(
@@ -417,6 +443,8 @@ class _AuthField extends StatefulWidget {
   final bool obscureText;
   final Widget? trailing;
   final TextInputType? keyboardType;
+  final String? suffixText;
+  final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
@@ -428,6 +456,8 @@ class _AuthField extends StatefulWidget {
     this.obscureText = false,
     this.trailing,
     this.keyboardType,
+    this.suffixText,
+    this.inputFormatters,
     this.onChanged,
     this.onSubmitted,
   });
@@ -470,6 +500,7 @@ class _AuthFieldState extends State<_AuthField> {
                   controller: widget.controller,
                   obscureText: widget.obscureText,
                   keyboardType: widget.keyboardType,
+                  inputFormatters: widget.inputFormatters,
                   autocorrect: false,
                   enableSuggestions: false,
                   onChanged: widget.onChanged,
@@ -499,6 +530,15 @@ class _AuthFieldState extends State<_AuthField> {
                   ),
                 ),
               ),
+              if (widget.suffixText != null)
+                Text(
+                  widget.suffixText!,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    color: AppColors.secondaryText,
+                    letterSpacing: -0.2,
+                  ),
+                ),
               if (widget.trailing != null) ...[
                 const SizedBox(width: 8),
                 widget.trailing!,
@@ -507,6 +547,23 @@ class _AuthFieldState extends State<_AuthField> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Email local-part formatter: drop anything from "@" onward ─────────────────
+class _NoDomainFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final at = newValue.text.indexOf('@');
+    if (at < 0) return newValue;
+    final text = newValue.text.substring(0, at);
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

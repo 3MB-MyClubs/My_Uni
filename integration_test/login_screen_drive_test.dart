@@ -42,10 +42,10 @@ void main() {
     // Brand + login affordances are the root UI.
     expect(find.text('Koç University'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
-    expect(find.text('Sign up'), findsOneWidget);
+    expect(find.text('Create a student account'), findsOneWidget);
 
     // Hand off to the multi-step sign-up flow.
-    await tester.tap(find.text('Sign up'));
+    await tester.tap(find.text('Create a student account'));
     await tester.pump(const Duration(milliseconds: 700));
     await binding.takeScreenshot('login-02-signup-step1');
     expect(find.textContaining('school email'), findsOneWidget);

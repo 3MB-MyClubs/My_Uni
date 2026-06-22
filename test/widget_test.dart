@@ -12,7 +12,7 @@ void main() {
     // Brand header + the design's login affordances are the root UI.
     expect(find.text('Koç University'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
-    expect(find.text('Sign up'), findsOneWidget);
+    expect(find.text('Create a student account'), findsOneWidget);
   });
 
   testWidgets('login screen "Sign up" hands off to the sign-up flow', (
@@ -30,7 +30,10 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Sign up'));
+    final cta = find.text('Create a student account');
+    await tester.ensureVisible(cta);
+    await tester.pump();
+    await tester.tap(cta);
     await tester.pump();
 
     expect(signUpTapped, isTrue);
