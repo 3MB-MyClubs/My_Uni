@@ -135,11 +135,14 @@ class _RsvpButtonState extends State<RsvpButton> {
       return SizedBox(
         key: const ValueKey('full-attending'),
         height: 56,
+        // stretch → both the status pill and the Cancel button fill the full
+        // 56px height (without this the pill collapses to its text height).
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // "You are attending" pill
+            // "You're going" status pill
             Expanded(
-              child: Container(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -158,66 +161,66 @@ class _RsvpButtonState extends State<RsvpButton> {
                     ),
                   ],
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle_rounded,
-                      color: Colors.white,
-                      size: 19,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'You are attending',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                child: const Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
                         color: Colors.white,
-                        letterSpacing: 0.1,
+                        size: 19,
                       ),
-                    ),
-                  ],
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          "You're going",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
 
             const SizedBox(width: 10),
 
-            // "Not Coming" secondary action
-            SizedBox(
-              width: 88,
-              height: 56,
-              child: GestureDetector(
-                onTap: onToggle,
-                child: AnimatedOpacity(
-                  opacity: 1.0,
-                  duration: const Duration(milliseconds: 150),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.divider, width: 1.5),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.close_rounded,
-                          size: 17,
+            // "Cancel" secondary action
+            GestureDetector(
+              onTap: onToggle,
+              child: Container(
+                width: 96,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.divider, width: 1.5),
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.secondaryText,
                         ),
-                        SizedBox(height: 3),
-                        Text(
-                          'Not Coming',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),

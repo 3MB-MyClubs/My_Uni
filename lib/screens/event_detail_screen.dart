@@ -1524,13 +1524,13 @@ class _StickyCtaState extends State<_StickyCta> {
                   GestureDetector(
                     onTap: _toggleRemind,
                     child: Container(
-                      width: 52,
-                      height: 52,
+                      width: 56,
+                      height: 56,
                       decoration: BoxDecoration(
                         color: _remind
                             ? accent.withValues(alpha: 0.14)
                             : AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(15),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: _remind
                               ? accent

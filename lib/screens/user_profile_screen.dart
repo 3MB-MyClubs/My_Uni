@@ -423,12 +423,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                           const SizedBox(width: 4),
                           if (major != null) ...[
-                            Text(
-                              major,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: _burgundy,
+                            Flexible(
+                              child: Text(
+                                major,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: _burgundy,
+                                ),
                               ),
                             ),
                             if (year != null) ...[
@@ -441,6 +445,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                               Text(
                                 year,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: AppColors.secondaryText,
@@ -448,11 +454,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ],
                           ] else if (year != null) ...[
-                            Text(
-                              year,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.secondaryText,
+                            Flexible(
+                              child: Text(
+                                year,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.secondaryText,
+                                ),
                               ),
                             ),
                           ],
