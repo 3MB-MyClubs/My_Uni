@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'auth_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
 
@@ -79,6 +80,12 @@ class SignupService {
     required List<String> interestIds,
     String? imagePath,
   }) async {
+    if (!authService.isValidNewStudentPassword(password)) {
+      return const SignupResult.failure(
+        'Use 6 numbers with no repeated or sequential numbers side by side.',
+      );
+    }
+
     final result = await _invoke('complete-signup', {
       'email': email,
       'password': password,

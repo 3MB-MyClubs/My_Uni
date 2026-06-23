@@ -48,7 +48,7 @@ class _StepPasswordState extends State<StepPassword> {
   void _submit() {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
-    if (!authService.isValidStudentPassword(password)) {
+    if (!authService.isValidNewStudentPassword(password)) {
       setState(
         () => _error =
             'Use 6 numbers with no repeated or sequential numbers side by side.',

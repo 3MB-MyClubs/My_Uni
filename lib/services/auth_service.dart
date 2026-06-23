@@ -54,6 +54,10 @@ class AuthService {
   }
 
   bool isValidStudentPassword(String password) {
+    return password.length == 6 && _digitsOnly.hasMatch(password);
+  }
+
+  bool isValidNewStudentPassword(String password) {
     return password.length == 6 &&
         _digitsOnly.hasMatch(password) &&
         hasNoAdjacentRepeatedDigits(password) &&
@@ -65,7 +69,7 @@ class AuthService {
   }
 
   bool isValidNumericPassword(String password) {
-    return isValidStudentPassword(password);
+    return isValidNewStudentPassword(password);
   }
 
   bool login(String email, [String? password]) {
@@ -213,7 +217,7 @@ class AuthService {
     final normalized = email.toLowerCase();
     final index = users.indexWhere((u) => u.email.toLowerCase() == normalized);
     if (index >= 0) {
-      if (!isValidStudentPassword(newPassword)) return false;
+      if (!isValidNewStudentPassword(newPassword)) return false;
       final user = users[index];
       users[index] = User(
         id: user.id,
