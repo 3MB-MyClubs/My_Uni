@@ -103,22 +103,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _hydrateConnections();
+    _hydrateProfile();
   }
 
   @override
   void didUpdateWidget(covariant UserProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.user.id != widget.user.id) _hydrateConnections();
+    if (oldWidget.user.id != widget.user.id) _hydrateProfile();
   }
 
-  Future<void> _hydrateConnections() async {
+  Future<void> _hydrateProfile() async {
     setState(() {
       _connectionsLoading = true;
       _connectionsError = null;
     });
     try {
-      await peopleService.hydrateConnectionsFor(widget.user.id);
+      await Future.wait([
+        peopleService.hydrateConnectionsFor(widget.user.id),
+        peopleService.hydrateProfileDetailsFor(widget.user.id),
+      ]);
       if (mounted) {
         setState(() => _connectionsLoading = false);
       }
@@ -131,12 +134,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
-  List<Club> get _subscribedClubs => widget.user.subscribedClubIds
-      .map(
-        (id) => clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first),
-      )
-      .where((c) => widget.user.subscribedClubIds.contains(c.id))
-      .toList();
+  List<Club> get _subscribedClubs {
+    final liveIds = peopleService.clubIdsFor(widget.user.id);
+    final ids = _isOwnProfile
+        ? userState.followedClubIds
+        : liveIds.isNotEmpty
+        ? liveIds
+        : widget.user.subscribedClubIds.toSet();
+
+    return [
+      for (final id in ids)
+        for (final club in clubs)
+          if (club.id == id) club,
+    ];
+  }
 
   void _openClub(Club club) {
     Navigator.push(

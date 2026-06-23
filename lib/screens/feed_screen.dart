@@ -87,7 +87,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // 0 = Following (followed clubs only), 1 = All
   int _feedTab = 1;
 
-  bool get _followedOnly => _feedTab == 0;
+  bool get _followedOnly => authService.isStudentSession && _feedTab == 0;
 
   Set<String> get _followedIds => userState.followedClubIds;
 
@@ -159,6 +159,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // Clubs the user doesn't follow yet, ranked by how well they match the
   // user's interests, then by popularity — "which club should I follow next".
   List<dynamic> _suggestedClubs() {
+    if (!authService.isStudentSession) return const [];
     return clubs
         .where((c) => !userState.followedClubIds.contains(c.id))
         .toList()
@@ -410,10 +411,12 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  String get _firstName {
-    final name =
-        authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
-    return name.split(' ').first;
+  String get _greetingName {
+    final adminName = authService.currentAdmin?.name.trim();
+    if (adminName != null && adminName.isNotEmpty) return adminName;
+
+    final userName = authService.currentUser?.name.trim() ?? '';
+    return userName.split(' ').first;
   }
 
   int get _unreadMessageCount {
@@ -637,7 +640,7 @@ class _FeedScreenState extends State<FeedScreen> {
               text: TextSpan(
                 children: [
                   TextSpan(
-                    text: _firstName,
+                    text: _greetingName,
                     style: TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.w700,
@@ -746,6 +749,24 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── Feed section header + filter tabs ────────────────────────────────────
   SliverToBoxAdapter _buildFeedTabs() {
+    if (!authService.isStudentSession) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          key: widget.tutorialFeedKey,
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+          child: Text(
+            'CLUB FEED',
+            style: TextStyle(
+              fontSize: 10,
+              color: AppColors.secondaryText,
+              letterSpacing: 0.9,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
     // tab 0 = Following, tab 1 = All
     const tabs = [('following', 'Following'), ('all', 'All')];
     return SliverToBoxAdapter(
@@ -1338,8 +1359,8 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // Follow button (self-contained)
-                    ClubFollowButton(clubId: c.id as String),
+                    if (authService.isStudentSession)
+                      ClubFollowButton(clubId: c.id as String),
                   ],
                 ),
               ),
@@ -1951,7 +1972,8 @@ class _PostCardState extends State<_PostCard>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    ClubFollowButton(clubId: club.id, size: 'small'),
+                    if (isStudent)
+                      ClubFollowButton(clubId: club.id, size: 'small'),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: _showPostOptions,
@@ -2283,7 +2305,8 @@ class _EventCardState extends State<_EventCard> {
                       ],
                     ),
                   ),
-                  ClubFollowButton(clubId: club.id, size: 'small'),
+                  if (authService.isStudentSession)
+                    ClubFollowButton(clubId: club.id, size: 'small'),
                 ],
               ),
             ),

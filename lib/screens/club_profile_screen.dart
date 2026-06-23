@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/club.dart';
+import '../models/event.dart';
+import '../models/news_post.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -10,6 +12,8 @@ import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
+import '../services/supabase_event_service.dart';
+import '../services/supabase_post_service.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import 'event_detail_screen.dart';
@@ -215,7 +219,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final panelText = AppColors.text;
     final bodyText = _clubPageBodyText(context);
     final handle = _handleFor(widget.club);
-    final showFollowAction = !_isThisClubAdmin;
+    final showFollowAction = authService.isStudentSession && !_isThisClubAdmin;
     final categoryLabel = widget.club.categoryName?.trim();
 
     return Scaffold(
@@ -845,8 +849,23 @@ class _ClubPostCompact extends StatelessWidget {
     );
     if (ok != true) return;
     final uid = authService.currentAdmin?.id ?? '';
-    contentStore.deletePost(post.id as String, uid);
-    onChanged();
+    final typedPost = post is NewsPost ? post as NewsPost : null;
+    if (typedPost == null) return;
+    try {
+      await supabasePostService.deletePost(typedPost);
+      contentStore.deletePost(typedPost.id, uid);
+      onChanged();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not delete post from Supabase.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 
   @override
@@ -1268,8 +1287,23 @@ class _EventCardV2 extends StatelessWidget {
     );
     if (ok != true) return;
     final uid = authService.currentAdmin?.id ?? '';
-    contentStore.deleteEvent(event.id as String, uid);
-    onChanged();
+    final typedEvent = event is Event ? event as Event : null;
+    if (typedEvent == null) return;
+    try {
+      await supabaseEventService.deleteEvent(typedEvent);
+      contentStore.deleteEvent(typedEvent.id, uid);
+      onChanged();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not delete event from Supabase.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 
   @override

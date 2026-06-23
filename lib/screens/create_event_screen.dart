@@ -20,6 +20,9 @@ import '../services/mock_data.dart';
 import '../services/supabase_event_service.dart';
 import '../widgets/mention_text_field.dart';
 
+bool _isRemoteEventImagePath(String path) =>
+    path.startsWith('http://') || path.startsWith('https://');
+
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
 
@@ -418,8 +421,27 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         capacity: ev.capacity,
         speakers: speakers,
       );
+      Event saved;
+      try {
+        saved = await supabaseEventService.updateEvent(
+          updated,
+          previousImagePath: ev.imagePath,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Could not save event to Supabase.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
+
       final ok = contentStore.updateEvent(
-        updated,
+        saved,
         authService.currentAdmin?.id ?? '',
       );
       if (!mounted) return;
@@ -986,7 +1008,7 @@ class _HeroEditor extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (hasImage)
-              Image.file(File(imagePath!), fit: BoxFit.cover)
+              _EventPreviewImage(path: imagePath!)
             else
               Container(
                 decoration: BoxDecoration(
@@ -1080,6 +1102,20 @@ class _HeroEditor extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _EventPreviewImage extends StatelessWidget {
+  final String path;
+
+  const _EventPreviewImage({required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isRemoteEventImagePath(path)) {
+      return Image.network(path, fit: BoxFit.cover);
+    }
+    return Image.file(File(path), fit: BoxFit.cover);
   }
 }
 

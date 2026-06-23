@@ -9,9 +9,11 @@ class PeopleService {
   Set<String> _cachedFollowerIds = const {};
   final Map<String, Set<String>> _followersByUserId = {};
   final Map<String, Set<String>> _followingByUserId = {};
+  final Map<String, Set<String>> _clubIdsByUserId = {};
 
   List<User> get cachedPeople => _cachedPeople;
   Set<String> get cachedFollowerIds => _cachedFollowerIds;
+  Set<String> clubIdsFor(String userId) => _clubIdsByUserId[userId] ?? const {};
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
@@ -134,6 +136,65 @@ class PeopleService {
     }
   }
 
+  Future<void> hydrateProfileDetailsFor(String userId) async {
+    final client = _client;
+    if (client == null || userId.isEmpty) return;
+
+    final majorNames = await _lookupNames('majors');
+    final yearNames = await _lookupNames('academic_years');
+
+    try {
+      final profile = await client
+          .from('profiles')
+          .select(
+            'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+          )
+          .eq('id', userId)
+          .maybeSingle();
+      if (profile != null) {
+        final user = _userFromProfileRow(
+          Map<String, dynamic>.from(profile),
+          majorNames: majorNames,
+          yearNames: yearNames,
+          subscribedClubIds: _clubIdsByUserId[userId]?.toList() ?? const [],
+        );
+        _upsertCachedUser(user);
+      }
+    } catch (_) {
+      // Keep whatever profile details are already cached locally.
+    }
+
+    try {
+      final interestRows = await client
+          .from('student_interests')
+          .select('interest_id')
+          .eq('user_id', userId);
+      final interestIds = interestRows
+          .map((row) => _nullableString(row['interest_id']))
+          .whereType<String>()
+          .toList();
+      final interestNames = await _lookupNamesByIds('interests', interestIds);
+      userState.setInterests(userId, interestNames);
+    } catch (_) {
+      // Missing permissions/tables should not block opening a profile.
+    }
+
+    try {
+      final clubRows = await client
+          .from('club_followers')
+          .select('club_id')
+          .eq('profile_id', userId);
+      final clubIds = clubRows
+          .map((row) => _nullableString(row['club_id']))
+          .whereType<String>()
+          .toSet();
+      _clubIdsByUserId[userId] = clubIds;
+      _replaceCachedUserClubIds(userId, clubIds.toList());
+    } catch (_) {
+      // Fall back to static/mock subscribedClubIds.
+    }
+  }
+
   Future<List<User>> fetchClubMembers(String clubId) async {
     final client = _client;
     if (client == null || clubId.isEmpty) return const [];
@@ -241,16 +302,7 @@ class PeopleService {
       majorNames: majorNames,
       yearNames: yearNames,
     );
-    final exists = _cachedPeople.any((cached) => cached.id == user.id);
-    _cachedPeople = [
-      ..._cachedPeople.where((cached) => cached.id != user.id),
-      user,
-    ];
-    if (!exists) {
-      _cachedPeople.sort(
-        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-      );
-    }
+    _upsertCachedUser(user);
     return user;
   }
 
@@ -316,6 +368,32 @@ class PeopleService {
     }
   }
 
+  Future<List<String>> _lookupNamesByIds(
+    String tableName,
+    List<String> ids,
+  ) async {
+    final client = _client;
+    if (client == null || ids.isEmpty) return const [];
+
+    try {
+      final rows = await client
+          .from(tableName)
+          .select('id, name')
+          .inFilter('id', ids);
+      final byId = {
+        for (final row in rows)
+          if (_nullableString(row['id']) != null)
+            row['id'].toString(): _string(row['name']),
+      };
+      return [
+        for (final id in ids)
+          if ((byId[id] ?? '').isNotEmpty) byId[id]!,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _cacheProfilesByIds(Set<String> ids) async {
     final client = _client;
     if (client == null || ids.isEmpty) return;
@@ -376,6 +454,39 @@ class PeopleService {
       role: _string(row['role'], fallback: 'student'),
       subscribedClubIds: subscribedClubIds,
     );
+  }
+
+  void _upsertCachedUser(User user) {
+    final exists = _cachedPeople.any((cached) => cached.id == user.id);
+    _cachedPeople = [
+      ..._cachedPeople.where((cached) => cached.id != user.id),
+      user,
+    ];
+    if (!exists) {
+      _cachedPeople.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+    }
+  }
+
+  void _replaceCachedUserClubIds(String userId, List<String> clubIds) {
+    final index = _cachedPeople.indexWhere((user) => user.id == userId);
+    if (index == -1) return;
+
+    final user = _cachedPeople[index];
+    final updated = User(
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      password: user.password,
+      role: user.role,
+      subscribedClubIds: clubIds,
+      followingUserIds: user.followingUserIds,
+    );
+    _cachedPeople = [
+      for (var i = 0; i < _cachedPeople.length; i++)
+        if (i == index) updated else _cachedPeople[i],
+    ];
   }
 
   String _string(dynamic value, {String fallback = ''}) {

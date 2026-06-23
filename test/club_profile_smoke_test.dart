@@ -65,27 +65,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'Find People starts blank and searches with photo-aware avatars',
-    (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
-      await tester.pumpAndSettle();
+  testWidgets('Find People previews up to 10 random profiles and searches', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Find People'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Find People'));
+    await tester.pumpAndSettle();
 
-      expect(find.byType(UserAvatar), findsNothing);
+    final previewAvatars = find.byType(UserAvatar).evaluate().length;
+    expect(previewAvatars, greaterThan(0));
+    expect(previewAvatars, lessThanOrEqualTo(10));
 
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Search by name or surname…'),
-        users.first.name.split(' ').first,
-      );
-      await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search by name or surname…'),
+      users.first.name.split(' ').first,
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.byType(UserAvatar), findsWidgets);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.byType(UserAvatar), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('ProfileScreen renders in light mode for a logged-in user', (
     tester,

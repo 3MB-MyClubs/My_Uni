@@ -15,6 +15,14 @@ class SupabasePostService {
 
   bool get isAvailable => _client != null;
 
+  Future<void> deletePost(NewsPost post) async {
+    final client = _client;
+    if (client == null || !_looksLikeUuid(post.id)) return;
+
+    await client.from('club_posts').delete().eq('id', post.id);
+    await _deleteStoredImage(post.imagePath);
+  }
+
   Future<NewsPost> createPost({
     required String clubId,
     required String authorId,
@@ -117,6 +125,44 @@ class SupabasePostService {
       taggedUserIds: taggedUserIds,
       imagePath: imagePath,
     );
+  }
+
+  Future<void> _deleteStoredImage(String? imagePath) async {
+    final client = _client;
+    final objectPath = _objectPathFromImageValue(imagePath);
+    if (client == null || objectPath == null) return;
+
+    try {
+      await client.storage.from(_imageBucket).remove([objectPath]);
+    } catch (_) {
+      // Non-critical: the database row no longer points at this image.
+    }
+  }
+
+  String? _objectPathFromImageValue(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+
+    final bucketPrefix = '$_imageBucket/';
+    if (text.startsWith(bucketPrefix)) {
+      return text.substring(bucketPrefix.length);
+    }
+    if (!text.startsWith('http://') && !text.startsWith('https://')) {
+      return text;
+    }
+
+    final uri = Uri.tryParse(text);
+    if (uri == null) return null;
+    final segments = uri.pathSegments;
+    final bucketIndex = segments.indexOf(_imageBucket);
+    if (bucketIndex < 0 || bucketIndex + 1 >= segments.length) return null;
+    return segments.skip(bucketIndex + 1).map(Uri.decodeComponent).join('/');
+  }
+
+  bool _looksLikeUuid(String value) {
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
   }
 }
 

@@ -70,7 +70,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   bool _passes(AppNotification n) =>
-      _filter == 'all' || _category(n) == _filter;
+      !authService.isStudentSession ||
+      _filter == 'all' ||
+      _category(n) == _filter;
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
@@ -375,30 +377,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    for (final f in _filters) ...[
-                      _FilterChipB(
-                        label: f.l,
-                        active: _filter == f.k,
-                        count: _allNotifs
-                            .where(
-                              (n) =>
-                                  (f.k == 'all' || _category(n) == f.k) &&
-                                  _isUnread(n),
-                            )
-                            .length,
-                        onTap: () => setState(() => _filter = f.k),
-                      ),
-                      const SizedBox(width: 8),
+              if (authService.isStudentSession) ...[
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      for (final f in _filters) ...[
+                        _FilterChipB(
+                          label: f.l,
+                          active: _filter == f.k,
+                          count: _allNotifs
+                              .where(
+                                (n) =>
+                                    (f.k == 'all' || _category(n) == f.k) &&
+                                    _isUnread(n),
+                              )
+                              .length,
+                          onTap: () => setState(() => _filter = f.k),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
+              ] else
+                const SizedBox(height: 12),
             ],
           ),
         ),

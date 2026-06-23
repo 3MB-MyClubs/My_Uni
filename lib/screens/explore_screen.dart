@@ -201,7 +201,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   /// Search by first name, surname, or display name, with strongest matches first.
   List<User> get _filteredPeople {
     final q = _peopleQuery.toLowerCase().trim();
-    if (q.isEmpty) return [];
+    if (q.isEmpty) return _randomPeoplePreview;
 
     final matches = _people.where((person) {
       if (person.id == _myId) return false;
@@ -222,6 +222,14 @@ class _ExploreScreenState extends State<ExploreScreen>
       return aName.compareTo(bName);
     });
     return matches;
+  }
+
+  List<User> get _randomPeoplePreview {
+    final preview = peopleService.randomProfiles(excludeId: _myId);
+    final source = preview.isNotEmpty
+        ? preview
+        : _people.where((person) => person.id != _myId).toList();
+    return source.take(10).toList();
   }
 
   void _persist() => userPrefsService.save(_myId);

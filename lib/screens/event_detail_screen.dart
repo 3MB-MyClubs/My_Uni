@@ -13,6 +13,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/rsvp_store.dart';
+import '../services/supabase_event_service.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
@@ -28,6 +29,25 @@ import 'user_profile_screen.dart';
 // registration link, about, tags, programme timeline, speakers and a sticky
 // register / add-to-calendar CTA.
 // ─────────────────────────────────────────────────────────────────────────────
+
+bool _isRemoteEventImagePath(String path) =>
+    path.startsWith('http://') || path.startsWith('https://');
+
+Widget _eventHeroImage({required String path, required Color accent}) {
+  if (_isRemoteEventImagePath(path)) {
+    return Image.network(
+      path,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _GradientHero(color: accent),
+    );
+  }
+
+  return Image.file(
+    File(path),
+    fit: BoxFit.cover,
+    errorBuilder: (_, _, _) => _GradientHero(color: accent),
+  );
+}
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -155,8 +175,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ],
       ),
-    ).then((confirmed) {
+    ).then((confirmed) async {
       if (confirmed != true || !mounted) return;
+      try {
+        await supabaseEventService.deleteEvent(widget.event);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Could not delete event from Supabase.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
       final ok = contentStore.deleteEvent(widget.event.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {
@@ -474,8 +508,22 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
           ),
         ],
       ),
-    ).then((confirmed) {
+    ).then((confirmed) async {
       if (confirmed != true || !mounted) return;
+      try {
+        await supabaseEventService.deleteEvent(_event);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Could not delete event from Supabase.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
       contentStore.deleteEvent(_event.id, _adminId);
       if (mounted) Navigator.pop(context);
     });
@@ -753,11 +801,7 @@ class _AdminHero extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (hasImage)
-            Image.file(
-              File(event.imagePath!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _GradientHero(color: accent),
-            )
+            _eventHeroImage(path: event.imagePath!, accent: accent)
           else
             _GradientHero(color: accent),
 
@@ -1125,11 +1169,7 @@ class _Hero extends StatelessWidget {
         children: [
           // Photo / gradient
           if (hasImage)
-            Image.file(
-              File(event.imagePath!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _GradientHero(color: accent),
-            )
+            _eventHeroImage(path: event.imagePath!, accent: accent)
           else
             _GradientHero(color: accent),
 

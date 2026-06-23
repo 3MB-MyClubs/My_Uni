@@ -395,12 +395,14 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    _HeaderIconBtn(
-                      icon: Icons.notifications_outlined,
-                      badgeCount: newEventCount,
-                      onTap: _openNewEventNotifications,
-                    ),
+                    if (authService.isStudentSession) ...[
+                      const SizedBox(width: 10),
+                      _HeaderIconBtn(
+                        icon: Icons.notifications_outlined,
+                        badgeCount: newEventCount,
+                        onTap: _openNewEventNotifications,
+                      ),
+                    ],
                   ],
                 ),
               ),
