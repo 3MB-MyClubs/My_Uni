@@ -1,8 +1,10 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import '../models/notification.dart';
+import '../models/user.dart';
 import 'auth_service.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
@@ -85,6 +87,37 @@ class ClubNotificationService {
     userState.addNotification(n);
   }
 
+  String? _clubNotificationUserId(String clubId) {
+    for (final admin in clubAdmins) {
+      if (admin.id == clubId) return admin.id;
+    }
+
+    Club? club;
+    for (final candidate in clubs) {
+      if (candidate.id == clubId) {
+        club = candidate;
+        break;
+      }
+    }
+    return club != null && club.adminUserIds.isNotEmpty
+        ? club.adminUserIds.first
+        : clubId;
+  }
+
+  String _actorName(String userId) {
+    User? user;
+    for (final candidate in users) {
+      if (candidate.id == userId) {
+        user = candidate;
+        break;
+      }
+    }
+    if (user != null) return user.name;
+    final currentUser = authService.currentUser;
+    if (currentUser?.id == userId) return currentUser!.name;
+    return 'A student';
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────────
 
   /// Notifies all followers of [post.clubId] that a new post was published.
@@ -132,6 +165,50 @@ class ClubNotificationService {
         ),
       );
     }
+  }
+
+  void notifyClubAboutPostLike({
+    required NewsPost post,
+    required String actorUserId,
+  }) {
+    final recipientId = _clubNotificationUserId(post.clubId);
+    if (recipientId == null || recipientId == actorUserId) return;
+
+    final notifId = 'post_like_${post.id}_$actorUserId';
+    if (_alreadyNotified(notifId)) return;
+    _emit(
+      AppNotification(
+        id: notifId,
+        userId: recipientId,
+        message: '${_actorName(actorUserId)} liked your post',
+        createdAt: DateTime.now(),
+        targetType: 'post',
+        targetId: post.id,
+        fromId: actorUserId,
+      ),
+    );
+  }
+
+  void notifyClubAboutEventRsvp({
+    required Event event,
+    required String actorUserId,
+  }) {
+    final recipientId = _clubNotificationUserId(event.clubId);
+    if (recipientId == null || recipientId == actorUserId) return;
+
+    final notifId = 'event_rsvp_${event.id}_$actorUserId';
+    if (_alreadyNotified(notifId)) return;
+    _emit(
+      AppNotification(
+        id: notifId,
+        userId: recipientId,
+        message: "${_actorName(actorUserId)} RSVP'd to ${event.title}",
+        createdAt: DateTime.now(),
+        targetType: 'event',
+        targetId: event.id,
+        fromId: actorUserId,
+      ),
+    );
   }
 }
 

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import '../models/like.dart';
+import '../models/news_post.dart';
 import 'auth_service.dart';
+import 'club_notification_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
 import 'supabase_interaction_service.dart';
@@ -41,6 +43,21 @@ Future<void> togglePostLike(String postId) async {
         postId: postId,
         liked: !wasLiked,
       );
+      if (!wasLiked) {
+        NewsPost? post;
+        for (final candidate in newsPosts) {
+          if (candidate.id == postId) {
+            post = candidate;
+            break;
+          }
+        }
+        if (post != null) {
+          clubNotificationService.notifyClubAboutPostLike(
+            post: post,
+            actorUserId: studentUserId,
+          );
+        }
+      }
     }
   } catch (_) {
     userState.toggleLike(postId);

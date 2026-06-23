@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/event.dart';
 import 'auth_service.dart';
 import 'calendar_sync_service.dart';
+import 'club_notification_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
 import 'notification_service.dart';
@@ -104,6 +105,12 @@ class RsvpStore extends ChangeNotifier {
         debugPrint(
           'RSVP supabase write skipped: no current student user '
           'eventId=$eventId userId=$userId',
+        );
+      }
+      if (!wasAttending) {
+        clubNotificationService.notifyClubAboutEventRsvp(
+          event: event,
+          actorUserId: userId,
         );
       }
     } catch (error, stackTrace) {
