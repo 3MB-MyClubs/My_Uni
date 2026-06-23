@@ -1,5 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import '../models/user.dart';
+import 'people_service.dart';
 import 'supabase_config.dart';
 
 class SupabaseInteractionService {
@@ -43,6 +45,48 @@ class SupabaseInteractionService {
           .eq('profile_id', profileId)
           .eq('post_id', postId);
     }
+  }
+
+  Future<List<User>> fetchPostLikers(String postId) async {
+    final client = _client;
+    if (client == null || postId.isEmpty) return const [];
+
+    final rows = await client
+        .from('post_likes')
+        .select(
+          'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+        )
+        .eq('post_id', postId);
+
+    final users = <User>[];
+    for (final row in rows) {
+      final profile = (row as Map)['profiles'];
+      if (profile is! Map) continue;
+      users.add(await peopleService.userFromProfileMap(profile));
+    }
+    users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return users;
+  }
+
+  Future<List<User>> fetchPostViewers(String postId) async {
+    final client = _client;
+    if (client == null || postId.isEmpty) return const [];
+
+    final rows = await client
+        .from('post_views')
+        .select(
+          'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+        )
+        .eq('post_id', postId);
+
+    final users = <User>[];
+    for (final row in rows) {
+      final profile = (row as Map)['profiles'];
+      if (profile is! Map) continue;
+      users.add(await peopleService.userFromProfileMap(profile));
+    }
+    users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return users;
   }
 
   Future<Set<String>> fetchRsvpEventIds(String profileId) async {

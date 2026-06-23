@@ -5,6 +5,7 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/mock_data.dart';
+import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
@@ -387,6 +388,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                     clubId: widget.club.id,
                                     clubName: widget.club.name,
                                     color: widget.color,
+                                    imageUrl: widget.club.logoUrl,
                                     size: 104,
                                     fontSize: 46,
                                     borderRadius: 28,
@@ -891,6 +893,7 @@ class _ClubPostCompact extends StatelessWidget {
                             clubId: club.id,
                             clubName: club.name,
                             color: clubColor,
+                            imageUrl: club.logoUrl,
                             size: 52,
                             fontSize: 22,
                             borderRadius: 11,
@@ -1648,6 +1651,7 @@ class _CollaborationsTab extends StatelessWidget {
                         clubId: club.id,
                         clubName: club.name,
                         color: color,
+                        imageUrl: club.logoUrl,
                         size: 48,
                         fontSize: 20,
                         borderRadius: 14,
@@ -1756,6 +1760,7 @@ class _CollaborationsTab extends StatelessWidget {
                             clubId: authorClub.id,
                             clubName: authorClub.name,
                             color: color,
+                            imageUrl: authorClub.logoUrl,
                             size: 36,
                             fontSize: 15,
                             borderRadius: 10,
@@ -1835,6 +1840,7 @@ class _CollaborationsTab extends StatelessWidget {
                           clubId: authorClub.id,
                           clubName: authorClub.name,
                           color: color,
+                          imageUrl: authorClub.logoUrl,
                           size: 72,
                           fontSize: 30,
                           borderRadius: 20,
@@ -2783,7 +2789,7 @@ class _StatCell extends StatelessWidget {
 
 // ─── Members sheet ───────────────────────────────────────────────────────────
 
-class _ClubMembersSheet extends StatelessWidget {
+class _ClubMembersSheet extends StatefulWidget {
   final Club club;
   final Color color;
   final List<User> members;
@@ -2795,6 +2801,59 @@ class _ClubMembersSheet extends StatelessWidget {
     required this.members,
     required this.totalCount,
   });
+
+  @override
+  State<_ClubMembersSheet> createState() => _ClubMembersSheetState();
+}
+
+class _ClubMembersSheetState extends State<_ClubMembersSheet> {
+  late List<User> _members = widget.members;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMembers();
+  }
+
+  Future<void> _loadMembers() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final members = await peopleService.fetchClubMembers(widget.club.id);
+      if (!mounted) return;
+      setState(() {
+        if (members.isNotEmpty || widget.members.isEmpty) {
+          _members = _sortMembers(members);
+        }
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _members = _sortMembers(widget.members);
+        _loading = false;
+        _error = widget.members.isEmpty
+            ? 'Member profiles could not be loaded.'
+            : null;
+      });
+    }
+  }
+
+  List<User> _sortMembers(List<User> members) {
+    final sorted = [...members];
+    sorted.sort((a, b) {
+      final aBoard = widget.club.boardMemberIds.contains(a.id);
+      final bBoard = widget.club.boardMemberIds.contains(b.id);
+      if (aBoard != bBoard) return aBoard ? -1 : 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return sorted;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2819,13 +2878,41 @@ class _ClubMembersSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Members',
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${widget.totalCount}',
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_loading) LinearProgressIndicator(color: widget.color),
             Expanded(
-              child: members.isEmpty
+              child: _members.isEmpty
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 28),
                         child: Text(
-                          'No members to show yet.',
+                          _loading
+                              ? 'Loading members...'
+                              : _error ?? 'No members to show yet.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.secondaryText,
@@ -2837,14 +2924,14 @@ class _ClubMembersSheet extends StatelessWidget {
                   : ListView.separated(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
-                      itemCount: members.length,
+                      itemCount: _members.length,
                       separatorBuilder: (_, _) => Divider(
                         height: 1,
                         indent: 62,
                         color: AppColors.divider.withValues(alpha: 0.8),
                       ),
                       itemBuilder: (context, index) {
-                        final member = members[index];
+                        final member = _members[index];
 
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(

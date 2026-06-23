@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart'
     show
         CupertinoDatePicker,
@@ -14,7 +17,6 @@ import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
-import 'dart:io';
 import '../widgets/mention_text_field.dart';
 
 class CreateEventScreen extends StatefulWidget {
@@ -365,7 +367,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     events.add(newEvent);
     contentStore.saveEvents();
-    clubNotificationService.notifyFollowersAboutEvent(newEvent);
+    unawaited(clubNotificationService.notifyFollowersAboutEvent(newEvent));
     widget.onCreated?.call();
     Navigator.pop(context);
   }

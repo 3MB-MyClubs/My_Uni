@@ -29,6 +29,7 @@ import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../services/group_chat_service.dart';
+import '../services/supabase_interaction_service.dart';
 import 'group_chat_screen.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
@@ -221,13 +222,23 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    viewTracker.addListener(_onViewCountsChanged);
     _loadFeedContent();
     _loadPeopleDirectory();
   }
 
   @override
   void dispose() {
+    viewTracker.removeListener(_onViewCountsChanged);
     super.dispose();
+  }
+
+  void _onViewCountsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _hydrateVisiblePostViews() {
+    viewTracker.hydratePostViewCounts(newsPosts.map((post) => post.id));
   }
 
   Future<void> _onRefresh() async {
@@ -237,12 +248,14 @@ class _FeedScreenState extends State<FeedScreen> {
       // Keep currently loaded content if the network request fails.
     }
     await _loadPeopleDirectory();
+    _hydrateVisiblePostViews();
     setState(() {});
   }
 
   Future<void> _loadFeedContent() async {
     try {
       await lazyContentLoader.ensureContentLoaded();
+      _hydrateVisiblePostViews();
       if (mounted) setState(() {});
     } catch (_) {
       // Keep local seed data visible if Supabase content is unreachable.
@@ -1339,16 +1352,170 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
   }
 }
 
-class _ViewersSheet extends StatelessWidget {
+class _PeopleEngagementSheet extends StatelessWidget {
+  final IconData icon;
+  final String emptyText;
+  final List<User> people;
+  final ScrollController scrollController;
+
+  const _PeopleEngagementSheet({
+    required this.icon,
+    required this.emptyText,
+    required this.people,
+    required this.scrollController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Handle
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 6),
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.primaryRed, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${people.length} ${people.length == 1 ? 'person' : 'people'}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.text,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Icon(
+                  Icons.close,
+                  color: AppColors.secondaryText,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1),
+        Expanded(
+          child: people.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, color: AppColors.secondaryText, size: 40),
+                      SizedBox(height: 12),
+                      Text(
+                        emptyText,
+                        style: TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: people.length,
+                  separatorBuilder: (_, s) => Divider(height: 1, indent: 60),
+                  itemBuilder: (_, i) {
+                    final user = people[i];
+                    return ListTile(
+                      leading: UserAvatar(
+                        userId: user.id,
+                        name: user.name,
+                        size: 40,
+                        fontSize: 15,
+                      ),
+                      title: Text(
+                        user.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      subtitle: Text(
+                        user.email,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: user),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ViewersSheet extends StatefulWidget {
   final String contentId;
   final String title;
 
   const _ViewersSheet({required this.contentId, required this.title});
 
   @override
-  Widget build(BuildContext context) {
-    final viewerList = viewTracker.viewers(contentId);
+  State<_ViewersSheet> createState() => _ViewersSheetState();
+}
 
+class _ViewersSheetState extends State<_ViewersSheet> {
+  List<User> _viewers = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadViewers();
+  }
+
+  Future<void> _loadViewers() async {
+    var viewers = viewTracker.viewers(widget.contentId);
+
+    try {
+      final remote = await supabaseInteractionService.fetchPostViewers(
+        widget.contentId,
+      );
+      if (remote.isNotEmpty) viewers = remote;
+    } catch (_) {
+      // Keep local/Hive viewers.
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _viewers = viewers;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       initialChildSize: 0.5,
       minChildSize: 0.3,
@@ -1358,119 +1525,87 @@ class _ViewersSheet extends StatelessWidget {
           color: AppColors.card,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Column(
-          children: [
-            // Handle
-            Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 6),
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        child: _loading
+            ? Center(
+                child: CircularProgressIndicator(color: AppColors.primaryRed),
+              )
+            : _PeopleEngagementSheet(
+                icon: Icons.remove_red_eye_outlined,
+                emptyText: 'No views yet',
+                people: _viewers,
+                scrollController: scrollController,
               ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.remove_red_eye_outlined,
-                    color: AppColors.primaryRed,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${viewerList.length} viewer${viewerList.length == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppColors.text,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(
-                      Icons.close,
-                      color: AppColors.secondaryText,
-                      size: 22,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1),
-            // List
-            Expanded(
-              child: viewerList.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.visibility_off_outlined,
-                            color: AppColors.secondaryText,
-                            size: 40,
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'No views yet',
-                            style: TextStyle(
-                              color: AppColors.secondaryText,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.separated(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: viewerList.length,
-                      separatorBuilder: (_, s) =>
-                          Divider(height: 1, indent: 60),
-                      itemBuilder: (_, i) {
-                        final user = viewerList[i];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            radius: 20,
-                            backgroundColor: AppColors.primaryRed.withValues(
-                              alpha: 0.12,
-                            ),
-                            child: Text(
-                              user.name.isNotEmpty ? user.name[0] : '?',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryRed,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            user.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            user.email,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+      ),
+    );
+  }
+}
+
+class _LikersSheet extends StatefulWidget {
+  final String postId;
+
+  const _LikersSheet({required this.postId});
+
+  @override
+  State<_LikersSheet> createState() => _LikersSheetState();
+}
+
+class _LikersSheetState extends State<_LikersSheet> {
+  List<User> _likers = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLikers();
+  }
+
+  Future<void> _loadLikers() async {
+    var likers = users
+        .where((user) {
+          return likes.any(
+            (like) => like.postId == widget.postId && like.userId == user.id,
+          );
+        })
+        .toList()
+        .cast<User>();
+
+    try {
+      final remote = await supabaseInteractionService.fetchPostLikers(
+        widget.postId,
+      );
+      if (remote.isNotEmpty) likers = remote;
+    } catch (_) {
+      // Keep local/mock likers.
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _likers = likers;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      builder: (_, scrollController) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
+        child: _loading
+            ? Center(
+                child: CircularProgressIndicator(color: AppColors.primaryRed),
+              )
+            : _PeopleEngagementSheet(
+                icon: Icons.favorite_rounded,
+                emptyText: 'No likes yet',
+                people: _likers,
+                scrollController: scrollController,
+              ),
       ),
     );
   }
@@ -1572,7 +1707,7 @@ class _PostCardState extends State<_PostCard>
     // Record this user as having seen the post
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    viewTracker.recordView(widget.post.id, userId);
+    viewTracker.recordView(widget.post.id, userId, syncRemote: true);
   }
 
   @override
@@ -1906,6 +2041,12 @@ class _PostCardState extends State<_PostCard>
                         contentId: widget.post.id,
                         title: 'Post Viewers',
                       ),
+                    ),
+                    onLikeTap: () => showModalBottomSheet<void>(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (_) => _LikersSheet(postId: widget.post.id),
                     ),
                   ),
                 ],
@@ -2352,6 +2493,7 @@ class _EngagementBar extends StatelessWidget {
   final int views;
   final double score;
   final VoidCallback? onViewTap;
+  final VoidCallback? onLikeTap;
 
   const _EngagementBar({
     required this.likes,
@@ -2359,6 +2501,7 @@ class _EngagementBar extends StatelessWidget {
     required this.score,
     this.views = 0,
     this.onViewTap,
+    this.onLikeTap,
   });
 
   @override
@@ -2391,14 +2534,25 @@ class _EngagementBar extends StatelessWidget {
         ],
         if (likes > 0) ...[
           if (views > 0) const SizedBox(width: 10),
-          Icon(Icons.favorite, size: 13, color: Colors.pink),
-          const SizedBox(width: 3),
-          Text(
-            '$likes likes',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.text,
+          GestureDetector(
+            onTap: onLikeTap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.favorite, size: 13, color: Colors.pink),
+                const SizedBox(width: 3),
+                Text(
+                  '$likes likes',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                    decoration: onLikeTap == null
+                        ? TextDecoration.none
+                        : TextDecoration.underline,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

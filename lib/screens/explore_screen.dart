@@ -80,9 +80,6 @@ class _ExploreScreenState extends State<ExploreScreen>
     super.dispose();
   }
 
-  // ─── Category inference ──────────────────────────────────────────────────
-  // The Club model has no category field, so we infer one from the name so the
-  // filter chips do real work across every club.
   Future<void> _loadClubContent() async {
     try {
       await lazyContentLoader.ensureContentLoaded();
@@ -93,6 +90,9 @@ class _ExploreScreenState extends State<ExploreScreen>
   }
 
   static String categoryFor(Club club) {
+    final category = club.categoryName?.trim();
+    if (category != null && category.isNotEmpty) return category;
+
     final n = club.name.toLowerCase();
     bool has(List<String> keys) => keys.any(n.contains);
 
@@ -150,10 +150,14 @@ class _ExploreScreenState extends State<ExploreScreen>
   List<Club> get _filteredClubs {
     final q = _clubQuery.toLowerCase();
     return clubs.where((c) {
+      final category = categoryFor(c).toLowerCase();
       final matchesQuery =
           q.isEmpty ||
           c.name.toLowerCase().contains(q) ||
-          c.description.toLowerCase().contains(q);
+          c.description.toLowerCase().contains(q) ||
+          (c.shortName?.toLowerCase().contains(q) ?? false) ||
+          (c.email?.toLowerCase().contains(q) ?? false) ||
+          category.contains(q);
       return matchesQuery;
     }).toList();
   }
@@ -786,6 +790,7 @@ class _ClubRow extends StatelessWidget {
               clubId: club.id,
               clubName: club.name,
               color: color,
+              imageUrl: club.logoUrl,
               size: 48,
               fontSize: 20,
               borderRadius: 14,

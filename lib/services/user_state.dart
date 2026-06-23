@@ -17,6 +17,7 @@ class UserState extends ChangeNotifier {
   final Set<String> savedPostIds = {};
   // User-to-user follows — pre-seeded for demo (assumes Bob/u2 is logged in)
   final Set<String> followedUserIds = {'u1', 'u4'};
+  @Deprecated('Use unreadNotificationCountFor instead.')
   int unreadNotifications = 3;
 
   // Profile photo image paths keyed by user/admin id.
@@ -281,9 +282,7 @@ class UserState extends ChangeNotifier {
   /// Adds a follow-request notification WITHOUT firing the in-app banner
   /// (it already shows as a card in the alerts tab).
   void addFollowRequestNotification(AppNotification n) {
-    dynamicNotifications.insert(0, n);
-    unreadNotifications++;
-    contentStore.saveDynamicNotifications(dynamicNotifications);
+    addNotification(n);
   }
 
   // ── Message requests ──────────────────────────────────────────────────────────
@@ -301,6 +300,7 @@ class UserState extends ChangeNotifier {
 
   /// Dynamic notifications generated at runtime (e.g. incoming messages).
   final List<AppNotification> dynamicNotifications = [];
+  final Set<String> readNotificationIds = {};
 
   /// Fires whenever a new incoming-message notification is added.
   final ValueNotifier<AppNotification?> incomingMessageNotifier = ValueNotifier(
@@ -308,14 +308,58 @@ class UserState extends ChangeNotifier {
   );
 
   void addMessageNotification(AppNotification n) {
-    dynamicNotifications.insert(0, n);
-    unreadNotifications++;
-    contentStore.saveDynamicNotifications(dynamicNotifications);
+    addNotification(n);
     incomingMessageNotifier.value = n;
     Future.delayed(
       const Duration(seconds: 4),
       () => incomingMessageNotifier.value = null,
     );
+  }
+
+  void addNotification(AppNotification n) {
+    if (n.targetType == 'story') return;
+    if (dynamicNotifications.any((existing) => existing.id == n.id)) return;
+    dynamicNotifications.insert(0, n);
+    unreadNotifications++;
+    contentStore.saveDynamicNotifications(dynamicNotifications);
+    notifyListeners();
+  }
+
+  void replaceReadNotificationIds(Iterable<String> ids) {
+    readNotificationIds
+      ..clear()
+      ..addAll(ids);
+    notifyListeners();
+  }
+
+  bool isNotificationRead(AppNotification n) =>
+      n.read || readNotificationIds.contains(n.id);
+
+  int unreadNotificationCountFor(Iterable<AppNotification> source) {
+    return source.where((n) {
+      return n.targetType != 'story' && !isNotificationRead(n);
+    }).length;
+  }
+
+  void markNotificationRead(AppNotification n) {
+    if (readNotificationIds.add(n.id)) {
+      unreadNotifications = unreadNotificationCountFor(dynamicNotifications);
+      contentStore.saveReadNotificationIds(readNotificationIds);
+      notifyListeners();
+    }
+  }
+
+  void markNotificationsRead(Iterable<AppNotification> source) {
+    var changed = false;
+    for (final n in source) {
+      if (n.targetType == 'story') continue;
+      changed = readNotificationIds.add(n.id) || changed;
+    }
+    if (changed) {
+      unreadNotifications = unreadNotificationCountFor(dynamicNotifications);
+      contentStore.saveReadNotificationIds(readNotificationIds);
+      notifyListeners();
+    }
   }
 
   // ── Pinned club posts (global; set by a club's admin) ───────────────────────

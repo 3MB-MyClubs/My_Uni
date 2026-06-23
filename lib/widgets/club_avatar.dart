@@ -18,6 +18,7 @@ class ClubAvatar extends StatelessWidget {
   final double fontSize;
   final String shape; // 'circle' | 'rounded'
   final double borderRadius;
+  final String? imageUrl;
 
   const ClubAvatar({
     super.key,
@@ -28,6 +29,7 @@ class ClubAvatar extends StatelessWidget {
     this.fontSize = 20,
     this.shape = 'rounded',
     this.borderRadius = 14,
+    this.imageUrl,
   });
 
   @override
@@ -36,7 +38,7 @@ class ClubAvatar extends StatelessWidget {
       listenable: userState,
       builder: (context, _) {
         final photoPath = userState.clubPhotoPaths[clubId];
-        final fallbackUrl = userState.mockClubPhotoUrls[clubId];
+        final fallbackUrl = imageUrl ?? userState.mockClubPhotoUrls[clubId];
         final isCircle = shape == 'circle';
 
         if (photoPath != null && _isNetworkImage(photoPath)) {

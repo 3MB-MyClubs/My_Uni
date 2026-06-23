@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
@@ -6,7 +7,7 @@ import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
-import '../models/news_post.dart';
+import '../services/supabase_post_service.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/mention_text_field.dart';
 
@@ -280,7 +281,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     ),
   ];
 
-  void _post() {
+  Future<void> _post() async {
     final content = _contentController.text.trim();
     if (content.isEmpty || _selectedClub == null) return;
     if (_requiresPhoto && !_hasUploadedPhoto) {
@@ -296,21 +297,51 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
     setState(() => _isPosting = true);
 
-    final post = NewsPost(
-      id: 'p_${DateTime.now().millisecondsSinceEpoch}',
-      clubId: _selectedClub!.id,
-      authorId: authService.currentAdmin?.id ?? '',
-      content: content,
-      createdAt: DateTime.now(),
-      taggedClubIds: _extractTaggedClubIds(content),
-      taggedUserIds: _extractTaggedUserIds(content),
-      imagePath: _requiresPhoto ? _imagePath : null,
-    );
-    newsPosts.insert(0, post);
-    contentStore.saveNewsPosts();
-    clubNotificationService.notifyFollowersAboutPost(post);
-    widget.onPosted?.call();
-    Navigator.of(context).pop();
+    try {
+      final post = await supabasePostService.createPost(
+        clubId: _selectedClub!.id,
+        authorId: authService.currentAdmin?.id ?? '',
+        content: content,
+        taggedClubIds: _extractTaggedClubIds(content),
+        taggedUserIds: _extractTaggedUserIds(content),
+        imagePath: _requiresPhoto ? _imagePath : null,
+      );
+      if (!mounted) return;
+      newsPosts.insert(0, post);
+      unawaited(contentStore.saveNewsPosts());
+      unawaited(clubNotificationService.notifyFollowersAboutPost(post));
+      widget.onPosted?.call();
+      Navigator.of(context).pop();
+    } catch (error, stackTrace) {
+      debugPrint('Create post failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_publishErrorMessage(error)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+  }
+
+  String _publishErrorMessage(Object error) {
+    final text = error.toString();
+    if (text.contains('row-level security') ||
+        text.contains('permission denied') ||
+        text.contains('42501')) {
+      return 'Could not publish post. Check club_posts RLS policies for this club account.';
+    }
+    if (text.contains('image_path') || text.contains('column')) {
+      return 'Could not publish post. Run the latest club_posts SQL migration.';
+    }
+    if (text.contains('post-images') || text.contains('storage')) {
+      return 'Could not upload photo. Check the post-images bucket policies.';
+    }
+    return 'Could not publish post. Check Supabase settings.';
   }
 
   bool get _canPost =>
@@ -343,7 +374,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               opacity: _canPost ? 1.0 : 0.4,
               duration: const Duration(milliseconds: 150),
               child: ElevatedButton(
-                onPressed: _canPost && !_isPosting ? _post : null,
+                onPressed: _canPost && !_isPosting ? () => _post() : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
                   foregroundColor: Colors.white,
@@ -357,10 +388,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: Text(
-                  'Post',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
+                child: _isPosting
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Post',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
               ),
             ),
           ),

@@ -7,6 +7,7 @@ import 'auth_service.dart';
 import 'calendar_sync_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
+import 'notification_service.dart';
 import 'supabase_interaction_service.dart';
 
 class _Entry {
@@ -46,8 +47,10 @@ class RsvpStore extends ChangeNotifier {
         if (!event.attendeeUserIds.contains(userId)) {
           event.attendeeUserIds.add(userId);
         }
+        _ignore(notificationService.scheduleEventReminders(event));
       } else {
         event.attendeeUserIds.remove(userId);
+        _ignore(notificationService.cancelEventReminders(event.id));
       }
     }
     notifyListeners();
@@ -75,8 +78,10 @@ class RsvpStore extends ChangeNotifier {
 
     if (wasAttending) {
       _ignore(calendarSyncService.removeEventFromDeviceCalendar(event, userId));
+      _ignore(notificationService.cancelEventReminders(event.id));
     } else {
       _ignore(calendarSyncService.syncEventsToDeviceCalendar([event], userId));
+      _ignore(notificationService.scheduleEventReminders(event));
     }
 
     try {
@@ -113,6 +118,11 @@ class RsvpStore extends ChangeNotifier {
         attending: wasAttending,
         timestamp: previousTimestamp,
       );
+      if (wasAttending) {
+        _ignore(notificationService.scheduleEventReminders(event));
+      } else {
+        _ignore(notificationService.cancelEventReminders(event.id));
+      }
       unawaited(contentStore.saveEvents());
       debugPrint(
         'RSVP local rollback complete: eventId=$eventId '

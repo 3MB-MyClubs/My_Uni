@@ -349,7 +349,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   }
 
   void _onNotificationsOpened() {
-    setState(() => userState.unreadNotifications = 0);
+    final currentId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final visible = [
+      ...notifications,
+      ...userState.dynamicNotifications,
+    ].where((n) => n.userId == currentId && n.targetType != 'story');
+    userState.markNotificationsRead(visible);
   }
 
   bool get _isClubAdmin {
@@ -426,6 +432,15 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   }
 
   Widget _buildBottomNav(BuildContext context) {
+    final currentId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final unreadAlerts = userState.unreadNotificationCountFor(
+      [
+        ...notifications,
+        ...userState.dynamicNotifications,
+      ].where((n) => n.userId == currentId && n.targetType != 'story'),
+    );
+
     return SafeArea(
       top: false,
       child: Padding(
@@ -484,7 +499,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 activeIcon: Icons.notifications_rounded,
                 label: 'Alerts',
                 selected: _selectedIndex == 3,
-                badge: userState.unreadNotifications,
+                badge: unreadAlerts,
                 onTap: () {
                   setState(() => _selectedIndex = 3);
                   _onNotificationsOpened();

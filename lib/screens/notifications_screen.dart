@@ -26,7 +26,6 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final Set<String> _read = {};
   String _filter = 'all'; // all | you | events | clubs
 
   static const List<({String k, String l})> _filters = [
@@ -49,15 +48,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    // Treat already-read notifications and anything older than ~18h as
-    // "Earlier" (seen), so the New / Earlier split is meaningful on open.
-    final cutoff = DateTime.now().subtract(const Duration(hours: 18));
-    for (final n in _allNotifs) {
-      if (n.read || n.createdAt.isBefore(cutoff)) _read.add(n.id);
-    }
   }
 
-  bool _isUnread(AppNotification n) => !_read.contains(n.id);
+  bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
 
   // ── Filter category ─────────────────────────────────────────────────────────
   String _category(AppNotification n) {
@@ -81,17 +74,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
-    if (_read.contains(n.id)) return;
-    setState(() {
-      _read.add(n.id);
-      if (userState.unreadNotifications > 0) userState.unreadNotifications--;
-    });
+    userState.markNotificationRead(n);
   }
 
-  void _markAllRead() => setState(() {
-    _read.addAll(_allNotifs.map((n) => n.id));
-    userState.unreadNotifications = 0;
-  });
+  void _markAllRead() => userState.markNotificationsRead(_allNotifs);
 
   // ── Time helper ───────────────────────────────────────────────────────────
   String _timeAgo(DateTime dt) {

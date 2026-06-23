@@ -134,6 +134,48 @@ class PeopleService {
     }
   }
 
+  Future<List<User>> fetchClubMembers(String clubId) async {
+    final client = _client;
+    if (client == null || clubId.isEmpty) return const [];
+
+    final followerRows = await client
+        .from('club_followers')
+        .select('profile_id')
+        .eq('club_id', clubId);
+
+    final profileIds = followerRows
+        .map((row) => row['profile_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (profileIds.isEmpty) return const [];
+
+    final rows = await client
+        .from('profiles')
+        .select(
+          'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+        )
+        .inFilter('id', profileIds);
+
+    final majorNames = await _lookupNames('majors');
+    final yearNames = await _lookupNames('academic_years');
+    final members = rows.map((row) {
+      return _userFromProfileRow(
+        Map<String, dynamic>.from(row as Map),
+        majorNames: majorNames,
+        yearNames: yearNames,
+        subscribedClubIds: [clubId],
+      );
+    }).toList();
+
+    final fetchedIds = members.map((user) => user.id).toSet();
+    _cachedPeople = [
+      ..._cachedPeople.where((user) => !fetchedIds.contains(user.id)),
+      ...members,
+    ];
+    return members;
+  }
+
   Future<void> refreshPeopleDirectory({String? excludeId}) async {
     final currentUserId = excludeId ?? '';
     await hydrateFollowing(currentUserId);
@@ -189,6 +231,27 @@ class PeopleService {
 
   List<User> followingFor(String userId) {
     return peopleByIds(_followingByUserId[userId] ?? const {});
+  }
+
+  Future<User> userFromProfileMap(Map<dynamic, dynamic> profile) async {
+    final majorNames = await _lookupNames('majors');
+    final yearNames = await _lookupNames('academic_years');
+    final user = _userFromProfileRow(
+      Map<String, dynamic>.from(profile),
+      majorNames: majorNames,
+      yearNames: yearNames,
+    );
+    final exists = _cachedPeople.any((cached) => cached.id == user.id);
+    _cachedPeople = [
+      ..._cachedPeople.where((cached) => cached.id != user.id),
+      user,
+    ];
+    if (!exists) {
+      _cachedPeople.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+    }
+    return user;
   }
 
   List<User> randomProfiles({String? excludeId}) {
@@ -270,36 +333,49 @@ class PeopleService {
 
     final majorNames = await _lookupNames('majors');
     final yearNames = await _lookupNames('academic_years');
-    final loaded = rows.map((row) {
-      final id = row['id'].toString();
-      final avatarUrl = _nullableString(row['avatar_url']);
-      if (avatarUrl != null) userState.setProfilePhotoUrl(id, avatarUrl);
-
-      final bio = _nullableString(row['bio']);
-      if (bio != null) userState.setBio(id, bio);
-
-      final majorName = majorNames[_nullableString(row['major_id'])];
-      if (majorName != null) userState.setMajor(id, majorName);
-
-      final yearName = yearNames[_nullableString(row['academic_year_id'])];
-      if (yearName != null) userState.setYear(id, yearName);
-
-      final name = _string(row['full_name']);
-      final email = _string(row['email']);
-      return User(
-        id: id,
-        name: name.isEmpty ? email : name,
-        email: email,
-        password: '',
-        role: _string(row['role'], fallback: 'student'),
-        subscribedClubIds: const [],
-      );
-    });
+    final loaded = rows.map(
+      (row) => _userFromProfileRow(
+        Map<String, dynamic>.from(row as Map),
+        majorNames: majorNames,
+        yearNames: yearNames,
+      ),
+    );
 
     _cachedPeople = [
       ..._cachedPeople.where((user) => !missingIds.contains(user.id)),
       ...loaded,
     ];
+  }
+
+  User _userFromProfileRow(
+    Map<String, dynamic> row, {
+    required Map<String, String> majorNames,
+    required Map<String, String> yearNames,
+    List<String> subscribedClubIds = const [],
+  }) {
+    final id = row['id'].toString();
+    final avatarUrl = _nullableString(row['avatar_url']);
+    if (avatarUrl != null) userState.setProfilePhotoUrl(id, avatarUrl);
+
+    final bio = _nullableString(row['bio']);
+    if (bio != null) userState.setBio(id, bio);
+
+    final majorName = majorNames[_nullableString(row['major_id'])];
+    if (majorName != null) userState.setMajor(id, majorName);
+
+    final yearName = yearNames[_nullableString(row['academic_year_id'])];
+    if (yearName != null) userState.setYear(id, yearName);
+
+    final name = _string(row['full_name']);
+    final email = _string(row['email']);
+    return User(
+      id: id,
+      name: name.isEmpty ? email : name,
+      email: email,
+      password: '',
+      role: _string(row['role'], fallback: 'student'),
+      subscribedClubIds: subscribedClubIds,
+    );
   }
 
   String _string(dynamic value, {String fallback = ''}) {

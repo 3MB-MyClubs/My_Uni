@@ -112,6 +112,15 @@ class ContentStore {
         ns.where((n) => n.targetType != 'story').map((n) => n.toMap()).toList(),
       );
 
+  Future<void> saveReadNotificationIds(Set<String> ids) async =>
+      _box.put('readNotifIds', ids.toList());
+
+  Set<String> loadReadNotificationIds() {
+    final raw = _box.get('readNotifIds');
+    if (raw is! List) return <String>{};
+    return raw.map((id) => id.toString()).toSet();
+  }
+
   List<AppNotification>? loadDynamicNotifications() {
     final raw = _box.get('dynNotifs');
     if (raw == null) return null;

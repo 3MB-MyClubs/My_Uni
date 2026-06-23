@@ -18,7 +18,7 @@ class SupabaseContentService {
     if (client == null) return;
 
     final results = await Future.wait([
-      client.from('clubs').select(),
+      client.from('clubs').select('*, club_categories(name)'),
       client.from('events').select().order('starts_at', ascending: true),
       client.from('club_posts').select().order('created_at', ascending: false),
     ]);
@@ -131,12 +131,28 @@ class SupabaseContentService {
     return Club(
       id: id,
       name: _string(row, ['name', 'title'], fallback: 'Club'),
+      shortName: _nullableString(row, ['short_name', 'shortName']),
       description: _string(row, ['description', 'bio']),
+      logoUrl: _nullableString(row, ['logo_url', 'logoUrl']),
+      categoryId: _nullableString(row, ['category_id', 'categoryId']),
+      categoryName: _categoryName(row),
+      email: _nullableString(row, ['email']),
       adminUserIds: adminIds,
       boardMemberIds: _stringList(
         row['board_member_ids'] ?? row['boardMemberIds'],
       ),
     );
+  }
+
+  String? _categoryName(Map<String, dynamic> row) {
+    final direct = _nullableString(row, ['category_name', 'categoryName']);
+    if (direct != null) return direct;
+
+    final category = row['club_categories'] ?? row['category'];
+    if (category is Map) {
+      return _nullableString(Map<String, dynamic>.from(category), ['name']);
+    }
+    return null;
   }
 
   Event _eventFromRow(Map<String, dynamic> row) {
@@ -197,8 +213,21 @@ class SupabaseContentService {
       taggedUserIds: _stringList(
         row['tagged_user_ids'] ?? row['taggedUserIds'],
       ),
-      imagePath: _nullableString(row, ['image_url', 'image_path', 'imagePath']),
+      imagePath: _postImagePath(row),
     );
+  }
+
+  String? _postImagePath(Map<String, dynamic> row) {
+    final imageUrl = _nullableString(row, ['image_url', 'imageUrl']);
+    if (imageUrl != null) return imageUrl;
+
+    final imagePath = _nullableString(row, ['image_path', 'imagePath']);
+    final client = _client;
+    if (client == null || imagePath == null) return imagePath;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    return client.storage.from('post-images').getPublicUrl(imagePath);
   }
 
   String _string(

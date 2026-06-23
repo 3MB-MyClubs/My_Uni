@@ -53,6 +53,7 @@ void main() async {
       ..clear()
       ..addAll(dynNotifs);
   }
+  userState.replaceReadNotificationIds(contentStore.loadReadNotificationIds());
   runApp(const ProviderScope(child: MyApp()));
 }
 
