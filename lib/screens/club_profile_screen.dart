@@ -160,7 +160,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     });
   }
 
-  String _handleFor(String name) {
+  String _handleFor(Club club) {
+    final shortName = club.shortName?.trim();
+    if (shortName != null && shortName.isNotEmpty) {
+      return shortName
+          .replaceFirst(RegExp(r'^@+'), '')
+          .replaceAll(RegExp(r'\s+'), '')
+          .toLowerCase();
+    }
+
+    final name = club.name;
     final words = name.split(RegExp(r'[\s\-]+'));
     final initials = words
         .where((w) => w.isNotEmpty && RegExp(r'[A-Za-z]').hasMatch(w[0]))
@@ -205,8 +214,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final subText = AppColors.secondaryText;
     final panelText = AppColors.text;
     final bodyText = _clubPageBodyText(context);
-    final handle = _handleFor(widget.club.name);
+    final handle = _handleFor(widget.club);
     final showFollowAction = !_isThisClubAdmin;
+    final categoryLabel = widget.club.categoryName?.trim();
 
     return Scaffold(
       backgroundColor: bg,
@@ -472,33 +482,28 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                   ),
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 9,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryRed.withValues(
-                                    alpha: 0.18,
+                              if (categoryLabel != null &&
+                                  categoryLabel.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 2,
                                   ),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  'Cultural',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.primaryRed,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryRed.withValues(
+                                      alpha: 0.18,
+                                    ),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    categoryLabel,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primaryRed,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Text(
-                                '· Est. 2010',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
                             ],
                           ),
 
