@@ -63,6 +63,8 @@ class _ExploreScreenState extends State<ExploreScreen>
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
+  bool get _canFollowPeople => authService.isStudentSession;
+
   @override
   void initState() {
     super.initState();
@@ -250,6 +252,8 @@ class _ExploreScreenState extends State<ExploreScreen>
   }
 
   Future<void> _togglePersonFollow(User person) async {
+    if (!_canFollowPeople) return;
+
     final nowFollowing = !userState.isFollowingUser(person.id);
     final feedbackVersion = ++_peopleFeedbackVersion;
 
@@ -712,6 +716,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                   subtitle: _personSubtitle(person),
                   sharedTags: _sharedClubNames(person),
                   color: _hueFor(personIndex),
+                  canFollow: _canFollowPeople,
                   following: userState.isFollowingUser(person.id),
                   onFollow: () => _togglePersonFollow(person),
                   onOpen: () => Navigator.push(
@@ -844,6 +849,7 @@ class _PersonRow extends StatefulWidget {
   final String subtitle;
   final List<String> sharedTags;
   final Color color;
+  final bool canFollow;
   final bool following;
   final VoidCallback onFollow;
   final VoidCallback onOpen;
@@ -855,6 +861,7 @@ class _PersonRow extends StatefulWidget {
     required this.subtitle,
     required this.sharedTags,
     required this.color,
+    required this.canFollow,
     required this.following,
     required this.onFollow,
     required this.onOpen,
@@ -884,7 +891,7 @@ class _PersonRowState extends State<_PersonRow> {
   }
 
   Future<void> _toggleFollow() async {
-    if (_changing) return;
+    if (_changing || !widget.canFollow) return;
     setState(() {
       _changing = true;
       _displayFollowing = !_displayFollowing;
@@ -976,65 +983,66 @@ class _PersonRowState extends State<_PersonRow> {
               ),
             ),
             const SizedBox(width: 10),
-            GestureDetector(
-              onTap: _toggleFollow,
-              child: AnimatedScale(
-                scale: _changing ? 1.06 : 1,
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutBack,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  height: 34,
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _displayFollowing
-                        ? AppColors.lightRed
-                        : AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
+            if (widget.canFollow)
+              GestureDetector(
+                onTap: _toggleFollow,
+                child: AnimatedScale(
+                  scale: _changing ? 1.06 : 1,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    height: 34,
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
                       color: _displayFollowing
-                          ? AppColors.primaryRed
-                          : Colors.transparent,
-                      width: 1.5,
+                          ? AppColors.lightRed
+                          : AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: _displayFollowing
+                            ? AppColors.primaryRed
+                            : Colors.transparent,
+                        width: 1.5,
+                      ),
                     ),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: animation,
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                    child: Row(
-                      key: ValueKey(_displayFollowing),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _displayFollowing
-                              ? Icons.check_rounded
-                              : Icons.person_add_alt_1_rounded,
-                          size: 15,
-                          color: _displayFollowing
-                              ? AppColors.primaryRed
-                              : Colors.white,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          _displayFollowing ? 'Following' : 'Follow',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      transitionBuilder: (child, animation) => ScaleTransition(
+                        scale: animation,
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child: Row(
+                        key: ValueKey(_displayFollowing),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _displayFollowing
+                                ? Icons.check_rounded
+                                : Icons.person_add_alt_1_rounded,
+                            size: 15,
                             color: _displayFollowing
                                 ? AppColors.primaryRed
                                 : Colors.white,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 5),
+                          Text(
+                            _displayFollowing ? 'Following' : 'Follow',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _displayFollowing
+                                  ? AppColors.primaryRed
+                                  : Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

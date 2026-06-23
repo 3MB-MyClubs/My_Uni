@@ -59,7 +59,7 @@ class SupabaseContentService {
 
     final nextMemberCounts = <String, int>{};
     final nextPostLikeCounts = <String, int>{};
-    final nextEventRsvpCounts = <String, int>{};
+    final nextEventRsvpIds = <String, List<String>>{};
 
     try {
       final rows = await client
@@ -96,24 +96,25 @@ class SupabaseContentService {
 
     try {
       final rows = await client
-          .from('event_rsvp_counts')
-          .select('event_id, rsvp_count');
+          .from('event_rsvps')
+          .select('event_id, profile_id');
       for (final row in rows) {
         final raw = row as Map;
         final eventId = raw['event_id']?.toString() ?? '';
-        final count = int.tryParse(raw['rsvp_count']?.toString() ?? '') ?? 0;
-        if (eventId.isNotEmpty) nextEventRsvpCounts[eventId] = count;
+        final profileId = raw['profile_id']?.toString() ?? '';
+        if (eventId.isEmpty || profileId.isEmpty) continue;
+        (nextEventRsvpIds[eventId] ??= []).add(profileId);
       }
     } catch (_) {
-      // Keep existing event attendee counts if the view has not been created.
+      // Keep existing event attendee ids if the RSVP table is unavailable.
     }
 
     for (final event in events) {
-      final count = nextEventRsvpCounts[event.id];
-      if (count == null) continue;
+      final attendeeIds = nextEventRsvpIds[event.id];
+      if (attendeeIds == null) continue;
       event.attendeeUserIds
         ..clear()
-        ..addAll(List.generate(count, (index) => 'rsvp_count_$index'));
+        ..addAll(attendeeIds.toSet());
     }
 
     supabaseClubMemberCounts

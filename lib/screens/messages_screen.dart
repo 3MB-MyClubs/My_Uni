@@ -28,7 +28,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   bool _isStudentUserId(String id) => users.any((u) => u.id == id);
   bool get _canUseMessages =>
-      authService.currentUser != null && _isStudentUserId(_myId);
+      authService.isStudentSession && _isStudentUserId(_myId);
 
   // All contacts: every student user except self.
   List<_Contact> get _allContacts {

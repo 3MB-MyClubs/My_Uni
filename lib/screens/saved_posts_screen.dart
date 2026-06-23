@@ -39,7 +39,7 @@ class SavedPostsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isStudent = authService.currentUser != null;
+    final isStudent = authService.isStudentSession;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -124,7 +124,11 @@ class SavedPostsScreen extends StatelessWidget {
                 ),
                 onRemove: () {
                   userState.toggleSave(post.id);
-                  userPrefsService.save(authService.currentUser?.id ?? '');
+                  userPrefsService.save(
+                    authService.isStudentSession
+                        ? authService.currentUser?.id ?? ''
+                        : '',
+                  );
                 },
               );
             },

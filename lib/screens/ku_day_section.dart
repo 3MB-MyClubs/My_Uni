@@ -919,6 +919,8 @@ class _PersonActionsState extends State<_PersonActions> {
   }
 
   void _toggleFollow() {
+    if (!authService.isStudentSession) return;
+
     userState.toggleFollowUser(widget.user.id);
     setState(() => _following = !_following);
     widget.onChanged();
@@ -926,32 +928,36 @@ class _PersonActionsState extends State<_PersonActions> {
 
   @override
   Widget build(BuildContext context) {
+    final canInteractWithStudent = authService.isStudentSession;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        _ActionChip(
-          label: _following ? 'Following ✓' : 'Follow',
-          icon: _following ? Icons.person_rounded : Icons.person_add_outlined,
-          color: widget.color,
-          filled: _following,
-          onTap: _toggleFollow,
-        ),
-        _ActionChip(
-          label: 'Message',
-          icon: Icons.chat_bubble_outline_rounded,
-          color: widget.color,
-          filled: false,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                otherUserId: widget.user.id,
-                otherUserName: widget.user.name,
+        if (canInteractWithStudent) ...[
+          _ActionChip(
+            label: _following ? 'Following ✓' : 'Follow',
+            icon: _following ? Icons.person_rounded : Icons.person_add_outlined,
+            color: widget.color,
+            filled: _following,
+            onTap: _toggleFollow,
+          ),
+          _ActionChip(
+            label: 'Message',
+            icon: Icons.chat_bubble_outline_rounded,
+            color: widget.color,
+            filled: false,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  otherUserId: widget.user.id,
+                  otherUserName: widget.user.name,
+                ),
               ),
             ),
           ),
-        ),
+        ],
         _ActionChip(
           label: 'Profile',
           icon: Icons.open_in_new_rounded,

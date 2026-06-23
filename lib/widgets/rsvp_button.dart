@@ -27,7 +27,7 @@ class RsvpButton extends StatefulWidget {
 
 class _RsvpButtonState extends State<RsvpButton> {
   String get _userId =>
-      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+      authService.isStudentSession ? authService.currentUser?.id ?? '' : '';
 
   void _syncCalendar(BuildContext context) {
     if (widget.event == null) return;
@@ -36,7 +36,7 @@ class _RsvpButtonState extends State<RsvpButton> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isPast) return const SizedBox.shrink();
+    if (widget.isPast || _userId.isEmpty) return const SizedBox.shrink();
 
     return ListenableBuilder(
       listenable: rsvpStore,

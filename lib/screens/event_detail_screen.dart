@@ -5,18 +5,22 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../features/calendar/widgets/add_to_calendar_button.dart';
 import '../models/event.dart';
+import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/people_service.dart';
 import '../services/rsvp_store.dart';
+import '../services/supabase_interaction_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/rsvp_button.dart';
 import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
+import 'user_profile_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Event detail — recreation of the "Event Information" design handoff.
@@ -80,7 +84,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   void _toggleSaved() {
-    if (authService.currentUser == null) return;
+    if (!authService.isStudentSession) return;
 
     setState(() => _saved = !_saved);
     ScaffoldMessenger.of(context)
@@ -98,7 +102,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _shareEvent() {
-    if (authService.currentUser == null) return;
+    if (!authService.isStudentSession) return;
 
     Clipboard.setData(
       ClipboardData(text: 'kuclubs://event/${widget.event.id}'),
@@ -201,7 +205,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final hasProgramme = event.schedule != null && event.schedule!.isNotEmpty;
     final hasSpeakers = event.speakers.isNotEmpty;
     final hasCapacity = event.capacity != null && event.capacity! > 0;
-    final canEngage = authService.currentUser != null;
+    final canEngage = authService.isStudentSession;
     final showCta = canEngage && !_isPast;
 
     return Scaffold(
@@ -385,6 +389,7 @@ class ClubEventAdminScreen extends StatefulWidget {
 
 class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   late Event _event = widget.event;
+  List<User> _remoteAttendees = const [];
 
   String get _adminId => authService.currentAdmin?.id ?? '';
 
@@ -396,6 +401,20 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   bool get _isPast => !_event.endTime.isAfter(DateTime.now());
 
   Color get _accent => _isLive ? const Color(0xFF2E9E5B) : widget.accent;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRemoteAttendees();
+  }
+
+  Future<void> _loadRemoteAttendees() async {
+    final attendees = await supabaseInteractionService.fetchEventAttendees(
+      _event.id,
+    );
+    if (!mounted || attendees.isEmpty) return;
+    setState(() => _remoteAttendees = attendees);
+  }
 
   String _countdownLabel() {
     if (_isLive) return 'Happening now';
@@ -465,8 +484,14 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   @override
   Widget build(BuildContext context) {
     final accent = _accent;
-    final attendees = users
-        .where((u) => _event.attendeeUserIds.contains(u.id))
+    final knownPeople = {
+      for (final user in users) user.id: user,
+      for (final user in peopleService.cachedPeople) user.id: user,
+      for (final user in _remoteAttendees) user.id: user,
+    };
+    final attendees = _event.attendeeUserIds
+        .map((id) => knownPeople[id])
+        .whereType<User>()
         .toList();
     final hasReg = (_event.registrationUrl?.trim().isNotEmpty) ?? false;
     final hasProgramme = _event.schedule != null && _event.schedule!.isNotEmpty;
@@ -867,7 +892,7 @@ class _AdminHero extends StatelessWidget {
 
 /// Attendees card for the admin view — initials, name, department.
 class _AdminAttendees extends StatelessWidget {
-  final List attendees;
+  final List<User> attendees;
   final Color accent;
 
   const _AdminAttendees({required this.attendees, required this.accent});
@@ -929,61 +954,76 @@ class _AdminAttendees extends StatelessWidget {
                 )
               : Column(
                   children: [
-                    for (final u in attendees.take(8))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.16),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: accent.withValues(alpha: 0.33),
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                _initials(u.name as String),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.text,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 11),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    userState.displayNameFor(
-                                      u.id as String,
-                                      u.name as String,
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.text,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                    for (final user in attendees)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(user: user),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: accent.withValues(alpha: 0.33),
                                   ),
-                                  if ((userState.majors[u.id] ?? '').isNotEmpty)
-                                    Text(
-                                      userState.majors[u.id]!,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.secondaryText,
-                                      ),
-                                    ),
-                                ],
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _initials(user.name),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.text,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      userState.displayNameFor(
+                                        user.id,
+                                        user.name,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.text,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if ((userState.majors[user.id] ?? '')
+                                        .isNotEmpty)
+                                      Text(
+                                        userState.majors[user.id]!,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.secondaryText,
+                                size: 20,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                   ],

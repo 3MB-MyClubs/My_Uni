@@ -21,6 +21,11 @@ class AuthService {
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
 
+  bool get isStudentSession =>
+      _currentAdmin == null &&
+      _currentUser != null &&
+      _currentUser!.role == 'student';
+
   void setClubAdmin(AppAdmin admin) {
     _currentAdmin = admin;
     _currentUser = null;

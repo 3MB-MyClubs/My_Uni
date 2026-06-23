@@ -153,7 +153,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void _persist() => userPrefsService.save(_myId);
 
   void _tryOpenChat() {
-    if (authService.currentUser == null) return;
+    if (!authService.isStudentSession) return;
     final otherId = widget.user.id;
     final name = userState.displayNameFor(otherId, widget.user.name);
     Navigator.push(
@@ -165,6 +165,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _handleFollowTap() async {
+    if (!authService.isStudentSession) return;
+
     final user = widget.user;
     final isFollowing = userState.isFollowingUser(user.id);
     final isPending = userState.hasPendingRequest(user.id);
@@ -506,7 +508,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                   ],
                 )
-              else
+              else if (authService.isStudentSession)
                 Column(
                   children: [
                     // Follow button
@@ -517,7 +519,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                     const SizedBox(height: 6),
                     // Message button
-                    if (authService.currentUser != null)
+                    if (authService.isStudentSession)
                       SizedBox(
                         height: 34,
                         child: OutlinedButton(

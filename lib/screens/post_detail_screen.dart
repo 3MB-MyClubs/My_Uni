@@ -101,7 +101,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   void _toggleLike() {
-    if (authService.currentUser == null) return;
+    if (!authService.isStudentSession) return;
     togglePostLike(widget.post.id);
     setState(() {});
   }
@@ -109,7 +109,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
-    final isStudent = authService.currentUser != null;
+    final isStudent = authService.isStudentSession;
     final isLiked = userState.isLiked(widget.post.id);
     final likeCount = postLikeCount(widget.post.id);
     final hasImage =

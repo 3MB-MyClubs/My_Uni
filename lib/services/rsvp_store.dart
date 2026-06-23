@@ -59,6 +59,14 @@ class RsvpStore extends ChangeNotifier {
 
   Future<void> toggle(String eventId, String userId) async {
     if (userId.isEmpty || eventId.isEmpty) return;
+    if (!authService.isStudentSession ||
+        authService.currentUser?.id != userId) {
+      debugPrint(
+        'RSVP toggle skipped: current session is not a student '
+        'eventId=$eventId userId=$userId',
+      );
+      return;
+    }
 
     final wasAttending = isAttending(eventId);
     final idx = events.indexWhere((e) => e.id == eventId);

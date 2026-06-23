@@ -1430,11 +1430,13 @@ class _EventCardV2 extends StatelessWidget {
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Text(
-                      isLive
-                          ? 'Join'
-                          : isPast
-                          ? 'Recap'
-                          : 'RSVP',
+                      authService.isStudentSession
+                          ? (isLive
+                                ? 'Join'
+                                : isPast
+                                ? 'Recap'
+                                : 'RSVP')
+                          : (isPast ? 'Recap' : 'View'),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,

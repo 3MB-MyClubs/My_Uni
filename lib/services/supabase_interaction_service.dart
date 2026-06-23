@@ -104,6 +104,27 @@ class SupabaseInteractionService {
         .toSet();
   }
 
+  Future<List<User>> fetchEventAttendees(String eventId) async {
+    final client = _client;
+    if (client == null || eventId.isEmpty) return const [];
+
+    final rows = await client
+        .from('event_rsvps')
+        .select(
+          'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+        )
+        .eq('event_id', eventId);
+
+    final users = <User>[];
+    for (final row in rows) {
+      final profile = (row as Map)['profiles'];
+      if (profile is! Map) continue;
+      users.add(await peopleService.userFromProfileMap(profile));
+    }
+    users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return users;
+  }
+
   Future<void> setEventRsvp({
     required String profileId,
     required String eventId,

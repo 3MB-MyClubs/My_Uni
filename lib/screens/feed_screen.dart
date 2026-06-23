@@ -482,7 +482,7 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            if (authService.currentUser != null) ...[
+            if (authService.isStudentSession) ...[
               // Messages button
               GestureDetector(
                 onTap: () =>
@@ -970,10 +970,10 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                         userId: u.id,
                         size: 'small',
                         onTap: () async {
-                          final myId =
-                              authService.currentUser?.id ??
-                              authService.currentAdmin?.id ??
-                              '';
+                          final myId = authService.isStudentSession
+                              ? authService.currentUser?.id ?? ''
+                              : '';
+                          if (myId.isEmpty) return;
                           final follow = !userState.isFollowingUser(u.id);
                           userState.setFollowingUser(u.id, follow);
                           userPrefsService.save(myId);
@@ -1641,7 +1641,7 @@ void _openShareSheet(
   bool isEvent = false,
 }) {
   final currentUser = authService.currentUser;
-  if (currentUser == null) return;
+  if (!authService.isStudentSession || currentUser == null) return;
 
   showModalBottomSheet(
     context: context,
@@ -1719,7 +1719,7 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _doubleTapLike() {
-    if (authService.currentUser == null) return;
+    if (!authService.isStudentSession) return;
     ensurePostLiked(widget.post.id);
     setState(() => _showHeart = true);
     _heartController.forward();
@@ -1727,14 +1727,14 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _toggleLike() {
-    if (authService.currentUser == null) return;
+    if (!authService.isStudentSession) return;
     togglePostLike(widget.post.id);
     setState(() {});
     widget.onUpdate();
   }
 
   void _showPostOptions() {
-    final isStudent = authService.currentUser != null;
+    final isStudent = authService.isStudentSession;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,
@@ -1859,7 +1859,7 @@ class _PostCardState extends State<_PostCard>
     final shareCount = postShareCount(widget.post.id);
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
-    final isStudent = authService.currentUser != null;
+    final isStudent = authService.isStudentSession;
     final ownContent = _isOwnerOfClub(widget.post.clubId);
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
@@ -2082,7 +2082,9 @@ class _PostCardState extends State<_PostCard>
                         onTap: () {
                           setState(() => userState.toggleSave(widget.post.id));
                           userPrefsService.save(
-                            authService.currentUser?.id ?? '',
+                            authService.isStudentSession
+                                ? authService.currentUser?.id ?? ''
+                                : '',
                           );
                           widget.onUpdate();
                         },
@@ -2359,7 +2361,7 @@ class _EventCardState extends State<_EventCard> {
               ),
             ),
 
-            if (authService.currentUser != null)
+            if (authService.isStudentSession)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 child: Row(
@@ -2394,7 +2396,9 @@ class _EventCardState extends State<_EventCard> {
                       onTap: () {
                         setState(() => userState.toggleSave(widget.event.id));
                         userPrefsService.save(
-                          authService.currentUser?.id ?? '',
+                          authService.isStudentSession
+                              ? authService.currentUser?.id ?? ''
+                              : '',
                         );
                       },
                     ),
@@ -2612,7 +2616,7 @@ class _ShareSheetState extends State<_ShareSheet> {
   String _query = '';
 
   String get _myId =>
-      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+      authService.isStudentSession ? authService.currentUser?.id ?? '' : '';
 
   String get _contentPayload => '${widget.contentPrefix}:${widget.targetId}';
 

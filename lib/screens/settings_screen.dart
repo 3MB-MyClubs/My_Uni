@@ -376,7 +376,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Profile section (students only) ──────────────────────────────
           // Clubs and the super admin edit via the Club section / dashboard,
           // so the personal profile editor is shown for student accounts only.
-          if (authService.currentUser != null) ...[
+          if (authService.isStudentSession) ...[
             _SectionHeader(title: 'Profile'),
             ListenableBuilder(
               listenable: userState,
@@ -1236,7 +1236,9 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
         !isTaken;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card,

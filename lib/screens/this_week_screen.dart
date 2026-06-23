@@ -1478,6 +1478,8 @@ class _WeekRsvpPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!authService.isStudentSession) return const SizedBox.shrink();
+
     if (!event.endTime.isAfter(DateTime.now())) {
       return Container(
         width: 92,
@@ -1504,8 +1506,7 @@ class _WeekRsvpPill extends StatelessWidget {
     return ListenableBuilder(
       listenable: rsvpStore,
       builder: (context, _) {
-        final userId =
-            authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+        final userId = authService.currentUser?.id ?? '';
         final attending = rsvpStore.isAttending(event.id);
         return GestureDetector(
           onTap: userId.isEmpty

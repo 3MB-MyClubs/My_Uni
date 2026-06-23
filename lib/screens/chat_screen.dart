@@ -53,7 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool get _isClub => clubs.any((c) => c.id == widget.otherUserId);
   bool get _isStudentChat =>
-      authService.currentUser != null &&
+      authService.isStudentSession &&
       users.any((u) => u.id == _myId) &&
       users.any((u) => u.id == widget.otherUserId);
 
