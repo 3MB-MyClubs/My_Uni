@@ -33,8 +33,31 @@ class AuthService {
 
   static final RegExp _digitsOnly = RegExp(r'^[0-9]+$');
 
+  bool hasNoAdjacentRepeatedDigits(String password) {
+    for (var i = 1; i < password.length; i++) {
+      if (password.codeUnitAt(i) == password.codeUnitAt(i - 1)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool hasNoAdjacentSequentialDigits(String password) {
+    for (var i = 1; i < password.length; i++) {
+      final current = password.codeUnitAt(i);
+      final previous = password.codeUnitAt(i - 1);
+      if ((current - previous).abs() == 1) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool isValidStudentPassword(String password) {
-    return password.length == 6 && _digitsOnly.hasMatch(password);
+    return password.length == 6 &&
+        _digitsOnly.hasMatch(password) &&
+        hasNoAdjacentRepeatedDigits(password) &&
+        hasNoAdjacentSequentialDigits(password);
   }
 
   bool isValidClubPassword(String password) {

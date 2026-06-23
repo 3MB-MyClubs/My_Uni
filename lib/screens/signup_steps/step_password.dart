@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/auth_service.dart';
 import 'signup_theme.dart';
 
 class StepPassword extends StatefulWidget {
@@ -32,13 +33,25 @@ class _StepPasswordState extends State<StepPassword> {
   bool get _isExactlySix => _passwordController.text.trim().length == 6;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
+  bool get _hasNoRepeatedNeighbors {
+    final password = _passwordController.text.trim();
+    return password.isNotEmpty &&
+        authService.hasNoAdjacentRepeatedDigits(password);
+  }
+
+  bool get _hasNoSequentialNeighbors {
+    final password = _passwordController.text.trim();
+    return password.isNotEmpty &&
+        authService.hasNoAdjacentSequentialDigits(password);
+  }
 
   void _submit() {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
-    if (!_hasOnlyNumbers || !_isExactlySix) {
+    if (!authService.isValidStudentPassword(password)) {
       setState(
-        () => _error = 'Password must be exactly 6 digits (numbers only).',
+        () => _error =
+            'Use 6 numbers with no repeated or sequential numbers side by side.',
       );
       return;
     }
@@ -62,6 +75,8 @@ class _StepPasswordState extends State<StepPassword> {
     final passedRules = [
       _isExactlySix,
       _hasOnlyNumbers,
+      _hasNoRepeatedNeighbors,
+      _hasNoSequentialNeighbors,
     ].where((rule) => rule).length;
 
     return Column(
@@ -173,7 +188,7 @@ class _StepPasswordState extends State<StepPassword> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
-                    value: passedRules / 2,
+                    value: passedRules / 4,
                     minHeight: 4,
                     backgroundColor: SC.hairStrong,
                     valueColor: AlwaysStoppedAnimation<Color>(SC.burgundy),
@@ -182,6 +197,14 @@ class _StepPasswordState extends State<StepPassword> {
                 const SizedBox(height: 18),
                 _RuleRow(label: 'Exactly 6 digits', passed: _isExactlySix),
                 _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
+                _RuleRow(
+                  label: 'No same numbers side by side',
+                  passed: _hasNoRepeatedNeighbors,
+                ),
+                _RuleRow(
+                  label: 'No sequential numbers side by side',
+                  passed: _hasNoSequentialNeighbors,
+                ),
               ],
             ),
           ),
