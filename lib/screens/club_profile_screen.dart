@@ -148,19 +148,10 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         members: _membersForThisClub,
         totalCount: clubMemberCount(widget.club.id),
       ),
-    );
-  }
-
-  void _openBoardManagement() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _BoardManagementSheet(club: widget.club),
-    ).then((changed) {
-      if (!mounted) return;
-      setState(() {});
-      if (changed == true) _tabController.animateTo(0);
+    ).then((_) {
+      // Roles assigned inside the sheet change the board — rebuild so the
+      // BOARD tab and header stats reflect them immediately.
+      if (mounted) setState(() {});
     });
   }
 
@@ -210,6 +201,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return months[m - 1];
   }
 
+  List<String> _categoryTagsFor(Club club) {
+    final raw = club.categoryName?.trim();
+    if (raw == null || raw.isEmpty) return const [];
+    return raw
+        .split(',')
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final memberCount = clubMemberCount(widget.club.id);
@@ -220,8 +221,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final bodyText = _clubPageBodyText(context);
     final handle = _handleFor(widget.club);
     final showFollowAction = authService.isStudentSession && !_isThisClubAdmin;
-    final categoryLabel = widget.club.categoryName?.trim();
-
     return Scaffold(
       backgroundColor: bg,
       body: NestedScrollView(
@@ -279,64 +278,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             ),
             centerTitle: true,
             actions: [
+              // Owner's Profile tab: a single settings gear. Board management
+              // now lives inside Settings.
               if (widget.onSettings != null)
-                // Owner's Profile tab: one ⋯ menu with board management + settings.
-                PopupMenuButton<String>(
-                  icon: Icon(
-                    Icons.more_horiz_rounded,
-                    color: panelText,
-                    size: 22,
-                  ),
-                  color: AppColors.card,
-                  onSelected: (v) {
-                    if (v == 'board') _openBoardManagement();
-                    if (v == 'settings') widget.onSettings!();
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'board',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.manage_accounts_outlined,
-                            size: 20,
-                            color: AppColors.text,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Manage board members',
-                            style: TextStyle(color: AppColors.text),
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'settings',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.settings_outlined,
-                            size: 20,
-                            color: AppColors.text,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Settings',
-                            style: TextStyle(color: AppColors.text),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                )
-              else
                 IconButton(
                   icon: Icon(
-                    Icons.more_horiz_rounded,
+                    Icons.settings_outlined,
                     color: panelText,
                     size: 22,
                   ),
-                  onPressed: _isThisClubAdmin ? _openBoardManagement : null,
+                  onPressed: () => widget.onSettings!(),
                 ),
             ],
           ),
@@ -346,6 +297,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             child: ListenableBuilder(
               listenable: userState,
               builder: (context, _) {
+                final categoryTags = _categoryTagsFor(widget.club);
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -486,25 +438,27 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                   ),
                                 ),
                               ),
-                              if (categoryLabel != null &&
-                                  categoryLabel.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 9,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryRed.withValues(
-                                      alpha: 0.18,
+                              for (final category in categoryTags)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 2),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 9,
+                                      vertical: 2,
                                     ),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    categoryLabel,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.primaryRed,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryRed.withValues(
+                                        alpha: 0.18,
+                                      ),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      category,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.primaryRed,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1973,15 +1927,15 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
 
 // ─── Board Management Sheet ───────────────────────────────────────────────────
 
-class _BoardManagementSheet extends StatefulWidget {
+class BoardManagementSheet extends StatefulWidget {
   final Club club;
-  const _BoardManagementSheet({required this.club});
+  const BoardManagementSheet({super.key, required this.club});
 
   @override
-  State<_BoardManagementSheet> createState() => _BoardManagementSheetState();
+  State<BoardManagementSheet> createState() => BoardManagementSheetState();
 }
 
-class _BoardManagementSheetState extends State<_BoardManagementSheet> {
+class BoardManagementSheetState extends State<BoardManagementSheet> {
   final _searchController = TextEditingController();
   String _query = '';
 
@@ -2007,6 +1961,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
     _searchController.clear();
     _query = '';
     await contentStore.saveBoardMemberIds();
+    userState.bumpClubInfo();
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }
@@ -2025,6 +1980,8 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
       widget.club.boardMemberTitles[u.id] = result;
     }
     await contentStore.saveBoardMemberTitles();
+    // Refresh any open student profile showing this club role.
+    userState.bumpClubInfo();
     if (!mounted) return;
     setState(() {});
   }
@@ -2101,6 +2058,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
     widget.club.boardMemberTitles.remove(u.id);
     await contentStore.saveBoardMemberIds();
     await contentStore.saveBoardMemberTitles();
+    userState.bumpClubInfo();
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }
@@ -2233,7 +2191,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                           textColor: AppColors.primaryRed,
                         ),
                         title: Text(
-                          u.name,
+                          userState.displayNameFor(u.id, u.name),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -2310,7 +2268,7 @@ class _BoardManagementSheetState extends State<_BoardManagementSheet> {
                           textColor: const Color(0xFF1565C0),
                         ),
                         title: Text(
-                          u.name,
+                          userState.displayNameFor(u.id, u.name),
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -2402,6 +2360,24 @@ class _BoardTab extends StatefulWidget {
 }
 
 class _BoardTabState extends State<_BoardTab> {
+  @override
+  void initState() {
+    super.initState();
+    // Load the club's members into the people cache so board members whose
+    // profiles aren't in the static seed data resolve and render immediately —
+    // without the user having to open the Members sheet first.
+    _ensureMembersLoaded();
+  }
+
+  Future<void> _ensureMembersLoaded() async {
+    try {
+      await peopleService.fetchClubMembers(widget.club.id);
+    } catch (_) {
+      // Offline / mock mode — board members come from the static user list.
+    }
+    if (mounted) setState(() {});
+  }
+
   // Only the club's own admin can approve/decline requests, add/remove members,
   // or assign titles. Board members and external users have no write access.
   bool get _isClubAdmin {
@@ -2421,12 +2397,16 @@ class _BoardTabState extends State<_BoardTab> {
     if (result == null || !mounted) return;
     setState(() {
       if (result.isEmpty) {
+        // Deleting the role removes the student from the board entirely.
+        widget.club.boardMemberIds.remove(u.id);
         widget.club.boardMemberTitles.remove(u.id);
       } else {
         widget.club.boardMemberTitles[u.id] = result;
       }
     });
+    await contentStore.saveBoardMemberIds();
     await contentStore.saveBoardMemberTitles();
+    userState.bumpClubInfo();
     if (!mounted) return;
     widget.onBoardChanged();
   }
@@ -2520,8 +2500,16 @@ class _BoardTabState extends State<_BoardTab> {
 
   @override
   Widget build(BuildContext context) {
-    final members = users
-        .where((u) => widget.club.boardMemberIds.contains(u.id))
+    // Resolve every board-member id against both the static user list and the
+    // people-service cache, so a member added from the live members list (not
+    // in the seed data) still shows up here for everyone.
+    final pool = <String, User>{
+      for (final u in users) u.id: u,
+      for (final u in peopleService.cachedPeople) u.id: u,
+    };
+    final members = widget.club.boardMemberIds
+        .map((id) => pool[id])
+        .whereType<User>()
         .toList();
     final authorized = _isClubAdmin;
     final cardColor = _clubPageCard(context);
@@ -2619,7 +2607,7 @@ class _BoardTabState extends State<_BoardTab> {
                     textColor: const Color(0xFF1565C0),
                   ),
                   title: Text(
-                    u.name,
+                    userState.displayNameFor(u.id, u.name),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -2763,7 +2751,7 @@ class _BoardTitleDialogState extends State<_BoardTitleDialog> {
           TextButton(
             onPressed: () => Navigator.pop(context, ''),
             child: Text(
-              'Remove title',
+              'Remove role',
               style: TextStyle(color: AppColors.primaryRed),
             ),
           ),
@@ -2896,6 +2884,142 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
     return sorted;
   }
 
+  /// Only the club's own admin can assign / clear board roles here.
+  bool get _isClubAdmin =>
+      clubIsManagedByAdmin(widget.club, authService.currentAdmin?.id ?? '');
+
+  /// The role label for [member], or null if they hold no board role.
+  String? _roleFor(User member) {
+    if (!widget.club.boardMemberIds.contains(member.id)) return null;
+    final raw = widget.club.boardMemberTitles[member.id]?.trim() ?? '';
+    return raw.isEmpty ? 'Board Member' : raw;
+  }
+
+  void _viewProfile(User member) {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: member)),
+    );
+  }
+
+  /// Owner tap → choose: view profile, assign/edit a club role, or remove role.
+  void _openMemberActions(User member) {
+    final hasRole = widget.club.boardMemberIds.contains(member.id);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Icon(Icons.person_outline, color: AppColors.text),
+              title: Text(
+                'View profile',
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _viewProfile(member);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.workspace_premium_outlined,
+                color: AppColors.primaryRed,
+              ),
+              title: Text(
+                hasRole ? 'Edit club role' : 'Assign club role',
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _assignRole(member);
+              },
+            ),
+            if (hasRole)
+              ListTile(
+                leading: const Icon(
+                  Icons.remove_circle_outline,
+                  color: Colors.red,
+                ),
+                title: const Text(
+                  'Remove from board',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _removeRole(member);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _assignRole(User member) async {
+    final current = widget.club.boardMemberTitles[member.id] ?? '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _BoardTitleDialog(memberName: member.name, initialTitle: current),
+    );
+    if (result == null || !mounted) return;
+
+    if (result.isEmpty) {
+      // Clearing the title deletes the role entirely — the student leaves the
+      // board and disappears from the board area and their profile.
+      widget.club.boardMemberIds.remove(member.id);
+      widget.club.boardMemberTitles.remove(member.id);
+    } else {
+      if (!widget.club.boardMemberIds.contains(member.id)) {
+        widget.club.boardMemberIds.add(member.id);
+      }
+      widget.club.boardMemberTitles[member.id] = result;
+    }
+    await contentStore.saveBoardMemberIds();
+    await contentStore.saveBoardMemberTitles();
+    userState.bumpClubInfo();
+    if (!mounted) return;
+    setState(() => _members = _sortMembers(_members));
+  }
+
+  Future<void> _removeRole(User member) async {
+    widget.club.boardMemberIds.remove(member.id);
+    widget.club.boardMemberTitles.remove(member.id);
+    await contentStore.saveBoardMemberIds();
+    await contentStore.saveBoardMemberTitles();
+    userState.bumpClubInfo();
+    if (!mounted) return;
+    setState(() => _members = _sortMembers(_members));
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -2973,6 +3097,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                       ),
                       itemBuilder: (context, index) {
                         final member = _members[index];
+                        final role = _roleFor(member);
 
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(
@@ -2986,21 +3111,53 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                             fontSize: 16,
                           ),
                           title: Text(
-                            member.name,
+                            userState.displayNameFor(member.id, member.name),
                             style: TextStyle(
                               color: AppColors.text,
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
                             ),
                           ),
+                          subtitle: role == null
+                              ? null
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.workspace_premium_outlined,
+                                        size: 13,
+                                        color: widget.color,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          role,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: widget.color,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                          trailing: _isClubAdmin
+                              ? Icon(
+                                  Icons.more_horiz_rounded,
+                                  color: AppColors.secondaryText,
+                                )
+                              : null,
                           onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: member),
-                              ),
-                            );
+                            if (_isClubAdmin) {
+                              _openMemberActions(member);
+                            } else {
+                              _viewProfile(member);
+                            }
                           },
                         );
                       },

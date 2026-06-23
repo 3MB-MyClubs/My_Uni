@@ -16,7 +16,6 @@ import '../services/recommendation_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../widgets/club_avatar.dart';
-import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'ku_day_onboarding_sheet.dart';
@@ -710,7 +709,7 @@ class _PersonBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  user.name,
+                  userState.displayNameFor(user.id, user.name),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -941,21 +940,6 @@ class _PersonActionsState extends State<_PersonActions> {
             color: widget.color,
             filled: _following,
             onTap: _toggleFollow,
-          ),
-          _ActionChip(
-            label: 'Message',
-            icon: Icons.chat_bubble_outline_rounded,
-            color: widget.color,
-            filled: false,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(
-                  otherUserId: widget.user.id,
-                  otherUserName: widget.user.name,
-                ),
-              ),
-            ),
           ),
         ],
         _ActionChip(

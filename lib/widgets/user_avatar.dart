@@ -102,13 +102,18 @@ class UserAvatar extends StatelessWidget {
         borderRadius: isCircle ? null : borderRadius,
       ),
       child: Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : '?',
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.bold,
-            color: fg,
-          ),
+        child: Builder(
+          builder: (context) {
+            final display = userState.displayNameFor(userId, name);
+            return Text(
+              display.isNotEmpty ? display[0].toUpperCase() : '?',
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.bold,
+                color: fg,
+              ),
+            );
+          },
         ),
       ),
     );

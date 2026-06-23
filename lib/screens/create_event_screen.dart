@@ -18,6 +18,7 @@ import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/supabase_event_service.dart';
+import '../services/user_state.dart';
 import '../widgets/mention_text_field.dart';
 
 bool _isRemoteEventImagePath(String path) =>
@@ -154,7 +155,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     ...users.map(
       (user) => MentionOption(
         id: user.id,
-        label: user.name,
+        label: userState.displayNameFor(user.id, user.name),
         type: MentionType.student,
       ),
     ),

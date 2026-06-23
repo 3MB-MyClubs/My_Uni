@@ -511,6 +511,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         online: online,
       ),
       name: name,
+      nameUserId: id,
       preview: last == null
           ? 'Tap to start chatting'
           : _previewBody(last.content),
@@ -686,6 +687,10 @@ class _SectionLabel extends StatelessWidget {
 class _ConvoRow extends StatefulWidget {
   final Widget leading;
   final String name;
+
+  /// When set, [name] is resolved through the user's current display name so a
+  /// renamed person shows their new name here. Null for group chats.
+  final String? nameUserId;
   final int? memberCount; // groups
   final String preview;
   final String time;
@@ -697,6 +702,7 @@ class _ConvoRow extends StatefulWidget {
   const _ConvoRow({
     required this.leading,
     required this.name,
+    this.nameUserId,
     this.memberCount,
     required this.preview,
     required this.time,
@@ -734,7 +740,12 @@ class _ConvoRowState extends State<_ConvoRow> {
                     children: [
                       Flexible(
                         child: Text(
-                          widget.name,
+                          widget.nameUserId == null
+                              ? widget.name
+                              : userState.displayNameFor(
+                                  widget.nameUserId!,
+                                  widget.name,
+                                ),
                           style: TextStyle(
                             fontSize: 15.5,
                             fontWeight: unread
@@ -995,7 +1006,7 @@ class _ContactResultTile extends StatelessWidget {
         children: [
           Flexible(
             child: Text(
-              contact.name,
+              userState.displayNameFor(contact.id, contact.name),
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: AppColors.text,
@@ -1293,7 +1304,7 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
                           fontSize: 16,
                         ),
                         title: Text(
-                          c.name,
+                          userState.displayNameFor(c.id, c.name),
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/club_avatar.dart';
+import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -34,6 +36,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final adminId = authService.currentAdmin?.id;
     if (adminId == null || adminId == 'admin1') return null;
     return managedClubForAdmin(adminId);
+  }
+
+  static const List<String> _clubCategoryOptions = [
+    'Academic',
+    'Arts',
+    'Business',
+    'Career',
+    'Engineering',
+    'Music',
+    'Social Impact',
+    'Sports',
+    'Tech',
+    'Wellness',
+  ];
+
+  List<String> _clubCategories(Club club) {
+    final raw = club.categoryName?.trim();
+    if (raw == null || raw.isEmpty) return const [];
+    return raw
+        .split(',')
+        .map((category) => category.trim())
+        .where((category) => category.isNotEmpty)
+        .toList();
   }
 
   // ── Club photo ──────────────────────────────────────────────────────────────
@@ -298,13 +323,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onPressed: canSave
                               ? () {
                                   club.description = value;
-                                  userPrefsService.saveClubDescription(
-                                    club.id,
-                                    value,
-                                  );
                                   userState.bumpClubInfo();
-                                  Navigator.pop(ctx);
-                                  setState(() {});
+                                  if (mounted) setState(() {});
+                                  Navigator.of(ctx).pop();
+                                  unawaited(
+                                    userPrefsService.saveClubDescription(
+                                      club.id,
+                                      value,
+                                    ),
+                                  );
                                 }
                               : null,
                           child: Text(
@@ -325,6 +352,211 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       ),
     );
+  }
+
+  void _openClubNameSheet(Club club) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ClubNameSheet(club: club),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _openBoardManagement(Club club) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BoardManagementSheet(club: club),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _openClubCategoriesSheet(Club club) {
+    final selected = _clubCategories(club).toSet();
+    final extra = selected
+        .where((category) => !_clubCategoryOptions.contains(category))
+        .join(', ');
+    final controller = TextEditingController(text: extra);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          List<String> categories() {
+            final custom = controller.text
+                .split(',')
+                .map((category) => category.trim())
+                .where((category) => category.isNotEmpty);
+            return {...selected, ...custom}.toList()..sort();
+          }
+
+          final values = categories();
+          final nextValue = values.join(', ');
+          final currentValue = _clubCategories(club).join(', ');
+          final canSave = nextValue != currentValue;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Club Categories',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Choose tags that help students discover your club.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final category in _clubCategoryOptions)
+                        FilterChip(
+                          label: Text(category),
+                          selected: selected.contains(category),
+                          selectedColor: AppColors.lightRed,
+                          checkmarkColor: AppColors.primaryRed,
+                          labelStyle: TextStyle(
+                            color: selected.contains(category)
+                                ? AppColors.primaryRed
+                                : AppColors.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          side: BorderSide(color: AppColors.divider),
+                          onSelected: (value) {
+                            setSheetState(() {
+                              if (value) {
+                                selected.add(category);
+                              } else {
+                                selected.remove(category);
+                              }
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: controller,
+                    style: TextStyle(color: AppColors.text, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Custom tags',
+                      hintText: 'Design, Gaming, Culture',
+                      helperText: 'Separate custom tags with commas',
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: AppColors.primaryRed,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(color: AppColors.secondaryText),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: canSave
+                                ? AppColors.primaryRed
+                                : AppColors.divider,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: canSave
+                              ? () {
+                                  club.categoryName = nextValue.isEmpty
+                                      ? null
+                                      : nextValue;
+                                  userState.bumpClubInfo();
+                                  if (mounted) setState(() {});
+                                  Navigator.of(ctx).pop();
+                                  unawaited(
+                                    userPrefsService.saveClubCategory(
+                                      club.id,
+                                      club.categoryName,
+                                    ),
+                                  );
+                                }
+                              : null,
+                          child: Text(
+                            'Save Categories',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   Future<void> _replayTutorial() async {
@@ -494,6 +726,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     children: [
                       ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Club Name',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          club.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: () => _openClubNameSheet(club),
+                      ),
+                      Divider(height: 1, indent: 56, color: AppColors.divider),
+                      ListTile(
                         leading: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
                           child: ClubAvatar(
@@ -535,6 +804,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
+                            Icons.sell_outlined,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Club Categories',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          _clubCategories(club).isEmpty
+                              ? 'Add discovery tags'
+                              : _clubCategories(club).join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: () => _openClubCategoriesSheet(club),
+                      ),
+                      Divider(height: 1, indent: 56, color: AppColors.divider),
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
                             Icons.description_outlined,
                             color: AppColors.primaryRed,
                             size: 20,
@@ -562,6 +870,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         onTap: () => _openClubDescriptionSheet(club),
                       ),
+                      Divider(height: 1, indent: 56, color: AppColors.divider),
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.manage_accounts_outlined,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Manage Board Members',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Add or remove board members & roles',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: () => _openBoardManagement(club),
+                      ),
                     ],
                   ),
                 );
@@ -569,69 +912,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
 
-          const SizedBox(height: 24),
+          if (authService.isStudentSession) ...[
+            const SizedBox(height: 24),
 
-          // ── Preferences section ──────────────────────────────────────────
-          _SectionHeader(title: 'Preferences'),
-          ListenableBuilder(
-            listenable: personalizationService,
-            builder: (context, _) {
-              final major = personalizationService.major;
-              final interests = personalizationService.interests;
-              final times = personalizationService.timePrefs;
-              final summary = [
-                if (major.isNotEmpty) major,
-                if (interests.isNotEmpty)
-                  interests.take(2).join(', ') +
-                      (interests.length > 2 ? '…' : ''),
-              ].join(' · ');
-              return Container(
-                color: AppColors.card,
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.lightRed,
-                          borderRadius: BorderRadius.circular(10),
+            // ── Preferences section ──────────────────────────────────────────
+            _SectionHeader(title: 'Preferences'),
+            ListenableBuilder(
+              listenable: personalizationService,
+              builder: (context, _) {
+                final major = personalizationService.major;
+                final interests = personalizationService.interests;
+                final times = personalizationService.timePrefs;
+                final summary = [
+                  if (major.isNotEmpty) major,
+                  if (interests.isNotEmpty)
+                    interests.take(2).join(', ') +
+                        (interests.length > 2 ? '…' : ''),
+                ].join(' · ');
+                return Container(
+                  color: AppColors.card,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.tune_rounded,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.tune_rounded,
-                          color: AppColors.primaryRed,
-                          size: 20,
+                        title: Text(
+                          'My Preferences',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
                         ),
-                      ),
-                      title: Text(
-                        'My Preferences',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
+                        subtitle: Text(
+                          summary.isNotEmpty
+                              ? summary
+                              : 'Not set — tap to configure',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      subtitle: Text(
-                        summary.isNotEmpty
-                            ? summary
-                            : 'Not set — tap to configure',
-                        style: TextStyle(
-                          fontSize: 12,
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
                           color: AppColors.secondaryText,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        onTap: () => _openPreferencesSheet(times),
                       ),
-                      trailing: Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.secondaryText,
-                      ),
-                      onTap: () => _openPreferencesSheet(times),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
 
           const SizedBox(height: 24),
 
@@ -1180,6 +1525,148 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// Bottom sheet for editing a club's name. Owns its own controller and disposes
+/// it in [dispose] — disposing it in `whenComplete` crashed because the dismiss
+/// animation rebuilds the [TextField] against a disposed controller.
+class _ClubNameSheet extends StatefulWidget {
+  final Club club;
+
+  const _ClubNameSheet({required this.club});
+
+  @override
+  State<_ClubNameSheet> createState() => _ClubNameSheetState();
+}
+
+class _ClubNameSheetState extends State<_ClubNameSheet> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.club.name,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save(String value) {
+    widget.club.name = value;
+    userState.bumpClubInfo();
+    unawaited(userPrefsService.saveClubName(widget.club.id, value));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _controller.text.trim();
+    final canSave = value.isNotEmpty && value != widget.club.name;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Club Name',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'This appears across the app wherever your club is shown.',
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              maxLength: 60,
+              textCapitalization: TextCapitalization.words,
+              style: TextStyle(color: AppColors.text, fontSize: 14),
+              decoration: InputDecoration(
+                labelText: 'Club name',
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.primaryRed, width: 1.5),
+                ),
+                counterStyle: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 11,
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: AppColors.secondaryText),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canSave
+                          ? AppColors.primaryRed
+                          : AppColors.divider,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: canSave ? () => _save(value) : null,
+                    child: Text(
+                      'Save Name',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -10,7 +10,6 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
-import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'saved_posts_screen.dart';
 
@@ -142,11 +141,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ? liveIds
         : widget.user.subscribedClubIds.toSet();
 
-    return [
+    final followed = [
       for (final id in ids)
         for (final club in clubs)
           if (club.id == id) club,
     ];
+
+    // Include clubs where this student holds a board role even if they don't
+    // follow them, and pin all role-clubs to the very top.
+    for (final club in clubs) {
+      if (_roleTitleFor(club) != null && !followed.contains(club)) {
+        followed.add(club);
+      }
+    }
+    final withRole = [for (final c in followed) if (_roleTitleFor(c) != null) c];
+    final rest = [for (final c in followed) if (_roleTitleFor(c) == null) c];
+    return [...withRole, ...rest];
   }
 
   void _openClub(Club club) {
@@ -162,18 +172,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   void _persist() => userPrefsService.save(_myId);
-
-  void _tryOpenChat() {
-    if (!authService.isStudentSession) return;
-    final otherId = widget.user.id;
-    final name = userState.displayNameFor(otherId, widget.user.name);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(otherUserId: otherId, otherUserName: name),
-      ),
-    );
-  }
 
   Future<void> _handleFollowTap() async {
     if (!authService.isStudentSession) return;
@@ -528,35 +526,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       isPending: isPending,
                       onTap: _handleFollowTap,
                     ),
-                    const SizedBox(height: 6),
-                    // Message button
-                    if (authService.isStudentSession)
-                      SizedBox(
-                        height: 34,
-                        child: OutlinedButton(
-                          onPressed: _tryOpenChat,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.text,
-                            side: BorderSide(
-                              color: AppColors.divider,
-                              width: 1,
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text(
-                            'Message',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
             ],
@@ -686,6 +655,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           final name = club.name.split('(').first.trim();
           return name.split(' ').take(2).join(' ');
         }).toList();
+  }
+
+  /// The board role title this student holds at [club], or null if none.
+  /// Empty stored titles fall back to a generic "Board Member" label.
+  String? _roleTitleFor(Club club) {
+    if (!club.boardMemberIds.contains(widget.user.id)) return null;
+    final raw = club.boardMemberTitles[widget.user.id]?.trim() ?? '';
+    return raw.isEmpty ? 'Board Member' : raw;
   }
 
   Widget _buildInterestsSection(List<String> interests) {
@@ -844,15 +821,48 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    child: Text(
-                                      club.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.text,
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          club.name,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.text,
+                                          ),
+                                        ),
+                                        if (_roleTitleFor(club) != null) ...[
+                                          const SizedBox(height: 3),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.workspace_premium_outlined,
+                                                size: 13,
+                                                color: _burgundy,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Flexible(
+                                                child: Text(
+                                                  _roleTitleFor(club)!,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: _burgundy,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ),
                                   Icon(

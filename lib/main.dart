@@ -38,6 +38,14 @@ void main() async {
   await notificationService.initialize();
   await userPrefsService.initialize();
   userPrefsService.loadAllPhotos();
+  // Give every demo student a stable mock profile photo so avatars show up in
+  // members/board lists etc. Curated seeds and real uploads are not overridden.
+  for (final u in users) {
+    userState.mockPhotoUrls.putIfAbsent(
+      u.id,
+      () => 'https://i.pravatar.cc/150?u=${u.id}',
+    );
+  }
   await contentStore.initialize();
   await viewTracker.initialize();
   await personalizationService.initialize();

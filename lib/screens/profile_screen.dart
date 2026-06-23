@@ -869,9 +869,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final memberCount = subscriptions
                 .where((s) => s.clubId == club.id)
                 .length;
-            final role = club.boardMemberIds.contains(user.id)
-                ? 'Board'
-                : 'Member';
+            final title = club.boardMemberTitles[user.id]?.trim() ?? '';
+            final role = title.isNotEmpty
+                ? title
+                : (club.boardMemberIds.contains(user.id) ? 'Board' : 'Member');
             return StudentClubDetail(
               club: club,
               memberCount: memberCount,
@@ -1890,7 +1891,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        u.name,
+                                        userState.displayNameFor(u.id, u.name),
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,

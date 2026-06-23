@@ -412,11 +412,17 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   String get _greetingName {
-    final adminName = authService.currentAdmin?.name.trim();
-    if (adminName != null && adminName.isNotEmpty) return adminName;
+    final student = authService.currentUser;
+    if (authService.isStudentSession && student != null) {
+      return student.name.split(' ').first;
+    }
 
-    final userName = authService.currentUser?.name.trim() ?? '';
-    return userName.split(' ').first;
+    final admin = authService.currentAdmin;
+    if (admin != null) {
+      return managedClubForAdmin(admin.id)?.name ?? admin.name;
+    }
+
+    return '';
   }
 
   int get _unreadMessageCount {
@@ -953,7 +959,10 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                           child: Column(
                             children: [
                               Text(
-                                u.name.split(' ').first,
+                                userState
+                                    .displayNameFor(u.id, u.name)
+                                    .split(' ')
+                                    .first,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
@@ -1464,7 +1473,7 @@ class _PeopleEngagementSheet extends StatelessWidget {
                         fontSize: 15,
                       ),
                       title: Text(
-                        user.name,
+                        userState.displayNameFor(user.id, user.name),
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -2849,7 +2858,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      u.name,
+                                      userState.displayNameFor(u.id, u.name),
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,

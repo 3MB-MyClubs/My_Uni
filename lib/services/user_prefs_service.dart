@@ -64,6 +64,16 @@ class UserPrefsService {
         final desc = _box.get(k);
         final idx = clubs.indexWhere((c) => c.id == cid);
         if (desc != null && idx >= 0) clubs[idx].description = desc as String;
+      } else if (k.startsWith('clubName_')) {
+        final cid = k.substring('clubName_'.length);
+        final name = _box.get(k);
+        final idx = clubs.indexWhere((c) => c.id == cid);
+        if (name != null && idx >= 0) clubs[idx].name = name as String;
+      } else if (k.startsWith('clubCategory_')) {
+        final cid = k.substring('clubCategory_'.length);
+        final category = _box.get(k);
+        final idx = clubs.indexWhere((c) => c.id == cid);
+        if (idx >= 0) clubs[idx].categoryName = category as String?;
       }
     }
     // Pinned club posts (global, set by club admins).
@@ -79,6 +89,22 @@ class UserPrefsService {
   Future<void> saveClubDescription(String clubId, String description) async {
     if (!_initialized) return;
     await _box.put('clubDesc_$clubId', description);
+  }
+
+  /// Persists a club's display name globally (visible to everyone).
+  Future<void> saveClubName(String clubId, String name) async {
+    if (!_initialized) return;
+    await _box.put('clubName_$clubId', name);
+  }
+
+  /// Persists a club's category/tag summary globally (visible to everyone).
+  Future<void> saveClubCategory(String clubId, String? category) async {
+    if (!_initialized) return;
+    if (category == null || category.trim().isEmpty) {
+      await _box.delete('clubCategory_$clubId');
+      return;
+    }
+    await _box.put('clubCategory_$clubId', category);
   }
 
   /// Persists the set of pinned club post ids globally.

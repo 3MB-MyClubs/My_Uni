@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_passcode_auth_service.dart';
+import 'forgot_password_screen.dart';
 
 class ClubAdminAuthScreen extends StatefulWidget {
   final VoidCallback onAdminLogin;
@@ -56,6 +57,28 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
     } else {
       setState(() => _error = result.error ?? 'Invalid club email or passcode');
     }
+  }
+
+  Future<void> _openForgotPasscode() async {
+    final localPart = _localPart(_clubEmailController.text.trim());
+    final initialEmail = localPart.isEmpty
+        ? ''
+        : '${localPart.toLowerCase()}@ku.edu.tr';
+    final resetEmail = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(
+          initialEmail: initialEmail,
+          passwordLength: 8,
+          passwordNoun: 'passcode',
+        ),
+      ),
+    );
+    if (!mounted || resetEmail == null || resetEmail.isEmpty) return;
+    setState(() {
+      _clubEmailController.text = _localPart(resetEmail);
+      _passwordController.clear();
+      _error = null;
+    });
   }
 
   @override
@@ -174,7 +197,32 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 8),
+
+              // Forgot passcode
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _isLoading ? null : _openForgotPasscode,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Forgot passcode?',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryRed,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
 
               SizedBox(
                 width: double.infinity,

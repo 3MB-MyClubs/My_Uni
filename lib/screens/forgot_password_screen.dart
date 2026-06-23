@@ -8,7 +8,18 @@ enum _ResetStep { email, code, password, done }
 class ForgotPasswordScreen extends StatefulWidget {
   final String initialEmail;
 
-  const ForgotPasswordScreen({super.key, this.initialEmail = ''});
+  /// Required digit count for the new credential (6 for students, 8 for clubs).
+  final int passwordLength;
+
+  /// What the credential is called in the copy ('password' or 'passcode').
+  final String passwordNoun;
+
+  const ForgotPasswordScreen({
+    super.key,
+    this.initialEmail = '',
+    this.passwordLength = 6,
+    this.passwordNoun = 'password',
+  });
 
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
@@ -44,7 +55,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  bool get _isExactlySix => _passwordController.text.trim().length == 6;
+  bool get _isExactLength =>
+      _passwordController.text.trim().length == widget.passwordLength;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
 
@@ -144,17 +156,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_isSubmitting) return;
     final password = _passwordController.text.trim();
     final confirm = _confirmPasswordController.text.trim();
-    if (!_isExactlySix) {
+    final noun = widget.passwordNoun[0].toUpperCase() +
+        widget.passwordNoun.substring(1);
+    if (!_isExactLength) {
       setState(() {
         _message = null;
-        _error = 'Password must be exactly 6 digits.';
+        _error = '$noun must be exactly ${widget.passwordLength} digits.';
       });
       return;
     }
     if (!_hasOnlyNumbers) {
       setState(() {
         _message = null;
-        _error = 'Password must contain numbers only.';
+        _error = '$noun must contain numbers only.';
       });
       return;
     }
@@ -273,13 +287,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String get _title {
     switch (_step) {
       case _ResetStep.email:
-        return 'Reset password';
+        return 'Reset ${widget.passwordNoun}';
       case _ResetStep.code:
         return 'Check your email';
       case _ResetStep.password:
-        return 'Create new password';
+        return 'Create new ${widget.passwordNoun}';
       case _ResetStep.done:
-        return 'Password updated';
+        return '${widget.passwordNoun[0].toUpperCase()}'
+            '${widget.passwordNoun.substring(1)} updated';
     }
   }
 
@@ -290,7 +305,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       case _ResetStep.code:
         return 'Enter the one-time code sent to $_email.';
       case _ResetStep.password:
-        return 'Use a 6-digit numbers-only password for future sign-ins.';
+        return 'Use a ${widget.passwordLength}-digit numbers-only '
+            '${widget.passwordNoun} for future sign-ins.';
       case _ResetStep.done:
         return 'You can now sign in with your new password.';
     }
@@ -303,7 +319,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       case _ResetStep.code:
         return 'Verify code';
       case _ResetStep.password:
-        return 'Update password';
+        return 'Update ${widget.passwordNoun}';
       case _ResetStep.done:
         return 'Back to sign in';
     }
@@ -386,12 +402,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
+                LengthLimitingTextInputFormatter(widget.passwordLength),
               ],
               onChanged: (_) => setState(() => _error = null),
               decoration: _fieldDecoration(
-                label: 'New password',
-                hint: '6-digit PIN',
+                label: 'New ${widget.passwordNoun}',
+                hint: '${widget.passwordLength}-digit PIN',
                 icon: Icons.lock_outline,
                 errorText: _error,
                 suffixIcon: _visibilityButton(
@@ -407,13 +423,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
+                LengthLimitingTextInputFormatter(widget.passwordLength),
               ],
               onChanged: (_) => setState(() => _error = null),
               onSubmitted: (_) => _updatePassword(),
               decoration: _fieldDecoration(
-                label: 'Confirm password',
-                hint: 'Re-enter 6-digit PIN',
+                label: 'Confirm ${widget.passwordNoun}',
+                hint: 'Re-enter ${widget.passwordLength}-digit PIN',
                 icon: Icons.lock_outline,
                 suffixIcon: _visibilityButton(
                   _obscureConfirm,
@@ -422,7 +438,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            _RuleRow(label: 'Exactly 6 digits', passed: _isExactlySix),
+            _RuleRow(
+              label: 'Exactly ${widget.passwordLength} digits',
+              passed: _isExactLength,
+            ),
             _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
           ],
         );

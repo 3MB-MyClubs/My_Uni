@@ -4,6 +4,7 @@ import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
+import '../services/user_state.dart';
 
 class RsvpListScreen extends StatelessWidget {
   final Event event;
@@ -105,7 +106,10 @@ class RsvpListScreen extends StatelessWidget {
                   leading: CircleAvatar(
                     backgroundColor: color.withValues(alpha: 0.15),
                     child: Text(
-                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                      () {
+                        final n = userState.displayNameFor(user.id, user.name);
+                        return n.isNotEmpty ? n[0].toUpperCase() : '?';
+                      }(),
                       style: TextStyle(
                         color: color,
                         fontWeight: FontWeight.bold,
@@ -113,7 +117,7 @@ class RsvpListScreen extends StatelessWidget {
                     ),
                   ),
                   title: Text(
-                    user.name,
+                    userState.displayNameFor(user.id, user.name),
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: AppColors.text,

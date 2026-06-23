@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/mock_data.dart';
 import '../services/presence_service.dart';
+import '../services/user_state.dart';
 
 import '../widgets/chat_widgets.dart';
 import '../widgets/club_avatar.dart';
@@ -451,7 +452,9 @@ class _ChatHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      otherUserName,
+                      isClub
+                          ? otherUserName
+                          : userState.displayNameFor(otherUserId, otherUserName),
                       style: TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.w800,

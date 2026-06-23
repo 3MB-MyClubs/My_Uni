@@ -955,7 +955,7 @@ class _PersonRowState extends State<_PersonRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.user.name,
+                    userState.displayNameFor(widget.user.id, widget.user.name),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
