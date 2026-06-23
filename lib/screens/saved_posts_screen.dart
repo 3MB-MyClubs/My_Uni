@@ -39,6 +39,8 @@ class SavedPostsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isStudent = authService.currentUser != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -48,6 +50,15 @@ class SavedPostsScreen extends StatelessWidget {
       body: ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
+          if (!isStudent) {
+            return Center(
+              child: Text(
+                'Saved posts are only available for students.',
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+            );
+          }
+
           final saved = newsPosts.where((p) => userState.isSaved(p.id)).toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -113,11 +124,7 @@ class SavedPostsScreen extends StatelessWidget {
                 ),
                 onRemove: () {
                   userState.toggleSave(post.id);
-                  userPrefsService.save(
-                    authService.currentUser?.id ??
-                        authService.currentAdmin?.id ??
-                        '',
-                  );
+                  userPrefsService.save(authService.currentUser?.id ?? '');
                 },
               );
             },

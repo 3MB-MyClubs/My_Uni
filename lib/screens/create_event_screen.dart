@@ -22,7 +22,12 @@ import '../widgets/mention_text_field.dart';
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
-  const CreateEventScreen({super.key, this.onCreated});
+
+  /// When provided, the form opens in edit mode pre-filled with this event and
+  /// saves changes in place instead of creating a new event.
+  final Event? existing;
+
+  const CreateEventScreen({super.key, this.onCreated, this.existing});
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -81,6 +86,47 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
   DateTime _endDate = DateTime.now().add(const Duration(hours: 3));
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final ev = widget.existing;
+    if (ev == null) return;
+
+    _titleController.text = ev.title;
+    _descController.text = ev.description;
+    _locationController.text = ev.location;
+    _imagePath = ev.imagePath;
+    _selectedTags.addAll(ev.tags);
+    _startDate = ev.dateTime;
+    _endDate = ev.endTime;
+
+    final reg = ev.registrationUrl?.trim() ?? '';
+    if (reg.isNotEmpty) {
+      _externalReg = true;
+      _regUrlCtrl.text = reg;
+    }
+
+    for (final slot in ev.schedule ?? const <EventSlot>[]) {
+      final entry = _ScheduleEntry(
+        time: TimeOfDay(hour: slot.time.hour, minute: slot.time.minute),
+        titleCtrl: TextEditingController(text: slot.title),
+        subtitleCtrl: TextEditingController(text: slot.subtitle ?? ''),
+      );
+      entry.isHighlighted = slot.isHighlighted;
+      _scheduleEntries.add(entry);
+    }
+
+    for (final sp in ev.speakers) {
+      final entry = _SpeakerEntry();
+      entry.nameCtrl.text = sp.name;
+      entry.roleCtrl.text = sp.role;
+      entry.linkedinCtrl.text = sp.linkedin ?? '';
+      _speakers.add(entry);
+    }
+  }
 
   bool get _canPost =>
       _titleController.text.trim().isNotEmpty &&
@@ -307,7 +353,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Future<void> _post() async {
-    final clubId = _adminClubId;
+    final clubId = widget.existing?.clubId ?? _adminClubId;
     if (clubId == null || _isPosting) return;
 
     // Build schedule
@@ -349,6 +395,49 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         .toList();
 
     final regUrl = _regUrlCtrl.text.trim();
+
+    // ── Edit mode: update the existing event in place ──────────────────────
+    if (_isEditing) {
+      final ev = widget.existing!;
+      final updated = Event(
+        id: ev.id,
+        clubId: ev.clubId,
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        location: _locationController.text.trim(),
+        dateTime: _startDate,
+        endTime: _endDate,
+        attendeeUserIds: ev.attendeeUserIds,
+        rsvpTimestamps: ev.rsvpTimestamps,
+        imagePath: _imagePath,
+        createdByUserId: ev.createdByUserId,
+        tags: List.from(_selectedTags),
+        schedule: schedule,
+        accentColorHex: ev.accentColorHex,
+        registrationUrl: (_externalReg && regUrl.isNotEmpty) ? regUrl : null,
+        capacity: ev.capacity,
+        speakers: speakers,
+      );
+      final ok = contentStore.updateEvent(
+        updated,
+        authService.currentAdmin?.id ?? '',
+      );
+      if (!mounted) return;
+      if (ok) {
+        widget.onCreated?.call();
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('Could not save changes.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
+      return;
+    }
 
     final draftEvent = Event(
       id: 'ev_${DateTime.now().millisecondsSinceEpoch}',
@@ -445,7 +534,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         ),
         leadingWidth: 80,
         title: Text(
-          'New Event',
+          _isEditing ? 'Edit Event' : 'New Event',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
         centerTitle: true,
@@ -464,7 +553,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       ),
                     )
                   : Text(
-                      'Post',
+                      _isEditing ? 'Save' : 'Post',
                       style: TextStyle(
                         color: _canPost
                             ? AppColors.primaryRed

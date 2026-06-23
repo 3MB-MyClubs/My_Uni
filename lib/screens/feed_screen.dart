@@ -1641,6 +1641,8 @@ void _openShareSheet(
   bool isEvent = false,
 }) {
   final currentUser = authService.currentUser;
+  if (currentUser == null) return;
+
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -1648,7 +1650,7 @@ void _openShareSheet(
     builder: (_) => _ShareSheet(
       targetId: targetId,
       contentPrefix: isEvent ? 'kuevent' : 'kupost',
-      userId: currentUser?.id ?? authService.currentAdmin?.id ?? 'guest',
+      userId: currentUser.id,
       onShared: onShared,
     ),
   );
@@ -1717,6 +1719,7 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _doubleTapLike() {
+    if (authService.currentUser == null) return;
     ensurePostLiked(widget.post.id);
     setState(() => _showHeart = true);
     _heartController.forward();
@@ -1724,13 +1727,14 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _toggleLike() {
+    if (authService.currentUser == null) return;
     togglePostLike(widget.post.id);
     setState(() {});
     widget.onUpdate();
   }
 
   void _showPostOptions() {
-    final isSaved = userState.isSaved(widget.post.id);
+    final isStudent = authService.currentUser != null;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,
@@ -1774,27 +1778,15 @@ class _PostCardState extends State<_PostCard>
                 ),
               ),
               const SizedBox(height: 8),
-              tile(
-                icon: Icons.ios_share,
-                label: 'Share',
-                onTap: () => _openShareSheet(context, widget.post.id, () {
-                  setState(() {});
-                  widget.onUpdate();
-                }),
-              ),
-              tile(
-                icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
-                label: isSaved ? 'Remove from saved' : 'Save post',
-                onTap: () {
-                  setState(() => userState.toggleSave(widget.post.id));
-                  userPrefsService.save(
-                    authService.currentUser?.id ??
-                        authService.currentAdmin?.id ??
-                        '',
-                  );
-                  widget.onUpdate();
-                },
-              ),
+              if (isStudent)
+                tile(
+                  icon: Icons.ios_share,
+                  label: 'Share',
+                  onTap: () => _openShareSheet(context, widget.post.id, () {
+                    setState(() {});
+                    widget.onUpdate();
+                  }),
+                ),
               tile(
                 icon: Icons.link_rounded,
                 label: 'Copy link',
@@ -1867,6 +1859,7 @@ class _PostCardState extends State<_PostCard>
     final shareCount = postShareCount(widget.post.id);
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
+    final isStudent = authService.currentUser != null;
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
 
@@ -1994,7 +1987,7 @@ class _PostCardState extends State<_PostCard>
                 if (hasImage) ...[
                   const SizedBox(height: 10),
                   GestureDetector(
-                    onDoubleTap: _doubleTapLike,
+                    onDoubleTap: isStudent ? _doubleTapLike : null,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Stack(
@@ -2052,49 +2045,49 @@ class _PostCardState extends State<_PostCard>
                 ],
                 const SizedBox(height: 4),
                 // ── Action row (counts inline, X-style) ──
-                Row(
-                  children: [
-                    _twAction(
-                      icon: isLiked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      count: likeCount > 0 ? '$likeCount' : null,
-                      color: isLiked
-                          ? AppColors.primaryRed
-                          : AppColors.secondaryText,
-                      onTap: _toggleLike,
-                    ),
-                    const SizedBox(width: 18),
-                    _twAction(
-                      icon: Icons.send_outlined,
-                      count: shareCount > 0 ? '$shareCount' : null,
-                      color: AppColors.secondaryText,
-                      onTap: () => _openShareSheet(context, widget.post.id, () {
-                        setState(() {});
-                        widget.onUpdate();
-                      }),
-                    ),
-                    const Spacer(),
-                    _twAction(
-                      icon: isSaved
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_border_rounded,
-                      count: null,
-                      color: isSaved
-                          ? AppColors.primaryRed
-                          : AppColors.secondaryText,
-                      onTap: () {
-                        setState(() => userState.toggleSave(widget.post.id));
-                        userPrefsService.save(
-                          authService.currentUser?.id ??
-                              authService.currentAdmin?.id ??
-                              '',
-                        );
-                        widget.onUpdate();
-                      },
-                    ),
-                  ],
-                ),
+                if (isStudent)
+                  Row(
+                    children: [
+                      _twAction(
+                        icon: isLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        count: likeCount > 0 ? '$likeCount' : null,
+                        color: isLiked
+                            ? AppColors.primaryRed
+                            : AppColors.secondaryText,
+                        onTap: _toggleLike,
+                      ),
+                      const SizedBox(width: 18),
+                      _twAction(
+                        icon: Icons.send_outlined,
+                        count: shareCount > 0 ? '$shareCount' : null,
+                        color: AppColors.secondaryText,
+                        onTap: () =>
+                            _openShareSheet(context, widget.post.id, () {
+                              setState(() {});
+                              widget.onUpdate();
+                            }),
+                      ),
+                      const Spacer(),
+                      _twAction(
+                        icon: isSaved
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_border_rounded,
+                        count: null,
+                        color: isSaved
+                            ? AppColors.primaryRed
+                            : AppColors.secondaryText,
+                        onTap: () {
+                          setState(() => userState.toggleSave(widget.post.id));
+                          userPrefsService.save(
+                            authService.currentUser?.id ?? '',
+                          );
+                          widget.onUpdate();
+                        },
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -2365,50 +2358,48 @@ class _EventCardState extends State<_EventCard> {
               ),
             ),
 
-            // ── Action row ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: Row(
-                children: [
-                  // RSVP button — reads/writes global store
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: RsvpButton(
-                      eventId: widget.event.id,
-                      color: AppColors.primaryRed,
-                      isPast: !widget.event.endTime.isAfter(DateTime.now()),
-                      compact: true,
+            if (authService.currentUser != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: RsvpButton(
+                        eventId: widget.event.id,
+                        color: AppColors.primaryRed,
+                        isPast: !widget.event.endTime.isAfter(DateTime.now()),
+                        compact: true,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  _ActionBtn(
-                    icon: Icons.send_outlined,
-                    color: AppColors.text,
-                    onTap: () => _openShareSheet(context, widget.event.id, () {
-                      setState(() {});
-                      widget.onUpdate();
-                    }, isEvent: true),
-                  ),
-                  const Spacer(),
-                  _ActionBtn(
-                    icon: userState.isSaved(widget.event.id)
-                        ? Icons.bookmark
-                        : Icons.bookmark_border,
-                    color: userState.isSaved(widget.event.id)
-                        ? AppColors.primaryRed
-                        : AppColors.text,
-                    onTap: () {
-                      setState(() => userState.toggleSave(widget.event.id));
-                      userPrefsService.save(
-                        authService.currentUser?.id ??
-                            authService.currentAdmin?.id ??
-                            '',
-                      );
-                    },
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    _ActionBtn(
+                      icon: Icons.send_outlined,
+                      color: AppColors.text,
+                      onTap: () =>
+                          _openShareSheet(context, widget.event.id, () {
+                            setState(() {});
+                            widget.onUpdate();
+                          }, isEvent: true),
+                    ),
+                    const Spacer(),
+                    _ActionBtn(
+                      icon: userState.isSaved(widget.event.id)
+                          ? Icons.bookmark
+                          : Icons.bookmark_border,
+                      color: userState.isSaved(widget.event.id)
+                          ? AppColors.primaryRed
+                          : AppColors.text,
+                      onTap: () {
+                        setState(() => userState.toggleSave(widget.event.id));
+                        userPrefsService.save(
+                          authService.currentUser?.id ?? '',
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
 
             // ── Engagement stats (own-club admin only) ──
             if (_isOwnerOfClub(widget.event.clubId)) ...[

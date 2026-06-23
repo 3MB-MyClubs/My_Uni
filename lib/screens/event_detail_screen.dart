@@ -7,13 +7,16 @@ import '../features/calendar/widgets/add_to_calendar_button.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
+import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/rsvp_button.dart';
 import 'club_profile_screen.dart';
+import 'create_event_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Event detail — recreation of the "Event Information" design handoff.
@@ -47,6 +50,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool get _canDeleteEvent =>
       contentStore.canDeleteEvent(widget.event.id, _currentAdminId);
 
+  // The owning club sees a dedicated, editable admin screen.
+  bool get _ownContent => currentAdminOwnsClubId(widget.event.clubId);
+
   bool get _isLive {
     final now = DateTime.now();
     return !widget.event.dateTime.isAfter(now) &&
@@ -74,6 +80,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   void _toggleSaved() {
+    if (authService.currentUser == null) return;
+
     setState(() => _saved = !_saved);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -90,6 +98,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _shareEvent() {
+    if (authService.currentUser == null) return;
+
     Clipboard.setData(
       ClipboardData(text: 'kuclubs://event/${widget.event.id}'),
     );
@@ -177,6 +187,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The owning club sees a dedicated, editable admin screen instead of the
+    // student-facing detail.
+    if (_ownContent) {
+      return ClubEventAdminScreen(event: widget.event, accent: _accent);
+    }
+
     final event = widget.event;
     final accent = _accent;
     final hasReg =
@@ -185,7 +201,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final hasProgramme = event.schedule != null && event.schedule!.isNotEmpty;
     final hasSpeakers = event.speakers.isNotEmpty;
     final hasCapacity = event.capacity != null && event.capacity! > 0;
-    final showCta = !_isPast;
+    final canEngage = authService.currentUser != null;
+    final showCta = canEngage && !_isPast;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -207,6 +224,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     isPast: _isPast,
                     saved: _saved,
                     canDelete: _canDeleteEvent,
+                    canEngage: canEngage,
                     onBack: () => Navigator.pop(context),
                     onToggleSaved: _toggleSaved,
                     onShare: _shareEvent,
@@ -347,6 +365,683 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Club admin event detail — editable management view shown when a club opens
+// one of its OWN events. Mirrors the "Club Event Detail" design handoff.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ClubEventAdminScreen extends StatefulWidget {
+  final Event event;
+  final Color accent;
+
+  const ClubEventAdminScreen({
+    super.key,
+    required this.event,
+    required this.accent,
+  });
+
+  @override
+  State<ClubEventAdminScreen> createState() => _ClubEventAdminScreenState();
+}
+
+class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
+  late Event _event = widget.event;
+
+  String get _adminId => authService.currentAdmin?.id ?? '';
+
+  bool get _isLive {
+    final now = DateTime.now();
+    return !_event.dateTime.isAfter(now) && _event.endTime.isAfter(now);
+  }
+
+  bool get _isPast => !_event.endTime.isAfter(DateTime.now());
+
+  Color get _accent => _isLive ? const Color(0xFF2E9E5B) : widget.accent;
+
+  String _countdownLabel() {
+    if (_isLive) return 'Happening now';
+    final diff = _event.dateTime.difference(DateTime.now());
+    if (diff.isNegative) return 'Ended';
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Tomorrow';
+    return 'In ${diff.inDays} days';
+  }
+
+  void _refresh() {
+    final found = events.where((e) => e.id == _event.id).toList();
+    if (found.isNotEmpty && mounted) setState(() => _event = found.first);
+  }
+
+  Future<void> _openEdit() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CreateEventScreen(existing: _event)),
+    );
+    _refresh();
+  }
+
+  void _confirmDelete() {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete this event?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
+        ),
+        content: Text(
+          '"${_event.title}" and all RSVP data will be permanently removed. '
+          'This cannot be undone.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Event'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed != true || !mounted) return;
+      contentStore.deleteEvent(_event.id, _adminId);
+      if (mounted) Navigator.pop(context);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _accent;
+    final attendees = users
+        .where((u) => _event.attendeeUserIds.contains(u.id))
+        .toList();
+    final hasReg = (_event.registrationUrl?.trim().isNotEmpty) ?? false;
+    final hasProgramme = _event.schedule != null && _event.schedule!.isNotEmpty;
+    final hasSpeakers = _event.speakers.isNotEmpty;
+    final hasCapacity = _event.capacity != null && _event.capacity! > 0;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 150),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _AdminHero(
+                    event: _event,
+                    accent: accent,
+                    isLive: _isLive,
+                    onBack: () => Navigator.pop(context),
+                    onEdit: _openEdit,
+                    onDelete: _confirmDelete,
+                  ),
+
+                  // RSVP stat strip
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.people_alt_outlined,
+                            size: 20,
+                            color: accent,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${_event.attendeeUserIds.length}',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.text,
+                              letterSpacing: -0.6,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _isPast ? 'ATTENDED' : 'RSVPs',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Ticket-style date / time / location (+ capacity)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _TicketCard(
+                      event: _event,
+                      accent: accent,
+                      countdown: _countdownLabel(),
+                      showCapacity: hasCapacity,
+                      takenSeats: _event.attendeeUserIds.length,
+                    ),
+                  ),
+
+                  // Registration link
+                  if (hasReg)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _RegistrationCard(
+                        url: _event.registrationUrl!.trim(),
+                        accent: accent,
+                      ),
+                    ),
+
+                  // Attendees
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+                    child: _AdminAttendees(
+                      attendees: attendees,
+                      accent: accent,
+                    ),
+                  ),
+
+                  // About + tags
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _AdminSecHead('About this event', onEdit: _openEdit),
+                        const SizedBox(height: 12),
+                        Text(
+                          _event.description,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.65,
+                            color: AppColors.text.withValues(alpha: 0.86),
+                          ),
+                        ),
+                        if (_event.tags.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final tag in _event.tags)
+                                _Tag(label: tag, accent: accent),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Programme / agenda
+                  if (hasProgramme)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _AdminSecHead('Agenda', onEdit: _openEdit),
+                          const SizedBox(height: 12),
+                          _ProgrammeTimeline(
+                            slots: _event.schedule!,
+                            accent: accent,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Speakers
+                  if (hasSpeakers) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                      child: _AdminSecHead('Speakers', onEdit: _openEdit),
+                    ),
+                    const SizedBox(height: 12),
+                    _SpeakersRow(speakers: _event.speakers),
+                  ],
+
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+
+          // Sticky Edit / Delete CTA
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                border: Border(top: BorderSide(color: AppColors.divider)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _openEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit Event'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.accent,
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: _confirmDelete,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 17),
+                      label: const Text('Delete Event'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: BorderSide(
+                          color: Colors.red.withValues(alpha: 0.4),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Hero for the admin event view: poster/gradient, a MANAGING pill, and
+/// edit / delete glass buttons.
+class _AdminHero extends StatelessWidget {
+  final Event event;
+  final Color accent;
+  final bool isLive;
+  final VoidCallback onBack;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _AdminHero({
+    required this.event,
+    required this.accent,
+    required this.isLive,
+    required this.onBack,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = AppColors.background;
+    final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return SizedBox(
+      height: 340,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasImage)
+            Image.file(
+              File(event.imagePath!),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _GradientHero(color: accent),
+            )
+          else
+            _GradientHero(color: accent),
+
+          // Scrim
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.0, 0.24, 0.5, 0.86, 1.0],
+                    colors: [
+                      Colors.black.withValues(alpha: 0.45),
+                      Colors.transparent,
+                      Colors.transparent,
+                      bg.withValues(alpha: 0.86),
+                      bg,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Nav row: back · MANAGING · edit/delete
+          Positioned(
+            top: topInset + 8,
+            left: 14,
+            right: 14,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _GlassButton(
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onTap: onBack,
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(9, 5, 12, 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: accent.withValues(alpha: 0.45)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'MANAGING',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    _GlassButton(icon: Icons.edit_outlined, onTap: onEdit),
+                    const SizedBox(width: 9),
+                    _GlassButton(
+                      icon: Icons.delete_outline_rounded,
+                      onTap: onDelete,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Status pill + title
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isLive ? accent : accent.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      isLive ? 'HAPPENING NOW' : 'UPCOMING',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: isLive ? Colors.white : accent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 11),
+                  Text(
+                    event.title,
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.8,
+                      height: 1.12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Attendees card for the admin view — initials, name, department.
+class _AdminAttendees extends StatelessWidget {
+  final List attendees;
+  final Color accent;
+
+  const _AdminAttendees({required this.attendees, required this.accent});
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Attendees',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: AppColors.text,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${attendees.length} total',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: accent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.divider),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: attendees.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  child: Center(
+                    child: Text(
+                      'No RSVPs yet.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                )
+              : Column(
+                  children: [
+                    for (final u in attendees.take(8))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: accent.withValues(alpha: 0.33),
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                _initials(u.name as String),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 11),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    userState.displayNameFor(
+                                      u.id as String,
+                                      u.name as String,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.text,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if ((userState.majors[u.id] ?? '').isNotEmpty)
+                                    Text(
+                                      userState.majors[u.id]!,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.secondaryText,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Section heading with an inline "Edit" affordance (admin view).
+class _AdminSecHead extends StatelessWidget {
+  final String title;
+  final VoidCallback onEdit;
+
+  const _AdminSecHead(this.title, {required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: AppColors.text,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const Spacer(),
+        TextButton.icon(
+          onPressed: onEdit,
+          icon: Icon(
+            Icons.edit_outlined,
+            size: 14,
+            color: AppColors.secondaryText,
+          ),
+          label: Text(
+            'Edit',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.secondaryText,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Hero
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -357,6 +1052,7 @@ class _Hero extends StatelessWidget {
   final bool isPast;
   final bool saved;
   final bool canDelete;
+  final bool canEngage;
   final VoidCallback onBack;
   final VoidCallback onToggleSaved;
   final VoidCallback onShare;
@@ -369,6 +1065,7 @@ class _Hero extends StatelessWidget {
     required this.isPast,
     required this.saved,
     required this.canDelete,
+    required this.canEngage,
     required this.onBack,
     required this.onToggleSaved,
     required this.onShare,
@@ -439,16 +1136,21 @@ class _Hero extends StatelessWidget {
                       ),
                       const SizedBox(width: 9),
                     ],
-                    _GlassButton(
-                      icon: saved
-                          ? Icons.bookmark_rounded
-                          : Icons.bookmark_outline_rounded,
-                      active: saved,
-                      activeColor: accent,
-                      onTap: onToggleSaved,
-                    ),
-                    const SizedBox(width: 9),
-                    _GlassButton(icon: Icons.ios_share_rounded, onTap: onShare),
+                    if (canEngage) ...[
+                      _GlassButton(
+                        icon: saved
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_outline_rounded,
+                        active: saved,
+                        activeColor: accent,
+                        onTap: onToggleSaved,
+                      ),
+                      const SizedBox(width: 9),
+                      _GlassButton(
+                        icon: Icons.ios_share_rounded,
+                        onTap: onShare,
+                      ),
+                    ],
                   ],
                 ),
               ],

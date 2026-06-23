@@ -10,7 +10,7 @@ import 'supabase_interaction_service.dart';
 import 'user_state.dart';
 
 Future<void> togglePostLike(String postId) async {
-  final userId = authService.currentUser?.id ?? authService.currentAdmin?.id;
+  final userId = authService.currentUser?.id;
   if (userId == null || userId.isEmpty || postId.isEmpty) return;
 
   final wasLiked = userState.isLiked(postId);

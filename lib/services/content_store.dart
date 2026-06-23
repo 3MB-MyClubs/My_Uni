@@ -202,6 +202,20 @@ class ContentStore {
     );
   }
 
+  bool canEditEvent(String eventId, String requestingUserId) =>
+      canDeleteEvent(eventId, requestingUserId);
+
+  /// Replaces the stored event with [updated] (matched by id) when the
+  /// requester is a club admin of that event's club. Returns false otherwise.
+  bool updateEvent(Event updated, String requestingUserId) {
+    final idx = events.indexWhere((e) => e.id == updated.id);
+    if (idx == -1) return false;
+    if (!_isClubAdmin(updated.clubId, requestingUserId)) return false;
+    events[idx] = updated;
+    saveEvents();
+    return true;
+  }
+
   bool deleteEvent(String eventId, String requestingUserId) {
     final idx = events.indexWhere((e) => e.id == eventId);
     if (idx == -1) return false;

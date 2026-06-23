@@ -101,6 +101,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   void _toggleLike() {
+    if (authService.currentUser == null) return;
     togglePostLike(widget.post.id);
     setState(() {});
   }
@@ -108,6 +109,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
+    final isStudent = authService.currentUser != null;
     final isLiked = userState.isLiked(widget.post.id);
     final likeCount = postLikeCount(widget.post.id);
     final hasImage =
@@ -194,7 +196,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               child: Row(
                 children: [
                   GestureDetector(
-                    onTap: _toggleLike,
+                    onTap: isStudent ? _toggleLike : null,
                     child: Row(
                       children: [
                         Icon(

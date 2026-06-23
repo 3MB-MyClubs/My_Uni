@@ -12,6 +12,14 @@ bool isCurrentAdminForClub(Club club) {
   return clubIsManagedByAdmin(club, adminId);
 }
 
+/// True when the logged-in club admin manages the club with [clubId].
+/// Used to show clubs an editable admin view of their own events.
+bool currentAdminOwnsClubId(String clubId) {
+  final adminId = authService.currentAdmin?.id ?? '';
+  if (adminId.isEmpty) return false;
+  return clubs.any((c) => c.id == clubId && clubIsManagedByAdmin(c, adminId));
+}
+
 Club? managedClubForAdmin(String adminId) {
   if (adminId.isEmpty || adminId == appAdmin.id) return null;
   for (final club in clubs) {
