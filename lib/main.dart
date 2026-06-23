@@ -24,6 +24,7 @@ import 'services/theme_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'services/tutorial_service.dart';
+import 'services/event_cleanup_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
@@ -44,6 +45,7 @@ void main() async {
   await calendarSyncService.initialize();
   await tutorialService.initialize();
   contentStore.applyToLists();
+  await eventCleanupService.cleanupExpiredEvents();
   contentStore.loadBoardMemberIds();
   contentStore.loadBoardMemberTitles();
   // Restore any dynamic notifications that were generated at runtime.

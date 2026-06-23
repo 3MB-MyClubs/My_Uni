@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'event_cleanup_service.dart';
 import 'supabase_content_service.dart';
 
 class LazyContentLoader {
@@ -30,6 +31,7 @@ class LazyContentLoader {
   Future<void> _loadContent() async {
     try {
       await supabaseContentService.refreshPublicContent();
+      await eventCleanupService.cleanupExpiredEvents();
       _contentLoaded = true;
       unawaited(ensureCountsLoaded());
     } finally {
