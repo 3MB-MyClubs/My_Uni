@@ -175,7 +175,7 @@ class SupabaseContentService {
       rsvpTimestamps: _stringMap(
         row['rsvp_timestamps'] ?? row['rsvpTimestamps'],
       ),
-      imagePath: _nullableString(row, ['image_url', 'image_path', 'imagePath']),
+      imagePath: _eventImagePath(row),
       createdByUserId: _nullableString(row, [
         'created_by_user_id',
         'createdByUserId',
@@ -194,7 +194,40 @@ class SupabaseContentService {
       capacity: row['capacity'] is int
           ? row['capacity'] as int
           : int.tryParse(row['capacity']?.toString() ?? ''),
+      schedule: _eventSchedule(row['schedule']),
+      speakers: _eventSpeakers(row['speakers']),
     );
+  }
+
+  String? _eventImagePath(Map<String, dynamic> row) {
+    final imageUrl = _nullableString(row, ['image_url', 'imageUrl']);
+    if (imageUrl != null) return imageUrl;
+
+    final imagePath = _nullableString(row, ['image_path', 'imagePath']);
+    final client = _client;
+    if (client == null || imagePath == null) return imagePath;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    return client.storage.from('event-images').getPublicUrl(imagePath);
+  }
+
+  List<EventSlot>? _eventSchedule(dynamic raw) {
+    if (raw is! List) return null;
+    return raw
+        .whereType<Map>()
+        .map((slot) => EventSlot.fromMap(Map<String, dynamic>.from(slot)))
+        .toList();
+  }
+
+  List<EventSpeaker> _eventSpeakers(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (speaker) => EventSpeaker.fromMap(Map<String, dynamic>.from(speaker)),
+        )
+        .toList();
   }
 
   NewsPost _postFromRow(Map<String, dynamic> row) {

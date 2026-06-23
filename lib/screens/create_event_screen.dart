@@ -17,6 +17,7 @@ import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/supabase_event_service.dart';
 import '../widgets/mention_text_field.dart';
 
 class CreateEventScreen extends StatefulWidget {
@@ -76,6 +77,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   // Speakers (name / role / LinkedIn)
   final List<_SpeakerEntry> _speakers = [];
+  bool _isPosting = false;
 
   DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
   DateTime _endDate = DateTime.now().add(const Duration(hours: 3));
@@ -304,9 +306,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
   }
 
-  void _post() {
+  Future<void> _post() async {
     final clubId = _adminClubId;
-    if (clubId == null) return;
+    if (clubId == null || _isPosting) return;
 
     // Build schedule
     List<EventSlot>? schedule;
@@ -348,7 +350,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     final regUrl = _regUrlCtrl.text.trim();
 
-    final newEvent = Event(
+    final draftEvent = Event(
       id: 'ev_${DateTime.now().millisecondsSinceEpoch}',
       clubId: clubId,
       title: _titleController.text.trim(),
@@ -365,11 +367,47 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       speakers: speakers,
     );
 
-    events.add(newEvent);
-    contentStore.saveEvents();
-    unawaited(clubNotificationService.notifyFollowersAboutEvent(newEvent));
-    widget.onCreated?.call();
-    Navigator.pop(context);
+    setState(() => _isPosting = true);
+    try {
+      final newEvent = await supabaseEventService.createEvent(draftEvent);
+      if (!mounted) return;
+      events.add(newEvent);
+      unawaited(contentStore.saveEvents());
+      unawaited(clubNotificationService.notifyFollowersAboutEvent(newEvent));
+      widget.onCreated?.call();
+      Navigator.pop(context);
+    } catch (error, stackTrace) {
+      debugPrint('Create event failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_publishErrorMessage(error)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+  }
+
+  String _publishErrorMessage(Object error) {
+    final text = error.toString();
+    if (text.contains('row-level security') ||
+        text.contains('permission denied') ||
+        text.contains('42501')) {
+      return 'Could not publish event. Check events RLS policies for this club account.';
+    }
+    if (text.contains('column') ||
+        text.contains('schedule') ||
+        text.contains('speakers')) {
+      return 'Could not publish event. Run the latest events SQL migration.';
+    }
+    if (text.contains('event-images') || text.contains('storage')) {
+      return 'Could not upload event image. Check the event-images bucket policies.';
+    }
+    return 'Could not publish event. Check Supabase settings.';
   }
 
   @override
@@ -415,17 +453,26 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ValueListenableBuilder(
             valueListenable: _titleController,
             builder: (ctx, value, child) => TextButton(
-              onPressed: _canPost ? _post : null,
-              child: Text(
-                'Post',
-                style: TextStyle(
-                  color: _canPost
-                      ? AppColors.primaryRed
-                      : AppColors.secondaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
+              onPressed: _canPost && !_isPosting ? () => _post() : null,
+              child: _isPosting
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primaryRed,
+                      ),
+                    )
+                  : Text(
+                      'Post',
+                      style: TextStyle(
+                        color: _canPost
+                            ? AppColors.primaryRed
+                            : AppColors.secondaryText,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
             ),
           ),
         ],
