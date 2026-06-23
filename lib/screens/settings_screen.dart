@@ -346,6 +346,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _openChangeNameSheet() {
+    final user = authService.currentUser;
+    if (user == null) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChangeNameSheet(userId: user.id, realName: user.name),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -364,56 +378,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // so the personal profile editor is shown for student accounts only.
           if (authService.currentUser != null) ...[
             _SectionHeader(title: 'Profile'),
-            Container(
-              color: AppColors.card,
-              child: ListTile(
-                leading: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.person_outline_rounded,
-                    color: AppColors.primaryRed,
-                    size: 20,
-                  ),
-                ),
-                title: Text(
-                  'Edit Profile',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
-                ),
-                subtitle: Text(
-                  'Name, photo, bio, major, year & interests',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-                trailing: Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.secondaryText,
-                ),
-                onTap: () {
-                  final user = authService.currentUser;
-                  if (user == null) return;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EditProfileScreen(
-                        userId: user.id,
-                        realName: user.name,
+            ListenableBuilder(
+              listenable: userState,
+              builder: (context, _) {
+                final user = authService.currentUser!;
+                final currentName = userState.displayNameFor(
+                  user.id,
+                  user.name,
+                );
+
+                return Container(
+                  color: AppColors.card,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.person_outline_rounded,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Edit Profile',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Photo, bio, major, year & interests',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                userId: user.id,
+                                realName: user.name,
+                              ),
+                            ),
+                          ).then((_) {
+                            if (mounted) setState(() {});
+                          });
+                        },
                       ),
-                    ),
-                  ).then((_) {
-                    if (mounted) setState(() {});
-                  });
-                },
-              ),
+                      Divider(height: 1, indent: 56, color: AppColors.divider),
+                      ListTile(
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.lightRed,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.badge_outlined,
+                            color: AppColors.primaryRed,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          'Change My Name',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        subtitle: Text(
+                          currentName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.secondaryText,
+                        ),
+                        onTap: _openChangeNameSheet,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
 
@@ -1116,6 +1180,171 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// Bottom sheet for editing the student's display name. Owns its own
+/// [TextEditingController] so it is disposed only after the sheet is fully
+/// removed — disposing it earlier (e.g. in `whenComplete`) crashed because the
+/// dismiss animation rebuilds the [TextField] against a disposed controller.
+class _ChangeNameSheet extends StatefulWidget {
+  final String userId;
+  final String realName;
+
+  const _ChangeNameSheet({required this.userId, required this.realName});
+
+  @override
+  State<_ChangeNameSheet> createState() => _ChangeNameSheetState();
+}
+
+class _ChangeNameSheetState extends State<_ChangeNameSheet> {
+  late final TextEditingController _controller = TextEditingController(
+    text: userState.usernameFor(widget.userId) ?? '',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _useRealName() async {
+    userState.clearUsername(widget.userId);
+    await userPrefsService.save(widget.userId);
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  Future<void> _save(String name) async {
+    userState.setUsername(widget.userId, name);
+    await userPrefsService.save(widget.userId);
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customName = _controller.text.trim();
+    final hasCustomName = userState.usernameFor(widget.userId) != null;
+    final isTaken =
+        customName.isNotEmpty &&
+        userState.isUsernameTaken(customName, excludeId: widget.userId);
+    final canSave =
+        customName.isNotEmpty &&
+        customName != userState.usernameFor(widget.userId) &&
+        !isTaken;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Change My Name',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Choose the name people see on your student profile.',
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              maxLength: 40,
+              textCapitalization: TextCapitalization.words,
+              style: TextStyle(color: AppColors.text, fontSize: 14),
+              decoration: InputDecoration(
+                labelText: 'Display name',
+                hintText: widget.realName,
+                errorText: isTaken ? 'That name is already taken.' : null,
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryRed,
+                    width: 1.5,
+                  ),
+                ),
+                counterStyle: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 11,
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: hasCustomName
+                        ? _useRealName
+                        : () => Navigator.pop(context),
+                    child: Text(
+                      hasCustomName ? 'Use Real Name' : 'Cancel',
+                      style: TextStyle(color: AppColors.secondaryText),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canSave
+                          ? AppColors.primaryRed
+                          : AppColors.divider,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: canSave ? () => _save(customName) : null,
+                    child: Text(
+                      'Save Name',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

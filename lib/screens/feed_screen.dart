@@ -1860,6 +1860,7 @@ class _PostCardState extends State<_PostCard>
     final isLiked = userState.isLiked(widget.post.id);
     final isSaved = userState.isSaved(widget.post.id);
     final isStudent = authService.currentUser != null;
+    final ownContent = _isOwnerOfClub(widget.post.clubId);
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
 
@@ -2019,7 +2020,7 @@ class _PostCardState extends State<_PostCard>
                   ),
                 ],
                 // ── Engagement stats (own-club admin only) ──
-                if (_isOwnerOfClub(widget.post.clubId)) ...[
+                if (ownContent) ...[
                   const SizedBox(height: 10),
                   _EngagementBar(
                     likes: likeCount,
