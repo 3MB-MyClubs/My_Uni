@@ -18,7 +18,6 @@ import 'explore_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
-import 'create_post_screen.dart';
 import 'create_event_screen.dart';
 
 class MainNavScreen extends ConsumerStatefulWidget {
@@ -364,26 +363,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     return admin.id != appAdmin.id; // not the super admin
   }
 
-  void _openCreateChooser(BuildContext context) {
-    showClubCreateSheet(
-      context,
-      onPost: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => CreatePostScreen(onPosted: () => setState(() {})),
-        ),
-      ),
-      onEvent: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => CreateEventScreen(onCreated: () => setState(() {})),
-        ),
+  void _onAddTap() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => CreateEventScreen(onCreated: () => setState(() {})),
       ),
     );
-  }
-
-  void _onAddTap() {
-    _openCreateChooser(context);
   }
 
   @override
