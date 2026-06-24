@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import 'profile_photo_viewer.dart';
 
@@ -19,6 +20,7 @@ class ClubAvatar extends StatelessWidget {
   final String shape; // 'circle' | 'rounded'
   final double borderRadius;
   final String? imageUrl;
+  final String? profilePhotoFallbackId;
 
   const ClubAvatar({
     super.key,
@@ -30,6 +32,7 @@ class ClubAvatar extends StatelessWidget {
     this.shape = 'rounded',
     this.borderRadius = 14,
     this.imageUrl,
+    this.profilePhotoFallbackId,
   });
 
   @override
@@ -37,8 +40,17 @@ class ClubAvatar extends StatelessWidget {
     return ListenableBuilder(
       listenable: userState,
       builder: (context, _) {
-        final photoPath = userState.clubPhotoPaths[clubId];
-        final fallbackUrl = imageUrl ?? userState.mockClubPhotoUrls[clubId];
+        final profileIds = _profileIdsForClub();
+        final photoPath =
+            userState.clubPhotoPaths[clubId] ??
+            _firstValue(
+              profileIds.map((id) => userState.profilePhotoPaths[id]),
+            );
+        final fallbackUrl = _firstNetworkImage([
+          imageUrl,
+          ...profileIds.map((id) => userState.mockPhotoUrls[id]),
+          userState.mockClubPhotoUrls[clubId],
+        ]);
         final isCircle = shape == 'circle';
 
         if (photoPath != null && _isNetworkImage(photoPath)) {
@@ -60,6 +72,30 @@ class ClubAvatar extends StatelessWidget {
 
   bool _isNetworkImage(String path) =>
       path.startsWith('http://') || path.startsWith('https://');
+
+  String? _firstNetworkImage(Iterable<String?> candidates) {
+    for (final candidate in candidates) {
+      if (candidate != null && _isNetworkImage(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  String? _firstValue(Iterable<String?> candidates) {
+    for (final candidate in candidates) {
+      if (candidate != null && candidate.isNotEmpty) return candidate;
+    }
+    return null;
+  }
+
+  List<String> _profileIdsForClub() {
+    final ids = <String>{?profilePhotoFallbackId, clubId};
+    for (final club in clubs) {
+      if (club.id != clubId) continue;
+      ids.addAll(club.adminUserIds);
+      break;
+    }
+    return ids.toList();
+  }
 
   Widget _photo(
     BuildContext context,

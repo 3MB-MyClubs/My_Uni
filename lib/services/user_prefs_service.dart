@@ -215,6 +215,11 @@ class UserPrefsService {
     await _box.put('clubPhotoPath_$clubId', path);
   }
 
+  Future<void> removeClubPhoto(String clubId) async {
+    if (!_initialized) return;
+    await _box.delete('clubPhotoPath_$clubId');
+  }
+
   void _restoreSet(
     Set<String> target,
     dynamic raw, {

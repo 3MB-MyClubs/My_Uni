@@ -191,6 +191,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
       userState.setProfilePhoto(userId, permanentPath);
+      final managedClub = authService.currentAdmin?.id == userId
+          ? managedClubForAdmin(userId)
+          : null;
+      if (managedClub != null) {
+        userState.setClubPhoto(managedClub.id, permanentPath);
+        await userPrefsService.saveClubPhoto(managedClub.id, permanentPath);
+      }
       userPrefsService.save(userId);
       try {
         await remote_profile.studentProfileService.uploadAvatar(
@@ -825,6 +832,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _removeProfilePhoto(String userId) async {
     userState.removeProfilePhoto(userId);
+    final managedClub = authService.currentAdmin?.id == userId
+        ? managedClubForAdmin(userId)
+        : null;
+    if (managedClub != null) {
+      userState.removeClubPhoto(managedClub.id);
+      await userPrefsService.removeClubPhoto(managedClub.id);
+    }
     await userPrefsService.save(userId);
     try {
       await remote_profile.studentProfileService.removeAvatar(userId);

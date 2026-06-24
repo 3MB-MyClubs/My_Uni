@@ -180,7 +180,13 @@ Widget buildPostBanner({
 
 class CreatePostScreen extends StatefulWidget {
   final VoidCallback? onPosted;
-  const CreatePostScreen({super.key, this.onPosted});
+  final bool startWithPhotoUpload;
+
+  const CreatePostScreen({
+    super.key,
+    this.onPosted,
+    this.startWithPhotoUpload = false,
+  });
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -189,7 +195,7 @@ class CreatePostScreen extends StatefulWidget {
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final _contentController = TextEditingController();
   bool _isPosting = false;
-  bool _requiresPhoto = false;
+  late bool _requiresPhoto;
 
   _ClubOption? _selectedClub;
   late final List<_ClubOption> _myClubs;
@@ -207,6 +213,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
+    _requiresPhoto = widget.startWithPhotoUpload;
     final adminId = authService.currentAdmin?.id ?? '';
     _myClubs = clubs
         .where((c) => clubIsManagedByAdmin(c, adminId))
@@ -363,10 +370,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(
             'Cancel',
+            maxLines: 1,
+            softWrap: false,
             style: TextStyle(color: AppColors.secondaryText),
           ),
         ),
-        leadingWidth: 70,
+        leadingWidth: 84,
         title: Text('New Post', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           Padding(
@@ -499,18 +508,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   const SizedBox(height: 16),
                 ],
 
-                _PhotoUploadChoice(
-                  enabled: _requiresPhoto,
-                  imagePath: _imagePath,
-                  hasUploadedPhoto: _hasUploadedPhoto,
-                  onEnabledChanged: (value) {
-                    setState(() {
-                      _requiresPhoto = value;
-                      if (!value) _imagePath = null;
-                    });
-                  },
-                  onImageChanged: (path) => setState(() => _imagePath = path),
-                ),
+                if (widget.startWithPhotoUpload)
+                  ContentImageUploader(
+                    imagePath: _imagePath,
+                    onChanged: (path) => setState(() => _imagePath = path),
+                    height: 180,
+                    emptyTitle: 'Upload photo (required)',
+                    emptySubtitle: 'Tap to choose from camera or library',
+                  )
+                else
+                  _PhotoUploadChoice(
+                    enabled: _requiresPhoto,
+                    imagePath: _imagePath,
+                    hasUploadedPhoto: _hasUploadedPhoto,
+                    onEnabledChanged: (value) {
+                      setState(() {
+                        _requiresPhoto = value;
+                        if (!value) _imagePath = null;
+                      });
+                    },
+                    onImageChanged: (path) => setState(() => _imagePath = path),
+                  ),
                 const SizedBox(height: 16),
 
                 // Tag hint

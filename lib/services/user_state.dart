@@ -79,6 +79,10 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void removeClubPhoto(String clubId) {
+    if (clubPhotoPaths.remove(clubId) != null) notifyListeners();
+  }
+
   /// Sets the profile photo path for [userId] and notifies all listeners.
   void setProfilePhoto(String userId, String path) {
     PaintingBinding.instance.imageCache.evict(FileImage(File(path)));

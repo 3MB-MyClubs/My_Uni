@@ -49,7 +49,8 @@ class _ExpandablePostCaptionState extends State<ExpandablePostCaption> {
     return Text.rich(
       TextSpan(
         children: [
-          TextSpan(text: '${widget.authorName}  ', style: widget.authorStyle),
+          if (widget.authorName.trim().isNotEmpty)
+            TextSpan(text: '${widget.authorName}  ', style: widget.authorStyle),
           TextSpan(text: visibleCaption, style: widget.captionStyle),
           if (canExpand && !_isExpanded) ...[
             TextSpan(text: '\u2026 ', style: widget.captionStyle),

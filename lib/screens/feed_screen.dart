@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
@@ -23,7 +24,9 @@ import '../models/user.dart';
 import '../services/message_service.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
-import 'create_post_screen.dart' show buildPostBanner;
+import 'create_post_screen.dart' show buildPostBanner, CreatePostScreen;
+import '../services/supabase_post_service.dart';
+import '../services/club_notification_service.dart';
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
@@ -33,7 +36,6 @@ import '../services/supabase_interaction_service.dart';
 import 'group_chat_screen.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
-import 'messages_screen.dart';
 import 'event_detail_screen.dart';
 
 // ─── Feed Item (unified post + event wrapper) ─────────────────────────────────
@@ -293,6 +295,7 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildGreeting(),
             _buildEventsRail(),
             _buildFeedTabs(),
+            _buildComposer(),
             if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -425,31 +428,8 @@ class _FeedScreenState extends State<FeedScreen> {
     return '';
   }
 
-  int get _unreadMessageCount {
-    final myId = authService.currentUser?.id ?? '';
-    if (myId.isEmpty) return 0;
-
-    final storedMessages = messageService.getAllMessages();
-    final storedIds = storedMessages.map((message) => message.id).toSet();
-    final allMessages = [
-      ...storedMessages,
-      ...messages.where((message) => !storedIds.contains(message.id)),
-    ];
-    final senderIds = allMessages
-        .where((message) => message.receiverId == myId)
-        .map((message) => message.senderId)
-        .toSet();
-
-    return senderIds.fold(
-      0,
-      (total, senderId) =>
-          total + messageService.unreadCount(myId, senderId, allMessages),
-    );
-  }
-
   // ── UniHub top bar ───────────────────────────────────────────────────────
   SliverAppBar _buildTopBar() {
-    final unreadMessages = _unreadMessageCount;
     return SliverAppBar(
       pinned: true,
       floating: false,
@@ -491,70 +471,6 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            if (authService.isStudentSession) ...[
-              // Messages button
-              GestureDetector(
-                onTap: () =>
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const MessagesScreen()),
-                    ).then((_) {
-                      if (mounted) setState(() {});
-                    }),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Center(
-                        child: Icon(
-                          Icons.send_outlined,
-                          size: 20,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      if (unreadMessages > 0)
-                        Positioned(
-                          top: -4,
-                          right: -4,
-                          child: Container(
-                            constraints: const BoxConstraints(
-                              minWidth: 18,
-                              minHeight: 18,
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryRed,
-                              borderRadius: BorderRadius.circular(100),
-                              border: Border.all(
-                                color: AppColors.card,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              unreadMessages > 99 ? '99+' : '$unreadMessages',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                height: 1,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
             // Bell button with unread badge
             ListenableBuilder(
               listenable: userState,
@@ -834,6 +750,31 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  // ── Quick post composer (club admins only) ───────────────────────────────
+  // Inline card for the managing admin to post a quick text update to their
+  // club, mirroring the design's composer. Hidden for student sessions and
+  // admins without a managed club, since only clubs author posts.
+  Widget _buildComposer() {
+    final admin = authService.currentAdmin;
+    if (admin == null) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    final club = managedClubForAdmin(admin.id);
+    if (club == null) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+        child: _QuickPostComposer(
+          club: club,
+          color: _colorForClub(club.id),
+          onPosted: () => setState(() {}),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFeedCard(_FeedItem item, int rank) {
     if (item.isEvent) {
       return _EventCard(
@@ -849,6 +790,295 @@ class _FeedScreenState extends State<FeedScreen> {
       score: item.score,
       rank: rank,
       onUpdate: () => setState(() {}),
+    );
+  }
+}
+
+// ─── Quick Post Composer ──────────────────────────────────────────────────────
+
+/// Inline composer card shown at the top of the feed for the managing club
+/// admin. Collapsed it's a single-line prompt; once focused it expands to a
+/// multi-line field with a photo / event action row, a 280-char counter, and a
+/// Post button. Text posts publish through the same path as CreatePostScreen.
+class _QuickPostComposer extends StatefulWidget {
+  final dynamic club; // Club
+  final Color color;
+  final VoidCallback onPosted;
+
+  const _QuickPostComposer({
+    required this.club,
+    required this.color,
+    required this.onPosted,
+  });
+
+  @override
+  State<_QuickPostComposer> createState() => _QuickPostComposerState();
+}
+
+class _QuickPostComposerState extends State<_QuickPostComposer> {
+  static const int _maxChars = 280;
+
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _focused = false;
+  bool _posting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+    _controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    _controller.removeListener(_onTextChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus && !_focused) {
+      setState(() => _focused = true);
+    }
+  }
+
+  void _onTextChanged() => setState(() {});
+
+  int get _remaining => _maxChars - _controller.text.length;
+
+  bool get _canPost =>
+      !_posting && _controller.text.trim().isNotEmpty && _remaining >= 0;
+
+  Future<void> _post() async {
+    if (!_canPost) return;
+    final content = _controller.text.trim();
+    setState(() => _posting = true);
+    try {
+      final post = await supabasePostService.createPost(
+        clubId: widget.club.id as String,
+        authorId: authService.currentAdmin?.id ?? '',
+        content: content,
+        taggedClubIds: const [],
+        taggedUserIds: const [],
+        imagePath: null,
+      );
+      if (!mounted) return;
+      newsPosts.insert(0, post);
+      unawaited(contentStore.saveNewsPosts());
+      unawaited(clubNotificationService.notifyFollowersAboutPost(post));
+      _controller.clear();
+      _focusNode.unfocus();
+      setState(() {
+        _focused = false;
+        _posting = false;
+      });
+      widget.onPosted();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _posting = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not publish post. Check Supabase settings.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+  }
+
+  // Opens the full post creation screen (with photo upload). Used by the
+  // image-add button in the composer action bar.
+  void _openFullComposer() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreatePostScreen(
+          onPosted: widget.onPosted,
+          startWithPhotoUpload: true,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Monochrome palette — pure black surface, white + grey text only.
+    const Color white = Color(0xFFFFFFFF);
+    const Color grey = Color(0xFF8A8A8E);
+
+    return Material(
+      color: const Color(0xFF000000),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClubAvatar(
+              key: ValueKey('quick-post-club-avatar-${widget.club.id}'),
+              clubId: widget.club.id as String,
+              clubName: widget.club.name as String,
+              color: white,
+              size: 42,
+              fontSize: 18,
+              shape: 'circle',
+              borderRadius: 13,
+              imageUrl: widget.club.logoUrl as String?,
+              profilePhotoFallbackId: authService.currentAdmin?.id,
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Read-only club label
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      widget.club.name as String,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: grey,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                  // Expanding text field — selection handles/highlight forced to
+                  // black so no burgundy accent appears when focused/selecting.
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      primaryColor: const Color(0xFF000000),
+                      focusColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      colorScheme: Theme.of(context).colorScheme.copyWith(
+                        primary: const Color(0xFF000000),
+                        onPrimary: white,
+                        surface: const Color(0xFF000000),
+                        onSurface: white,
+                      ),
+                      textSelectionTheme: const TextSelectionThemeData(
+                        cursorColor: white,
+                        selectionColor: Color(0xFF000000),
+                        selectionHandleColor: Color(0xFF000000),
+                      ),
+                      inputDecorationTheme: const InputDecorationTheme(
+                        filled: true,
+                        fillColor: Color(0xFF000000),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      minLines: 1,
+                      maxLines: _focused ? 5 : 1,
+                      maxLength: _maxChars + 20,
+                      textCapitalization: TextCapitalization.sentences,
+                      cursorColor: white,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: white,
+                        height: 1.55,
+                      ),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        filled: true,
+                        fillColor: Color(0xFF000000),
+                        counterText: '',
+                        hintText: "What's happening at your club?",
+                        hintStyle: TextStyle(
+                          fontSize: 15,
+                          color: grey,
+                          height: 1.55,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Action bar — revealed once focused
+                  if (_focused) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Tooltip(
+                          message: 'Add photo',
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _openFullComposer,
+                            child: const Icon(
+                              Icons.image_outlined,
+                              size: 19,
+                              color: white,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_controller.text.isNotEmpty) ...[
+                          Text(
+                            '$_remaining',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                              color: grey,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        _PostButton(enabled: _canPost, onTap: _post),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostButton extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _PostButton({required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        alignment: Alignment.center,
+        child: Text(
+          'Post',
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
+            color: enabled ? const Color(0xFFFFFFFF) : const Color(0xFF8A8A8E),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1764,7 +1994,6 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _showPostOptions() {
-    final isStudent = authService.isStudentSession;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,
@@ -1808,15 +2037,6 @@ class _PostCardState extends State<_PostCard>
                 ),
               ),
               const SizedBox(height: 8),
-              if (isStudent)
-                tile(
-                  icon: Icons.ios_share,
-                  label: 'Share',
-                  onTap: () => _openShareSheet(context, widget.post.id, () {
-                    setState(() {});
-                    widget.onUpdate();
-                  }),
-                ),
               tile(
                 icon: Icons.link_rounded,
                 label: 'Copy link',
@@ -1888,7 +2108,6 @@ class _PostCardState extends State<_PostCard>
     final likeCount = postLikeCount(widget.post.id);
     final shareCount = postShareCount(widget.post.id);
     final isLiked = userState.isLiked(widget.post.id);
-    final isSaved = userState.isSaved(widget.post.id);
     final isStudent = authService.isStudentSession;
     final ownContent = _isOwnerOfClub(widget.post.clubId);
     final hasImage =
@@ -2084,41 +2303,11 @@ class _PostCardState extends State<_PostCard>
                         icon: isLiked
                             ? Icons.favorite_rounded
                             : Icons.favorite_border_rounded,
-                        count: likeCount > 0 ? '$likeCount' : null,
+                        count: null,
                         color: isLiked
                             ? AppColors.primaryRed
                             : AppColors.secondaryText,
                         onTap: _toggleLike,
-                      ),
-                      const SizedBox(width: 18),
-                      _twAction(
-                        icon: Icons.send_outlined,
-                        count: shareCount > 0 ? '$shareCount' : null,
-                        color: AppColors.secondaryText,
-                        onTap: () =>
-                            _openShareSheet(context, widget.post.id, () {
-                              setState(() {});
-                              widget.onUpdate();
-                            }),
-                      ),
-                      const Spacer(),
-                      _twAction(
-                        icon: isSaved
-                            ? Icons.bookmark_rounded
-                            : Icons.bookmark_border_rounded,
-                        count: null,
-                        color: isSaved
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
-                        onTap: () {
-                          setState(() => userState.toggleSave(widget.post.id));
-                          userPrefsService.save(
-                            authService.isStudentSession
-                                ? authService.currentUser?.id ?? ''
-                                : '',
-                          );
-                          widget.onUpdate();
-                        },
                       ),
                     ],
                   ),

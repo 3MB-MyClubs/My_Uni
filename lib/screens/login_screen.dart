@@ -145,34 +145,28 @@ class _LoginScreenState extends State<LoginScreen> {
               // ── Brand header ──────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Crest(),
-                    const SizedBox(width: 13),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'EST. 1993',
-                          style: TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1.6,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Koç University',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'EST. 1993',
+                      style: TextStyle(
+                        fontSize: 11,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Koç University',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                        color: AppColors.text,
+                      ),
                     ),
                   ],
                 ),
@@ -196,23 +190,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           const TextSpan(text: 'Welcome back to\n'),
                           TextSpan(
-                            text: 'campus.',
+                            text: 'campus',
                             style: TextStyle(color: AppColors.primaryRed),
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 330),
-                      child: Text(
-                        'Sign in to pick up where you left off at Koç University.',
-                        style: TextStyle(
-                          fontSize: 15.5,
-                          height: 1.45,
-                          letterSpacing: -0.1,
-                          color: AppColors.secondaryText,
-                        ),
                       ),
                     ),
                   ],
@@ -390,42 +371,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Brand crest tile ─────────────────────────────────────────────────────────
-class _Crest extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primaryRed, AppColors.darkRed],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryRed.withValues(alpha: 0.30),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: const Text(
-        'KU',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 17,
-          letterSpacing: -0.6,
         ),
       ),
     );
