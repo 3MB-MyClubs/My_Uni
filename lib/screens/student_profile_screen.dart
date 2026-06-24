@@ -488,8 +488,6 @@ class _NameMajorBlock extends StatelessWidget {
           Row(
             children: [
               if (hasMajor) ...[
-                _FacultySquare(major: data.major),
-                const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     data.major,
@@ -528,15 +526,14 @@ class _NameMajorBlock extends StatelessWidget {
           ),
         ],
         if (data.doubleMajors.isNotEmpty || data.minors.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
+          const SizedBox(height: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final dm in data.doubleMajors)
-                _AcademicTag(label: 'Double major', value: dm, filled: true),
+                _AcademicLine(label: 'Double major', value: dm),
               for (final mn in data.minors)
-                _AcademicTag(label: 'Minor', value: mn, filled: false),
+                _AcademicLine(label: 'Minor', value: mn),
             ],
           ),
         ],
@@ -545,101 +542,29 @@ class _NameMajorBlock extends StatelessWidget {
   }
 }
 
-/// Small pill tag for a double major / minor program.
-class _AcademicTag extends StatelessWidget {
+class _AcademicLine extends StatelessWidget {
   final String label;
   final String value;
-  final bool filled;
-  const _AcademicTag({
-    required this.label,
-    required this.value,
-    required this.filled,
-  });
+  const _AcademicLine({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    final accent = StudentProfileScreen._burgundy;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: filled ? accent.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: filled
-              ? accent.withValues(alpha: 0.35)
-              : StudentProfileScreen._hair,
-        ),
-      ),
-      child: RichText(
-        text: TextSpan(
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text.rich(
+        TextSpan(
           children: [
-            TextSpan(
-              text: '$label · ',
-              style: TextStyle(
-                color: accent,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.1,
-              ),
-            ),
-            TextSpan(
-              text: value,
-              style: TextStyle(
-                color: StudentProfileScreen._body,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.1,
-              ),
-            ),
+            TextSpan(text: '$label: '),
+            TextSpan(text: value),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Small 18×18 colored square representing the student's faculty / major.
-class _FacultySquare extends StatelessWidget {
-  final String major;
-  const _FacultySquare({required this.major});
-
-  static Color _colorFor(String major) {
-    // Fixed palette derived from first letter, similar to design's oklab approach.
-    final hues = [
-      const Color(0xFF1565C0), // A-C → blue
-      const Color(0xFF2E7D32), // D-G → green
-      const Color(0xFF6A1B9A), // H-M → purple
-      const Color(0xFFE65100), // N-R → orange
-      const Color(0xFF00838F), // S-Z → teal
-    ];
-    if (major.isEmpty) return hues[0];
-    final c = major.toUpperCase().codeUnitAt(0);
-    if (c <= 67) return hues[0]; // A-C
-    if (c <= 71) return hues[1]; // D-G
-    if (c <= 77) return hues[2]; // H-M
-    if (c <= 82) return hues[3]; // N-R
-    return hues[4]; // S-Z
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _colorFor(major);
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 1),
-      ),
-      child: Center(
-        child: Text(
-          major.isNotEmpty ? major[0].toUpperCase() : '?',
-          style: TextStyle(
-            color: color,
-            fontSize: 9,
-            fontWeight: FontWeight.w800,
-          ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: StudentProfileScreen._body,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          letterSpacing: -0.1,
         ),
       ),
     );
