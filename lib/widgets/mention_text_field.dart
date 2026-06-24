@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/app_colors.dart';
 
@@ -24,6 +25,7 @@ class MentionTextField extends StatefulWidget {
   final int? maxLines;
   final int? minLines;
   final TextCapitalization textCapitalization;
+  final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<MentionOption>? onMentionSelected;
@@ -37,6 +39,7 @@ class MentionTextField extends StatefulWidget {
     this.maxLines = 1,
     this.minLines,
     this.textCapitalization = TextCapitalization.none,
+    this.inputFormatters,
     this.onChanged,
     this.onSubmitted,
     this.onMentionSelected,
@@ -149,6 +152,7 @@ class _MentionTextFieldState extends State<MentionTextField> {
           maxLines: widget.maxLines,
           minLines: widget.minLines,
           textCapitalization: widget.textCapitalization,
+          inputFormatters: widget.inputFormatters,
           decoration: widget.decoration,
           onChanged: widget.onChanged,
           onSubmitted: widget.onSubmitted,

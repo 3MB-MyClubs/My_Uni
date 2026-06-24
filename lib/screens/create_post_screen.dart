@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -536,6 +537,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ),
                         maxLines: null,
                         minLines: 5,
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(500),
+                        ],
                         textCapitalization: TextCapitalization.sentences,
                       ),
                       const SizedBox(height: 10),

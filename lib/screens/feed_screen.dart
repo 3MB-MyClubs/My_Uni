@@ -808,7 +808,7 @@ class _QuickPostComposer extends StatefulWidget {
 }
 
 class _QuickPostComposerState extends State<_QuickPostComposer> {
-  static const int _maxChars = 280;
+  static const int _maxChars = 500;
 
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
@@ -975,7 +975,8 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                       focusNode: _focusNode,
                       minLines: 1,
                       maxLines: _focused ? 5 : 1,
-                      maxLength: _maxChars + 20,
+                      maxLength: _maxChars,
+                      maxLengthEnforcement: MaxLengthEnforcement.enforced,
                       textCapitalization: TextCapitalization.sentences,
                       cursorColor: textColor,
                       style: TextStyle(
@@ -1022,17 +1023,6 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                           ),
                         ),
                         const Spacer(),
-                        if (_controller.text.isNotEmpty) ...[
-                          Text(
-                            '$_remaining',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontFeatures: [FontFeature.tabularFigures()],
-                              color: secondaryTextColor,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                        ],
                         _PostButton(enabled: _canPost, onTap: _post),
                       ],
                     ),
