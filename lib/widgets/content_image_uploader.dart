@@ -16,6 +16,11 @@ class ContentImageUploader extends StatefulWidget {
   final String emptyTitle;
   final String emptySubtitle;
 
+  /// When true, the empty state is a small "add photo" button instead of a
+  /// large tap area. The full-bleed preview is still shown once a photo is
+  /// selected. Defaults to the original large placeholder.
+  final bool compact;
+
   const ContentImageUploader({
     super.key,
     required this.imagePath,
@@ -23,6 +28,7 @@ class ContentImageUploader extends StatefulWidget {
     this.height = 180,
     this.emptyTitle = 'Add cover photo (optional)',
     this.emptySubtitle = 'Tap to pick from camera or library',
+    this.compact = false,
   });
 
   @override
@@ -126,6 +132,43 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
 
   @override
   Widget build(BuildContext context) {
+    // Compact empty state — a small button rather than a large tap target.
+    if (widget.compact && widget.imagePath == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: GestureDetector(
+          onTap: _showPickerSheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.add_photo_alternate_rounded,
+                  size: 20,
+                  color: AppColors.primaryRed,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.emptyTitle,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: _showPickerSheet,
       child: Container(

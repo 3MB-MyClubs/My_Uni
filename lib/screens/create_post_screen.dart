@@ -10,6 +10,7 @@ import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/content_image_uploader.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/mention_text_field.dart';
 
 // ── Template definitions ─────────────────────────────────────────────────────
@@ -195,7 +196,6 @@ class CreatePostScreen extends StatefulWidget {
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final _contentController = TextEditingController();
   bool _isPosting = false;
-  late bool _requiresPhoto;
 
   _ClubOption? _selectedClub;
   late final List<_ClubOption> _myClubs;
@@ -213,7 +213,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
-    _requiresPhoto = widget.startWithPhotoUpload;
     final adminId = authService.currentAdmin?.id ?? '';
     _myClubs = clubs
         .where((c) => clubIsManagedByAdmin(c, adminId))
@@ -292,17 +291,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> _post() async {
     final content = _contentController.text.trim();
     if (content.isEmpty || _selectedClub == null) return;
-    if (_requiresPhoto && !_hasUploadedPhoto) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Please upload a photo before posting.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
-    }
     setState(() => _isPosting = true);
 
     try {
@@ -312,7 +300,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         content: content,
         taggedClubIds: _extractTaggedClubIds(content),
         taggedUserIds: _extractTaggedUserIds(content),
-        imagePath: _requiresPhoto ? _imagePath : null,
+        imagePath: _hasUploadedPhoto ? _imagePath : null,
       );
       if (!mounted) return;
       newsPosts.insert(0, post);
@@ -353,13 +341,21 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   bool get _canPost =>
-      _contentController.text.trim().isNotEmpty &&
-      _selectedClub != null &&
-      (!_requiresPhoto || _hasUploadedPhoto);
+      _contentController.text.trim().isNotEmpty && _selectedClub != null;
 
   @override
   Widget build(BuildContext context) {
     final adminName = authService.currentAdmin?.name ?? 'Club';
+    dynamic selectedClubModel;
+    if (_selectedClub != null) {
+      for (final c in clubs) {
+        if (c.id == _selectedClub!.id) {
+          selectedClubModel = c;
+          break;
+        }
+      }
+    }
+    final clubName = _selectedClub?.name ?? adminName;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -428,35 +424,36 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Who is posting
+                // Who is posting — club avatar + name
                 Row(
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.admin_panel_settings,
-                          color: AppColors.primaryRed,
-                          size: 20,
-                        ),
-                      ),
+                    ClubAvatar(
+                      clubId: _selectedClub?.id ?? '',
+                      clubName: clubName,
+                      color: AppColors.primaryRed,
+                      size: 46,
+                      fontSize: 18,
+                      imageUrl: selectedClubModel?.logoUrl as String?,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            adminName,
+                            clubName,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontSize: 15,
                               color: AppColors.text,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Sharing with your followers',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.secondaryText,
                             ),
                           ),
                         ],
@@ -464,7 +461,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 // Club picker
                 if (_myClubs.length > 1) ...[
@@ -480,7 +477,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   Container(
                     decoration: BoxDecoration(
                       color: AppColors.card,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.divider),
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -505,186 +502,93 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
                 ],
 
-                if (widget.startWithPhotoUpload)
-                  ContentImageUploader(
-                    imagePath: _imagePath,
-                    onChanged: (path) => setState(() => _imagePath = path),
-                    height: 180,
-                    emptyTitle: 'Upload photo (required)',
-                    emptySubtitle: 'Tap to choose from camera or library',
-                  )
-                else
-                  _PhotoUploadChoice(
-                    enabled: _requiresPhoto,
-                    imagePath: _imagePath,
-                    hasUploadedPhoto: _hasUploadedPhoto,
-                    onEnabledChanged: (value) {
-                      setState(() {
-                        _requiresPhoto = value;
-                        if (!value) _imagePath = null;
-                      });
-                    },
-                    onImageChanged: (path) => setState(() => _imagePath = path),
+                // Content — blends into the active light/dark page surface
+                Container(
+                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 10),
+                  color: AppColors.background,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      MentionTextField(
+                        controller: _contentController,
+                        options: _mentionOptions,
+                        onMentionSelected: _rememberMention,
+                        onChanged: (_) => setState(() {}),
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: AppColors.text,
+                          height: 1.6,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Write something for your club members…',
+                          hintStyle: TextStyle(
+                            fontSize: 15,
+                            color: AppColors.secondaryText,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          filled: false,
+                          isCollapsed: true,
+                        ),
+                        maxLines: null,
+                        minLines: 5,
+                        textCapitalization: TextCapitalization.sentences,
+                      ),
+                      const SizedBox(height: 10),
+                      Divider(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.alternate_email,
+                            size: 14,
+                            color: AppColors.secondaryText,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Type @ to tag a club or student',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 18),
 
-                // Tag hint
+                // Photo
                 Row(
                   children: [
-                    Icon(
-                      Icons.alternate_email,
-                      size: 13,
-                      color: AppColors.secondaryText,
-                    ),
-                    SizedBox(width: 4),
+                    Icon(Icons.image_outlined, size: 16, color: AppColors.text),
+                    const SizedBox(width: 6),
                     Text(
-                      'Type @ to tag a club or student',
+                      'Photo',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-
-                // Content
-                MentionTextField(
-                  controller: _contentController,
-                  options: _mentionOptions,
-                  onMentionSelected: _rememberMention,
-                  onChanged: (_) => setState(() {}),
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: AppColors.text,
-                    height: 1.6,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Write something for your club members…',
-                    hintStyle: TextStyle(
-                      fontSize: 15,
-                      color: AppColors.secondaryText,
-                    ),
-                    border: InputBorder.none,
-                    filled: false,
-                  ),
-                  maxLines: null,
-                  minLines: 6,
-                  textCapitalization: TextCapitalization.sentences,
+                const SizedBox(height: 10),
+                ContentImageUploader(
+                  imagePath: _imagePath,
+                  onChanged: (path) => setState(() => _imagePath = path),
+                  height: 200,
+                  compact: true,
+                  emptyTitle: 'Add a photo',
+                  emptySubtitle: 'Tap to pick from camera or library',
                 ),
                 const SizedBox(height: 40),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Photo upload choice ──────────────────────────────────────────────────────
-
-class _PhotoUploadChoice extends StatelessWidget {
-  final bool enabled;
-  final String? imagePath;
-  final bool hasUploadedPhoto;
-  final ValueChanged<bool> onEnabledChanged;
-  final ValueChanged<String?> onImageChanged;
-
-  const _PhotoUploadChoice({
-    required this.enabled,
-    required this.imagePath,
-    required this.hasUploadedPhoto,
-    required this.onEnabledChanged,
-    required this.onImageChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: enabled ? AppColors.primaryRed : AppColors.divider,
-          width: enabled ? 1.4 : 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  enabled
-                      ? Icons.add_photo_alternate_rounded
-                      : Icons.notes_rounded,
-                  color: AppColors.primaryRed,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      enabled ? 'Photo post' : 'Text update',
-                      style: TextStyle(
-                        color: AppColors.text,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      enabled
-                          ? hasUploadedPhoto
-                                ? 'Photo attached. This post will include it.'
-                                : 'Upload a photo to unlock posting.'
-                          : 'No photo needed. This will publish as an update.',
-                      style: TextStyle(
-                        color: AppColors.secondaryText,
-                        fontSize: 12.5,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Switch.adaptive(
-                value: enabled,
-                activeThumbColor: AppColors.primaryRed,
-                onChanged: onEnabledChanged,
-              ),
-            ],
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 180),
-            crossFadeState: enabled
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: ContentImageUploader(
-                imagePath: imagePath,
-                onChanged: onImageChanged,
-                height: 180,
-                emptyTitle: 'Upload photo (required)',
-                emptySubtitle: 'Tap to choose from camera or library',
-              ),
             ),
           ),
         ],

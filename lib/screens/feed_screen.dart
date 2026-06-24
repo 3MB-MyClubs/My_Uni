@@ -116,8 +116,8 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _loadingPeopleDirectory = false;
 
   // Profile users to suggest in the feed. Prefer people who follow me but I do
-  // not follow back, then other unfollowed profiles. If that leaves the rail
-  // empty, show people I already follow, then a random-looking profile fallback.
+  // not follow back, then other unfollowed profiles. If no eligible profiles
+  // remain, the suggestion rail is omitted.
   List<User> _suggestedUsers() {
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -146,14 +146,6 @@ class _FeedScreenState extends State<FeedScreen> {
           .randomProfiles(excludeId: myId)
           .where((user) => !myFollowing.contains(user.id)),
     );
-
-    if (suggested.isEmpty) {
-      addAll(profiles.where((user) => myFollowing.contains(user.id)));
-    }
-
-    if (suggested.isEmpty) {
-      addAll(peopleService.randomProfiles(excludeId: myId));
-    }
 
     return suggested.values.toList();
   }
@@ -906,12 +898,12 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
 
   @override
   Widget build(BuildContext context) {
-    // Monochrome palette — pure black surface, white + grey text only.
-    const Color white = Color(0xFFFFFFFF);
-    const Color grey = Color(0xFF8A8A8E);
+    final surfaceColor = AppColors.background;
+    final textColor = AppColors.text;
+    final secondaryTextColor = AppColors.secondaryText;
 
     return Material(
-      color: const Color(0xFF000000),
+      color: surfaceColor,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(
@@ -921,7 +913,7 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
               key: ValueKey('quick-post-club-avatar-${widget.club.id}'),
               clubId: widget.club.id as String,
               clubName: widget.club.name as String,
-              color: white,
+              color: textColor,
               size: 42,
               fontSize: 18,
               shape: 'circle',
@@ -939,37 +931,37 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                     margin: const EdgeInsets.only(bottom: 6),
                     child: Text(
                       widget.club.name as String,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: grey,
+                        color: secondaryTextColor,
                         letterSpacing: -0.1,
                       ),
                     ),
                   ),
                   // Expanding text field — selection handles/highlight forced to
-                  // black so no burgundy accent appears when focused/selecting.
+                  // the current text color so no burgundy accent appears.
                   Theme(
                     data: Theme.of(context).copyWith(
-                      primaryColor: const Color(0xFF000000),
+                      primaryColor: textColor,
                       focusColor: Colors.transparent,
                       hoverColor: Colors.transparent,
                       highlightColor: Colors.transparent,
                       splashColor: Colors.transparent,
                       colorScheme: Theme.of(context).colorScheme.copyWith(
-                        primary: const Color(0xFF000000),
-                        onPrimary: white,
-                        surface: const Color(0xFF000000),
-                        onSurface: white,
+                        primary: textColor,
+                        onPrimary: surfaceColor,
+                        surface: surfaceColor,
+                        onSurface: textColor,
                       ),
-                      textSelectionTheme: const TextSelectionThemeData(
-                        cursorColor: white,
-                        selectionColor: Color(0xFF000000),
-                        selectionHandleColor: Color(0xFF000000),
+                      textSelectionTheme: TextSelectionThemeData(
+                        cursorColor: textColor,
+                        selectionColor: textColor.withValues(alpha: 0.18),
+                        selectionHandleColor: textColor,
                       ),
-                      inputDecorationTheme: const InputDecorationTheme(
+                      inputDecorationTheme: InputDecorationTheme(
                         filled: true,
-                        fillColor: Color(0xFF000000),
+                        fillColor: surfaceColor,
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
@@ -985,13 +977,13 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                       maxLines: _focused ? 5 : 1,
                       maxLength: _maxChars + 20,
                       textCapitalization: TextCapitalization.sentences,
-                      cursorColor: white,
-                      style: const TextStyle(
+                      cursorColor: textColor,
+                      style: TextStyle(
                         fontSize: 15,
-                        color: white,
+                        color: textColor,
                         height: 1.55,
                       ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
                         border: InputBorder.none,
@@ -1001,12 +993,12 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                         errorBorder: InputBorder.none,
                         focusedErrorBorder: InputBorder.none,
                         filled: true,
-                        fillColor: Color(0xFF000000),
+                        fillColor: surfaceColor,
                         counterText: '',
                         hintText: "What's happening at your club?",
                         hintStyle: TextStyle(
                           fontSize: 15,
-                          color: grey,
+                          color: secondaryTextColor,
                           height: 1.55,
                         ),
                       ),
@@ -1022,10 +1014,10 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: _openFullComposer,
-                            child: const Icon(
+                            child: Icon(
                               Icons.image_outlined,
                               size: 19,
-                              color: white,
+                              color: textColor,
                             ),
                           ),
                         ),
@@ -1033,10 +1025,10 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                         if (_controller.text.isNotEmpty) ...[
                           Text(
                             '$_remaining',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontFeatures: [FontFeature.tabularFigures()],
-                              color: grey,
+                              color: secondaryTextColor,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1109,8 +1101,13 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Show at most 8 suggestions in the card
-    final shown = widget.suggestions.take(8).toList();
+    // Re-check live follow state so a newly followed person disappears at once.
+    final shown = widget.suggestions
+        .where((user) => !userState.isFollowingUser(user.id))
+        .take(8)
+        .toList();
+
+    if (shown.isEmpty) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
