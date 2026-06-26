@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/user_state.dart';
 import '../services/app_colors.dart';
+import 'loading_skeleton.dart';
 import 'profile_photo_viewer.dart';
 
 /// Shows a user's profile photo if they have one, otherwise their initial.
@@ -81,7 +82,7 @@ class UserAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
                 loadingBuilder: (ctx, child, progress) =>
-                    progress == null ? child : _initial(bg, fg, isCircle),
+                    progress == null ? child : _skeleton(isCircle),
               ),
             ),
           );
@@ -116,6 +117,15 @@ class UserAvatar extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+
+  Widget _skeleton(bool isCircle) {
+    return SkeletonBox(
+      width: size,
+      height: size,
+      shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+      borderRadius: isCircle ? null : borderRadius,
     );
   }
 }

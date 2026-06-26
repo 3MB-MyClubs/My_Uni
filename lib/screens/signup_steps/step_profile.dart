@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/signup_service.dart';
+import '../../widgets/loading_skeleton.dart';
 import 'signup_theme.dart';
 
 class StepProfile extends StatefulWidget {
@@ -361,7 +362,28 @@ class _StepProfileState extends State<StepProfile> {
 
   Widget _selectedAvatarImage(String path) {
     if (kIsWeb) {
-      return Image.network(path, width: 92, height: 92, fit: BoxFit.cover);
+      return Image.network(
+        path,
+        width: 92,
+        height: 92,
+        fit: BoxFit.cover,
+        loadingBuilder: (_, child, progress) =>
+            progress == null ? child : const SkeletonBox.circle(size: 92),
+        errorBuilder: (_, _, _) => Container(
+          width: 92,
+          height: 92,
+          decoration: const BoxDecoration(
+            color: SC.burgundyTint,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.person_outline_rounded,
+            color: SC.burgundy,
+            size: 32,
+          ),
+        ),
+      );
     }
     return Image.file(File(path), width: 92, height: 92, fit: BoxFit.cover);
   }

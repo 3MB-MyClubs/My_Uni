@@ -20,6 +20,7 @@ import '../services/student_profile_service.dart' as remote_profile;
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
+import '../widgets/loading_skeleton.dart';
 import '../widgets/profile_photo_viewer.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
@@ -2165,6 +2166,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? Image.network(
                           p.imagePath!,
                           fit: BoxFit.cover,
+                          loadingBuilder: (_, child, progress) =>
+                              progress == null ? child : const SkeletonBox(),
                           errorBuilder: (ctx2, err, stack) => Center(
                             child: Text(
                               clubs

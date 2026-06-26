@@ -10,6 +10,7 @@ import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/loading_skeleton.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'user_profile_screen.dart';
@@ -577,26 +578,15 @@ class _ExploreScreenState extends State<ExploreScreen>
                 value: _peopleQuery,
                 onChanged: (v) => setState(() => _peopleQuery = v),
               ),
-              if (_peopleLoading || _peopleError != null) ...[
+              if (_peopleError != null &&
+                  !_peopleLoading &&
+                  people.isEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    if (_peopleLoading) ...[
-                      SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primaryRed,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
                     Expanded(
                       child: Text(
-                        _peopleLoading
-                            ? 'Loading people...'
-                            : _peopleError ?? '',
+                        _peopleError ?? '',
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.secondaryText,
@@ -682,10 +672,17 @@ class _ExploreScreenState extends State<ExploreScreen>
             ),
             physics: const AlwaysScrollableScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            itemCount: people.isEmpty ? 2 : people.length + 1,
+            itemCount: _peopleLoading && people.isEmpty
+                ? 7
+                : people.isEmpty
+                ? 2
+                : people.length + 1,
             itemBuilder: (context, i) {
               if (i == 0) {
                 return _sectionLabel(label);
+              }
+              if (_peopleLoading && people.isEmpty) {
+                return const _PersonRowSkeleton();
               }
               if (people.isEmpty) {
                 return SizedBox(
@@ -851,6 +848,60 @@ class _ClubRow extends StatelessWidget {
 }
 
 // ─── Person row ──────────────────────────────────────────────────────────────
+
+class _PersonRowSkeleton extends StatelessWidget {
+  const _PersonRowSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SkeletonBox.circle(size: 48),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(
+                  width: 130,
+                  height: 14,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                const SizedBox(height: 8),
+                SkeletonBox(
+                  width: double.infinity,
+                  height: 12,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                const SizedBox(height: 9),
+                SkeletonBox(
+                  width: 86,
+                  height: 18,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SkeletonBox(
+            width: 76,
+            height: 34,
+            borderRadius: BorderRadius.circular(100),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _PersonRow extends StatefulWidget {
   final User user;

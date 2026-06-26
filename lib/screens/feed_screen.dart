@@ -15,6 +15,7 @@ import '../services/post_like_helper.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import '../widgets/loading_skeleton.dart';
 import '../widgets/user_follow_button.dart';
 import '../models/share.dart';
 import '../models/message.dart';
@@ -114,6 +115,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   bool _loadingPeopleDirectory = false;
+  bool _loadingFeedContent = false;
 
   // Profile users to suggest in the feed. Prefer people who follow me but I do
   // not follow back, then other unfollowed profiles. If no eligible profiles
@@ -248,12 +250,14 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _loadFeedContent() async {
+    if (mounted) setState(() => _loadingFeedContent = true);
     try {
       await lazyContentLoader.ensureContentLoaded();
       _hydrateVisiblePostViews();
-      if (mounted) setState(() {});
     } catch (_) {
       // Keep local seed data visible if Supabase content is unreachable.
+    } finally {
+      if (mounted) setState(() => _loadingFeedContent = false);
     }
   }
 
@@ -275,6 +279,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     final mixed = _buildMixedFeed(_buildFeed());
+    final showFeedSkeleton = _loadingFeedContent && mixed.isEmpty;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -288,7 +293,9 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildEventsRail(),
             _buildFeedTabs(),
             _buildComposer(),
-            if (mixed.isEmpty)
+            if (showFeedSkeleton) ...[
+              ..._buildFeedSkeletonSlivers(),
+            ] else if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -404,6 +411,30 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildFeedSkeletonSlivers() {
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+          child: SkeletonBox(
+            width: 70,
+            height: 18,
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) => const _FeedPostSkeleton(),
+          childCount: 4,
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: SizedBox(height: MediaQuery.of(context).padding.bottom + 112),
+      ),
+    ];
   }
 
   String get _greetingName {
@@ -782,6 +813,63 @@ class _FeedScreenState extends State<FeedScreen> {
       score: item.score,
       rank: rank,
       onUpdate: () => setState(() {}),
+    );
+  }
+}
+
+class _FeedPostSkeleton extends StatelessWidget {
+  const _FeedPostSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.divider.withValues(alpha: 0.7),
+            width: 0.6,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SkeletonBox.circle(size: 44),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(
+                  width: 128,
+                  height: 14,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                const SizedBox(height: 8),
+                SkeletonBox(
+                  width: double.infinity,
+                  height: 12,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                const SizedBox(height: 6),
+                SkeletonBox(
+                  width: MediaQuery.sizeOf(context).width * 0.46,
+                  height: 12,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                const SizedBox(height: 12),
+                SkeletonBox(
+                  width: double.infinity,
+                  height: 176,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1722,6 +1810,95 @@ class _PeopleEngagementSheet extends StatelessWidget {
   }
 }
 
+class _PeopleEngagementSkeleton extends StatelessWidget {
+  final IconData icon;
+  final ScrollController scrollController;
+
+  const _PeopleEngagementSkeleton({
+    required this.icon,
+    required this.scrollController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 10, bottom: 6),
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.primaryRed, size: 20),
+              const SizedBox(width: 8),
+              SkeletonBox(
+                width: 118,
+                height: 16,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: AppColors.divider),
+        Expanded(
+          child: ListView.separated(
+            controller: scrollController,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: 6,
+            separatorBuilder: (_, s) =>
+                Divider(height: 1, indent: 60, color: AppColors.divider),
+            itemBuilder: (_, i) => const _PeopleEngagementSkeletonRow(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PeopleEngagementSkeletonRow extends StatelessWidget {
+  const _PeopleEngagementSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const SkeletonBox.circle(size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(
+                  width: 140,
+                  height: 13,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                const SizedBox(height: 8),
+                SkeletonBox(
+                  width: 190,
+                  height: 11,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ViewersSheet extends StatefulWidget {
   final String contentId;
   final String title;
@@ -1773,8 +1950,9 @@ class _ViewersSheetState extends State<_ViewersSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: _loading
-            ? Center(
-                child: CircularProgressIndicator(color: AppColors.primaryRed),
+            ? _PeopleEngagementSkeleton(
+                icon: Icons.remove_red_eye_outlined,
+                scrollController: scrollController,
               )
             : _PeopleEngagementSheet(
                 icon: Icons.remove_red_eye_outlined,
@@ -1844,8 +2022,9 @@ class _LikersSheetState extends State<_LikersSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: _loading
-            ? Center(
-                child: CircularProgressIndicator(color: AppColors.primaryRed),
+            ? _PeopleEngagementSkeleton(
+                icon: Icons.favorite_rounded,
+                scrollController: scrollController,
               )
             : _PeopleEngagementSheet(
                 icon: Icons.favorite_rounded,

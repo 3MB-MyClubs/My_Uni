@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/app_colors.dart';
+import 'loading_skeleton.dart';
 
 void showProfilePhotoViewer({
   required BuildContext context,
@@ -27,6 +28,8 @@ class _ProfilePhotoViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageSize = MediaQuery.sizeOf(context).width * 0.84;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -46,9 +49,12 @@ class _ProfilePhotoViewer extends StatelessWidget {
                   borderRadius: BorderRadius.circular(28),
                   child: Image(
                     image: imageProvider,
-                    width: MediaQuery.sizeOf(context).width * 0.84,
-                    height: MediaQuery.sizeOf(context).width * 0.84,
+                    width: imageSize,
+                    height: imageSize,
                     fit: BoxFit.contain,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : SkeletonBox(width: imageSize, height: imageSize),
                   ),
                 ),
               ),

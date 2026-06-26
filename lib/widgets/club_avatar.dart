@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
+import 'loading_skeleton.dart';
 import 'profile_photo_viewer.dart';
 
 /// Shows a club's profile photo if one has been set, otherwise falls back to
@@ -118,8 +119,19 @@ class ClubAvatar extends StatelessWidget {
           height: size,
           fit: BoxFit.cover,
           errorBuilder: (ctx, e, st) => _initial(isCircle),
+          loadingBuilder: (ctx, child, progress) =>
+              progress == null ? child : _skeleton(isCircle),
         ),
       ),
+    );
+  }
+
+  Widget _skeleton(bool isCircle) {
+    return SkeletonBox(
+      width: size,
+      height: size,
+      shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+      borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
     );
   }
 

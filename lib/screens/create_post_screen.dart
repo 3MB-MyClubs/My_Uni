@@ -12,6 +12,7 @@ import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/loading_skeleton.dart';
 import '../widgets/mention_text_field.dart';
 
 // ── Template definitions ─────────────────────────────────────────────────────
@@ -81,8 +82,9 @@ Widget buildPostBanner({
   required String fallbackLetter,
   double height = 200,
 }) {
-  // Network image (Picsum / any https URL)
-  if (imagePath != null && imagePath.startsWith('https://')) {
+  // Network image (Supabase / Picsum / any remote URL)
+  if (imagePath != null &&
+      (imagePath.startsWith('https://') || imagePath.startsWith('http://'))) {
     return SizedBox(
       width: double.infinity,
       height: height,
@@ -94,26 +96,24 @@ Widget buildPostBanner({
           height: height,
           loadingBuilder: (_, child, progress) => progress == null
               ? child
-              : Container(
+              : SkeletonBox(
                   width: double.infinity,
                   height: height,
-                  color: fallbackColor.withValues(alpha: 0.12),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white54,
-                    ),
-                  ),
+                  borderRadius: BorderRadius.zero,
                 ),
           errorBuilder: (ctx, e, _) => Container(
             width: double.infinity,
             height: height,
-            color: fallbackColor.withValues(alpha: 0.18),
+            color: Color.lerp(
+              AppColors.surfaceAlt,
+              fallbackColor.withValues(alpha: 0.18),
+              0.35,
+            ),
             child: Center(
               child: Icon(
-                Icons.broken_image_outlined,
-                color: fallbackColor.withValues(alpha: 0.4),
-                size: 40,
+                Icons.image_not_supported_outlined,
+                color: AppColors.secondaryText.withValues(alpha: 0.45),
+                size: 34,
               ),
             ),
           ),

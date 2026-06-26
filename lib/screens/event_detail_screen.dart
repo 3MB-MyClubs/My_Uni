@@ -18,6 +18,7 @@ import '../services/supabase_interaction_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/loading_skeleton.dart';
 import '../widgets/rsvp_button.dart';
 import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
@@ -38,6 +39,8 @@ Widget _eventHeroImage({required String path, required Color accent}) {
     return Image.network(
       path,
       fit: BoxFit.cover,
+      loadingBuilder: (_, child, progress) =>
+          progress == null ? child : const SkeletonBox(),
       errorBuilder: (_, _, _) => _GradientHero(color: accent),
     );
   }

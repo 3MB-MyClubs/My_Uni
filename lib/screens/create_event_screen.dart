@@ -19,6 +19,8 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/supabase_event_service.dart';
 import '../services/user_state.dart';
+import '../widgets/club_avatar.dart';
+import '../widgets/loading_skeleton.dart';
 import '../widgets/mention_text_field.dart';
 
 bool _isRemoteEventImagePath(String path) =>
@@ -91,6 +93,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
   DateTime _endDate = DateTime.now().add(const Duration(hours: 3));
 
+  // Wizard navigation
+  final PageController _pageController = PageController();
+  int _step = 0;
+  static const int _stepCount = 4;
+  static const List<String> _stepTitles = [
+    'Basics',
+    'When',
+    'Details',
+    'Review',
+  ];
+
   bool get _isEditing => widget.existing != null;
 
   @override
@@ -136,6 +149,66 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _titleController.text.trim().isNotEmpty &&
       _locationController.text.trim().isNotEmpty &&
       _endDate.isAfter(_startDate);
+
+  // ── Wizard navigation ────────────────────────────────────────────────────
+
+  // Whether the user may move past [step]. Required fields are validated on the
+  // step that collects them so they're always satisfied before Review.
+  bool _canAdvanceFrom(int step) {
+    switch (step) {
+      case 0:
+        return _titleController.text.trim().isNotEmpty &&
+            _locationController.text.trim().isNotEmpty;
+      case 1:
+        return _endDate.isAfter(_startDate);
+      case 3:
+        return _canPost;
+      default:
+        return true;
+    }
+  }
+
+  // Reason shown when a Next is blocked, per step.
+  String _blockedReason(int step) {
+    if (step == 0) return 'Add an event title and location to continue.';
+    if (step == 1) return 'End time must be after the start time.';
+    return 'Please complete the required fields.';
+  }
+
+  void _goToStep(int target) {
+    final clamped = target.clamp(0, _stepCount - 1);
+    _pageController.animateToPage(
+      clamped,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _next() {
+    if (_step >= _stepCount - 1) return;
+    if (!_canAdvanceFrom(_step)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_blockedReason(_step)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    _goToStep(_step + 1);
+  }
+
+  void _back() {
+    if (_step == 0) {
+      Navigator.pop(context);
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    _goToStep(_step - 1);
+  }
 
   String? get _adminClubId {
     final admin = authService.currentAdmin;
@@ -524,6 +597,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     _titleController.dispose();
     _descController.dispose();
     _locationController.dispose();
@@ -549,9 +623,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.text,
         leading: TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _back,
           child: Text(
-            'Cancel',
+            _step == 0 ? 'Cancel' : 'Back',
             style: TextStyle(color: AppColors.secondaryText),
           ),
         ),
@@ -561,36 +635,35 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
         centerTitle: true,
-        actions: [
-          ValueListenableBuilder(
-            valueListenable: _titleController,
-            builder: (ctx, value, child) => TextButton(
-              onPressed: _canPost && !_isPosting ? () => _post() : null,
-              child: _isPosting
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primaryRed,
-                      ),
-                    )
-                  : Text(
-                      _isEditing ? 'Save' : 'Post',
-                      style: TextStyle(
-                        color: _canPost
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
+      ),
+      body: Column(
+        children: [
+          _buildProgress(),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (i) => setState(() => _step = i),
+              children: [
+                _buildStepBasics(),
+                _buildStepWhen(),
+                _buildStepDetails(),
+                _buildStepReview(),
+              ],
             ),
           ),
+          _buildBottomBar(),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  // ── Step 1: Basics ─────────────────────────────────────────────────────────
+  Widget _buildStepBasics() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Hero preview + optional image ────────────────────────────────
           _HeroEditor(
@@ -630,9 +703,24 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 16),
-
+  // ── Step 2: When ─────────────────────────────────────────────────────────
+  Widget _buildStepWhen() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            icon: Icons.event_rounded,
+            label: 'When',
+            subtitle: 'Set when your event starts and ends',
+          ),
+          const SizedBox(height: 8),
           // ── Date & time ──────────────────────────────────────────────────
           _SectionCard(
             child: Column(
@@ -654,9 +742,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 16),
-
+  // ── Step 3: Details (optional) ───────────────────────────────────────────
+  Widget _buildStepDetails() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           // ── Tags ─────────────────────────────────────────────────────────
           _SectionHeader(
             icon: Icons.label_outline_rounded,
@@ -975,7 +1072,500 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // ── Step 4: Review ───────────────────────────────────────────────────────
+  Widget _buildStepReview() {
+    final clubId = widget.existing?.clubId ?? _adminClubId;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            icon: Icons.visibility_outlined,
+            label: 'Review',
+            subtitle: 'Here\'s how your event will appear',
+          ),
+          const SizedBox(height: 12),
+          _EventPreviewCard(
+            imagePath: _imagePath,
+            title: _titleController.text.trim(),
+            location: _locationController.text.trim(),
+            startDate: _startDate,
+            endDate: _endDate,
+            tags: _selectedTags,
+            clubId: clubId,
+            hasRegistration: _externalReg && _regUrlCtrl.text.trim().isNotEmpty,
+          ),
+          const SizedBox(height: 16),
+          if (!_canPost)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.lightRed,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: AppColors.primaryRed,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Add a title, a location and a valid time range before publishing.',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.text,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              _isEditing
+                  ? 'Tap Save to update this event.'
+                  : 'Tap Publish to share this event with your followers.',
+              style: TextStyle(fontSize: 12.5, color: AppColors.secondaryText),
+            ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // ── Progress header ──────────────────────────────────────────────────────
+  Widget _buildProgress() {
+    return Container(
+      width: double.infinity,
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: List.generate(_stepCount, (i) {
+              final filled = i <= _step;
+              // In edit mode every step is reachable; in create mode only
+              // already-visited steps can be jumped to.
+              final canTap = _isEditing || i <= _step;
+              return Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: canTap ? () => _goToStep(i) : null,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: i == 0 ? 0 : 5),
+                    child: Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: filled
+                            ? AppColors.primaryRed
+                            : AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Step ${_step + 1} of $_stepCount · ${_stepTitles[_step]}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Bottom navigation bar ──────────────────────────────────────────────────
+  Widget _buildBottomBar() {
+    final isLast = _step == _stepCount - 1;
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          border: Border(top: BorderSide(color: AppColors.divider)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Row(
+          children: [
+            OutlinedButton(
+              onPressed: _back,
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: AppColors.divider),
+                foregroundColor: AppColors.text,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(_step == 0 ? 'Cancel' : 'Back'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: isLast ? _buildPublishButton() : _buildNextButton(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNextButton() {
+    final enabled = _canAdvanceFrom(_step);
+    return ElevatedButton(
+      // Always tappable — when blocked, _next() surfaces a reason via SnackBar.
+      onPressed: _next,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: enabled ? AppColors.primaryRed : AppColors.lightRed,
+        foregroundColor: enabled ? Colors.white : AppColors.secondaryText,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: const Text(
+        'Next',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+      ),
+    );
+  }
+
+  Widget _buildPublishButton() {
+    final enabled = _canPost && !_isPosting;
+    return ElevatedButton(
+      onPressed: enabled ? () => _post() : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primaryRed,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: AppColors.lightRed,
+        disabledForegroundColor: AppColors.secondaryText,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: _isPosting
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Text(
+              _isEditing ? 'Save' : 'Publish',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live preview card — how the event will appear (Review step)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EventPreviewCard extends StatelessWidget {
+  final String? imagePath;
+  final String title;
+  final String location;
+  final DateTime startDate;
+  final DateTime endDate;
+  final List<String> tags;
+  final String? clubId;
+  final bool hasRegistration;
+
+  const _EventPreviewCard({
+    required this.imagePath,
+    required this.title,
+    required this.location,
+    required this.startDate,
+    required this.endDate,
+    required this.tags,
+    required this.clubId,
+    required this.hasRegistration,
+  });
+
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  String _t(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  String _timeLine() {
+    final sameDay =
+        startDate.year == endDate.year &&
+        startDate.month == endDate.month &&
+        startDate.day == endDate.day;
+    if (sameDay) {
+      return '${_months[startDate.month - 1]} ${startDate.day} · ${_t(startDate)} – ${_t(endDate)}';
+    }
+    return '${_months[startDate.month - 1]} ${startDate.day}, ${_t(startDate)} → '
+        '${_months[endDate.month - 1]} ${endDate.day}, ${_t(endDate)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imagePath != null && imagePath!.isNotEmpty;
+    String clubName = 'Your club';
+    if (clubId != null && clubId!.isNotEmpty) {
+      for (final c in clubs) {
+        if (c.id == clubId) {
+          clubName = c.name;
+          break;
+        }
+      }
+    }
+    final dateChip = '${_months[startDate.month - 1]} ${startDate.day}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasImage)
+            SizedBox(
+              height: 150,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _EventPreviewImage(path: imagePath!),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Color(0x8C000000)],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 14,
+                    right: 14,
+                    bottom: 12,
+                    child: Text(
+                      title.isEmpty ? 'Event title' : title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ClubAvatar(
+                      clubId: clubId ?? '',
+                      clubName: clubName,
+                      color: AppColors.primaryRed,
+                      size: 36,
+                      fontSize: 15,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        clubName,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.lightRed,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        dateChip,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!hasImage) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    title.isEmpty ? 'Event title' : title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: title.isEmpty
+                          ? AppColors.secondaryText
+                          : AppColors.text,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 14,
+                      color: AppColors.secondaryText,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _timeLine(),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.secondaryText,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: AppColors.secondaryText,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        location.isEmpty ? 'Location' : location,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: location.isEmpty
+                              ? AppColors.secondaryText.withValues(alpha: 0.7)
+                              : AppColors.secondaryText,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: tags
+                        .map(
+                          (t) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceAlt,
+                              borderRadius: BorderRadius.circular(100),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: Text(
+                              t,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+                if (hasRegistration) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.link_rounded,
+                        size: 14,
+                        color: AppColors.primaryRed,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'External sign-up',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1114,7 +1704,21 @@ class _EventPreviewImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (_isRemoteEventImagePath(path)) {
-      return Image.network(path, fit: BoxFit.cover);
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        loadingBuilder: (_, child, progress) =>
+            progress == null ? child : const SkeletonBox(),
+        errorBuilder: (_, _, _) => Container(
+          color: AppColors.surfaceAlt,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.image_not_supported_outlined,
+            color: AppColors.secondaryText.withValues(alpha: 0.45),
+            size: 28,
+          ),
+        ),
+      );
     }
     return Image.file(File(path), fit: BoxFit.cover);
   }
