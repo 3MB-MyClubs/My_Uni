@@ -14,6 +14,8 @@ import '../services/rsvp_store.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
+import '../services/locale_service.dart';
+import '../services/app_strings.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/club_avatar.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
@@ -597,11 +599,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(S.settings, style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
       ),
-      body: ListView(
+      body: ListenableBuilder(
+        listenable: localeService,
+        builder: (context, _) => ListView(
         children: [
           const SizedBox(height: 12),
 
@@ -609,7 +613,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Clubs and the super admin edit via the Club section / dashboard,
           // so the personal profile editor is shown for student accounts only.
           if (authService.isStudentSession) ...[
-            _SectionHeader(title: 'Profile'),
+            _SectionHeader(title: S.profileSection),
             ListenableBuilder(
               listenable: userState,
               builder: (context, _) {
@@ -638,7 +642,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Edit Profile',
+                          S.editProfile,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -685,7 +689,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Change My Name',
+                          S.changeMyName,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -916,7 +920,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
 
             // ── Preferences section ──────────────────────────────────────────
-            _SectionHeader(title: 'Preferences'),
+            _SectionHeader(title: S.preferences),
             ListenableBuilder(
               listenable: personalizationService,
               builder: (context, _) {
@@ -948,7 +952,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'My Preferences',
+                          S.myPreferences,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -981,7 +985,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ── Appearance section ───────────────────────────────────────────
-          _SectionHeader(title: 'Appearance'),
+          _SectionHeader(title: S.appearance),
           ListenableBuilder(
             listenable: themeService,
             builder: (context, _) => Container(
@@ -1003,7 +1007,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 title: Text(
-                  themeService.isDark ? 'Dark Mode' : 'Light Mode',
+                  themeService.isDark ? S.darkMode : S.lightMode,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: AppColors.text,
@@ -1028,7 +1032,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ── Help section ────────────────────────────────────────────────
-          _SectionHeader(title: 'Help'),
+          _SectionHeader(title: S.help),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: DecoratedBox(
@@ -1074,8 +1078,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Replay App Tutorial',
+                              Text(
+                                S.replayTutorial,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 16,
@@ -1110,7 +1114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ── Account section ──────────────────────────────────────────────
-          _SectionHeader(title: 'Account'),
+          _SectionHeader(title: S.account),
           Container(
             color: AppColors.card,
             child: ListTile(
@@ -1124,7 +1128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Icon(Icons.logout, color: Colors.red, size: 20),
               ),
               title: Text(
-                'Log Out',
+                S.logOut,
                 style: TextStyle(
                   color: Colors.red,
                   fontWeight: FontWeight.w600,
@@ -1141,6 +1145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 40),
         ],
+      ),
       ),
     );
   }

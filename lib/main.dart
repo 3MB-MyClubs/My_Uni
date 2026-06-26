@@ -21,6 +21,7 @@ import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
 import 'services/people_service.dart';
 import 'services/theme_service.dart';
+import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'services/tutorial_service.dart';
@@ -62,6 +63,7 @@ void main() async {
   await viewTracker.initialize();
   await personalizationService.initialize();
   await themeService.initialize();
+  await localeService.initialize();
   await calendarSyncService.initialize();
   await tutorialService.initialize();
   contentStore.applyToLists();

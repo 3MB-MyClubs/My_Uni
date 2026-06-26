@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
+import '../widgets/language_switcher.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -28,11 +31,11 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String _filter = 'all'; // all | you | events | clubs
 
-  static const List<({String k, String l})> _filters = [
-    (k: 'all', l: 'All'),
-    (k: 'you', l: 'You'),
-    (k: 'events', l: 'Events'),
-    (k: 'clubs', l: 'Clubs'),
+  List<({String k, String l})> get _filters => [
+    (k: 'all', l: S.all),
+    (k: 'you', l: S.filterYou),
+    (k: 'events', l: S.filterEvents),
+    (k: 'clubs', l: S.filterClubs),
   ];
 
   String get _myId =>
@@ -48,6 +51,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    localeService.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    localeService.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
@@ -280,11 +294,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         padding: EdgeInsets.zero,
                         children: [
                           if (news.isNotEmpty) ...[
-                            const _Sec(label: 'New'),
+                            _Sec(label: S.newSection),
                             ...news.map(_row),
                           ],
                           if (earlier.isNotEmpty) ...[
-                            const _Sec(label: 'Earlier'),
+                            _Sec(label: S.earlier),
                             ...earlier.map(_row),
                           ],
                           const SizedBox(height: 16),
@@ -327,7 +341,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   Text(
-                    'Notifications',
+                    S.notifications,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -358,6 +372,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   const Spacer(),
+                  const LanguageSwitcher(),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: _markAllRead,
                     child: Container(
@@ -577,9 +593,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               color: AppColors.primaryRed,
               borderRadius: BorderRadius.circular(100),
             ),
-            child: const Text(
-              'Accept',
-              style: TextStyle(
+            child: Text(
+              S.accept,
+              style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -602,7 +618,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               border: Border.all(color: AppColors.divider),
             ),
             child: Text(
-              'Decline',
+              S.decline,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -735,7 +751,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Nothing here',
+              S.nothingHereNotif,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,

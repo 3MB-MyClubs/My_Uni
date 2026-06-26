@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
+import '../widgets/language_switcher.dart';
 import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -71,6 +74,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    localeService.addListener(_onLocaleChanged);
     _loadClubContent();
     _loadPeople();
   }
@@ -80,7 +84,12 @@ class _ExploreScreenState extends State<ExploreScreen>
     _tabController.dispose();
     _clubSearchController.dispose();
     _peopleSearchController.dispose();
+    localeService.removeListener(_onLocaleChanged);
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadClubContent() async {
@@ -307,18 +316,19 @@ class _ExploreScreenState extends State<ExploreScreen>
       appBar: AppBar(
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
-          'Explore',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+        title: Text(
+          S.explore,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
+        actions: const [LanguageSwitcher(), SizedBox(width: 8)],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.primaryRed,
           unselectedLabelColor: AppColors.secondaryText,
           indicatorColor: AppColors.primaryRed,
-          tabs: const [
-            Tab(text: 'Discover Clubs'),
-            Tab(text: 'Find People'),
+          tabs: [
+            Tab(text: S.discoverClubs),
+            Tab(text: S.findPeople),
           ],
         ),
       ),
@@ -495,7 +505,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final filtering = _clubQuery.isNotEmpty;
     final label = filtering
         ? '${filtered.length} club${filtered.length == 1 ? '' : 's'}'
-        : 'All clubs';
+        : S.allClubs;
 
     return Column(
       children: [
@@ -505,7 +515,7 @@ class _ExploreScreenState extends State<ExploreScreen>
             children: [
               _searchField(
                 controller: _clubSearchController,
-                hint: 'Search clubs…',
+                hint: S.searchClubs,
                 value: _clubQuery,
                 onChanged: (v) => setState(() => _clubQuery = v),
               ),
@@ -515,7 +525,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: filtered.isEmpty
-              ? _emptyState('No clubs match', 'Try a different search term')
+              ? _emptyState(S.noClubsMatch, S.tryDifferentSearch)
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -564,7 +574,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
     final label = searching
         ? '${people.length} result${people.length == 1 ? '' : 's'}'
-        : 'People you might know';
+        : S.peopleMightKnow;
 
     return Column(
       children: [
@@ -574,7 +584,7 @@ class _ExploreScreenState extends State<ExploreScreen>
             children: [
               _searchField(
                 controller: _peopleSearchController,
-                hint: 'Search by name or surname…',
+                hint: S.searchPeople,
                 value: _peopleQuery,
                 onChanged: (v) => setState(() => _peopleQuery = v),
               ),
@@ -688,11 +698,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                 return SizedBox(
                   height: 340,
                   child: _emptyState(
+                    S.noOneMatches,
                     searching
-                        ? 'No one matches "$_peopleQuery"'
-                        : 'No profiles yet',
-                    searching
-                        ? 'Try a name, surname, or email'
+                        ? S.tryNameSearch
                         : 'Profiles will appear here after users sign up',
                   ),
                 );
@@ -746,7 +754,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (major != null && major.isNotEmpty) {
       return year != null && year.isNotEmpty ? '$major · $year' : major;
     }
-    return u.email.isNotEmpty ? u.email : 'Student profile';
+    return u.email.isNotEmpty ? u.email : S.studentProfile;
   }
 }
 
@@ -836,8 +844,8 @@ class _ClubRow extends StatelessWidget {
             const SizedBox(width: 10),
             toggleBuilder(
               active: joined,
-              activeLabel: 'Joined ✓',
-              inactiveLabel: 'Join',
+              activeLabel: S.joined,
+              inactiveLabel: S.join,
               onTap: onJoin,
             ),
           ],
@@ -1087,7 +1095,7 @@ class _PersonRowState extends State<_PersonRow> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _displayFollowing ? 'Following' : 'Follow',
+                            _displayFollowing ? S.following : S.follow,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,

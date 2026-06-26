@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
+import '../widgets/language_switcher.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
@@ -220,6 +223,7 @@ class _FeedScreenState extends State<FeedScreen> {
   void initState() {
     super.initState();
     viewTracker.addListener(_onViewCountsChanged);
+    localeService.addListener(_onLocaleChanged);
     _loadFeedContent();
     _loadPeopleDirectory();
   }
@@ -227,12 +231,19 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void dispose() {
     viewTracker.removeListener(_onViewCountsChanged);
+    localeService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
   void _onViewCountsChanged() {
     if (mounted) setState(() {});
   }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+
 
   void _hydrateVisiblePostViews() {
     viewTracker.hydratePostViewCounts(newsPosts.map((post) => post.id));
@@ -313,7 +324,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'Nothing here yet',
+                          S.nothingHere,
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -322,7 +333,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Follow clubs to see their posts\nand events in your feed',
+                          S.followClubs,
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.secondaryText,
@@ -347,7 +358,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           ),
                           icon: Icon(Icons.explore_rounded, size: 18),
                           label: Text(
-                            'Explore All Clubs',
+                            S.exploreClubs,
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
@@ -366,7 +377,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   child: Row(
                     children: [
                       Text(
-                        'Latest',
+                        S.latest,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -494,6 +505,8 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
+            const LanguageSwitcher(),
+            const SizedBox(width: 8),
             // Bell button with unread badge
             ListenableBuilder(
               listenable: userState,
@@ -559,12 +572,12 @@ class _FeedScreenState extends State<FeedScreen> {
   SliverToBoxAdapter _buildGreeting() {
     final h = DateTime.now().hour;
     final greet = h < 5
-        ? 'Still up'
+        ? S.stillUp
         : h < 12
-        ? 'Good morning'
+        ? S.goodMorning
         : h < 17
-        ? 'Good afternoon'
-        : 'Good evening';
+        ? S.goodAfternoon
+        : S.goodEvening;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
@@ -648,7 +661,7 @@ class _FeedScreenState extends State<FeedScreen> {
               child: Row(
                 children: [
                   Text(
-                    'THIS WEEK',
+                    S.thisWeek,
                     style: TextStyle(
                       fontSize: 10,
                       color: AppColors.secondaryText,
@@ -663,7 +676,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
                     ),
                     child: Text(
-                      'See all',
+                      S.seeAll,
                       style: TextStyle(
                         fontSize: 12.5,
                         color: AppColors.primaryRed,
@@ -700,7 +713,7 @@ class _FeedScreenState extends State<FeedScreen> {
           key: widget.tutorialFeedKey,
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
           child: Text(
-            'CLUB FEED',
+            S.clubFeed,
             style: TextStyle(
               fontSize: 10,
               color: AppColors.secondaryText,
@@ -713,7 +726,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     // tab 0 = Following, tab 1 = All
-    const tabs = [('following', 'Following'), ('all', 'All')];
+    final tabs = [('following', S.following), ('all', S.all)];
     return SliverToBoxAdapter(
       child: Padding(
         key: widget.tutorialFeedKey,
@@ -721,7 +734,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Row(
           children: [
             Text(
-              'FROM YOUR CLUBS',
+              S.fromYourClubs,
               style: TextStyle(
                 fontSize: 10,
                 color: AppColors.secondaryText,
@@ -1204,7 +1217,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'People You Might Know',
+                  S.peopleMightKnow,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -1392,9 +1405,9 @@ class _TrendingEventCard extends StatelessWidget {
     ];
     final daysAway = dt.difference(DateTime.now()).inDays;
     final timeLabel = daysAway == 0
-        ? 'Today'
+        ? S.today
         : daysAway == 1
-        ? 'Tomorrow'
+        ? S.tomorrow
         : '${mo[dt.month - 1]} ${dt.day}';
     final views = viewTracker.viewCount(event.id);
 
@@ -1585,7 +1598,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                   Icon(Icons.explore_rounded, size: 18, color: color),
                   const SizedBox(width: 6),
                   Text(
-                    'Club You Might Like',
+                    S.clubMightLike,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -2589,9 +2602,9 @@ class _EventCardState extends State<_EventCard> {
 
     final daysAway = dt.difference(DateTime.now()).inDays;
     final daysLabel = daysAway == 0
-        ? 'Today'
+        ? S.today
         : daysAway == 1
-        ? 'Tomorrow'
+        ? S.tomorrow
         : 'In $daysAway days';
 
     return GestureDetector(
@@ -3649,3 +3662,4 @@ class _PulsingDotState extends State<_PulsingDot>
     );
   }
 }
+

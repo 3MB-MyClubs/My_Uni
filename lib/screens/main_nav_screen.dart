@@ -8,6 +8,8 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/app_tutorial_overlay.dart';
 import 'chat_screen.dart';
@@ -375,7 +377,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: themeService,
+      listenable: Listenable.merge([themeService, localeService]),
       builder: (context, _) {
         // Non-const instances so Flutter creates new widget objects each rebuild,
         // which triggers element.update() → markNeedsBuild() on each screen state.
@@ -456,7 +458,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 key: _homeNavKey,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
-                label: 'Home',
+                label: S.home,
                 selected: _selectedIndex == 0,
                 onTap: () => setState(() => _selectedIndex = 0),
               ),
@@ -464,7 +466,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 key: _eventsNavKey,
                 icon: Icons.calendar_today_outlined,
                 activeIcon: Icons.calendar_today_rounded,
-                label: 'Events',
+                label: S.events,
                 selected: _selectedIndex == 1,
                 onTap: () => setState(() => _selectedIndex = 1),
               ),
@@ -473,7 +475,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                   key: _searchNavKey,
                   icon: Icons.search_outlined,
                   activeIcon: Icons.search_rounded,
-                  label: 'Search',
+                  label: S.search,
                   selected: _selectedIndex == 2,
                   onTap: () => setState(() => _selectedIndex = 2),
                 ),
@@ -483,7 +485,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 key: _alertsNavKey,
                 icon: Icons.notifications_none_rounded,
                 activeIcon: Icons.notifications_rounded,
-                label: 'Alerts',
+                label: S.alerts,
                 selected: _selectedIndex == 3,
                 badge: unreadAlerts,
                 onTap: () {
@@ -495,7 +497,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 key: _profileNavKey,
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
-                label: 'Profile',
+                label: S.profile,
                 selected: _selectedIndex == 4,
                 onTap: () => setState(() => _selectedIndex = 4),
               ),
@@ -504,7 +506,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                   key: _adminNavKey,
                   icon: Icons.admin_panel_settings_outlined,
                   activeIcon: Icons.admin_panel_settings_rounded,
-                  label: 'Admin',
+                  label: S.admin,
                   selected: _selectedIndex == 5,
                   onTap: () => setState(() => _selectedIndex = 5),
                 ),
@@ -970,3 +972,5 @@ class _CreateOptionState extends State<_CreateOption> {
     );
   }
 }
+
+

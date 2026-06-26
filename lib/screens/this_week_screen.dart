@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
+import '../widgets/language_switcher.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -126,6 +129,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   void initState() {
     super.initState();
     _loadEventContent();
+    localeService.addListener(_onLocaleChanged);
     final now = DateTime.now();
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -137,7 +141,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    localeService.removeListener(_onLocaleChanged);
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadEventContent() async {
@@ -372,7 +381,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Discover events',
+                            S.discoverEvents,
                             style: TextStyle(
                               fontSize: 27,
                               fontWeight: FontWeight.w800,
@@ -395,8 +404,10 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    const LanguageSwitcher(),
                     if (authService.isStudentSession) ...[
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       _HeaderIconBtn(
                         icon: Icons.notifications_outlined,
                         badgeCount: newEventCount,
@@ -431,7 +442,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   children: [
                     // Audience
                     _FilterPillBtn(
-                      label: _audience == 'following' ? 'Following' : 'All',
+                      label: _audience == 'following' ? S.following : S.all,
                       icon: _audience == 'following'
                           ? Icons.favorite_outline_rounded
                           : Icons.people_outline_rounded,
@@ -443,7 +454,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     Expanded(
                       child: _FilterPillBtn(
                         label: _dateFilters.isEmpty
-                            ? 'Any date'
+                            ? S.anyDate
                             : _dateFilters.length == 1
                             ? _shortDay(_dayKeyToDate(_dateFilters.first))
                             : '${_dateFilters.length} days',
@@ -462,7 +473,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     const SizedBox(width: 8),
                     // Past week toggle
                     _FilterPillBtn(
-                      label: 'Past',
+                      label: S.past,
                       icon: Icons.history_rounded,
                       active: _showPastWeek,
                       showChevron: false,
@@ -665,7 +676,7 @@ class _SearchBarState extends State<_SearchBar> {
                 disabledBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
-                hintText: 'Search events, clubs, topics',
+                hintText: S.searchEvents,
                 hintStyle: TextStyle(
                   fontSize: 15,
                   color: AppColors.secondaryText,
@@ -869,7 +880,7 @@ class _AudienceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            'Show events from',
+            S.showEventsFrom,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
@@ -879,16 +890,16 @@ class _AudienceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _AudienceOption(
-            label: 'All events',
-            subtitle: 'Everything happening on campus',
+            label: S.allEvents,
+            subtitle: S.everythingOnCampus,
             icon: Icons.public_outlined,
             selected: current == 'all',
             onTap: () => onPick('all'),
           ),
           const SizedBox(height: 10),
           _AudienceOption(
-            label: 'Following',
-            subtitle: 'Only clubs you follow',
+            label: S.following,
+            subtitle: S.followingOnly,
             icon: Icons.favorite_outline_rounded,
             selected: current == 'following',
             onTap: () => onPick('following'),
@@ -1071,7 +1082,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
           Row(
             children: [
               Text(
-                'Pick a date',
+                S.pickDate,
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -1084,7 +1095,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 GestureDetector(
                   onTap: () => setState(_temp.clear),
                   child: Text(
-                    'Clear',
+                    S.clear,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1219,7 +1230,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               ),
               child: Text(
                 _temp.isEmpty
-                    ? 'Show all dates'
+                    ? S.showAllDates
                     : 'Show events for ${_temp.length} selected ${_temp.length == 1 ? 'date' : 'dates'}',
                 style: const TextStyle(
                   fontSize: 15,
@@ -1494,7 +1505,7 @@ class _WeekRsvpPill extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
         ),
         child: Text(
-          'Ended',
+          S.ended,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1547,7 +1558,7 @@ class _WeekRsvpPill extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      attending ? 'Going' : 'RSVP',
+                      attending ? S.going : S.rsvp,
                       maxLines: 1,
                       style: TextStyle(
                         fontSize: 13,
@@ -1635,7 +1646,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'No events found',
+              S.noEventsFound,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -1646,8 +1657,8 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               searching
-                  ? 'Try a different keyword or clear your filters.'
-                  : 'Nothing scheduled here yet — check another date.',
+                  ? S.tryDifferentKeyword
+                  : S.nothingScheduled,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -1666,8 +1677,8 @@ class _EmptyState extends StatelessWidget {
                   color: AppColors.primaryRed,
                   borderRadius: BorderRadius.circular(100),
                 ),
-                child: const Text(
-                  'Reset filters',
+                child: Text(
+                  S.resetFilters,
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -1815,7 +1826,7 @@ class _NewEventsSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'New events',
+                        S.newEvents,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
@@ -1888,7 +1899,7 @@ class _NoNewEventsState extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            'All caught up',
+            S.allCaughtUp,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w900,
@@ -1897,7 +1908,7 @@ class _NoNewEventsState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Newly created events will appear here until you open their details.',
+            S.newEventsHint,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,

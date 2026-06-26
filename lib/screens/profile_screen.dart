@@ -1,4 +1,7 @@
 import 'dart:io';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
+import '../widgets/language_switcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -51,6 +54,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ];
 
   Color _clubColor(int index) => _clubColors[index % _clubColors.length];
+
+  @override
+  void initState() {
+    super.initState();
+    localeService.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    localeService.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
 
   int _contentTab = 0; // 0 = Posts, 1 = Events
   String? _hydratedConnectionsForUserId;
@@ -161,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel',
+              S.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -289,7 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                'Cancel',
+                S.cancel,
                 style: TextStyle(color: AppColors.secondaryText),
               ),
             ),
@@ -300,7 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await userPrefsService.save(userId);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
-              child: const Text('Save'),
+              child: Text(S.save),
             ),
           ],
         ),
@@ -336,7 +355,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              'Cancel',
+              S.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -346,7 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               await userPrefsService.save(userId);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('Save'),
+            child: Text(S.save),
           ),
         ],
       ),
@@ -1035,6 +1054,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       actions: [
+        const LanguageSwitcher(),
         IconButton(
           icon: Icon(Icons.settings_outlined),
           onPressed: () => Navigator.push(
@@ -1196,8 +1216,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _StatCell(value: '$postCount', label: 'Posts'),
-                      _StatCell(value: '$eventCount', label: 'Events'),
+                      _StatCell(value: '$postCount', label: S.posts),
+                      _StatCell(value: '$eventCount', label: S.events),
                       _StatCell(value: '$boardMemberCount', label: 'Members'),
                     ],
                   ),
@@ -1471,7 +1491,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 if (major.isNotEmpty) major,
                                 if (year.isNotEmpty) year,
                               ].join(' · ')
-                            : 'Add major & year',
+                            : S.addMajorYear,
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.secondaryText,
@@ -1548,7 +1568,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _StatsBlock(value: '$clubCount', label: 'Clubs'),
+                    child: _StatsBlock(value: '$clubCount', label: S.clubs),
                   ),
                   VerticalDivider(width: 1, color: AppColors.divider),
                   Expanded(
@@ -1557,7 +1577,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () => _showFollowersSheet(followers),
                       child: _StatsBlock(
                         value: '${followers.length}',
-                        label: 'Followers',
+                        label: S.followers,
                       ),
                     ),
                   ),
@@ -1568,7 +1588,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () => _showFollowingSheet(following),
                       child: _StatsBlock(
                         value: '${following.length}',
-                        label: 'Following',
+                        label: S.following,
                       ),
                     ),
                   ),
@@ -1608,7 +1628,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'My Clubs',
+                    S.myClubs,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1661,7 +1681,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           SizedBox(height: 8),
                           Text(
-                            "You haven't followed any clubs yet.",
+                            S.noClubsYet,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.secondaryText,
@@ -1671,7 +1691,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Explore clubs and follow the ones you like.',
+                            S.exploreClubsHint,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.secondaryText,
@@ -1779,7 +1799,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Board Members',
+                        S.boardMembers,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1842,7 +1862,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         SizedBox(height: 6),
                         Text(
-                          'No board members yet.',
+                          S.noBoardMembers,
                           style: TextStyle(
                             color: Color(0xFF1565C0),
                             fontSize: 13,
@@ -1851,7 +1871,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Approved requests will appear here.',
+                          S.approvedHere,
                           style: TextStyle(
                             color: Color(0xFF1565C0),
                             fontSize: 11,
@@ -2006,7 +2026,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Icon(Icons.grid_view_rounded, size: 18, color: clubColor),
                     const SizedBox(width: 8),
                     Text(
-                      'My Content',
+                      S.myContent,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -2042,7 +2062,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Row(
                   children: [
                     _ContentTabChip(
-                      label: 'Posts',
+                      label: S.posts,
                       count: myPosts.length,
                       selected: _contentTab == 0,
                       color: clubColor,
@@ -2050,7 +2070,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(width: 8),
                     _ContentTabChip(
-                      label: 'Events',
+                      label: S.events,
                       count: myEvents.length,
                       selected: _contentTab == 1,
                       color: clubColor,
@@ -2092,7 +2112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel',
+              S.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -2105,7 +2125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete'),
+            child: Text(S.delete),
           ),
         ],
       ),
@@ -2114,7 +2134,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildPostsList(List myPosts, Color color, String adminId) {
     if (myPosts.isEmpty) {
-      return const _EmptyHint(text: 'No posts yet.');
+      return _EmptyHint(text: S.noPostsYet);
     }
     return Column(
       children: myPosts.map((p) {
@@ -2128,8 +2148,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
           confirmDismiss: (_) => _confirmDelete(
-            'Delete post?',
-            'This post will be permanently removed.',
+            S.deletePost,
+            S.deletePostMsg,
           ),
           onDismissed: (_) {
             final ok = contentStore.deletePost(p.id, adminId);
@@ -2237,7 +2257,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildEventsList(List myEvents, Color color, String adminId) {
     if (myEvents.isEmpty) {
-      return const _EmptyHint(text: 'No events yet.');
+      return _EmptyHint(text: S.noEventsYet);
     }
     return Column(
       children: myEvents.map((e) {
@@ -2275,8 +2295,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
           confirmDismiss: (_) => _confirmDelete(
-            'Delete event?',
-            'This event will be permanently removed.',
+            S.deleteEvent,
+            S.deleteEventMsg,
           ),
           onDismissed: (_) {
             final ok = contentStore.deleteEvent(e.id, adminId);
