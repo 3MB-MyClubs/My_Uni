@@ -787,6 +787,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                       clubId: clubId,
                       clubName: club.name,
                       color: color,
+                      imageUrl: club.logoUrl,
                       size: 44,
                       shape: 'rounded',
                     ),

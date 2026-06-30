@@ -154,8 +154,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         followed.add(club);
       }
     }
-    final withRole = [for (final c in followed) if (_roleTitleFor(c) != null) c];
-    final rest = [for (final c in followed) if (_roleTitleFor(c) == null) c];
+    final withRole = [
+      for (final c in followed)
+        if (_roleTitleFor(c) != null) c,
+    ];
+    final rest = [
+      for (final c in followed)
+        if (_roleTitleFor(c) == null) c,
+    ];
     return [...withRole, ...rest];
   }
 
@@ -815,6 +821,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     clubId: club.id,
                                     clubName: club.name,
                                     color: color,
+                                    imageUrl: club.logoUrl,
                                     size: 44,
                                     fontSize: 18,
                                     borderRadius: 13,
@@ -841,7 +848,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               const Icon(
-                                                Icons.workspace_premium_outlined,
+                                                Icons
+                                                    .workspace_premium_outlined,
                                                 size: 13,
                                                 color: _burgundy,
                                               ),

@@ -1775,6 +1775,7 @@ class _HostCard extends StatelessWidget {
             clubId: club.id,
             clubName: club.name,
             color: accent,
+            imageUrl: club.logoUrl,
             size: 46,
             fontSize: 16,
             borderRadius: 14,

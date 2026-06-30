@@ -1307,6 +1307,7 @@ class _WeekEventRow extends StatelessWidget {
                   clubId: club.id,
                   clubName: club.name,
                   color: color,
+                  imageUrl: club.logoUrl,
                   size: 46,
                   fontSize: 19,
                   shape: 'rounded',

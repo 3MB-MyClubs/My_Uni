@@ -34,15 +34,6 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  String _filter = 'all'; // all | you | events | clubs
-
-  List<({String k, String l})> get _filters => [
-    (k: 'all', l: S.all),
-    (k: 'you', l: S.filterYou),
-    (k: 'events', l: S.filterEvents),
-    (k: 'clubs', l: S.filterClubs),
-  ];
-
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
@@ -70,28 +61,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
-
-  // ── Filter category ─────────────────────────────────────────────────────────
-  String _category(AppNotification n) {
-    switch (n.targetType) {
-      case 'event':
-        return 'events';
-      case 'club':
-        return 'clubs';
-      case 'message':
-      case 'user':
-      case 'follow_request':
-      case 'follow_accepted':
-      case 'post':
-        return 'you';
-    }
-    return 'you';
-  }
-
-  bool _passes(AppNotification n) =>
-      !authService.isStudentSession ||
-      _filter == 'all' ||
-      _category(n) == _filter;
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
@@ -284,7 +253,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
-          final list = _allNotifs.where(_passes).toList();
+          final list = _allNotifs;
           final news = list.where(_isUnread).toList();
           final earlier = list.where((n) => !_isUnread(n)).toList();
           final totalUnread = _allNotifs.where(_isUnread).length;
@@ -294,7 +263,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               _buildHeader(totalUnread),
               Expanded(
                 child: (news.isEmpty && earlier.isEmpty)
-                    ? _BEmpty(filter: _filter)
+                    ? const _BEmpty()
                     : ListView(
                         padding: EdgeInsets.zero,
                         children: [
@@ -401,33 +370,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ],
               ),
-              if (authService.isStudentSession) ...[
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      for (final f in _filters) ...[
-                        _FilterChipB(
-                          label: f.l,
-                          active: _filter == f.k,
-                          count: _allNotifs
-                              .where(
-                                (n) =>
-                                    (f.k == 'all' || _category(n) == f.k) &&
-                                    _isUnread(n),
-                              )
-                              .length,
-                          onTap: () => setState(() => _filter = f.k),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ],
-                  ),
-                ),
-              ] else
-                const SizedBox(height: 12),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -467,6 +410,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       clubId: club.id as String,
                       clubName: club.name as String,
                       color: accent,
+                      imageUrl: club.logoUrl,
                       size: 46,
                       fontSize: 20,
                       borderRadius: 14,
@@ -664,80 +608,12 @@ class _Sec extends StatelessWidget {
   }
 }
 
-// ── Filter chip ───────────────────────────────────────────────────────────────
-class _FilterChipB extends StatelessWidget {
-  final String label;
-  final bool active;
-  final int count;
-  final VoidCallback onTap;
-
-  const _FilterChipB({
-    required this.label,
-    required this.active,
-    required this.count,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primaryRed : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? AppColors.primaryRed : AppColors.divider,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: active ? Colors.white : AppColors.secondaryText,
-              ),
-            ),
-            if (count > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                constraints: const BoxConstraints(minWidth: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                decoration: BoxDecoration(
-                  color: active ? Colors.white : AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$count',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1.5,
-                    fontWeight: FontWeight.w800,
-                    color: active ? AppColors.primaryRed : Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Empty state ───────────────────────────────────────────────────────────────
 class _BEmpty extends StatelessWidget {
-  final String filter;
-  const _BEmpty({required this.filter});
+  const _BEmpty();
 
   @override
   Widget build(BuildContext context) {
-    final label = filter == 'all' ? '' : '$filter ';
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(40, 0, 40, 60),
@@ -768,7 +644,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              S.noNotificationsFor(label),
+              S.noNotificationsFor(''),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,

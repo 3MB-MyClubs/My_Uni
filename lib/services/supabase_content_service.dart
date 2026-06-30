@@ -5,6 +5,7 @@ import '../models/event.dart';
 import '../models/news_post.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
+import 'supabase_club_service.dart';
 import 'user_state.dart';
 
 class SupabaseContentService {
@@ -27,6 +28,7 @@ class SupabaseContentService {
         .map((row) => _clubFromRow(Map<String, dynamic>.from(row as Map)))
         .where((club) => club.id.isNotEmpty)
         .toList();
+    await _hydrateBoardMembers(client, nextClubs);
     final nextEvents = (results[1] as List)
         .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
         .where((event) => event.id.isNotEmpty && event.clubId.isNotEmpty)
@@ -134,7 +136,9 @@ class SupabaseContentService {
       name: _string(row, ['name', 'title'], fallback: 'Club'),
       shortName: _nullableString(row, ['short_name', 'shortName']),
       description: _string(row, ['description', 'bio']),
-      logoUrl: _nullableString(row, ['logo_url', 'logoUrl']),
+      logoUrl: supabaseClubService.publicLogoUrl(
+        _nullableString(row, ['logo_url', 'logoUrl']),
+      ),
       categoryId: _nullableString(row, ['category_id', 'categoryId']),
       categoryName: _categoryName(row),
       email: _nullableString(row, ['email']),
@@ -142,7 +146,47 @@ class SupabaseContentService {
       boardMemberIds: _stringList(
         row['board_member_ids'] ?? row['boardMemberIds'],
       ),
+      boardMemberTitles: _stringMap(
+        row['board_member_titles'] ?? row['boardMemberTitles'],
+      ),
     );
+  }
+
+  Future<void> _hydrateBoardMembers(
+    SupabaseClient client,
+    List<Club> targetClubs,
+  ) async {
+    if (targetClubs.isEmpty) return;
+
+    List rows;
+    try {
+      rows = await client
+          .from('club_followers')
+          .select('club_id, profile_id, role, role_title')
+          .eq('role', 'board_member');
+    } catch (_) {
+      try {
+        rows = await client
+            .from('club_followers')
+            .select('club_id, profile_id, role')
+            .eq('role', 'board_member');
+      } catch (_) {
+        return;
+      }
+    }
+
+    final byClub = {for (final club in targetClubs) club.id: club};
+    for (final raw in rows) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final club = byClub[row['club_id']?.toString() ?? ''];
+      final profileId = row['profile_id']?.toString() ?? '';
+      if (club == null || profileId.isEmpty) continue;
+      if (!club.boardMemberIds.contains(profileId)) {
+        club.boardMemberIds.add(profileId);
+      }
+      final title = row['role_title']?.toString().trim() ?? '';
+      if (title.isNotEmpty) club.boardMemberTitles[profileId] = title;
+    }
   }
 
   String? _categoryName(Map<String, dynamic> row) {

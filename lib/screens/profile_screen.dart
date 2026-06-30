@@ -19,6 +19,7 @@ import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/student_profile_service.dart' as remote_profile;
+import '../services/supabase_club_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
@@ -113,14 +114,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: source, imageQuality: 85);
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 72,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        maxWidth: 512,
+        maxHeight: 512,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 82,
+        compressQuality: 72,
         uiSettings: [
           IOSUiSettings(
             title: 'Crop Photo',
@@ -214,8 +222,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? managedClubForAdmin(userId)
           : null;
       if (managedClub != null) {
-        userState.setClubPhoto(managedClub.id, permanentPath);
-        await userPrefsService.saveClubPhoto(managedClub.id, permanentPath);
+        try {
+          final remoteUrl = await supabaseClubService.updateClubLogo(
+            club: managedClub,
+            imagePath: croppedFile.path,
+          );
+          if (remoteUrl != null) {
+            managedClub.logoUrl = remoteUrl;
+            userState.setClubPhoto(managedClub.id, remoteUrl);
+            await userPrefsService.removeClubPhoto(managedClub.id);
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                const SnackBar(
+                  content: Text('Could not upload club photo.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+          }
+        }
       }
       userPrefsService.save(userId);
       try {
@@ -857,6 +885,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (managedClub != null) {
       userState.removeClubPhoto(managedClub.id);
       await userPrefsService.removeClubPhoto(managedClub.id);
+      try {
+        await supabaseClubService.removeClubLogo(managedClub);
+        managedClub.logoUrl = null;
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Club photo removed locally, but remote delete failed.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
     }
     await userPrefsService.save(userId);
     try {
@@ -1738,6 +1782,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     clubId: club.id,
                                     clubName: club.name,
                                     color: color,
+                                    imageUrl: club.logoUrl,
                                     size: 52,
                                     fontSize: 20,
                                     borderRadius: 14,
@@ -2145,10 +2190,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) => _confirmDelete(
-            S.deletePost,
-            S.deletePostMsg,
-          ),
+          confirmDismiss: (_) => _confirmDelete(S.deletePost, S.deletePostMsg),
           onDismissed: (_) {
             final ok = contentStore.deletePost(p.id, adminId);
             if (mounted) {
@@ -2292,10 +2334,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) => _confirmDelete(
-            S.deleteEvent,
-            S.deleteEventMsg,
-          ),
+          confirmDismiss: (_) =>
+              _confirmDelete(S.deleteEvent, S.deleteEventMsg),
           onDismissed: (_) {
             final ok = contentStore.deleteEvent(e.id, adminId);
             if (mounted) {

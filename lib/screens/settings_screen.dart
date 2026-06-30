@@ -4,13 +4,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
+import '../services/student_profile_service.dart';
+import '../services/supabase_club_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
@@ -202,21 +203,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true && mounted) {
-      final docsDir = await getApplicationDocumentsDirectory();
-      final ext = cropped.path.contains('.')
-          ? cropped.path.substring(cropped.path.lastIndexOf('.'))
-          : '.jpg';
-      final permanentPath = '${docsDir.path}/club_${club.id}$ext';
-      await File(cropped.path).copy(permanentPath);
-      if (!mounted) return;
-      userState.setClubPhoto(club.id, permanentPath);
-      await userPrefsService.saveClubPhoto(club.id, permanentPath);
+      try {
+        final remoteUrl = await supabaseClubService.updateClubLogo(
+          club: club,
+          imagePath: cropped.path,
+        );
+        if (remoteUrl != null) {
+          club.logoUrl = remoteUrl;
+          userState.setClubPhoto(club.id, remoteUrl);
+          await userPrefsService.removeClubPhoto(club.id);
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Could not upload club photo.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+        }
+      }
       setState(() {});
     }
   }
 
   void _openClubDescriptionSheet(Club club) {
     final controller = TextEditingController(text: club.description);
+    var saving = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -224,7 +239,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           final value = controller.text.trim();
-          final canSave = value.isNotEmpty && value != club.description;
+          final canSave =
+              value.isNotEmpty && value != club.description && !saving;
           return Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(ctx).viewInsets.bottom,
@@ -323,10 +339,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           onPressed: canSave
-                              ? () {
+                              ? () async {
+                                  setSheetState(() => saving = true);
+                                  try {
+                                    await supabaseClubService
+                                        .updateClubDescription(
+                                          club: club,
+                                          description: value,
+                                        );
+                                  } catch (_) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not update club description.',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    if (ctx.mounted) {
+                                      setSheetState(() => saving = false);
+                                    }
+                                    return;
+                                  }
+                                  if (!mounted || !ctx.mounted) return;
                                   club.description = value;
                                   userState.bumpClubInfo();
-                                  if (mounted) setState(() {});
+                                  setState(() {});
                                   Navigator.of(ctx).pop();
                                   unawaited(
                                     userPrefsService.saveClubDescription(
@@ -337,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 }
                               : null,
                           child: Text(
-                            S.save,
+                            saving ? 'Saving...' : S.save,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -781,6 +822,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               clubId: club.id,
                               clubName: club.name,
                               color: AppColors.primaryRed,
+                              imageUrl: club.logoUrl,
                               size: 36,
                               fontSize: 16,
                               borderRadius: 10,
@@ -1597,6 +1639,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.club.name,
   );
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -1604,7 +1647,24 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
     super.dispose();
   }
 
-  void _save(String value) {
+  Future<void> _save(String value) async {
+    setState(() => _saving = true);
+    try {
+      await supabaseClubService.updateClubName(club: widget.club, name: value);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not update club name.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+    if (!mounted) return;
     widget.club.name = value;
     userState.bumpClubInfo();
     unawaited(userPrefsService.saveClubName(widget.club.id, value));
@@ -1614,7 +1674,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
   @override
   Widget build(BuildContext context) {
     final value = _controller.text.trim();
-    final canSave = value.isNotEmpty && value != widget.club.name;
+    final canSave = value.isNotEmpty && value != widget.club.name && !_saving;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1711,7 +1771,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(value) : null,
                     child: Text(
-                      S.saveName,
+                      _saving ? 'Saving...' : S.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -1789,8 +1849,9 @@ class _ChangeNameSheet extends StatefulWidget {
 
 class _ChangeNameSheetState extends State<_ChangeNameSheet> {
   late final TextEditingController _controller = TextEditingController(
-    text: userState.usernameFor(widget.userId) ?? '',
+    text: widget.realName,
   );
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -1798,16 +1859,29 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
     super.dispose();
   }
 
-  Future<void> _useRealName() async {
-    userState.clearUsername(widget.userId);
-    await userPrefsService.save(widget.userId);
-    if (!mounted) return;
-    Navigator.pop(context);
-  }
-
   Future<void> _save(String name) async {
-    userState.setUsername(widget.userId, name);
-    await userPrefsService.save(widget.userId);
+    setState(() => _saving = true);
+    try {
+      await studentProfileService.updateFullName(
+        userId: widget.userId,
+        fullName: name,
+      );
+      authService.updateCurrentUserName(name);
+      userState.clearUsername(widget.userId);
+      await userPrefsService.save(widget.userId);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not update name.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -1815,14 +1889,8 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
   @override
   Widget build(BuildContext context) {
     final customName = _controller.text.trim();
-    final hasCustomName = userState.usernameFor(widget.userId) != null;
-    final isTaken =
-        customName.isNotEmpty &&
-        userState.isUsernameTaken(customName, excludeId: widget.userId);
     final canSave =
-        customName.isNotEmpty &&
-        customName != userState.usernameFor(widget.userId) &&
-        !isTaken;
+        customName.isNotEmpty && customName != widget.realName && !_saving;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1872,7 +1940,6 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
               decoration: InputDecoration(
                 labelText: S.displayName,
                 hintText: widget.realName,
-                errorText: isTaken ? S.nameTaken : null,
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
@@ -1898,11 +1965,9 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
               children: [
                 Expanded(
                   child: TextButton(
-                    onPressed: hasCustomName
-                        ? _useRealName
-                        : () => Navigator.pop(context),
+                    onPressed: _saving ? null : () => Navigator.pop(context),
                     child: Text(
-                      hasCustomName ? S.useRealName : S.cancel,
+                      S.cancel,
                       style: TextStyle(color: AppColors.secondaryText),
                     ),
                   ),
@@ -1923,7 +1988,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(customName) : null,
                     child: Text(
-                      S.saveName,
+                      _saving ? 'Saving...' : S.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,

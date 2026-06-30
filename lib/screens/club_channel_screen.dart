@@ -10,9 +10,15 @@ import '../widgets/chat_widgets.dart';
 import '../widgets/club_avatar.dart';
 
 const List<Color> _memberColors = [
-  Color(0xFFB41C18), Color(0xFF1565C0), Color(0xFF2E7D32),
-  Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F),
-  Color(0xFF558B2F), Color(0xFF283593), Color(0xFF6D4C41),
+  Color(0xFFB41C18),
+  Color(0xFF1565C0),
+  Color(0xFF2E7D32),
+  Color(0xFF6A1B9A),
+  Color(0xFFE65100),
+  Color(0xFF00838F),
+  Color(0xFF558B2F),
+  Color(0xFF283593),
+  Color(0xFF6D4C41),
 ];
 
 Color _colorForUser(String userId) {
@@ -50,7 +56,9 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
   void initState() {
     super.initState();
     clubChatService.markRead(widget.clubId);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom(animate: false));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollToBottom(animate: false),
+    );
   }
 
   String _nameFor(String uid) {
@@ -107,16 +115,20 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
   ];
 
   Future<void> _simulateReply() async {
-    final others =
-        clubChatService.memberIdsFor(widget.clubId).where((id) => id != _myId).toList();
+    final others = clubChatService
+        .memberIdsFor(widget.clubId)
+        .where((id) => id != _myId)
+        .toList();
     if (others.isEmpty) return;
-    final responder = others[DateTime.now().millisecondsSinceEpoch % others.length];
+    final responder =
+        others[DateTime.now().millisecondsSinceEpoch % others.length];
     presenceService.startTyping(_typingKey);
     await Future.delayed(const Duration(seconds: 3));
     presenceService.stopTyping(_typingKey);
     if (!mounted) return;
     final reply =
-        _autoReplies[DateTime.now().millisecondsSinceEpoch % _autoReplies.length];
+        _autoReplies[DateTime.now().millisecondsSinceEpoch %
+            _autoReplies.length];
     clubChatService.addMessage(
       widget.clubId,
       GroupMessage(
@@ -135,8 +147,11 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
       if (!_scrollController.hasClients) return;
       final target = _scrollController.position.maxScrollExtent;
       if (animate) {
-        _scrollController.animateTo(target,
-            duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       } else {
         _scrollController.jumpTo(target);
       }
@@ -162,7 +177,10 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
             _header(),
             Expanded(
               child: ListenableBuilder(
-                listenable: Listenable.merge([clubChatService, presenceService]),
+                listenable: Listenable.merge([
+                  clubChatService,
+                  presenceService,
+                ]),
                 builder: (context, _) => _buildMessageList(),
               ),
             ),
@@ -193,13 +211,19 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: Icon(Icons.arrow_back_ios_new_rounded,
-                color: AppColors.primaryRed, size: 22),
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: AppColors.primaryRed,
+              size: 22,
+            ),
           ),
           ClubAvatar(
             clubId: widget.clubId,
             clubName: widget.clubName,
             color: widget.color,
+            imageUrl: clubs.any((club) => club.id == widget.clubId)
+                ? clubs.firstWhere((club) => club.id == widget.clubId).logoUrl
+                : null,
             size: 40,
             fontSize: 16,
             borderRadius: 13,
@@ -212,27 +236,35 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(widget.clubName,
-                          style: TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.text,
-                              letterSpacing: -0.2),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        widget.clubName,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.text,
+                          letterSpacing: -0.2,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.lightRed,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text('Club',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.primaryRed,
-                              fontWeight: FontWeight.w600)),
+                      child: Text(
+                        'Club',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -241,9 +273,10 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
                   '${members.length} members'
                   '${active > 0 ? ' · $active active' : ''} · group discussion',
                   style: TextStyle(
-                      fontSize: 11.5,
-                      color: active > 0 ? kOnlineGreen : AppColors.secondaryText,
-                      fontWeight: FontWeight.w600),
+                    fontSize: 11.5,
+                    color: active > 0 ? kOnlineGreen : AppColors.secondaryText,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -257,8 +290,11 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
               color: AppColors.surfaceAlt,
               border: Border.all(color: AppColors.divider),
             ),
-            child: Icon(Icons.groups_rounded,
-                size: 19, color: AppColors.secondaryText),
+            child: Icon(
+              Icons.groups_rounded,
+              size: 19,
+              color: AppColors.secondaryText,
+            ),
           ),
         ],
       ),
@@ -274,17 +310,26 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.forum_outlined, size: 56, color: AppColors.secondaryText),
+              Icon(
+                Icons.forum_outlined,
+                size: 56,
+                color: AppColors.secondaryText,
+              ),
               const SizedBox(height: 14),
-              Text('No messages yet',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text)),
+              Text(
+                'No messages yet',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.text,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text('Be the first to start the discussion in this club.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.secondaryText)),
+              Text(
+                'Be the first to start the discussion in this club.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
             ],
           ),
         ),
@@ -317,7 +362,10 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
               .toList();
           final who = others.isNotEmpty ? others.first : '';
           return TypingBubble(
-              isGroup: true, senderUserId: who, senderName: _nameFor(who));
+            isGroup: true,
+            senderUserId: who,
+            senderName: _nameFor(who),
+          );
         }
 
         final row = items[idx];
@@ -329,13 +377,19 @@ class _ClubChannelScreenState extends State<ClubChannelScreen> {
         final prev = idx > 0 ? items[idx - 1] : null;
         final next = idx < items.length - 1 ? items[idx + 1] : null;
         final prevSame =
-            prev != null && !prev.isDivider && prev.message!.senderId == m.senderId;
+            prev != null &&
+            !prev.isDivider &&
+            prev.message!.senderId == m.senderId;
         final nextSame =
-            next != null && !next.isDivider && next.message!.senderId == m.senderId;
+            next != null &&
+            !next.isDivider &&
+            next.message!.senderId == m.senderId;
 
         String? status;
         if (isMe) {
-          status = (row.originalIndex == msgs.length - 1) ? 'delivered' : 'read';
+          status = (row.originalIndex == msgs.length - 1)
+              ? 'delivered'
+              : 'read';
         }
 
         return ChatBubble(
@@ -362,10 +416,10 @@ class _CRow {
   final GroupMessage? message;
   final int originalIndex;
   _CRow.divider(this.label)
-      : isDivider = true,
-        message = null,
-        originalIndex = -1;
+    : isDivider = true,
+      message = null,
+      originalIndex = -1;
   _CRow.message(this.message, this.originalIndex)
-      : isDivider = false,
-        label = null;
+    : isDivider = false,
+      label = null;
 }

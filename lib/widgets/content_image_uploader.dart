@@ -39,11 +39,17 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
   Future<void> _pickPhoto(ImageSource source) async {
     final picked = await ImagePicker().pickImage(
       source: source,
-      imageQuality: 90,
+      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
     );
     if (picked == null || !mounted) return;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
       uiSettings: [
         IOSUiSettings(
           title: 'Crop Photo',

@@ -192,6 +192,27 @@ class StudentProfileService {
     return profile;
   }
 
+  Future<StudentProfileData?> updateFullName({
+    required String userId,
+    required String fullName,
+  }) async {
+    final client = _client;
+    final value = fullName.trim();
+    if (client == null || userId.isEmpty || value.isEmpty) return null;
+
+    await client
+        .from('profiles')
+        .update({
+          'full_name': value,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', userId);
+
+    final profile = await fetchProfile(userId);
+    if (profile != null) applyToUserState(profile);
+    return profile;
+  }
+
   Future<String?> uploadAvatar({
     required String userId,
     required Uint8List bytes,
@@ -199,8 +220,7 @@ class StudentProfileService {
     final client = _client;
     if (client == null || userId.isEmpty) return null;
 
-    final objectPath = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final path = '$userId/$objectPath';
+    final path = '$userId/avatar.jpg';
     await client.storage
         .from('avatars')
         .uploadBinary(
@@ -221,8 +241,6 @@ class StudentProfileService {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', userId);
-
-    await _deleteOldAvatars(userId: userId, keepPath: path);
 
     userState.setProfilePhotoUrl(userId, publicUrl);
     return publicUrl;
@@ -255,27 +273,6 @@ class StudentProfileService {
     final profile = await fetchProfile(userId);
     if (profile == null) return;
     applyToUserState(profile);
-  }
-
-  Future<void> _deleteOldAvatars({
-    required String userId,
-    required String keepPath,
-  }) async {
-    final client = _client;
-    if (client == null || userId.isEmpty) return;
-
-    try {
-      final objects = await client.storage.from('avatars').list(path: userId);
-      final oldPaths = objects
-          .map((object) => '$userId/${object.name}')
-          .where((path) => path != keepPath)
-          .toList();
-      if (oldPaths.isNotEmpty) {
-        await client.storage.from('avatars').remove(oldPaths);
-      }
-    } catch (_) {
-      // Non-critical: the new avatar is already uploaded and saved.
-    }
   }
 
   void applyToUserState(StudentProfileData profile) {

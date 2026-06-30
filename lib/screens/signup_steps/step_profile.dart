@@ -241,14 +241,21 @@ class _StepProfileState extends State<StepProfile> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: source, imageQuality: 85);
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 72,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        maxWidth: 512,
+        maxHeight: 512,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 82,
+        compressQuality: 72,
         uiSettings: [
           IOSUiSettings(
             title: 'Crop Photo',

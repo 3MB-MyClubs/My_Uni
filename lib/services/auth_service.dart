@@ -269,6 +269,35 @@ class AuthService {
     return false;
   }
 
+  void updateCurrentUserName(String name) {
+    final user = _currentUser;
+    if (user == null) return;
+
+    _currentUser = User(
+      id: user.id,
+      name: name,
+      email: user.email,
+      password: user.password,
+      role: user.role,
+      subscribedClubIds: user.subscribedClubIds,
+      followingUserIds: user.followingUserIds,
+    );
+
+    final index = users.indexWhere((u) => u.id == user.id);
+    if (index >= 0) {
+      final existing = users[index];
+      users[index] = User(
+        id: existing.id,
+        name: name,
+        email: existing.email,
+        password: existing.password,
+        role: existing.role,
+        subscribedClubIds: existing.subscribedClubIds,
+        followingUserIds: existing.followingUserIds,
+      );
+    }
+  }
+
   void logout() {
     if (SupabaseConfig.isConfigured) {
       try {
