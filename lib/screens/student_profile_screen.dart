@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/user_avatar.dart';
 
@@ -150,18 +151,28 @@ class StudentProfileScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        _HeaderIconButton(
-                          icon: Icons.settings_outlined,
-                          onTap: onSettings,
+                        KeyedSubtree(
+                          key: tutorialAnchors.keyFor(
+                            TutorialAnchors.profileSettings,
+                          ),
+                          child: _HeaderIconButton(
+                            icon: Icons.settings_outlined,
+                            onTap: onSettings,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 18),
                     // Avatar row
-                    _AvatarRow(
-                      userId: data.userId,
-                      name: data.name,
-                      initials: data.initials,
+                    KeyedSubtree(
+                      key: tutorialAnchors.keyFor(
+                        TutorialAnchors.profileHeader,
+                      ),
+                      child: _AvatarRow(
+                        userId: data.userId,
+                        name: data.name,
+                        initials: data.initials,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     // Name + major + year + double major / minor tags

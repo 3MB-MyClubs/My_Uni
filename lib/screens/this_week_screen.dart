@@ -10,6 +10,7 @@ import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import 'event_detail_screen.dart';
 
@@ -109,7 +110,12 @@ class _DateResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ThisWeekScreen extends StatefulWidget {
-  const ThisWeekScreen({super.key});
+  /// True only for the instance hosted in the main nav bar's IndexedStack, so
+  /// the app tour's RSVP anchor attaches to a single widget — this screen is
+  /// also pushed as a route from the home "See all".
+  final bool isTutorialHost;
+
+  const ThisWeekScreen({super.key, this.isTutorialHost = false});
 
   @override
   State<ThisWeekScreen> createState() => _ThisWeekScreenState();
@@ -568,6 +574,11 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         event: ev,
                         color: _clubColor(ev.clubId),
                         onTap: () => _openEvent(ev),
+                        // Anchor the tour's "RSVP" step to the first event's
+                        // pill — only on the nav-hosted instance.
+                        rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
+                            ? tutorialAnchors.keyFor(TutorialAnchors.eventsRsvp)
+                            : null,
                       ),
                     );
                   }, childCount: results.length),
@@ -1253,11 +1264,15 @@ class _WeekEventRow extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
+  /// When set, wraps this row's RSVP pill so the app tour can highlight it.
+  final Key? rsvpAnchorKey;
+
   const _WeekEventRow({
     super.key,
     required this.event,
     required this.color,
     required this.onTap,
+    this.rsvpAnchorKey,
   });
 
   @override
@@ -1420,7 +1435,12 @@ class _WeekEventRow extends StatelessWidget {
                   height: 34,
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: _WeekRsvpPill(event: event),
+                    child: rsvpAnchorKey == null
+                        ? _WeekRsvpPill(event: event)
+                        : KeyedSubtree(
+                            key: rsvpAnchorKey,
+                            child: _WeekRsvpPill(event: event),
+                          ),
                   ),
                 ),
               ],
@@ -1653,9 +1673,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              searching
-                  ? S.tryDifferentKeyword
-                  : S.nothingScheduled,
+              searching ? S.tryDifferentKeyword : S.nothingScheduled,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

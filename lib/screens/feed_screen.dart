@@ -15,6 +15,7 @@ import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/view_tracker.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/loading_skeleton.dart';
@@ -73,16 +74,7 @@ class _ClubSuggestion {
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
 class FeedScreen extends StatefulWidget {
-  final Key? tutorialHeaderKey;
-  final Key? tutorialEventsKey;
-  final Key? tutorialFeedKey;
-
-  const FeedScreen({
-    super.key,
-    this.tutorialHeaderKey,
-    this.tutorialEventsKey,
-    this.tutorialFeedKey,
-  });
+  const FeedScreen({super.key});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -241,8 +233,6 @@ class _FeedScreenState extends State<FeedScreen> {
   void _onLocaleChanged() {
     if (mounted) setState(() {});
   }
-
-
 
   void _hydrateVisiblePostViews() {
     viewTracker.hydratePostViewCounts(newsPosts.map((post) => post.id));
@@ -474,7 +464,6 @@ class _FeedScreenState extends State<FeedScreen> {
       leadingWidth: 0,
       titleSpacing: 0,
       title: Padding(
-        key: widget.tutorialHeaderKey,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           children: [
@@ -648,7 +637,6 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return SliverToBoxAdapter(
       child: Padding(
-        key: widget.tutorialEventsKey,
         padding: const EdgeInsets.only(top: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,7 +695,6 @@ class _FeedScreenState extends State<FeedScreen> {
     if (!authService.isStudentSession) {
       return SliverToBoxAdapter(
         child: Padding(
-          key: widget.tutorialFeedKey,
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
           child: Text(
             S.clubFeed,
@@ -726,7 +713,6 @@ class _FeedScreenState extends State<FeedScreen> {
     final tabs = [('following', S.following), ('all', S.all)];
     return SliverToBoxAdapter(
       child: Padding(
-        key: widget.tutorialFeedKey,
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
         child: Row(
           children: [
@@ -741,6 +727,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             const Spacer(),
             Row(
+              key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
               children: tabs.asMap().entries.map((entry) {
                 final i = entry.key;
                 final label = entry.value.$2;
@@ -3659,4 +3646,3 @@ class _PulsingDotState extends State<_PulsingDot>
     );
   }
 }
-

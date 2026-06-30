@@ -5,6 +5,12 @@ import 'package:flutter/services.dart';
 
 import '../services/app_colors.dart';
 
+/// One step of the interactive app tour.
+///
+/// When [targetKey] is null the step is a centered "hero" card (welcome /
+/// finale). Otherwise the overlay highlights the live widget that key is
+/// attached to — scrolling it into view, drawing a pulsing ring + a pointer
+/// arrow on it, and placing the coaching card so the element stays visible.
 class AppTutorialStep {
   final String eyebrow;
   final String title;
@@ -25,6 +31,12 @@ class AppTutorialStep {
   });
 }
 
+/// Transparent, step-by-step coach-mark overlay.
+///
+/// The app underneath stays fully visible — there is no dimming scrim. Each
+/// anchored step points an animated ring + arrow at the real UI element it
+/// describes. A full-screen transparent layer keeps the tour in control
+/// (tap-anywhere advances) without hiding anything.
 class AppTutorialOverlay extends StatefulWidget {
   final List<AppTutorialStep> steps;
   final ValueChanged<AppTutorialStep> onStepChanged;
@@ -47,17 +59,18 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     with TickerProviderStateMixin {
   int _index = 0;
 
-  // The rect currently painted as the spotlight. Driven by [_spotCtrl] so it
-  // glides smoothly from one highlighted element to the next.
+  // The rect currently highlighted. Driven by [_spotCtrl] so it glides smoothly
+  // from one element to the next.
   Rect? _displayRect;
   Rect? _animFrom;
   Rect? _animTo;
   bool _shrinkToNull = false;
   int _measureAttempts = 0;
+  bool _didScrollForStep = false;
 
   late final AnimationController _enterCtrl; // whole-overlay fade-in
-  late final AnimationController _spotCtrl; // spotlight glide between targets
-  late final AnimationController _pulseCtrl; // breathing glow ring + halo
+  late final AnimationController _spotCtrl; // ring glide between targets
+  late final AnimationController _pulseCtrl; // breathing glow + arrow bob
   late final AnimationController _contentCtrl; // per-step card entrance
 
   late final Animation<double> _enter;
@@ -90,7 +103,10 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
 
     _enter = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic);
     _spot = CurvedAnimation(parent: _spotCtrl, curve: Curves.easeInOutCubic);
-    _content = CurvedAnimation(parent: _contentCtrl, curve: Curves.easeOutCubic);
+    _content = CurvedAnimation(
+      parent: _contentCtrl,
+      curve: Curves.easeOutCubic,
+    );
 
     _spotCtrl.addListener(_onSpotTick);
 
@@ -115,7 +131,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     super.dispose();
   }
 
-  // ── Spotlight measurement & glide ──────────────────────────────────────────
+  // ── Target measurement, scroll-into-view & glide ────────────────────────────
 
   void _onSpotTick() {
     final from = _animFrom;
@@ -123,26 +139,47 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     if (from == null || to == null) return;
     final t = _spot.value;
     setState(() {
-      _displayRect = (t >= 1.0 && _shrinkToNull) ? null : Rect.lerp(from, to, t);
+      _displayRect = (t >= 1.0 && _shrinkToNull)
+          ? null
+          : Rect.lerp(from, to, t);
     });
   }
 
   void _scheduleMeasure() {
     _measureAttempts = 0;
+    _didScrollForStep = false;
     _attemptMeasure();
   }
 
   void _attemptMeasure() {
     if (!mounted) return;
+    final context = _step.targetKey?.currentContext;
+
+    // Before the first measurement of an anchored step, bring the element into
+    // view so the highlight and the card are visible together. Re-measure once
+    // the scroll has settled.
+    if (context != null && !_didScrollForStep) {
+      _didScrollForStep = true;
+      try {
+        Scrollable.ensureVisible(
+          context,
+          alignment: 0.42,
+          duration: const Duration(milliseconds: 340),
+          curve: Curves.easeInOutCubic,
+        );
+      } catch (_) {
+        // Element isn't inside a Scrollable (e.g. the nav bar) — nothing to do.
+      }
+      Future.delayed(const Duration(milliseconds: 380), _attemptMeasure);
+      return;
+    }
+
     final rect = _resolveTargetRect();
     // The target lives inside a tab that may need a frame or two to lay out
     // after a tab switch — retry briefly before giving up.
-    if (rect == null && _step.targetKey != null && _measureAttempts < 6) {
+    if (rect == null && _step.targetKey != null && _measureAttempts < 8) {
       _measureAttempts++;
-      Future.delayed(
-        const Duration(milliseconds: 45),
-        () => _attemptMeasure(),
-      );
+      Future.delayed(const Duration(milliseconds: 45), _attemptMeasure);
       return;
     }
     _beginSpotlight(rect);
@@ -153,7 +190,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     final renderObject = context?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) return null;
     final origin = renderObject.localToGlobal(Offset.zero);
-    return (origin & renderObject.size).inflate(8);
+    return (origin & renderObject.size).inflate(7);
   }
 
   void _beginSpotlight(Rect? to) {
@@ -168,7 +205,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     Rect animFrom;
     Rect animTo;
     if (from == null && to != null) {
-      // Grow the spotlight out of the target's center.
+      // Grow the ring out of the target's center.
       animFrom = Rect.fromCenter(center: to.center, width: 0, height: 0);
       animTo = to;
     } else if (to == null && from != null) {
@@ -214,32 +251,40 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
         color: Colors.transparent,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final screenSize = Size(constraints.maxWidth, constraints.maxHeight);
+            final screenSize = Size(
+              constraints.maxWidth,
+              constraints.maxHeight,
+            );
             final target = _visibleTarget(screenSize);
+            final placement = target == null
+                ? null
+                : _resolveCardPlacement(
+                    target,
+                    screenSize,
+                    MediaQuery.paddingOf(context),
+                  );
+            final cardAbove = placement?.above ?? false;
 
             return Stack(
               children: [
-                // Dimming scrim + soft-edged spotlight cutout.
-                // Tapping the dimmed area advances (except on the last step).
+                // Transparent tap-catcher. Keeps the tour in control without
+                // dimming the app; tapping anywhere advances (except the last
+                // step). Tapping the card itself is absorbed separately.
                 Positioned.fill(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _isLast ? null : () => _moveTo(_index + 1),
-                    child: CustomPaint(
-                      painter: _SpotlightPainter(target),
-                      size: screenSize,
-                    ),
                   ),
                 ),
 
-                // Breathing glow ring around the highlighted element.
-                if (target != null && !_shrinkToNull) _buildGlowRing(target),
+                // Ring + arrow on the live element.
+                if (target != null && !_shrinkToNull) ...[
+                  _buildGlowRing(target),
+                  _buildPointerArrow(target, cardAbove, screenSize),
+                ],
 
-                // Always-available skip affordance.
-                _buildSkipButton(context),
-
-                // The coaching card.
-                _buildCard(context, screenSize, target),
+                // The coaching card (carries its own Skip control).
+                _buildCard(screenSize, target, placement),
               ],
             );
           },
@@ -256,29 +301,87 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     return visible;
   }
 
+  // Chooses the side of [target] with more room and caps the card height to
+  // that side's free space, so the coaching card can never overlap the element
+  // it is pointing at. The element (and the live UI) always stays visible.
+  _CardPlacement _resolveCardPlacement(
+    Rect target,
+    Size screen,
+    EdgeInsets pad,
+  ) {
+    const gap = 22.0; // room for the pointer arrow + breathing space
+    final topInset = pad.top + 56; // clear the Skip button at the top-right
+    final bottomInset = pad.bottom + 16;
+    final ceiling = math.min(440.0, screen.height * 0.62);
+
+    final spaceAbove = target.top - topInset - gap;
+    final spaceBelow = screen.height - target.bottom - bottomInset - gap;
+    final placeBelow = spaceBelow >= spaceAbove;
+    final avail = math.max(0.0, placeBelow ? spaceBelow : spaceAbove);
+
+    return _CardPlacement(
+      above: !placeBelow,
+      // Distance from the screen edge (top when below, bottom when above) to
+      // the card's near edge.
+      offset: placeBelow
+          ? target.bottom + gap
+          : screen.height - target.top + gap,
+      maxHeight: math.min(ceiling, avail),
+    );
+  }
+
+  // Highlight drawn as STROKES only (outline + outward glow), never a fill — so
+  // the element inside the ring (its icons and labels) stays fully readable
+  // while the tour points at it.
   Widget _buildGlowRing(Rect target) {
+    const pad =
+        16.0; // transparent room for the blurred glow so it isn't clipped
     return AnimatedBuilder(
       animation: _pulseCtrl,
       builder: (context, _) {
         final p = Curves.easeInOut.transform(_pulseCtrl.value);
-        final rect = target.inflate(2 * p);
         return Positioned.fromRect(
-          rect: rect,
+          rect: target.inflate(2 * p).inflate(pad),
           child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryRed.withValues(alpha: 0.35 + 0.35 * p),
-                    blurRadius: 16 + 10 * p,
-                    spreadRadius: 1 + 3 * p,
-                  ),
-                ],
+            child: CustomPaint(
+              painter: _RingPainter(pulse: p, pad: pad),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Small triangle sitting in the gap between the card and the element,
+  // pointing at the element and gently bobbing toward it.
+  Widget _buildPointerArrow(Rect target, bool cardAbove, Size screenSize) {
+    const w = 26.0;
+    const h = 14.0;
+    const margin = 16.0;
+    final cx = target.center.dx.clamp(
+      margin + w,
+      screenSize.width - margin - w,
+    );
+
+    return AnimatedBuilder(
+      animation: _pulseCtrl,
+      builder: (context, _) {
+        final p = Curves.easeInOut.transform(_pulseCtrl.value);
+        // Arrow points down at the element when the card is above it, and up
+        // when the card is below it.
+        final pointDown = cardAbove;
+        final top = pointDown
+            ? target.top - h - 4 - 2 * p
+            : target.bottom + 4 + 2 * p;
+        return Positioned(
+          left: cx - w / 2,
+          top: top,
+          child: IgnorePointer(
+            child: CustomPaint(
+              size: const Size(w, h),
+              painter: _ArrowPainter(
+                pointDown: pointDown,
+                color: AppColors.primaryRed,
               ),
             ),
           ),
@@ -287,50 +390,40 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     );
   }
 
-  Widget _buildSkipButton(BuildContext context) {
-    return Positioned(
-      top: MediaQuery.paddingOf(context).top + 10,
-      right: 14,
-      child: SafeArea(
-        bottom: false,
-        child: Material(
-          color: Colors.transparent,
-          child: TextButton.icon(
-            onPressed: widget.onSkip,
-            icon: const Icon(Icons.close_rounded, size: 16),
-            label: const Text(
-              'Skip tour',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.black.withValues(alpha: 0.5),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(100),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
-              ),
-            ),
-          ),
-        ),
+  // Low-emphasis "Skip tour" control that lives INSIDE the coaching card, so no
+  // floating chrome ever covers the element being taught. Hidden on the last
+  // step, where the primary button already finishes the tour.
+  Widget _skipButton() {
+    return TextButton.icon(
+      onPressed: widget.onSkip,
+      icon: const Icon(Icons.close_rounded, size: 15),
+      label: const Text(
+        'Skip tour',
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+      ),
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.secondaryText,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
 
   // ── Card placement ──────────────────────────────────────────────────────────
 
-  Widget _buildCard(BuildContext context, Size screenSize, Rect? target) {
+  Widget _buildCard(Size screenSize, Rect? target, _CardPlacement? placement) {
     const margin = 16.0;
-    final media = MediaQuery.of(context);
 
-    // Absorb taps so tapping the card itself never triggers scrim-advance.
+    // Absorb taps so tapping the card itself never triggers tap-to-advance.
     final card = GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {},
-      child: _animatedContent(child: _isHero ? _buildHeroCard() : _buildAnchoredCard()),
+      child: _animatedContent(
+        child: _isHero ? _buildHeroCard() : _buildAnchoredCard(),
+      ),
     );
 
-    if (_isHero || target == null) {
+    if (_isHero || target == null || placement == null) {
       return Positioned(
         left: margin,
         right: margin,
@@ -348,35 +441,19 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
       );
     }
 
-    final maxCardHeight = math.min(430.0, screenSize.height * 0.6);
+    // Height is capped to the free space on the chosen side, so the card is
+    // always fully on one side of the element — never on top of it. If space
+    // is tight the card scrolls internally rather than spilling over.
     final wrapped = ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxCardHeight),
+      constraints: BoxConstraints(maxHeight: placement.maxHeight),
       child: SingleChildScrollView(child: card),
     );
 
-    final isLargeTarget = target.height > screenSize.height * 0.45;
-    if (isLargeTarget || target.center.dy > screenSize.height * 0.55) {
-      // Place the card above the target (anchored to the bottom).
-      final bottom = isLargeTarget
-          ? math.max(96.0, media.padding.bottom + 90)
-          : screenSize.height - target.top + 14;
-      return Positioned(
-        left: margin,
-        right: margin,
-        bottom: bottom.clamp(20.0, screenSize.height * 0.72),
-        child: wrapped,
-      );
-    }
-
-    // Place the card below the target.
-    final top = math.min(
-      target.bottom + 14,
-      screenSize.height - maxCardHeight - 16,
-    );
     return Positioned(
       left: margin,
       right: margin,
-      top: math.max(media.padding.top + 60, top),
+      top: placement.above ? null : placement.offset,
+      bottom: placement.above ? placement.offset : null,
       child: wrapped,
     );
   }
@@ -415,10 +492,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
             child: Stack(
               alignment: Alignment.center,
               clipBehavior: Clip.none,
-              children: [
-                if (_isLast) _buildSparkles(),
-                _buildHeroHalo(),
-              ],
+              children: [if (_isLast) _buildSparkles(), _buildHeroHalo()],
             ),
           ),
           const SizedBox(height: 18),
@@ -467,6 +541,10 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
           _progressBar(),
           const SizedBox(height: 18),
           _buttonRow(),
+          if (!_isLast) ...[
+            const SizedBox(height: 4),
+            Center(child: _skipButton()),
+          ],
         ],
       ),
     );
@@ -522,9 +600,11 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
               Transform.translate(
                 offset: spots[i],
                 child: Opacity(
-                  opacity: (0.25 +
-                          0.75 * ((_pulseCtrl.value + i / spots.length) % 1.0))
-                      .clamp(0.0, 1.0),
+                  opacity:
+                      (0.25 +
+                              0.75 *
+                                  ((_pulseCtrl.value + i / spots.length) % 1.0))
+                          .clamp(0.0, 1.0),
                   child: Icon(
                     Icons.star_rounded,
                     size: sizes[i],
@@ -600,6 +680,10 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
           _progressBar(),
           const SizedBox(height: 16),
           _buttonRow(),
+          if (!_isLast) ...[
+            const SizedBox(height: 4),
+            Center(child: _skipButton()),
+          ],
         ],
       ),
     );
@@ -813,35 +897,102 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
   }
 }
 
-class _SpotlightPainter extends CustomPainter {
-  final Rect? target;
+/// Draws the highlight as concentric strokes with an outward-only glow — no
+/// fill — so the element inside the ring stays fully visible.
+class _RingPainter extends CustomPainter {
+  final double pulse; // 0..1 breathing
+  final double pad; // transparent padding around the element
 
-  const _SpotlightPainter(this.target);
+  const _RingPainter({required this.pulse, required this.pad});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bounds = Offset.zero & size;
-    canvas.saveLayer(bounds, Paint());
-    canvas.drawRect(
-      bounds,
-      Paint()..color = Colors.black.withValues(alpha: 0.72),
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(pad, pad, size.width - 2 * pad, size.height - 2 * pad),
+      const Radius.circular(18),
     );
 
-    if (target != null && target!.shortestSide > 2) {
-      // A soft-feathered cutout reads as a focused spotlight rather than a
-      // hard-edged hole.
-      final clear = Paint()
-        ..blendMode = BlendMode.clear
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(target!, const Radius.circular(18)),
-        clear,
-      );
-    }
-    canvas.restore();
+    // Soft glow that hugs the outline and falls OUTWARD only (BlurStyle.outer),
+    // so it never washes over the element.
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = AppColors.primaryRed.withValues(alpha: 0.30 + 0.18 * pulse)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..maskFilter = MaskFilter.blur(BlurStyle.outer, 4 + 3 * pulse),
+    );
+
+    // Thin white separation line just outside the red ring (reads on busy UI).
+    canvas.drawRRect(
+      rrect.inflate(1.6),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.45)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // Crisp red outline — the primary "look here" cue.
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = AppColors.primaryRed
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _SpotlightPainter oldDelegate) =>
-      oldDelegate.target != target;
+  bool shouldRepaint(covariant _RingPainter old) =>
+      old.pulse != pulse || old.pad != pad;
+}
+
+/// Where to put the coaching card relative to the highlighted element.
+class _CardPlacement {
+  final bool above; // card sits above the element → arrow points down
+  final double offset; // top inset (card below) or bottom inset (card above)
+  final double maxHeight; // capped to the element's free side — never overlaps
+
+  const _CardPlacement({
+    required this.above,
+    required this.offset,
+    required this.maxHeight,
+  });
+}
+
+/// Filled triangle with a white outline, pointing up or down at the element.
+class _ArrowPainter extends CustomPainter {
+  final bool pointDown;
+  final Color color;
+
+  const _ArrowPainter({required this.pointDown, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    if (pointDown) {
+      path.moveTo(0, 0);
+      path.lineTo(size.width, 0);
+      path.lineTo(size.width / 2, size.height);
+    } else {
+      path.moveTo(size.width / 2, 0);
+      path.lineTo(size.width, size.height);
+      path.lineTo(0, size.height);
+    }
+    path.close();
+
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ArrowPainter oldDelegate) =>
+      oldDelegate.pointDown != pointDown || oldDelegate.color != color;
 }

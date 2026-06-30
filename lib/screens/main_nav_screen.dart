@@ -11,6 +11,7 @@ import '../services/theme_service.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/tutorial_service.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/app_tutorial_overlay.dart';
 import 'chat_screen.dart';
 import 'feed_screen.dart';
@@ -36,19 +37,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   OverlayEntry? _bannerEntry;
   bool _showTutorial = false;
 
-  final _contentKey = GlobalKey();
-  final _homeHeaderKey = GlobalKey();
-  final _homeEventsKey = GlobalKey();
-  final _homeFeedKey = GlobalKey();
-  final _bottomNavKey = GlobalKey();
-  final _homeNavKey = GlobalKey();
-  final _eventsNavKey = GlobalKey();
-  final _searchNavKey = GlobalKey();
-  final _alertsNavKey = GlobalKey();
-  final _profileNavKey = GlobalKey();
-  final _createNavKey = GlobalKey();
-  final _adminNavKey = GlobalKey();
-
   String get _currentUserId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
@@ -62,9 +50,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     );
   }
 
+  // The tour covers the student-facing UI only — it never runs for club admins
+  // or the super admin.
   void _startInitialExperience() {
     if (!mounted) return;
-    if (!tutorialService.isComplete(_currentUserId)) {
+    if (authService.isStudentSession &&
+        !tutorialService.isComplete(_currentUserId)) {
       _startTutorial();
       return;
     }
@@ -72,7 +63,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   }
 
   void _onTutorialReplayRequested() {
-    if (!mounted) return;
+    if (!mounted || !authService.isStudentSession) return;
     _startTutorial();
   }
 
@@ -98,191 +89,117 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     setState(() => _selectedIndex = step.tabIndex);
   }
 
-  List<AppTutorialStep> get _tutorialSteps {
-    final steps = <AppTutorialStep>[
-      const AppTutorialStep(
-        eyebrow: 'Welcome',
-        title: 'Your campus, in one place',
-        description:
-            'This quick tour uses the real app screens. We will show you where events, clubs, people, alerts, and profile tools live.',
-        icon: Icons.waving_hand_rounded,
-        tabIndex: 0,
-        tips: [
-          'Use Next and Back at your own pace.',
-          'Skip tour is always available in the top-right corner.',
-          'You can replay the full tour later from Settings.',
-        ],
-      ),
-      AppTutorialStep(
-        eyebrow: 'Home',
-        title: 'Shortcuts and campus updates',
-        description:
-            'The Home header keeps your calendar, search, and notifications one tap away. Below it, your feed combines updates from clubs you follow with campus recommendations.',
-        icon: Icons.home_rounded,
-        targetKey: _homeHeaderKey,
-        tabIndex: 0,
-        tips: [
-          'Tap the calendar icon to see everything you are going to.',
-          'Tap the search icon to find a person or club quickly.',
-          'The bell opens your latest activity.',
-        ],
-      ),
-      AppTutorialStep(
-        eyebrow: 'Home events',
-        title: 'See what is happening this week',
-        description:
-            'These event cards show the next campus activities. Tap any card to open its full details before deciding whether to RSVP.',
-        icon: Icons.event_available_rounded,
-        targetKey: _homeEventsKey,
-        tabIndex: 0,
-        tips: [
-          'Swipe sideways to browse up to ten upcoming events.',
-          'Open an event to see its date, time, location, and description.',
-          'After you RSVP, it can be added to your personal calendar.',
-        ],
-      ),
-      AppTutorialStep(
-        eyebrow: 'Home feed',
-        title: 'Follow, RSVP, share, and save',
-        description:
-            'Switch between Following and All to control your feed. Every post and event has its own actions, and tapping an event opens its details.',
-        icon: Icons.dynamic_feed_rounded,
-        targetKey: _homeFeedKey,
-        tabIndex: 0,
-        tips: [
-          'Follow clubs to shape the Following feed.',
-          'Use RSVP on events and Save on anything you want to revisit.',
-          'Share sends a post or event to another student.',
-        ],
-      ),
-      AppTutorialStep(
-        eyebrow: 'Events',
-        title: 'Plan the week',
-        description:
-            'The Events tab is your campus agenda. Browse by day, search event names or clubs, and filter the list to clubs you follow.',
-        icon: Icons.calendar_month_rounded,
-        targetKey: _contentKey,
-        tabIndex: 1,
-        tips: [
-          'Choose a day from the date strip to narrow the agenda.',
-          'Tap an event to open details and RSVP.',
-          'Going events appear in your personal calendar view.',
-        ],
-      ),
-      if (!_isClubAdmin)
-        AppTutorialStep(
-          eyebrow: 'Search',
-          title: 'Find people and clubs',
-          description:
-              'Search by a student’s first name, surname, or major, and search clubs by name. Suggested people prioritize useful campus connections.',
-          icon: Icons.manage_search_rounded,
-          targetKey: _contentKey,
-          tabIndex: 2,
-          tips: [
-            'Type a name or surname to find a specific student.',
-            'Open a profile before following to see clubs and interests.',
-            'Follow and unfollow directly from search results.',
-          ],
-        ),
-      AppTutorialStep(
-        eyebrow: 'Alerts',
-        title: 'Keep track of activity',
-        description:
-            'Alerts collect follow activity, club updates, event changes, message notices, and other account activity in one place.',
-        icon: Icons.notifications_active_rounded,
-        targetKey: _contentKey,
-        tabIndex: 3,
-        tips: [
-          'Unread activity is marked with a badge in the navigation bar.',
-          'Tap an alert to open the related person, message, club, or event.',
-          'Opening this tab clears the navigation badge.',
-        ],
-      ),
-      AppTutorialStep(
-        eyebrow: 'Profile',
-        title: 'Your campus identity',
-        description:
-            'Your Profile shows your bio, major, interests, clubs, connections, saved content, and upcoming RSVP. Use Settings to edit preferences and appearance.',
-        icon: Icons.account_circle_rounded,
-        targetKey: _contentKey,
-        tabIndex: 4,
-        tips: [
-          'Edit your profile so classmates know who you are.',
-          'Open follower and following lists from the profile counts.',
-          'Settings includes preferences, theme, and Replay App Tour.',
-        ],
-      ),
-      AppTutorialStep(
-        eyebrow: 'Navigation',
-        title: 'Move around from anywhere',
-        description:
-            'The bottom bar stays available across the main app. The active section turns red, and badges tell you when something needs attention.',
-        icon: Icons.touch_app_rounded,
-        targetKey: _bottomNavKey,
-        tabIndex: 0,
-        tips: [
-          'Home is your personalized starting point.',
-          _isClubAdmin
-              ? 'Events, Create, Alerts, and Profile are one tap away.'
-              : 'Events and Search are for discovery and planning.',
-          'Alerts and Profile keep your activity and identity organized.',
-        ],
-      ),
-    ];
-
-    if (_isClubAdmin) {
-      steps.add(
-        AppTutorialStep(
-          eyebrow: 'Club tools',
-          title: 'Publish for your club',
-          description:
-              'Club posters get this central Create button. It opens a chooser for a club update or a scheduled event.',
-          icon: Icons.add_circle_rounded,
-          targetKey: _createNavKey,
-          tabIndex: 0,
-          tips: [
-            'Post shares a club update with followers.',
-            'Event adds a date, time, location, and RSVP page.',
-            'Only the event poster can see attendee totals and the RSVP list.',
-          ],
-        ),
-      );
-    }
-
-    if (widget.isAdmin) {
-      steps.add(
-        AppTutorialStep(
-          eyebrow: 'Administration',
-          title: 'Manage the wider community',
-          description:
-              'The Admin area contains platform-level moderation and management tools that are only visible to the super admin.',
-          icon: Icons.admin_panel_settings_rounded,
-          targetKey: _adminNavKey,
-          tabIndex: 5,
-          tips: [
-            'Review management information from the dedicated dashboard.',
-            'Student and club navigation remains available beside it.',
-          ],
-        ),
-      );
-    }
-
-    steps.add(
-      const AppTutorialStep(
-        eyebrow: 'You are ready',
-        title: 'Explore at your own pace',
-        description:
-            'That is the complete map. The tour will not appear automatically again for this account, but you can replay it from Profile → Settings.',
-        icon: Icons.rocket_launch_rounded,
-        tabIndex: 0,
-        tips: [
-          'Tap Start exploring to return to Home.',
-          'Your follows, RSVPs, saves, and preferences personalize the app.',
-        ],
-      ),
-    );
-    return steps;
-  }
+  // Student-only walkthrough. Each anchored step points at the real widget via
+  // a shared key from [tutorialAnchors]; welcome/finale are centered heroes.
+  List<AppTutorialStep> get _tutorialSteps => <AppTutorialStep>[
+    const AppTutorialStep(
+      eyebrow: 'Welcome',
+      title: 'Your campus, in one place',
+      description:
+          'A quick, tappable tour of the app — we’ll point to the real buttons as we go.',
+      icon: Icons.waving_hand_rounded,
+      tabIndex: 0,
+      tips: [
+        'Tap Next, or tap anywhere, to advance.',
+        'Use Back to revisit a step.',
+        'Skip tour is always in the top-right.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Getting around',
+      title: 'Your five sections',
+      description:
+          'This bar stays with you everywhere: Home, Events, Search, Alerts, and Profile. The active one turns red.',
+      icon: Icons.touch_app_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
+      tabIndex: 0,
+      tips: ['Home is your personalized feed.', 'Badges flag new activity.'],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Home',
+      title: 'Your feed, your way',
+      description:
+          'Switch between Following and All to control what you see. Like, RSVP, save, and share right from each post.',
+      icon: Icons.dynamic_feed_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
+      tabIndex: 0,
+      tips: [
+        'Following shows only clubs you follow.',
+        'All mixes in campus recommendations.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Events',
+      title: 'RSVP in one tap',
+      description:
+          'Tap RSVP to mark you’re going — it turns to “Going” and can flow into your calendar. Search and filter the agenda up top.',
+      icon: Icons.event_available_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.eventsRsvp),
+      tabIndex: 1,
+      tips: [
+        'Filter by date, audience, or what’s live now.',
+        'Open any event for full details.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Search',
+      title: 'Find people & clubs',
+      description:
+          'Search students by name or major, and clubs by name. Use the tabs above to switch between People and Clubs.',
+      icon: Icons.manage_search_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.searchField),
+      tabIndex: 2,
+      tips: [
+        'Follow people and join clubs from the results.',
+        'Open a profile before you follow.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Alerts',
+      title: 'Stay in the loop',
+      description:
+          'Follows, club posts, event changes, and messages collect here. Tap an alert to open it, filter with the chips, or clear them all with this button.',
+      icon: Icons.notifications_active_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
+      tabIndex: 3,
+      tips: [
+        'A badge on the bar means something’s new.',
+        'Opening this tab clears the badge.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Profile',
+      title: 'This is you',
+      description:
+          'Tap your photo, name, bio, or interests to edit them so classmates recognize you. Your clubs, RSVPs, and stats live here too.',
+      icon: Icons.account_circle_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileHeader),
+      tabIndex: 4,
+      tips: [
+        'Tap Followers / Following to see who’s who.',
+        'Your “Up next” event is one tap away.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Settings',
+      title: 'Preferences & replay',
+      description:
+          'The gear opens Settings — appearance, your interests, and “Replay App Tutorial” whenever you want this tour again.',
+      icon: Icons.settings_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileSettings),
+      tabIndex: 4,
+      tips: ['Switch between light and dark mode here.'],
+    ),
+    const AppTutorialStep(
+      eyebrow: 'You’re set',
+      title: 'Explore at your own pace',
+      description:
+          'That’s the tour. It won’t pop up again automatically — replay it anytime from Profile → Settings.',
+      icon: Icons.rocket_launch_rounded,
+      tabIndex: 0,
+      tips: ['Your follows, RSVPs, and saves personalize the app.'],
+    ),
+  ];
 
   Future<void> _requestCalendarIfNeeded() async {
     final service = ref.read(calendarServiceProvider);
@@ -382,14 +299,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         // Non-const instances so Flutter creates new widget objects each rebuild,
         // which triggers element.update() → markNeedsBuild() on each screen state.
         final screens = <Widget>[
-          FeedScreen(
-            tutorialHeaderKey: _homeHeaderKey,
-            tutorialEventsKey: _homeEventsKey,
-            tutorialFeedKey: _homeFeedKey,
-          ), // 0
-          ThisWeekScreen(), // 1
+          FeedScreen(), // 0
+          ThisWeekScreen(isTutorialHost: true), // 1
           ExploreScreen(), // 2
-          NotificationsScreen(), // 3
+          NotificationsScreen(isTutorialHost: true), // 3
           ProfileScreen(onLogout: widget.onLogout), // 4
           if (widget.isAdmin) AdminDashboard(), // 5
         ];
@@ -398,10 +311,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
           children: [
             Scaffold(
               extendBody: true,
-              body: KeyedSubtree(
-                key: _contentKey,
-                child: IndexedStack(index: _selectedIndex, children: screens),
-              ),
+              body: IndexedStack(index: _selectedIndex, children: screens),
               bottomNavigationBar: _buildBottomNav(context),
             ),
             if (_showTutorial)
@@ -434,7 +344,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: Container(
-          key: _bottomNavKey,
+          key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
           height: 72,
           decoration: BoxDecoration(
             color: AppColors.card,
@@ -455,7 +365,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _NavItem(
-                key: _homeNavKey,
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
                 label: S.home,
@@ -463,7 +372,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 onTap: () => setState(() => _selectedIndex = 0),
               ),
               _NavItem(
-                key: _eventsNavKey,
                 icon: Icons.calendar_today_outlined,
                 activeIcon: Icons.calendar_today_rounded,
                 label: S.events,
@@ -472,17 +380,14 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
               ),
               if (!_isClubAdmin)
                 _NavItem(
-                  key: _searchNavKey,
                   icon: Icons.search_outlined,
                   activeIcon: Icons.search_rounded,
                   label: S.search,
                   selected: _selectedIndex == 2,
                   onTap: () => setState(() => _selectedIndex = 2),
                 ),
-              if (_isClubAdmin)
-                _CenterAddButton(key: _createNavKey, onTap: _onAddTap),
+              if (_isClubAdmin) _CenterAddButton(onTap: _onAddTap),
               _NavItem(
-                key: _alertsNavKey,
                 icon: Icons.notifications_none_rounded,
                 activeIcon: Icons.notifications_rounded,
                 label: S.alerts,
@@ -494,7 +399,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                 },
               ),
               _NavItem(
-                key: _profileNavKey,
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: S.profile,
@@ -503,7 +407,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
               ),
               if (widget.isAdmin)
                 _NavItem(
-                  key: _adminNavKey,
                   icon: Icons.admin_panel_settings_outlined,
                   activeIcon: Icons.admin_panel_settings_rounded,
                   label: S.admin,
@@ -527,7 +430,6 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _NavItem({
-    super.key,
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -616,7 +518,7 @@ class _NavItem extends StatelessWidget {
 
 class _CenterAddButton extends StatelessWidget {
   final VoidCallback onTap;
-  const _CenterAddButton({super.key, required this.onTap});
+  const _CenterAddButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -972,5 +874,3 @@ class _CreateOptionState extends State<_CreateOption> {
     );
   }
 }
-
-
