@@ -133,17 +133,69 @@ class S {
   static String get admin   => _t('Admin',   'Yönetici');
 
   // ── Settings
-  static String get settings       => _t('Settings',           'Ayarlar');
-  static String get appearance     => _t('Appearance',         'Görünüm');
-  static String get darkMode       => _t('Dark Mode',          'Karanlık Mod');
-  static String get lightMode      => _t('Light Mode',         'Aydınlık Mod');
-  static String get help           => _t('Help',               'Yardım');
-  static String get account        => _t('Account',            'Hesap');
-  static String get logOut         => _t('Log Out',            'Çıkış Yap');
-  static String get editProfile    => _t('Edit Profile',       'Profili Düzenle');
-  static String get changeMyName   => _t('Change My Name',     'Adımı Değiştir');
-  static String get preferences    => _t('Preferences',        'Tercihler');
-  static String get myPreferences  => _t('My Preferences',     'Tercihlerim');
-  static String get replayTutorial => _t('Replay App Tutorial','Uygulamayı Yeniden Gez');
-  static String get profileSection => _t('Profile',            'Profil');
+  static String get settings              => _t('Settings',                        'Ayarlar');
+  static String get language              => _t('Language',                        'Dil');
+  static String get appearance            => _t('Appearance',                      'Görünüm');
+  static String get darkMode              => _t('Dark Mode',                       'Karanlık Mod');
+  static String get lightMode             => _t('Light Mode',                      'Aydınlık Mod');
+  static String get switchToDark          => _t('Switch to dark theme',            'Karanlık temaya geç');
+  static String get switchToLight         => _t('Switch to light theme',           'Aydınlık temaya geç');
+  static String get help                  => _t('Help',                            'Yardım');
+  static String get account               => _t('Account',                         'Hesap');
+  static String get logOut                => _t('Log Out',                         'Çıkış Yap');
+  static String get editProfile           => _t('Edit Profile',                    'Profili Düzenle');
+  static String get editProfileSubtitle   => _t('Photo, bio, major, year & interests', 'Fotoğraf, biyografi, bölüm, yıl & ilgi alanları');
+  static String get changeMyName          => _t('Change My Name',                  'Adımı Değiştir');
+  static String get changeNameSubtitle    => _t('Choose the name people see on your student profile.', 'Öğrenci profilinde görünen adı seç.');
+  static String get displayName           => _t('Display name',                    'Görünen ad');
+  static String get nameTaken             => _t('That name is already taken.',     'Bu isim zaten alınmış.');
+  static String get useRealName           => _t('Use Real Name',                   'Gerçek Adı Kullan');
+  static String get saveName              => _t('Save Name',                       'Adı Kaydet');
+  static String get preferences           => _t('Preferences',                     'Tercihler');
+  static String get myPreferences         => _t('My Preferences',                  'Tercihlerim');
+  static String get notSetConfigure       => _t('Not set — tap to configure',      'Ayarlanmadı — yapılandırmak için dokun');
+  static String get replayTutorial        => _t('Replay App Tutorial',             'Uygulamayı Yeniden Gez');
+  static String get replayTutorialSubtitle => _t('Take the guided tour of every area again — anytime', 'Uygulamanın her alanını istediğin zaman yeniden gez');
+  static String get profileSection        => _t('Profile',                         'Profil');
+
+  // ── Settings — Club admin
+  static String get clubSection          => _t('Club',                             'Kulüp');
+  static String get clubName             => _t('Club Name',                        'Kulüp Adı');
+  static String get clubNameLabel        => _t('Club name',                        'Kulüp adı');
+  static String get clubPhoto            => _t('Club Photo',                       'Kulüp Fotoğrafı');
+  static String get changeClubPhoto      => _t('Change Club Photo',                'Kulüp Fotoğrafını Değiştir');
+  static String get tapToChangeLogo      => _t('Tap to change your club logo',     'Kulüp logonuzu değiştirmek için dokun');
+  static String get clubCategories       => _t('Club Categories',                  'Kulüp Kategorileri');
+  static String get chooseTagsHint       => _t('Choose tags that help students discover your club.', 'Öğrencilerin kulübünüzü keşfetmesine yardımcı olacak etiketler seçin.');
+  static String get customTags           => _t('Custom tags',                      'Özel etiketler');
+  static String get customTagsHint       => _t('Design, Gaming, Culture',          'Tasarım, Oyun, Kültür');
+  static String get separateWithCommas   => _t('Separate custom tags with commas', 'Özel etiketleri virgülle ayırın');
+  static String get saveCategories       => _t('Save Categories',                  'Kategorileri Kaydet');
+  static String get addDiscoveryTags     => _t('Add discovery tags',               'Keşif etiketleri ekle');
+  static String get clubDescription      => _t('Club Description',                 'Kulüp Açıklaması');
+  static String get clubDescriptionHint  => _t('What is this club about?',         'Bu kulüp ne hakkında?');
+  static String get manageBoardMembers   => _t('Manage Board Members',             'Yönetim Kurulunu Yönet');
+  static String get manageBoardSubtitle  => _t('Add or remove board members & roles', 'Yönetim üyelerini ve rolleri ekle veya kaldır');
+
+  // ── Feed composer
+  static String get post                 => _t('Post',                             'Gönder');
+  static String get addPhoto             => _t('Add photo',                        'Fotoğraf ekle');
+  static String get whatsHappeningAtClub => _t("What's happening at your club?",   'Kulübünde neler oluyor?');
+  static String get tapForDetails        => _t('Tap for details',                  'Detaylar için dokun');
+
+  // ── This Week
+  static String get pastEventsHint       => _t('Events that finished during the last 7 days.', 'Son 7 gün içinde biten etkinlikler.');
+  static String get upcomingEventsHint   => _t("What's on across campus — next 3 weeks.", 'Kampüste neler var — önümüzdeki 3 hafta.');
+
+  // ── Notifications
+  static String get yesterday            => _t('Yesterday',                        'Dün');
+  static String noNotificationsFor(String label) =>
+      _t('No ${label}notifications right now. We\'ll let you know when something happens.',
+         '${label}bildirim yok şu an. Bir şey olduğunda haber veririz.');
+
+  // ── Explore
+  static String get profilesWillAppear   => _t('Profiles will appear here after users sign up', 'Kullanıcılar kaydolduktan sonra profiller burada görünecek');
+
+  // ── Profile
+  static String get graduate             => _t('Graduate',                         'Lisansüstü');
 }

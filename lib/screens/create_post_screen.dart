@@ -451,9 +451,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Sharing with your followers',
+                            'Posting as $clubName',
                             style: TextStyle(
                               fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
                               color: AppColors.secondaryText,
                             ),
                           ),
@@ -560,6 +561,25 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                               color: AppColors.secondaryText,
                             ),
                           ),
+                          const Spacer(),
+                          Builder(
+                            builder: (_) {
+                              final len = _contentController.text.length;
+                              final isLow = 500 - len <= 40;
+                              return Text(
+                                '$len/500',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isLow
+                                      ? Colors.red
+                                      : AppColors.secondaryText,
+                                  fontWeight: isLow
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ],
@@ -567,13 +587,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                // Photo
+                // ── Template picker ────────────────────────────────────────
                 Row(
                   children: [
-                    Icon(Icons.image_outlined, size: 16, color: AppColors.text),
+                    Icon(
+                      Icons.palette_outlined,
+                      size: 16,
+                      color: AppColors.text,
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      'Photo',
+                      'Template',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -582,20 +606,113 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                ContentImageUploader(
-                  imagePath: _imagePath,
-                  onChanged: (path) => setState(() => _imagePath = path),
-                  height: 200,
-                  compact: true,
-                  emptyTitle: 'Add a photo',
-                  emptySubtitle: 'Tap to pick from camera or library',
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _TemplateSwatch(
+                        isActive: _imagePath == null,
+                        onTap: () => setState(() => _imagePath = null),
+                        child: Icon(
+                          Icons.close,
+                          size: 14,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      ..._templates.expand(
+                        (tpl) => [
+                          _TemplateSwatch(
+                            isActive: _imagePath == tpl.id,
+                            onTap: () => setState(() => _imagePath = tpl.id),
+                            gradient: LinearGradient(
+                              colors: tpl.colors,
+                              begin: tpl.begin,
+                              end: tpl.end,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 16),
+
+                // Photo (hidden when a template is active)
+                if (!(_imagePath?.startsWith('tpl:') ?? false)) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.image_outlined,
+                        size: 16,
+                        color: AppColors.text,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Photo',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ContentImageUploader(
+                    imagePath: _imagePath,
+                    onChanged: (path) => setState(() => _imagePath = path),
+                    height: 200,
+                    compact: true,
+                    emptyTitle: 'Add a photo',
+                    emptySubtitle: 'Tap to pick from camera or library',
+                  ),
+                ],
                 const SizedBox(height: 40),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Template swatch ───────────────────────────────────────────────────────────
+
+class _TemplateSwatch extends StatelessWidget {
+  final bool isActive;
+  final VoidCallback onTap;
+  final LinearGradient? gradient;
+  final Widget? child;
+
+  const _TemplateSwatch({
+    required this.isActive,
+    required this.onTap,
+    this.gradient,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: gradient == null ? AppColors.surfaceAlt : null,
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isActive ? AppColors.primaryRed : AppColors.divider,
+            width: isActive ? 2 : 1,
+          ),
+        ),
+        child: child != null ? Center(child: child) : null,
       ),
     );
   }

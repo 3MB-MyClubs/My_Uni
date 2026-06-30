@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
-import '../widgets/language_switcher.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -101,7 +100,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (diff.inMinutes < 1) return 'now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays == 1) return S.yesterday;
     if (diff.inDays < 7) return '${diff.inDays}d';
     final weeks = (diff.inDays / 7).floor();
     return '${weeks}w';
@@ -372,8 +371,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   const Spacer(),
-                  const LanguageSwitcher(),
-                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: _markAllRead,
                     child: Container(
@@ -760,7 +757,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'No ${label}notifications right now. We\'ll let you know when something happens.',
+              S.noNotificationsFor(label),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,

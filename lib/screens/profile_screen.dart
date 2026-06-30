@@ -1,7 +1,6 @@
 import 'dart:io';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
-import '../widgets/language_switcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -161,7 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppColors.surfaceAlt,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Use this photo?',
+          S.useThisPhoto,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Center(
@@ -193,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Use Photo'),
+            child: Text(S.usePhoto),
           ),
         ],
       ),
@@ -256,7 +255,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
-            'Major & Year',
+            S.majorYearLabel,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: AppColors.text,
@@ -267,11 +266,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               AcademicProgramField(
                 value: selectedMajor,
-                hint: 'Select your major',
+                hint: S.selectMajorHint,
                 onTap: () async {
                   final result = await showAcademicProgramPicker(
                     context: ctx,
-                    title: 'Select major',
+                    title: S.selectMajor,
                     selected: selectedMajor == null
                         ? const []
                         : [selectedMajor!],
@@ -288,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? selectedYear
                     : null,
                 dropdownColor: AppColors.card,
-                decoration: const InputDecoration(labelText: 'Year'),
+                decoration: InputDecoration(labelText: S.yearLabel),
                 items: _yearOptions
                     .map(
                       (year) => DropdownMenuItem<String>(
@@ -338,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppColors.surfaceAlt,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Bio',
+          S.bioLabel,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: TextField(
@@ -347,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           maxLines: 3,
           style: TextStyle(color: AppColors.text),
           decoration: InputDecoration(
-            hintText: 'Tell people a little about yourself',
+            hintText: S.bioHint,
             hintStyle: TextStyle(color: AppColors.secondaryText),
           ),
         ),
@@ -508,7 +507,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Followers',
+                    S.followers,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -531,7 +530,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: followers.isEmpty
                     ? Center(
                         child: Text(
-                          'No followers yet.',
+                          S.noFollowersYet,
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.secondaryText,
@@ -635,7 +634,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Following',
+                    S.following,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -658,7 +657,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: following.isEmpty
                     ? Center(
                         child: Text(
-                          'Not following anyone yet.',
+                          S.notFollowingAnyone,
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.secondaryText,
@@ -749,7 +748,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Change Profile Photo',
+              S.changePhoto,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -771,14 +770,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               title: Text(
-                'Take a Photo',
+                S.takePhoto,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: AppColors.text,
                 ),
               ),
               subtitle: Text(
-                'Use your camera right now',
+                S.useCamera,
                 style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
               onTap: () {
@@ -801,14 +800,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               title: Text(
-                'Choose from Library',
+                S.chooseFromLib,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: AppColors.text,
                 ),
               ),
               subtitle: Text(
-                'Pick from your photo library',
+                S.pickFromLib,
                 style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
               onTap: () {
@@ -832,7 +831,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 title: Text(
-                  'Remove photo',
+                  S.removePhoto,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.red.shade400,
@@ -906,7 +905,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final title = club.boardMemberTitles[user.id]?.trim() ?? '';
             final role = title.isNotEmpty
                 ? title
-                : (club.boardMemberIds.contains(user.id) ? 'Board' : 'Member');
+                : (club.boardMemberIds.contains(user.id) ? S.board : 'Member');
             return StudentClubDetail(
               club: club,
               memberCount: memberCount,
@@ -1054,7 +1053,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       actions: [
-        const LanguageSwitcher(),
         IconButton(
           icon: Icon(Icons.settings_outlined),
           onPressed: () => Navigator.push(
@@ -1968,7 +1966,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                       SizedBox(width: 4),
                                       Text(
-                                        'Board',
+                                        S.board,
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
@@ -2269,16 +2267,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         String statusLabel;
         Color statusColor;
         if (isLive) {
-          statusLabel = 'Live';
+          statusLabel = S.live;
           statusColor = Colors.green;
         } else if (isPast) {
-          statusLabel = 'Ended';
+          statusLabel = S.ended;
           statusColor = AppColors.secondaryText;
         } else if (diff.inDays == 0) {
-          statusLabel = 'Today';
+          statusLabel = S.today;
           statusColor = Colors.orange;
         } else if (diff.inDays == 1) {
-          statusLabel = 'Tomorrow';
+          statusLabel = S.tomorrow;
           statusColor = color;
         } else {
           statusLabel = 'In ${diff.inDays}d';

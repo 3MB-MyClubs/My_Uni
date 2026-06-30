@@ -759,6 +759,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             icon: Icons.label_outline_rounded,
             label: 'Tags',
             subtitle: 'Create your own tags for discovery',
+            badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
           _SectionCard(
@@ -877,6 +878,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             icon: Icons.groups_2_rounded,
             label: 'Speakers',
             subtitle: 'Optional — add speaker name, role & LinkedIn',
+            badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
           _SectionCard(
@@ -966,6 +968,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             icon: Icons.link_rounded,
             label: 'Registration',
             subtitle: 'Send attendees to your own sign-up form',
+            badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
           _SectionCard(
@@ -1010,6 +1013,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             icon: Icons.format_list_bulleted_rounded,
             label: 'Programme',
             subtitle: 'Add a timetable for your event',
+            badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
           _SectionCard(
@@ -1091,6 +1095,78 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             label: 'Review',
             subtitle: 'Here\'s how your event will appear',
           ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _goToStep(0),
+                icon: const Icon(Icons.edit_outlined, size: 13),
+                label: const Text('Basics'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  side: BorderSide(color: AppColors.divider),
+                  foregroundColor: AppColors.text,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _goToStep(1),
+                icon: const Icon(Icons.schedule_outlined, size: 13),
+                label: const Text('When'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  side: BorderSide(color: AppColors.divider),
+                  foregroundColor: AppColors.text,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _goToStep(2),
+                icon: const Icon(Icons.settings_outlined, size: 13),
+                label: const Text('Details'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  side: BorderSide(color: AppColors.divider),
+                  foregroundColor: AppColors.text,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           _EventPreviewCard(
             imagePath: _imagePath,
@@ -1134,8 +1210,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           else
             Text(
               _isEditing
-                  ? 'Tap Save to update this event.'
-                  : 'Tap Publish to share this event with your followers.',
+                  ? 'Tap Save Changes to update this event.'
+                  : 'Tap Publish Event to share this event with your followers.',
               style: TextStyle(fontSize: 12.5, color: AppColors.secondaryText),
             ),
           const SizedBox(height: 24),
@@ -1165,14 +1241,34 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   onTap: canTap ? () => _goToStep(i) : null,
                   child: Padding(
                     padding: EdgeInsets.only(left: i == 0 ? 0 : 5),
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: filled
-                            ? AppColors.primaryRed
-                            : AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: filled
+                                ? AppColors.primaryRed
+                                : AppColors.divider,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _stepTitles[i],
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: i == _step
+                                ? AppColors.primaryRed
+                                : i < _step
+                                    ? AppColors.text
+                                    : AppColors.secondaryText,
+                            fontWeight: i == _step
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1273,7 +1369,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               ),
             )
           : Text(
-              _isEditing ? 'Save' : 'Publish',
+              _isEditing ? 'Save Changes' : 'Publish Event',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
     );
@@ -1976,11 +2072,13 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String label;
   final String subtitle;
+  final Widget? badge;
 
   const _SectionHeader({
     required this.icon,
     required this.label,
     required this.subtitle,
+    this.badge,
   });
 
   @override
@@ -1992,13 +2090,21 @@ class _SectionHeader extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.text,
-              ),
+            Row(
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.text,
+                  ),
+                ),
+                if (badge != null) ...[
+                  const SizedBox(width: 6),
+                  badge!,
+                ],
+              ],
             ),
             Text(
               subtitle,
@@ -2007,6 +2113,30 @@ class _SectionHeader extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _OptionalBadge extends StatelessWidget {
+  const _OptionalBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Text(
+        'Optional',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+          color: AppColors.secondaryText,
+        ),
+      ),
     );
   }
 }

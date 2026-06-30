@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
-import '../widgets/language_switcher.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -85,14 +84,14 @@ const _kWeekdays = [
 ];
 
 String _shortDay(DateTime d) {
-  if (_isDateToday(d)) return 'Today';
-  if (_isDateTomorrow(d)) return 'Tomorrow';
+  if (_isDateToday(d)) return S.today;
+  if (_isDateTomorrow(d)) return S.tomorrow;
   return '${_kWeekdays[d.weekday].substring(0, 3)} ${d.day}';
 }
 
 String _relativeDay(DateTime d) {
-  if (_isDateToday(d)) return 'Today';
-  if (_isDateTomorrow(d)) return 'Tomorrow';
+  if (_isDateToday(d)) return S.today;
+  if (_isDateTomorrow(d)) return S.tomorrow;
   return _kWeekdays[d.weekday].substring(0, 3);
 }
 
@@ -393,8 +392,8 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           const SizedBox(height: 4),
                           Text(
                             _showPastWeek
-                                ? 'Events that finished during the last 7 days.'
-                                : "What's on across campus — next 3 weeks.",
+                                ? S.pastEventsHint
+                                : S.upcomingEventsHint,
                             style: TextStyle(
                               fontSize: 13,
                               color: AppColors.secondaryText,
@@ -404,8 +403,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    const LanguageSwitcher(),
                     if (authService.isStudentSession) ...[
                       const SizedBox(width: 8),
                       _HeaderIconBtn(
@@ -826,7 +823,7 @@ class _LiveToggleBtn extends StatelessWidget {
             _PulseDot(color: active ? Colors.white : AppColors.primaryRed),
             const SizedBox(width: 6),
             Text(
-              'Live',
+              S.live,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

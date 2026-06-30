@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
-import '../widgets/language_switcher.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
@@ -505,8 +504,6 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            const LanguageSwitcher(),
-            const SizedBox(width: 8),
             // Bell button with unread badge
             ListenableBuilder(
               listenable: userState,
@@ -1097,7 +1094,7 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                         filled: true,
                         fillColor: surfaceColor,
                         counterText: '',
-                        hintText: "What's happening at your club?",
+                        hintText: S.whatsHappeningAtClub,
                         hintStyle: TextStyle(
                           fontSize: 15,
                           color: secondaryTextColor,
@@ -1112,7 +1109,7 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
                     Row(
                       children: [
                         Tooltip(
-                          message: 'Add photo',
+                          message: S.addPhoto,
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: _openFullComposer,
@@ -1153,7 +1150,7 @@ class _PostButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18),
         alignment: Alignment.center,
         child: Text(
-          'Post',
+          S.post,
           style: TextStyle(
             fontSize: 13.5,
             fontWeight: FontWeight.w700,
@@ -1521,7 +1518,7 @@ class _TrendingEventCard extends StatelessWidget {
                       ],
                       const Spacer(),
                       Text(
-                        'Tap for details',
+                        S.tapForDetails,
                         style: TextStyle(
                           fontSize: 11,
                           color: color,
@@ -3437,9 +3434,9 @@ class _EventRailCardState extends State<_EventRailCard> {
     if (isLive) {
       dayLabel = 'LIVE';
     } else if (daysAway == 0) {
-      dayLabel = 'Today';
+      dayLabel = S.today;
     } else if (daysAway == 1) {
-      dayLabel = 'Tomorrow';
+      dayLabel = S.tomorrow;
     } else {
       const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       dayLabel = wd[ev.dateTime.weekday - 1];

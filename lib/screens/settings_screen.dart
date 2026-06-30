@@ -91,7 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Change Club Photo',
+                S.changeClubPhoto,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -99,14 +99,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _clubPhotoOption(Icons.camera_alt_outlined, 'Take a Photo', () {
+              _clubPhotoOption(Icons.camera_alt_outlined, S.takePhoto, () {
                 Navigator.pop(context);
                 _pickClubPhoto(club, ImageSource.camera);
               }),
               Divider(height: 1, indent: 16, color: AppColors.divider),
               _clubPhotoOption(
                 Icons.photo_library_outlined,
-                'Choose from Library',
+                S.chooseFromLib,
                 () {
                   Navigator.pop(context);
                   _pickClubPhoto(club, ImageSource.gallery);
@@ -170,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Use this photo?',
+          S.useThisPhoto,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: ClipRRect(
@@ -182,7 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel',
+              S.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -195,7 +195,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Use Photo'),
+            child: Text(S.usePhoto),
           ),
         ],
       ),
@@ -251,7 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Club Description',
+                    S.clubDescription,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -260,7 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'This appears on ${club.name}’s profile across the app.',
+                    "This appears on ${club.name}’s profile across the app.",
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -274,7 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     maxLines: 4,
                     style: TextStyle(color: AppColors.text, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'What is this club about?',
+                      hintText: S.clubDescriptionHint,
                       hintStyle: TextStyle(color: AppColors.secondaryText),
                       filled: true,
                       fillColor: AppColors.background,
@@ -303,7 +303,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: TextButton(
                           onPressed: () => Navigator.pop(ctx),
                           child: Text(
-                            'Cancel',
+                            S.cancel,
                             style: TextStyle(color: AppColors.secondaryText),
                           ),
                         ),
@@ -337,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 }
                               : null,
                           child: Text(
-                            'Save',
+                            S.save,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -430,7 +430,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Club Categories',
+                    S.clubCategories,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -439,7 +439,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Choose tags that help students discover your club.',
+                    S.chooseTagsHint,
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -480,9 +480,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     controller: controller,
                     style: TextStyle(color: AppColors.text, fontSize: 14),
                     decoration: InputDecoration(
-                      labelText: 'Custom tags',
-                      hintText: 'Design, Gaming, Culture',
-                      helperText: 'Separate custom tags with commas',
+                      labelText: S.customTags,
+                      hintText: S.customTagsHint,
+                      helperText: S.separateWithCommas,
                       filled: true,
                       fillColor: AppColors.background,
                       border: OutlineInputBorder(
@@ -506,7 +506,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: TextButton(
                           onPressed: () => Navigator.pop(ctx),
                           child: Text(
-                            'Cancel',
+                            S.cancel,
                             style: TextStyle(color: AppColors.secondaryText),
                           ),
                         ),
@@ -542,7 +542,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 }
                               : null,
                           child: Text(
-                            'Save Categories',
+                            S.saveCategories,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -649,7 +649,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         subtitle: Text(
-                          'Photo, bio, major, year & interests',
+                          S.editProfileSubtitle,
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryText,
@@ -720,7 +720,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Club section (club admins only) ──────────────────────────────
           if (_managedClub != null) ...[
             const SizedBox(height: 24),
-            _SectionHeader(title: 'Club'),
+            _SectionHeader(title: S.clubSection),
             ListenableBuilder(
               listenable: userState,
               builder: (context, _) {
@@ -744,7 +744,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Club Name',
+                          S.clubName,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -779,14 +779,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Club Photo',
+                          S.clubPhoto,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
                           ),
                         ),
                         subtitle: Text(
-                          'Tap to change your club logo',
+                          S.tapToChangeLogo,
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryText,
@@ -814,7 +814,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Club Categories',
+                          S.clubCategories,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -822,7 +822,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         subtitle: Text(
                           _clubCategories(club).isEmpty
-                              ? 'Add discovery tags'
+                              ? S.addDiscoveryTags
                               : _clubCategories(club).join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -853,7 +853,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Club Description',
+                          S.clubDescription,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
@@ -890,14 +890,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         title: Text(
-                          'Manage Board Members',
+                          S.manageBoardMembers,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
                           ),
                         ),
                         subtitle: Text(
-                          'Add or remove board members & roles',
+                          S.manageBoardSubtitle,
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryText,
@@ -961,7 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: Text(
                           summary.isNotEmpty
                               ? summary
-                              : 'Not set — tap to configure',
+                              : S.notSetConfigure,
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryText,
@@ -990,41 +990,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
             listenable: themeService,
             builder: (context, _) => Container(
               color: AppColors.card,
-              child: SwitchListTile(
-                secondary: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: BorderRadius.circular(10),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.lightRed,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        themeService.isDark
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        color: AppColors.primaryRed,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      themeService.isDark ? S.darkMode : S.lightMode,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    subtitle: Text(
+                      themeService.isDark
+                          ? S.switchToLight
+                          : S.switchToDark,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    value: themeService.isDark,
+                    activeThumbColor: AppColors.primaryRed,
+                    onChanged: (v) => themeService.setDark(v),
                   ),
-                  child: Icon(
-                    themeService.isDark
-                        ? Icons.dark_mode_rounded
-                        : Icons.light_mode_rounded,
-                    color: AppColors.primaryRed,
-                    size: 20,
+                  Divider(height: 1, color: AppColors.divider),
+                  ListTile(
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.lightRed,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.language_rounded,
+                        color: AppColors.primaryRed,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      S.language,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    trailing: _LanguageToggle(),
                   ),
-                ),
-                title: Text(
-                  themeService.isDark ? S.darkMode : S.lightMode,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
-                ),
-                subtitle: Text(
-                  themeService.isDark
-                      ? 'Switch to light theme'
-                      : 'Switch to dark theme',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-                value: themeService.isDark,
-                activeThumbColor: AppColors.primaryRed,
-                onChanged: (v) => themeService.setDark(v),
+                ],
               ),
             ),
           ),
@@ -1088,7 +1116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Take the guided tour of every area again — anytime',
+                                S.replayTutorialSubtitle,
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   height: 1.3,
@@ -1263,7 +1291,7 @@ class _EditPreferencesSheetState extends State<_EditPreferencesSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'My Preferences',
+                      S.myPreferences,
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -1593,7 +1621,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
             ),
             const SizedBox(height: 18),
             Text(
-              'Club Name',
+              S.clubName,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -1613,7 +1641,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
               textCapitalization: TextCapitalization.words,
               style: TextStyle(color: AppColors.text, fontSize: 14),
               decoration: InputDecoration(
-                labelText: 'Club name',
+                labelText: S.clubNameLabel,
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
@@ -1638,7 +1666,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: Text(
-                      'Cancel',
+                      S.cancel,
                       style: TextStyle(color: AppColors.secondaryText),
                     ),
                   ),
@@ -1659,7 +1687,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(value) : null,
                     child: Text(
-                      'Save Name',
+                      S.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -1670,6 +1698,51 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageToggle extends StatelessWidget {
+  const _LanguageToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final current = localeService.languageCode;
+    return Container(
+      height: 34,
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _seg('EN', current == 'en', () => localeService.setLanguage('en')),
+          _seg('TR', current == 'tr', () => localeService.setLanguage('tr')),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? AppColors.primaryRed : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+            color: active ? Colors.white : AppColors.secondaryText,
+          ),
         ),
       ),
     );
@@ -1753,7 +1826,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
             ),
             const SizedBox(height: 18),
             Text(
-              'Change My Name',
+              S.changeMyName,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -1762,7 +1835,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Choose the name people see on your student profile.',
+              S.changeNameSubtitle,
               style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
             ),
             const SizedBox(height: 18),
@@ -1773,9 +1846,9 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
               textCapitalization: TextCapitalization.words,
               style: TextStyle(color: AppColors.text, fontSize: 14),
               decoration: InputDecoration(
-                labelText: 'Display name',
+                labelText: S.displayName,
                 hintText: widget.realName,
-                errorText: isTaken ? 'That name is already taken.' : null,
+                errorText: isTaken ? S.nameTaken : null,
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
@@ -1805,7 +1878,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                         ? _useRealName
                         : () => Navigator.pop(context),
                     child: Text(
-                      hasCustomName ? 'Use Real Name' : 'Cancel',
+                      hasCustomName ? S.useRealName : S.cancel,
                       style: TextStyle(color: AppColors.secondaryText),
                     ),
                   ),
@@ -1826,7 +1899,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(customName) : null,
                     child: Text(
-                      'Save Name',
+                      S.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,

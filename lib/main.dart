@@ -9,6 +9,7 @@ import 'screens/signup_flow_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
+import 'screens/language_choice_screen.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
 import 'services/app_colors.dart';
@@ -267,7 +268,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: themeService,
+      listenable: Listenable.merge([themeService, localeService]),
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
@@ -285,10 +286,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           }
           if (currentUserId != null &&
               !themeService.hasChosenTheme(currentUserId)) {
-            // First sign-in for this account → interactive light/dark picker.
             homeWidget = ThemeChoiceScreen(
               onChoose: (dark) =>
                   themeService.markThemeChosen(currentUserId, dark),
+            );
+          } else if (currentUserId != null &&
+              !localeService.hasChosenLanguage(currentUserId)) {
+            homeWidget = LanguageChoiceScreen(
+              onChoose: (code) =>
+                  localeService.markLanguageChosen(currentUserId, code),
             );
           } else {
             homeWidget = MainNavScreen(

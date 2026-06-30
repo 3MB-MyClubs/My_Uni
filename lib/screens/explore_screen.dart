@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
-import '../widgets/language_switcher.dart';
 import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -320,7 +319,6 @@ class _ExploreScreenState extends State<ExploreScreen>
           S.explore,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
-        actions: const [LanguageSwitcher(), SizedBox(width: 8)],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.primaryRed,
@@ -701,7 +699,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                     S.noOneMatches,
                     searching
                         ? S.tryNameSearch
-                        : 'Profiles will appear here after users sign up',
+                        : S.profilesWillAppear,
                   ),
                 );
               }
