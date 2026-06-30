@@ -1292,6 +1292,7 @@ class _WeekEventRow extends StatelessWidget {
                   clubId: club.id,
                   clubName: club.name,
                   color: color,
+                  imageUrl: club.logoUrl,
                   size: 46,
                   fontSize: 19,
                   shape: 'rounded',
@@ -1653,9 +1654,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              searching
-                  ? S.tryDifferentKeyword
-                  : S.nothingScheduled,
+              searching ? S.tryDifferentKeyword : S.nothingScheduled,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

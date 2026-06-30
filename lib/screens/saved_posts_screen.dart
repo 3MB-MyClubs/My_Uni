@@ -169,6 +169,7 @@ class _SavedPostRow extends StatelessWidget {
               clubId: club?.id ?? post.clubId,
               clubName: club?.name ?? 'Club',
               color: color,
+              imageUrl: club?.logoUrl,
               size: 42,
               fontSize: 16,
               shape: 'circle',

@@ -24,6 +24,7 @@ import '../models/message.dart';
 import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
+import '../models/club.dart';
 import '../services/message_service.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
@@ -70,6 +71,13 @@ class _ClubSuggestion {
   const _ClubSuggestion(this.club);
 }
 
+Club? _clubById(String id) {
+  for (final club in clubs) {
+    if (club.id == id) return club;
+  }
+  return null;
+}
+
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
 class FeedScreen extends StatefulWidget {
@@ -101,6 +109,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   List<_FeedItem> _buildFeed() {
     final items = newsPosts
+        .where((post) => _clubById(post.clubId) != null)
         .where((post) => _clubVisible(post.clubId))
         .map(
           (post) => _FeedItem(
@@ -241,8 +250,6 @@ class _FeedScreenState extends State<FeedScreen> {
   void _onLocaleChanged() {
     if (mounted) setState(() {});
   }
-
-
 
   void _hydrateVisiblePostViews() {
     viewTracker.hydratePostViewCounts(newsPosts.map((post) => post.id));
@@ -1379,10 +1386,8 @@ class _TrendingEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = _clubById(event.clubId);
+    if (club == null) return const SizedBox.shrink();
     final idx = clubs.indexOf(club);
     final color = _colors[idx % _colors.length];
     final dt = event.dateTime;
@@ -1622,6 +1627,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                       clubId: c.id as String,
                       clubName: c.name as String,
                       color: color,
+                      imageUrl: c.logoUrl,
                       size: 52,
                       fontSize: 20,
                     ),
@@ -2279,7 +2285,8 @@ class _PostCardState extends State<_PostCard>
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
+    final club = _clubById(widget.post.clubId);
+    if (club == null) return const SizedBox.shrink();
     final clubColor = _colorForClub(club.id);
     final likeCount = postLikeCount(widget.post.id);
     final shareCount = postShareCount(widget.post.id);
@@ -2318,6 +2325,7 @@ class _PostCardState extends State<_PostCard>
               clubId: club.id,
               clubName: club.name,
               color: clubColor,
+              imageUrl: club.logoUrl,
               size: 44,
               fontSize: 18,
               shape: 'circle',
@@ -2592,7 +2600,8 @@ class _EventCardState extends State<_EventCard> {
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere((c) => c.id == widget.event.clubId);
+    final club = _clubById(widget.event.clubId);
+    if (club == null) return const SizedBox.shrink();
     final clubColor = _colorForClub(club.id);
     final dt = widget.event.dateTime;
     final shareCount = postShareCount(widget.event.id);
@@ -2631,6 +2640,7 @@ class _EventCardState extends State<_EventCard> {
                       clubId: club.id,
                       clubName: club.name,
                       color: clubColor,
+                      imageUrl: club.logoUrl,
                       size: 38,
                       fontSize: 16,
                       shape: 'circle',
@@ -3659,4 +3669,3 @@ class _PulsingDotState extends State<_PulsingDot>
     );
   }
 }
-

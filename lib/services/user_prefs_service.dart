@@ -56,6 +56,7 @@ class UserPrefsService {
         final path = _box.get(k);
         if (path != null) userState.profilePhotoPaths[uid] = path as String;
       } else if (k.startsWith('clubPhotoPath_')) {
+        if (SupabaseConfig.isConfigured) continue;
         final cid = k.substring('clubPhotoPath_'.length);
         final path = _box.get(k);
         if (path != null) userState.clubPhotoPaths[cid] = path as String;

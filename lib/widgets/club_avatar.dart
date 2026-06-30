@@ -42,17 +42,21 @@ class ClubAvatar extends StatelessWidget {
       listenable: userState,
       builder: (context, _) {
         final profileIds = _profileIdsForClub();
+        final logoUrl = imageUrl?.trim();
         final photoPath =
             userState.clubPhotoPaths[clubId] ??
             _firstValue(
               profileIds.map((id) => userState.profilePhotoPaths[id]),
             );
         final fallbackUrl = _firstNetworkImage([
-          imageUrl,
           ...profileIds.map((id) => userState.mockPhotoUrls[id]),
           userState.mockClubPhotoUrls[clubId],
         ]);
         final isCircle = shape == 'circle';
+
+        if (logoUrl != null && _isNetworkImage(logoUrl)) {
+          return _photo(context, NetworkImage(logoUrl), isCircle);
+        }
 
         if (photoPath != null && _isNetworkImage(photoPath)) {
           return _photo(context, NetworkImage(photoPath), isCircle);

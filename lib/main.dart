@@ -40,18 +40,6 @@ void main() async {
   await notificationService.initialize();
   await userPrefsService.initialize();
   userPrefsService.loadAllPhotos();
-  // Older club-owner accounts stored their visible profile image under the
-  // admin id. Mirror it to the managed club so every ClubAvatar uses the same
-  // photo across the profile, composer, feed, and club pages.
-  for (final club in clubs) {
-    if (userState.clubPhotoPaths.containsKey(club.id)) continue;
-    for (final adminId in club.adminUserIds) {
-      final profilePath = userState.profilePhotoPaths[adminId];
-      if (profilePath == null) continue;
-      userState.clubPhotoPaths[club.id] = profilePath;
-      break;
-    }
-  }
   // Give every demo student a stable mock profile photo so avatars show up in
   // members/board lists etc. Curated seeds and real uploads are not overridden.
   for (final u in users) {

@@ -4,13 +4,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/personalization_service.dart';
 import '../services/rsvp_store.dart';
+import '../services/student_profile_service.dart';
+import '../services/supabase_club_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
@@ -202,21 +203,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true && mounted) {
-      final docsDir = await getApplicationDocumentsDirectory();
-      final ext = cropped.path.contains('.')
-          ? cropped.path.substring(cropped.path.lastIndexOf('.'))
-          : '.jpg';
-      final permanentPath = '${docsDir.path}/club_${club.id}$ext';
-      await File(cropped.path).copy(permanentPath);
-      if (!mounted) return;
-      userState.setClubPhoto(club.id, permanentPath);
-      await userPrefsService.saveClubPhoto(club.id, permanentPath);
+      try {
+        final remoteUrl = await supabaseClubService.updateClubLogo(
+          club: club,
+          imagePath: cropped.path,
+        );
+        if (remoteUrl != null) {
+          club.logoUrl = remoteUrl;
+          userState.setClubPhoto(club.id, remoteUrl);
+          await userPrefsService.removeClubPhoto(club.id);
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Could not upload club photo.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+        }
+      }
       setState(() {});
     }
   }
 
   void _openClubDescriptionSheet(Club club) {
     final controller = TextEditingController(text: club.description);
+    var saving = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -224,7 +239,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           final value = controller.text.trim();
-          final canSave = value.isNotEmpty && value != club.description;
+          final canSave =
+              value.isNotEmpty && value != club.description && !saving;
           return Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(ctx).viewInsets.bottom,
@@ -323,10 +339,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           onPressed: canSave
-                              ? () {
+                              ? () async {
+                                  setSheetState(() => saving = true);
+                                  try {
+                                    await supabaseClubService
+                                        .updateClubDescription(
+                                          club: club,
+                                          description: value,
+                                        );
+                                  } catch (_) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Could not update club description.',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    if (ctx.mounted) {
+                                      setSheetState(() => saving = false);
+                                    }
+                                    return;
+                                  }
+                                  if (!mounted || !ctx.mounted) return;
                                   club.description = value;
                                   userState.bumpClubInfo();
-                                  if (mounted) setState(() {});
+                                  setState(() {});
                                   Navigator.of(ctx).pop();
                                   unawaited(
                                     userPrefsService.saveClubDescription(
@@ -337,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 }
                               : null,
                           child: Text(
-                            S.save,
+                            saving ? 'Saving...' : S.save,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -606,574 +647,591 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListenableBuilder(
         listenable: localeService,
         builder: (context, _) => ListView(
-        children: [
-          const SizedBox(height: 12),
+          children: [
+            const SizedBox(height: 12),
 
-          // ── Profile section (students only) ──────────────────────────────
-          // Clubs and the super admin edit via the Club section / dashboard,
-          // so the personal profile editor is shown for student accounts only.
-          if (authService.isStudentSession) ...[
-            _SectionHeader(title: S.profileSection),
-            ListenableBuilder(
-              listenable: userState,
-              builder: (context, _) {
-                final user = authService.currentUser!;
-                final currentName = userState.displayNameFor(
-                  user.id,
-                  user.name,
-                );
+            // ── Profile section (students only) ──────────────────────────────
+            // Clubs and the super admin edit via the Club section / dashboard,
+            // so the personal profile editor is shown for student accounts only.
+            if (authService.isStudentSession) ...[
+              _SectionHeader(title: S.profileSection),
+              ListenableBuilder(
+                listenable: userState,
+                builder: (context, _) {
+                  final user = authService.currentUser!;
+                  final currentName = userState.displayNameFor(
+                    user.id,
+                    user.name,
+                  );
 
-                return Container(
-                  color: AppColors.card,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.person_outline_rounded,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.editProfile,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          S.editProfileSubtitle,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditProfileScreen(
-                                userId: user.id,
-                                realName: user.name,
-                              ),
-                            ),
-                          ).then((_) {
-                            if (mounted) setState(() {});
-                          });
-                        },
-                      ),
-                      Divider(height: 1, indent: 56, color: AppColors.divider),
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.badge_outlined,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.changeMyName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          currentName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: _openChangeNameSheet,
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-
-          // ── Club section (club admins only) ──────────────────────────────
-          if (_managedClub != null) ...[
-            const SizedBox(height: 24),
-            _SectionHeader(title: S.clubSection),
-            ListenableBuilder(
-              listenable: userState,
-              builder: (context, _) {
-                final club = _managedClub!;
-                return Container(
-                  color: AppColors.card,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.edit_outlined,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.clubName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          club.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () => _openClubNameSheet(club),
-                      ),
-                      Divider(height: 1, indent: 56, color: AppColors.divider),
-                      ListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: ClubAvatar(
-                            clubId: club.id,
-                            clubName: club.name,
-                            color: AppColors.primaryRed,
-                            size: 36,
-                            fontSize: 16,
-                            borderRadius: 10,
-                          ),
-                        ),
-                        title: Text(
-                          S.clubPhoto,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          S.tapToChangeLogo,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () => _showClubPhotoOptions(club),
-                      ),
-                      Divider(height: 1, indent: 56, color: AppColors.divider),
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.sell_outlined,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.clubCategories,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          _clubCategories(club).isEmpty
-                              ? S.addDiscoveryTags
-                              : _clubCategories(club).join(', '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () => _openClubCategoriesSheet(club),
-                      ),
-                      Divider(height: 1, indent: 56, color: AppColors.divider),
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.description_outlined,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.clubDescription,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          club.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () => _openClubDescriptionSheet(club),
-                      ),
-                      Divider(height: 1, indent: 56, color: AppColors.divider),
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.manage_accounts_outlined,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.manageBoardMembers,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          S.manageBoardSubtitle,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () => _openBoardManagement(club),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-
-          if (authService.isStudentSession) ...[
-            const SizedBox(height: 24),
-
-            // ── Preferences section ──────────────────────────────────────────
-            _SectionHeader(title: S.preferences),
-            ListenableBuilder(
-              listenable: personalizationService,
-              builder: (context, _) {
-                final major = personalizationService.major;
-                final interests = personalizationService.interests;
-                final times = personalizationService.timePrefs;
-                final summary = [
-                  if (major.isNotEmpty) major,
-                  if (interests.isNotEmpty)
-                    interests.take(2).join(', ') +
-                        (interests.length > 2 ? '…' : ''),
-                ].join(' · ');
-                return Container(
-                  color: AppColors.card,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.lightRed,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.tune_rounded,
-                            color: AppColors.primaryRed,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          S.myPreferences,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          summary.isNotEmpty
-                              ? summary
-                              : S.notSetConfigure,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.secondaryText,
-                        ),
-                        onTap: () => _openPreferencesSheet(times),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // ── Appearance section ───────────────────────────────────────────
-          _SectionHeader(title: S.appearance),
-          ListenableBuilder(
-            listenable: themeService,
-            builder: (context, _) => Container(
-              color: AppColors.card,
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    secondary: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.lightRed,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        themeService.isDark
-                            ? Icons.dark_mode_rounded
-                            : Icons.light_mode_rounded,
-                        color: AppColors.primaryRed,
-                        size: 20,
-                      ),
-                    ),
-                    title: Text(
-                      themeService.isDark ? S.darkMode : S.lightMode,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    subtitle: Text(
-                      themeService.isDark
-                          ? S.switchToLight
-                          : S.switchToDark,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                    value: themeService.isDark,
-                    activeThumbColor: AppColors.primaryRed,
-                    onChanged: (v) => themeService.setDark(v),
-                  ),
-                  Divider(height: 1, color: AppColors.divider),
-                  ListTile(
-                    leading: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.lightRed,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.language_rounded,
-                        color: AppColors.primaryRed,
-                        size: 20,
-                      ),
-                    ),
-                    title: Text(
-                      S.language,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    trailing: _LanguageToggle(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Help section ────────────────────────────────────────────────
-          _SectionHeader(title: S.help),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primaryRed, AppColors.darkRed],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryRed.withValues(alpha: 0.35),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: _replayTutorial,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
+                  return Container(
+                    color: AppColors.card,
+                    child: Column(
                       children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(13),
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.play_circle_fill_rounded,
-                            color: Colors.white,
-                            size: 27,
+                          title: Text(
+                            S.editProfile,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                S.replayTutorial,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                  color: Colors.white,
+                          subtitle: Text(
+                            S.editProfileSubtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditProfileScreen(
+                                  userId: user.id,
+                                  realName: user.name,
                                 ),
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                S.replayTutorialSubtitle,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  height: 1.3,
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ).then((_) {
+                              if (mounted) setState(() {});
+                            });
+                          },
                         ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.white.withValues(alpha: 0.9),
+                        Divider(
+                          height: 1,
+                          indent: 56,
+                          color: AppColors.divider,
+                        ),
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.badge_outlined,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            S.changeMyName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            currentName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: _openChangeNameSheet,
                         ),
                       ],
                     ),
+                  );
+                },
+              ),
+            ],
+
+            // ── Club section (club admins only) ──────────────────────────────
+            if (_managedClub != null) ...[
+              const SizedBox(height: 24),
+              _SectionHeader(title: S.clubSection),
+              ListenableBuilder(
+                listenable: userState,
+                builder: (context, _) {
+                  final club = _managedClub!;
+                  return Container(
+                    color: AppColors.card,
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.edit_outlined,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            S.clubName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            club.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () => _openClubNameSheet(club),
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 56,
+                          color: AppColors.divider,
+                        ),
+                        ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: ClubAvatar(
+                              clubId: club.id,
+                              clubName: club.name,
+                              color: AppColors.primaryRed,
+                              imageUrl: club.logoUrl,
+                              size: 36,
+                              fontSize: 16,
+                              borderRadius: 10,
+                            ),
+                          ),
+                          title: Text(
+                            S.clubPhoto,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            S.tapToChangeLogo,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () => _showClubPhotoOptions(club),
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 56,
+                          color: AppColors.divider,
+                        ),
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.sell_outlined,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            S.clubCategories,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _clubCategories(club).isEmpty
+                                ? S.addDiscoveryTags
+                                : _clubCategories(club).join(', '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () => _openClubCategoriesSheet(club),
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 56,
+                          color: AppColors.divider,
+                        ),
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.description_outlined,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            S.clubDescription,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            club.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () => _openClubDescriptionSheet(club),
+                        ),
+                        Divider(
+                          height: 1,
+                          indent: 56,
+                          color: AppColors.divider,
+                        ),
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.manage_accounts_outlined,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            S.manageBoardMembers,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            S.manageBoardSubtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () => _openBoardManagement(club),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+
+            if (authService.isStudentSession) ...[
+              const SizedBox(height: 24),
+
+              // ── Preferences section ──────────────────────────────────────────
+              _SectionHeader(title: S.preferences),
+              ListenableBuilder(
+                listenable: personalizationService,
+                builder: (context, _) {
+                  final major = personalizationService.major;
+                  final interests = personalizationService.interests;
+                  final times = personalizationService.timePrefs;
+                  final summary = [
+                    if (major.isNotEmpty) major,
+                    if (interests.isNotEmpty)
+                      interests.take(2).join(', ') +
+                          (interests.length > 2 ? '…' : ''),
+                  ].join(' · ');
+                  return Container(
+                    color: AppColors.card,
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.lightRed,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.tune_rounded,
+                              color: AppColors.primaryRed,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            S.myPreferences,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            summary.isNotEmpty ? summary : S.notSetConfigure,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryText,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.secondaryText,
+                          ),
+                          onTap: () => _openPreferencesSheet(times),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+
+            const SizedBox(height: 24),
+
+            // ── Appearance section ───────────────────────────────────────────
+            _SectionHeader(title: S.appearance),
+            ListenableBuilder(
+              listenable: themeService,
+              builder: (context, _) => Container(
+                color: AppColors.card,
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.lightRed,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          themeService.isDark
+                              ? Icons.dark_mode_rounded
+                              : Icons.light_mode_rounded,
+                          color: AppColors.primaryRed,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        themeService.isDark ? S.darkMode : S.lightMode,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      subtitle: Text(
+                        themeService.isDark ? S.switchToLight : S.switchToDark,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                      value: themeService.isDark,
+                      activeThumbColor: AppColors.primaryRed,
+                      onChanged: (v) => themeService.setDark(v),
+                    ),
+                    Divider(height: 1, color: AppColors.divider),
+                    ListTile(
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.lightRed,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.language_rounded,
+                          color: AppColors.primaryRed,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        S.language,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      trailing: _LanguageToggle(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Help section ────────────────────────────────────────────────
+            _SectionHeader(title: S.help),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primaryRed, AppColors.darkRed],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryRed.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: _replayTutorial,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Icon(
+                              Icons.play_circle_fill_rounded,
+                              color: Colors.white,
+                              size: 27,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  S.replayTutorial,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  S.replayTutorialSubtitle,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    height: 1.3,
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // ── Account section ──────────────────────────────────────────────
-          _SectionHeader(title: S.account),
-          Container(
-            color: AppColors.card,
-            child: ListTile(
-              leading: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
+            // ── Account section ──────────────────────────────────────────────
+            _SectionHeader(title: S.account),
+            Container(
+              color: AppColors.card,
+              child: ListTile(
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.logout, color: Colors.red, size: 20),
                 ),
-                child: Icon(Icons.logout, color: Colors.red, size: 20),
-              ),
-              title: Text(
-                S.logOut,
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
+                title: Text(
+                  S.logOut,
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
+                onTap: () {
+                  authService.logout();
+                  rsvpStore.clear();
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  widget.onLogout();
+                },
               ),
-              onTap: () {
-                authService.logout();
-                rsvpStore.clear();
-                Navigator.of(context).popUntil((route) => route.isFirst);
-                widget.onLogout();
-              },
             ),
-          ),
 
-          const SizedBox(height: 40),
-        ],
-      ),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }
@@ -1578,6 +1636,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.club.name,
   );
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -1585,7 +1644,24 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
     super.dispose();
   }
 
-  void _save(String value) {
+  Future<void> _save(String value) async {
+    setState(() => _saving = true);
+    try {
+      await supabaseClubService.updateClubName(club: widget.club, name: value);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not update club name.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+    if (!mounted) return;
     widget.club.name = value;
     userState.bumpClubInfo();
     unawaited(userPrefsService.saveClubName(widget.club.id, value));
@@ -1595,10 +1671,12 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
   @override
   Widget build(BuildContext context) {
     final value = _controller.text.trim();
-    final canSave = value.isNotEmpty && value != widget.club.name;
+    final canSave = value.isNotEmpty && value != widget.club.name && !_saving;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card,
@@ -1650,7 +1728,10 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.primaryRed, width: 1.5),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryRed,
+                    width: 1.5,
+                  ),
                 ),
                 counterStyle: TextStyle(
                   color: AppColors.secondaryText,
@@ -1687,7 +1768,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(value) : null,
                     child: Text(
-                      S.saveName,
+                      _saving ? 'Saving...' : S.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -1765,8 +1846,9 @@ class _ChangeNameSheet extends StatefulWidget {
 
 class _ChangeNameSheetState extends State<_ChangeNameSheet> {
   late final TextEditingController _controller = TextEditingController(
-    text: userState.usernameFor(widget.userId) ?? '',
+    text: widget.realName,
   );
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -1774,16 +1856,29 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
     super.dispose();
   }
 
-  Future<void> _useRealName() async {
-    userState.clearUsername(widget.userId);
-    await userPrefsService.save(widget.userId);
-    if (!mounted) return;
-    Navigator.pop(context);
-  }
-
   Future<void> _save(String name) async {
-    userState.setUsername(widget.userId, name);
-    await userPrefsService.save(widget.userId);
+    setState(() => _saving = true);
+    try {
+      await studentProfileService.updateFullName(
+        userId: widget.userId,
+        fullName: name,
+      );
+      authService.updateCurrentUserName(name);
+      userState.clearUsername(widget.userId);
+      await userPrefsService.save(widget.userId);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not update name.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -1791,14 +1886,8 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
   @override
   Widget build(BuildContext context) {
     final customName = _controller.text.trim();
-    final hasCustomName = userState.usernameFor(widget.userId) != null;
-    final isTaken =
-        customName.isNotEmpty &&
-        userState.isUsernameTaken(customName, excludeId: widget.userId);
     final canSave =
-        customName.isNotEmpty &&
-        customName != userState.usernameFor(widget.userId) &&
-        !isTaken;
+        customName.isNotEmpty && customName != widget.realName && !_saving;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1848,7 +1937,6 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
               decoration: InputDecoration(
                 labelText: S.displayName,
                 hintText: widget.realName,
-                errorText: isTaken ? S.nameTaken : null,
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
@@ -1874,11 +1962,9 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
               children: [
                 Expanded(
                   child: TextButton(
-                    onPressed: hasCustomName
-                        ? _useRealName
-                        : () => Navigator.pop(context),
+                    onPressed: _saving ? null : () => Navigator.pop(context),
                     child: Text(
-                      hasCustomName ? S.useRealName : S.cancel,
+                      S.cancel,
                       style: TextStyle(color: AppColors.secondaryText),
                     ),
                   ),
@@ -1899,7 +1985,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(customName) : null,
                     child: Text(
-                      S.saveName,
+                      _saving ? 'Saving...' : S.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,

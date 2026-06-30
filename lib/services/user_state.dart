@@ -74,7 +74,7 @@ class UserState extends ChangeNotifier {
   void setClubPhoto(String clubId, String path) {
     // Club photos are overwritten at a stable path. Remove the old decoded
     // bitmap so every ClubAvatar immediately displays the newly edited photo.
-    PaintingBinding.instance.imageCache.evict(FileImage(File(path)));
+    PaintingBinding.instance.imageCache.evict(_imageProviderFor(path));
     clubPhotoPaths[clubId] = path;
     notifyListeners();
   }
@@ -85,9 +85,16 @@ class UserState extends ChangeNotifier {
 
   /// Sets the profile photo path for [userId] and notifies all listeners.
   void setProfilePhoto(String userId, String path) {
-    PaintingBinding.instance.imageCache.evict(FileImage(File(path)));
+    PaintingBinding.instance.imageCache.evict(_imageProviderFor(path));
     profilePhotoPaths[userId] = path;
     notifyListeners();
+  }
+
+  ImageProvider _imageProviderFor(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return NetworkImage(path);
+    }
+    return FileImage(File(path));
   }
 
   /// Removes the profile photo for [userId] and notifies all listeners.
@@ -100,6 +107,10 @@ class UserState extends ChangeNotifier {
   /// Sets a remote profile photo URL for [userId] and notifies all listeners.
   void setProfilePhotoUrl(String userId, String url) {
     final value = url.trim();
+    final localPath = profilePhotoPaths.remove(userId);
+    if (localPath != null) {
+      PaintingBinding.instance.imageCache.evict(FileImage(File(localPath)));
+    }
     if (value.isEmpty) {
       mockPhotoUrls.remove(userId);
     } else {

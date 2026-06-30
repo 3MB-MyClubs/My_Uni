@@ -5,7 +5,7 @@ class Club {
   // Editable by the club's own admin from Settings. Mutable so an edit shows
   // everywhere the club is displayed; persisted globally and re-applied at start.
   String description;
-  final String? logoUrl;
+  String? logoUrl;
   String? categoryId;
   String? categoryName;
   final String? email;

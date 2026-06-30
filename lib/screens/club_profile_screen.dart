@@ -12,6 +12,7 @@ import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
+import '../services/supabase_club_service.dart';
 import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/club_avatar.dart';
@@ -1937,24 +1938,90 @@ class BoardManagementSheet extends StatefulWidget {
 
 class BoardManagementSheetState extends State<BoardManagementSheet> {
   final _searchController = TextEditingController();
+  List<User> _followers = const [];
   String _query = '';
+  bool _loadingFollowers = false;
+  String? _followersError;
 
-  List get _matchedUsers {
-    if (_query.trim().isEmpty) return [];
+  @override
+  void initState() {
+    super.initState();
+    _followers = _sortUsers(clubMembers(widget.club.id));
+    _loadFollowers();
+  }
+
+  List<User> get _availableFollowers {
     final q = _query.trim().toLowerCase();
-    return users
+    return _followers
         .where(
           (u) =>
-              u.name.toLowerCase().contains(q) &&
+              (q.isEmpty ||
+                  u.name.toLowerCase().contains(q) ||
+                  u.email.toLowerCase().contains(q)) &&
               !widget.club.boardMemberIds.contains(u.id),
         )
         .toList();
   }
 
-  List get _currentBoardMembers =>
-      users.where((u) => widget.club.boardMemberIds.contains(u.id)).toList();
+  List<User> get _currentBoardMembers {
+    final pool = <String, User>{
+      for (final u in users) u.id: u,
+      for (final u in peopleService.cachedPeople) u.id: u,
+      for (final u in _followers) u.id: u,
+    };
+    return widget.club.boardMemberIds
+        .map((id) => pool[id])
+        .whereType<User>()
+        .toList();
+  }
+
+  List<User> _sortUsers(List<User> source) {
+    final sorted = [...source];
+    sorted.sort((a, b) {
+      final aBoard = widget.club.boardMemberIds.contains(a.id);
+      final bBoard = widget.club.boardMemberIds.contains(b.id);
+      if (aBoard != bBoard) return aBoard ? -1 : 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return sorted;
+  }
+
+  Future<void> _loadFollowers() async {
+    setState(() {
+      _loadingFollowers = true;
+      _followersError = null;
+    });
+
+    try {
+      final followers = await peopleService.fetchClubMembers(widget.club.id);
+      if (!mounted) return;
+      setState(() {
+        if (followers.isNotEmpty || _followers.isEmpty) {
+          _followers = _sortUsers(followers);
+        }
+        _loadingFollowers = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingFollowers = false;
+        _followersError = _followers.isEmpty
+            ? 'Followers could not be loaded.'
+            : null;
+      });
+    }
+  }
 
   Future<void> _addMember(String userId) async {
+    try {
+      await supabaseClubService.setBoardMemberRole(
+        club: widget.club,
+        userId: userId,
+      );
+    } catch (_) {
+      _showRoleError();
+      return;
+    }
     if (!widget.club.boardMemberIds.contains(userId)) {
       widget.club.boardMemberIds.add(userId);
     }
@@ -1963,7 +2030,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
     await contentStore.saveBoardMemberIds();
     userState.bumpClubInfo();
     if (!mounted) return;
-    Navigator.of(context).pop(true);
+    setState(() => _followers = _sortUsers(_followers));
   }
 
   Future<void> _editTitleInSheet(dynamic u) async {
@@ -1978,6 +2045,16 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
       widget.club.boardMemberTitles.remove(u.id);
     } else {
       widget.club.boardMemberTitles[u.id] = result;
+    }
+    try {
+      await supabaseClubService.setBoardMemberRole(
+        club: widget.club,
+        userId: u.id,
+        title: result,
+      );
+    } catch (_) {
+      _showRoleError();
+      return;
     }
     await contentStore.saveBoardMemberTitles();
     // Refresh any open student profile showing this club role.
@@ -2054,13 +2131,34 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
     );
     if (second != true || !mounted) return;
 
+    try {
+      await supabaseClubService.removeBoardMemberRole(
+        club: widget.club,
+        userId: u.id,
+      );
+    } catch (_) {
+      _showRoleError();
+      return;
+    }
     widget.club.boardMemberIds.remove(u.id);
     widget.club.boardMemberTitles.remove(u.id);
     await contentStore.saveBoardMemberIds();
     await contentStore.saveBoardMemberTitles();
     userState.bumpClubInfo();
     if (!mounted) return;
-    Navigator.of(context).pop(true);
+    setState(() => _followers = _sortUsers(_followers));
+  }
+
+  void _showRoleError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Could not update board member role.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
@@ -2072,7 +2170,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
   @override
   Widget build(BuildContext context) {
     final boardMembers = _currentBoardMembers;
-    final matches = _matchedUsers;
+    final availableFollowers = _availableFollowers;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -2122,7 +2220,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Members added here are added instantly, no confirmation needed.',
+                    'Followers added here are shown publicly in the Board tab.',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -2135,7 +2233,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                     onChanged: (v) => setState(() => _query = v),
                     style: TextStyle(fontSize: 14, color: AppColors.text),
                     decoration: InputDecoration(
-                      hintText: 'Search users by name...',
+                      hintText: 'Search followers by name...',
                       hintStyle: TextStyle(
                         color: AppColors.secondaryText,
                         fontSize: 14,
@@ -2166,12 +2264,20 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                 controller: scrollController,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  // Search results
-                  if (matches.isNotEmpty) ...[
+                  if (_loadingFollowers)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: LinearProgressIndicator(
+                        color: AppColors.primaryRed,
+                        minHeight: 2,
+                      ),
+                    ),
+
+                  if (availableFollowers.isNotEmpty) ...[
                     Padding(
                       padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: Text(
-                        'Add to Board',
+                        'Followers (${availableFollowers.length})',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -2180,7 +2286,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                         ),
                       ),
                     ),
-                    ...matches.map(
+                    ...availableFollowers.map(
                       (u) => ListTile(
                         leading: UserAvatar(
                           userId: u.id,
@@ -2247,7 +2353,10 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                     Padding(
                       padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
                       child: Text(
-                        'Search for a user above to add them to the board.',
+                        _followersError ??
+                            (_followers.isEmpty
+                                ? 'No followers yet.'
+                                : 'Add a follower above to show them publicly on the Board tab.'),
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.secondaryText,

@@ -151,6 +151,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     size: 42,
                     fontSize: 18,
                     color: widget.clubColor,
+                    imageUrl: club.logoUrl,
                     shape: 'circle',
                   ),
                   const SizedBox(width: 12),

@@ -364,12 +364,14 @@ class _ChatHeader extends StatelessWidget {
   Widget _avatar() {
     if (isClub) {
       final idx = clubs.indexWhere((c) => c.id == otherUserId);
+      final club = idx < 0 ? null : clubs[idx];
       final color =
           _chatClubColors[(idx < 0 ? 0 : idx) % _chatClubColors.length];
       return ClubAvatar(
         clubId: otherUserId,
         clubName: otherUserName,
         color: color,
+        imageUrl: club?.logoUrl,
         size: 40,
         fontSize: 16,
         borderRadius: 13,
@@ -454,7 +456,10 @@ class _ChatHeader extends StatelessWidget {
                     Text(
                       isClub
                           ? otherUserName
-                          : userState.displayNameFor(otherUserId, otherUserName),
+                          : userState.displayNameFor(
+                              otherUserId,
+                              otherUserName,
+                            ),
                       style: TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.w800,
@@ -579,7 +584,8 @@ class _SharedPostBubble extends StatelessWidget {
       clubName = clubs.firstWhere((c) => c.id == post!.clubId).name;
     } catch (_) {}
 
-    final color = _colorForClubId(post.clubId);
+    final postClubId = post.clubId;
+    final color = _colorForClubId(postClubId);
     final caption = post.content.length > 90
         ? '${post.content.substring(0, 90)}…'
         : post.content;
@@ -621,9 +627,14 @@ class _SharedPostBubble extends StatelessWidget {
                   child: Row(
                     children: [
                       ClubAvatar(
-                        clubId: post.clubId,
+                        clubId: postClubId,
                         clubName: clubName,
                         color: color,
+                        imageUrl: clubs.any((club) => club.id == postClubId)
+                            ? clubs
+                                  .firstWhere((club) => club.id == postClubId)
+                                  .logoUrl
+                            : null,
                         size: 26,
                         fontSize: 12,
                         shape: 'circle',

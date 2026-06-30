@@ -1261,8 +1261,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             color: i == _step
                                 ? AppColors.primaryRed
                                 : i < _step
-                                    ? AppColors.text
-                                    : AppColors.secondaryText,
+                                ? AppColors.text
+                                : AppColors.secondaryText,
                             fontWeight: i == _step
                                 ? FontWeight.w700
                                 : FontWeight.w500,
@@ -1509,6 +1509,11 @@ class _EventPreviewCard extends StatelessWidget {
                       clubId: clubId ?? '',
                       clubName: clubName,
                       color: AppColors.primaryRed,
+                      imageUrl: clubs.any((club) => club.id == clubId)
+                          ? clubs
+                                .firstWhere((club) => club.id == clubId)
+                                .logoUrl
+                          : null,
                       size: 36,
                       fontSize: 15,
                     ),
@@ -1834,12 +1839,18 @@ class _PhotoEditButton extends StatelessWidget {
   Future<void> _pickFromGallery(BuildContext context) async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      imageQuality: 90,
+      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
     );
     if (picked == null || !context.mounted) return;
 
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: 85,
       uiSettings: [
         IOSUiSettings(
           title: 'Crop Photo',
@@ -2100,10 +2111,7 @@ class _SectionHeader extends StatelessWidget {
                     color: AppColors.text,
                   ),
                 ),
-                if (badge != null) ...[
-                  const SizedBox(width: 6),
-                  badge!,
-                ],
+                if (badge != null) ...[const SizedBox(width: 6), badge!],
               ],
             ),
             Text(
