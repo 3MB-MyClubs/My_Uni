@@ -397,7 +397,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
           key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
           borderRadius: BorderRadius.circular(30),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               height: 72,
               decoration: BoxDecoration(
@@ -407,21 +407,21 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                   end: Alignment.bottomCenter,
                   colors: isDark
                       ? [
-                          Colors.white.withValues(alpha: 0.05),
-                          Colors.black.withValues(alpha: 0.09),
+                          Colors.white.withValues(alpha: 0.008),
+                          Colors.black.withValues(alpha: 0.015),
                         ]
                       : [
-                          Colors.white.withValues(alpha: 0.16),
-                          Colors.white.withValues(alpha: 0.06),
+                          Colors.white.withValues(alpha: 0.03),
+                          Colors.white.withValues(alpha: 0.01),
                         ],
                 ),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.24),
+                  color: Colors.white.withValues(alpha: isDark ? 0.04 : 0.10),
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.08),
+                    color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.03),
                     blurRadius: 32,
                     spreadRadius: 0,
                     offset: const Offset(0, 16),
@@ -447,7 +447,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   Colors.white.withValues(
-                                    alpha: isDark ? 0.04 : 0.13,
+                                    alpha: isDark ? 0.015 : 0.04,
                                   ),
                                   Colors.transparent,
                                 ],
