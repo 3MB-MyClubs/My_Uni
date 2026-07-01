@@ -1221,7 +1221,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
             ),
           ),
           SizedBox(
-            height: 148,
+            height: 164,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1230,9 +1230,10 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
               itemBuilder: (ctx, i) {
                 final u = shown[i];
                 final color = _avatarColors[i % _avatarColors.length];
+                final displayName = userState.displayNameFor(u.id, u.name);
 
                 return Container(
-                  width: 110,
+                  width: 126,
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(14),
@@ -1270,11 +1271,8 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                           child: Column(
                             children: [
                               Text(
-                                userState
-                                    .displayNameFor(u.id, u.name)
-                                    .split(' ')
-                                    .first,
-                                maxLines: 1,
+                                displayName,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(

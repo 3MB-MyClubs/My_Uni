@@ -126,7 +126,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   Set<String> _dateFilters =
       {}; // empty = any date; else set of day-key strings
   bool _showLive = false;
-  bool _showPastWeek = false;
   String _query = '';
   final _searchController = TextEditingController();
 
@@ -177,18 +176,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         .toList();
   }
 
-  // Events that finished during the previous seven days.
-  List<Event> get _pastWeekPool {
-    final now = DateTime.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
-    return events
-        .where(
-          (event) =>
-              !event.endTime.isAfter(now) && event.endTime.isAfter(weekAgo),
-        )
-        .toList();
-  }
-
   bool _matchesQuery(Event e, String q) {
     if (e.title.toLowerCase().contains(q)) return true;
     if (e.description.toLowerCase().contains(q)) return true;
@@ -201,10 +188,10 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   }
 
   List<Event> _results() {
-    var list = _showPastWeek ? _pastWeekPool : _eventPool;
+    var list = _eventPool;
     final q = _query.trim().toLowerCase();
     if (q.isNotEmpty) {
-      // Search stays inside the selected upcoming/past time window.
+      // Search stays inside the upcoming event window.
       list = list.where((e) => _matchesQuery(e, q)).toList();
     } else {
       if (_audience == 'following') {
@@ -220,11 +207,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         list = list.where((e) => _isLive(e)).toList();
       }
     }
-    if (_showPastWeek) {
-      list.sort((a, b) => b.endTime.compareTo(a.endTime));
-    } else {
-      list.sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    }
+    list.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     return list;
   }
 
@@ -290,7 +273,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       _audience = 'all';
       _dateFilters = {};
       _showLive = false;
-      _showPastWeek = false;
       _query = '';
       _searchController.clear();
     });
@@ -320,10 +302,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       builder: (_) => _DatePickerSheet(selected: _dateFilters),
     );
     if (mounted && result != null) {
-      setState(() {
-        _dateFilters = result.keys;
-        _showPastWeek = false;
-      });
+      setState(() => _dateFilters = result.keys);
     }
   }
 
@@ -342,10 +321,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     final newEventCount = _newUnopenedEvents().length;
     final searching = _query.trim().isNotEmpty;
     final hasFilter =
-        _audience != 'all' ||
-        _dateFilters.isNotEmpty ||
-        _showLive ||
-        _showPastWeek;
+        _audience != 'all' || _dateFilters.isNotEmpty || _showLive;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -397,9 +373,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _showPastWeek
-                                ? S.pastEventsHint
-                                : S.upcomingEventsHint,
+                            S.upcomingEventsHint,
                             style: TextStyle(
                               fontSize: 13,
                               color: AppColors.secondaryText,
@@ -437,7 +411,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
               ),
             ),
 
-            // ── Filter bar: audience · date (multi) · live · past · clear ──
+            // ── Filter bar: audience · date (multi) · live · clear ──
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
@@ -472,19 +446,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     _LiveToggleBtn(
                       active: _showLive,
                       onTap: () => setState(() => _showLive = !_showLive),
-                    ),
-                    const SizedBox(width: 8),
-                    // Past week toggle
-                    _FilterPillBtn(
-                      label: S.past,
-                      icon: Icons.history_rounded,
-                      active: _showPastWeek,
-                      showChevron: false,
-                      horizontalPadding: 10,
-                      onTap: () => setState(() {
-                        _showPastWeek = !_showPastWeek;
-                        if (_showPastWeek) _dateFilters = {};
-                      }),
                     ),
                     // Clear all filters
                     if (hasFilter && !searching) ...[
@@ -606,7 +567,6 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     final q = _query.trim();
     if (q.isNotEmpty) return '· "$q"';
     final parts = <String>[];
-    if (_showPastWeek) parts.add('past week');
     if (_showLive) parts.add('live now');
     if (_audience == 'following') parts.add('following');
     if (_dateFilters.isNotEmpty) {
@@ -732,8 +692,6 @@ class _FilterPillBtn extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
   final bool expand;
-  final bool showChevron;
-  final double horizontalPadding;
 
   const _FilterPillBtn({
     required this.label,
@@ -741,8 +699,6 @@ class _FilterPillBtn extends StatelessWidget {
     required this.active,
     required this.onTap,
     this.expand = false,
-    this.showChevron = true,
-    this.horizontalPadding = 14,
   });
 
   @override
@@ -752,7 +708,7 @@ class _FilterPillBtn extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         height: 38,
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: active ? AppColors.primaryRed : AppColors.card,
           borderRadius: BorderRadius.circular(100),
@@ -784,16 +740,14 @@ class _FilterPillBtn extends StatelessWidget {
                 ),
               ),
             ),
-            if (showChevron) ...[
-              const SizedBox(width: 4),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 16,
-                color: active
-                    ? Colors.white.withValues(alpha: 0.8)
-                    : AppColors.secondaryText,
-              ),
-            ],
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: active
+                  ? Colors.white.withValues(alpha: 0.8)
+                  : AppColors.secondaryText,
+            ),
           ],
         ),
       ),
@@ -1025,10 +979,36 @@ class _DatePickerSheet extends StatefulWidget {
 class _DatePickerSheetState extends State<_DatePickerSheet> {
   late Set<String> _temp;
 
+  // Drag-to-select-range support: a GlobalKey per day cell so we can hit-test
+  // the pointer's global position against each cell's RenderBox while
+  // dragging, plus whether that day is disabled (past).
+  final Map<String, GlobalKey> _cellKeys = {};
+  final Map<String, bool> _cellPast = {};
+
+  // Cell + add-vs-remove mode captured at touch-down, but not applied yet —
+  // a plain tap also fires onPanDown, and applying immediately would double
+  // toggle that cell once the tap's own onTap runs (Pan is only confirmed,
+  // and this pending state promoted, once onPanStart actually fires).
+  String? _pendingStartKey;
+  bool? _pendingAdding;
+
+  // Mode of the in-progress (confirmed) drag, and the last cell it touched
+  // so we only act once per cell crossed.
+  bool? _dragAdding;
+  String? _lastDragKey;
+
   @override
   void initState() {
     super.initState();
     _temp = {...widget.selected};
+    final today = _todayDate;
+    for (final week in _weeks) {
+      for (final day in week) {
+        final key = _dayKey(day);
+        _cellKeys.putIfAbsent(key, () => GlobalKey());
+        _cellPast[key] = day.isBefore(today);
+      }
+    }
   }
 
   DateTime get _todayDate {
@@ -1052,6 +1032,72 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
       ws = ws.add(const Duration(days: 7));
     }
     return rows;
+  }
+
+  String? _dayKeyAt(Offset globalPosition) {
+    for (final entry in _cellKeys.entries) {
+      final box = entry.value.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final local = box.globalToLocal(globalPosition);
+      if (local.dx >= 0 &&
+          local.dy >= 0 &&
+          local.dx <= box.size.width &&
+          local.dy <= box.size.height) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  // onPanDown fires on every touch, including a plain tap — just remember
+  // what the drag *would* do here without mutating selection yet.
+  void _handleDragDown(Offset globalPosition) {
+    final key = _dayKeyAt(globalPosition);
+    if (key == null || _cellPast[key] == true) {
+      _pendingStartKey = null;
+      _pendingAdding = null;
+      return;
+    }
+    _pendingStartKey = key;
+    _pendingAdding = !_temp.contains(key);
+  }
+
+  // onPanStart only fires once the pointer has actually moved past the pan
+  // slop, i.e. once this is confirmed to be a real drag (a plain tap never
+  // reaches this point). Promote the pending start cell now, then also
+  // handle wherever the pointer already is post-slop.
+  void _handleDragStart(Offset globalPosition) {
+    if (_pendingStartKey != null && _pendingAdding != null) {
+      _dragAdding = _pendingAdding;
+      _lastDragKey = _pendingStartKey;
+      _applyToCell(_pendingStartKey!, _dragAdding!);
+    }
+    _handleDragUpdate(globalPosition);
+  }
+
+  void _handleDragUpdate(Offset globalPosition) {
+    if (_dragAdding == null) return;
+    final key = _dayKeyAt(globalPosition);
+    if (key == null || _cellPast[key] == true || key == _lastDragKey) return;
+    _lastDragKey = key;
+    _applyToCell(key, _dragAdding!);
+  }
+
+  void _applyToCell(String key, bool adding) {
+    setState(() {
+      if (adding) {
+        _temp.add(key);
+      } else {
+        _temp.remove(key);
+      }
+    });
+  }
+
+  void _endDrag() {
+    _pendingStartKey = null;
+    _pendingAdding = null;
+    _dragAdding = null;
+    _lastDragKey = null;
   }
 
   @override
@@ -1135,85 +1181,103 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 .toList(),
           ),
           const SizedBox(height: 8),
-          // Week rows
-          for (int wi = 0; wi < weeks.length; wi++) ...[
-            // Month label when a new month starts
-            if (wi == 0 || weeks[wi][0].month != weeks[wi - 1][0].month) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '${_kMonths[weeks[wi][0].month]} ${weeks[wi][0].year}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.secondaryText,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-            ],
-            Row(
-              children: weeks[wi].map((day) {
-                final isToday =
-                    day.year == today.year &&
-                    day.month == today.month &&
-                    day.day == today.day;
-                final isPast = day.isBefore(today);
-                final dayKey = _dayKey(day);
-                final isSelected = _temp.contains(dayKey);
-
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: isPast
-                        ? null
-                        : () => setState(() {
-                            if (!_temp.add(dayKey)) _temp.remove(dayKey);
-                          }),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      margin: const EdgeInsets.symmetric(
-                        vertical: 3,
-                        horizontal: 1,
-                      ),
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primaryRed
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: isToday && !isSelected
-                            ? Border.all(
-                                color: AppColors.primaryRed,
-                                width: 1.5,
-                              )
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${day.day}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: isSelected || isToday
-                                ? FontWeight.w800
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? Colors.white
-                                : isPast
-                                ? AppColors.divider
-                                : isToday
-                                ? AppColors.primaryRed
-                                : AppColors.text,
-                          ),
+          // Week rows. Wrapped in a single pan detector so a press-and-drag
+          // across cells range-selects them (tap-to-toggle on each cell still
+          // works independently — see _handleDragDown/_handleDragStart for
+          // why the starting cell isn't applied until the pan is confirmed).
+          GestureDetector(
+            onPanDown: (d) => _handleDragDown(d.globalPosition),
+            onPanStart: (d) => _handleDragStart(d.globalPosition),
+            onPanUpdate: (d) => _handleDragUpdate(d.globalPosition),
+            onPanEnd: (_) => _endDrag(),
+            onPanCancel: _endDrag,
+            child: Column(
+              children: [
+                for (int wi = 0; wi < weeks.length; wi++) ...[
+                  // Month label when a new month starts
+                  if (wi == 0 ||
+                      weeks[wi][0].month != weeks[wi - 1][0].month) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${_kMonths[weeks[wi][0].month]} ${weeks[wi][0].year}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.secondaryText,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
+                    const SizedBox(height: 6),
+                  ],
+                  Row(
+                    children: weeks[wi].map((day) {
+                      final isToday =
+                          day.year == today.year &&
+                          day.month == today.month &&
+                          day.day == today.day;
+                      final isPast = day.isBefore(today);
+                      final dayKey = _dayKey(day);
+                      final isSelected = _temp.contains(dayKey);
+
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: isPast
+                              ? null
+                              : () => setState(() {
+                                  if (!_temp.add(dayKey)) {
+                                    _temp.remove(dayKey);
+                                  }
+                                }),
+                          child: AnimatedContainer(
+                            key: _cellKeys[dayKey],
+                            duration: const Duration(milliseconds: 120),
+                            margin: const EdgeInsets.symmetric(
+                              vertical: 3,
+                              horizontal: 1,
+                            ),
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primaryRed
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                              border: isToday && !isSelected
+                                  ? Border.all(
+                                      color: AppColors.primaryRed,
+                                      width: 1.5,
+                                    )
+                                  : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${day.day}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: isSelected || isToday
+                                      ? FontWeight.w800
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : isPast
+                                      ? AppColors.divider
+                                      : isToday
+                                      ? AppColors.primaryRed
+                                      : AppColors.text,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                );
-              }).toList(),
+                ],
+              ],
             ),
-          ],
+          ),
           const SizedBox(height: 20),
           // Done button
           GestureDetector(

@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
@@ -338,87 +339,230 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         ...userState.dynamicNotifications,
       ].where((n) => n.userId == currentId && n.targetType != 'story'),
     );
+    final isDark = themeService.isDark;
+
+    // Ordered slots so the sliding highlight can be positioned purely from
+    // list index, regardless of which tabs are hidden for admins.
+    final slots = <_NavSlot>[
+      _NavSlot(
+        index: 0,
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        label: S.home,
+      ),
+      _NavSlot(
+        index: 1,
+        icon: Icons.calendar_today_outlined,
+        activeIcon: Icons.calendar_today_rounded,
+        label: S.events,
+      ),
+      if (!_isClubAdmin)
+        _NavSlot(
+          index: 2,
+          icon: Icons.search_outlined,
+          activeIcon: Icons.search_rounded,
+          label: S.search,
+        ),
+      if (_isClubAdmin) const _NavSlot.center(),
+      _NavSlot(
+        index: 3,
+        icon: Icons.notifications_none_rounded,
+        activeIcon: Icons.notifications_rounded,
+        label: S.alerts,
+        badge: unreadAlerts,
+      ),
+      _NavSlot(
+        index: 4,
+        icon: Icons.person_outline_rounded,
+        activeIcon: Icons.person_rounded,
+        label: S.profile,
+      ),
+      if (widget.isAdmin)
+        _NavSlot(
+          index: 5,
+          icon: Icons.admin_panel_settings_outlined,
+          activeIcon: Icons.admin_panel_settings_rounded,
+          label: S.admin,
+        ),
+    ];
+
+    final slotCount = slots.length;
+    final selectedSlot = slots.indexWhere((s) => s.index == _selectedIndex);
 
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-        child: Container(
+        child: ClipRRect(
           key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
-          height: 72,
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: AppColors.divider.withValues(alpha: 0.45),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.16),
-                blurRadius: 30,
-                spreadRadius: 0,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home_rounded,
-                label: S.home,
-                selected: _selectedIndex == 0,
-                onTap: () => setState(() => _selectedIndex = 0),
-              ),
-              _NavItem(
-                icon: Icons.calendar_today_outlined,
-                activeIcon: Icons.calendar_today_rounded,
-                label: S.events,
-                selected: _selectedIndex == 1,
-                onTap: () => setState(() => _selectedIndex = 1),
-              ),
-              if (!_isClubAdmin)
-                _NavItem(
-                  icon: Icons.search_outlined,
-                  activeIcon: Icons.search_rounded,
-                  label: S.search,
-                  selected: _selectedIndex == 2,
-                  onTap: () => setState(() => _selectedIndex = 2),
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              height: 72,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: isDark
+                      ? [
+                          Colors.white.withValues(alpha: 0.05),
+                          Colors.black.withValues(alpha: 0.09),
+                        ]
+                      : [
+                          Colors.white.withValues(alpha: 0.16),
+                          Colors.white.withValues(alpha: 0.06),
+                        ],
                 ),
-              if (_isClubAdmin) _CenterAddButton(onTap: _onAddTap),
-              _NavItem(
-                icon: Icons.notifications_none_rounded,
-                activeIcon: Icons.notifications_rounded,
-                label: S.alerts,
-                selected: _selectedIndex == 3,
-                badge: unreadAlerts,
-                onTap: () {
-                  setState(() => _selectedIndex = 3);
-                  _onNotificationsOpened();
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.24),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.08),
+                    blurRadius: 32,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final barWidth = constraints.maxWidth;
+                  final slotWidth = slotCount > 0
+                      ? barWidth / slotCount
+                      : barWidth;
+                  return Stack(
+                    children: [
+                      // Soft inner highlight sheen along the top edge.
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(30),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.white.withValues(
+                                    alpha: isDark ? 0.04 : 0.13,
+                                  ),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.55],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Brighter glass capsule sliding under the selected tab.
+                      if (selectedSlot != -1)
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                          left: slotWidth * selectedSlot + 6,
+                          top: 8,
+                          width: slotWidth - 12,
+                          height: 72 - 16,
+                          child: IgnorePointer(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(22),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 10,
+                                  sigmaY: 10,
+                                ),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(22),
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.10)
+                                        : Colors.white.withValues(alpha: 0.36),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: isDark ? 0.17 : 0.52,
+                                      ),
+                                      width: 1,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.primaryRed
+                                            .withValues(alpha: 0.16),
+                                        blurRadius: 14,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Foreground row of nav items.
+                      Positioned.fill(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            for (final slot in slots)
+                              slot.isCenterButton
+                                  ? _CenterAddButton(onTap: _onAddTap)
+                                  : _NavItem(
+                                      icon: slot.icon!,
+                                      activeIcon: slot.activeIcon!,
+                                      label: slot.label!,
+                                      selected: _selectedIndex == slot.index,
+                                      badge: slot.badge,
+                                      onTap: () {
+                                        setState(
+                                          () => _selectedIndex = slot.index!,
+                                        );
+                                        if (slot.index == 3) {
+                                          _onNotificationsOpened();
+                                        }
+                                      },
+                                    ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
                 },
               ),
-              _NavItem(
-                icon: Icons.person_outline_rounded,
-                activeIcon: Icons.person_rounded,
-                label: S.profile,
-                selected: _selectedIndex == 4,
-                onTap: () => setState(() => _selectedIndex = 4),
-              ),
-              if (widget.isAdmin)
-                _NavItem(
-                  icon: Icons.admin_panel_settings_outlined,
-                  activeIcon: Icons.admin_panel_settings_rounded,
-                  label: S.admin,
-                  selected: _selectedIndex == 5,
-                  onTap: () => setState(() => _selectedIndex = 5),
-                ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Describes one position in the bottom nav row — either a selectable tab
+/// or the club-admin center "add" button, which has no selection state.
+class _NavSlot {
+  final int? index;
+  final IconData? icon;
+  final IconData? activeIcon;
+  final String? label;
+  final int badge;
+  final bool isCenterButton;
+
+  _NavSlot({
+    required this.index,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    this.badge = 0,
+  }) : isCenterButton = false;
+
+  const _NavSlot.center()
+    : index = null,
+      icon = null,
+      activeIcon = null,
+      label = null,
+      badge = 0,
+      isCenterButton = true;
 }
 
 class _NavItem extends StatelessWidget {
@@ -445,7 +589,7 @@ class _NavItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
@@ -454,44 +598,49 @@ class _NavItem extends StatelessWidget {
             children: [
               AnimatedScale(
                 scale: selected ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOut,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(
-                      selected ? activeIcon : icon,
-                      color: selected
-                          ? AppColors.primaryRed
-                          : AppColors.secondaryText,
-                      size: 24,
-                    ),
-                    if (badge > 0)
-                      Positioned(
-                        top: -4,
-                        right: -6,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          constraints: const BoxConstraints(
-                            minWidth: 15,
-                            minHeight: 15,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            badge > 9 ? '9+' : '$badge',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
+                child: AnimatedOpacity(
+                  opacity: selected ? 1.0 : 0.82,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(
+                        selected ? activeIcon : icon,
+                        color: selected
+                            ? AppColors.primaryRed
+                            : AppColors.secondaryText,
+                        size: 24,
+                      ),
+                      if (badge > 0)
+                        Positioned(
+                          top: -4,
+                          right: -6,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            constraints: const BoxConstraints(
+                              minWidth: 15,
+                              minHeight: 15,
                             ),
-                            textAlign: TextAlign.center,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              badge > 9 ? '9+' : '$badge',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 3),
