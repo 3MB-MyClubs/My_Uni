@@ -27,6 +27,9 @@ class S {
       _t('Explore All Clubs', 'Tüm Kulüpleri Keşfet');
   static String get peopleMightKnow =>
       _t('People You Might Know', 'Tanıyor Olabileceğin Kişiler');
+  static String get suggestedForYou =>
+      _t('Suggested for you', 'Senin için önerilenler');
+  static String get followBack => _t('Follow back', 'Geri takip et');
   static String get clubMightLike =>
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');

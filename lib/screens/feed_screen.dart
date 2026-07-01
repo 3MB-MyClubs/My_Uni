@@ -29,6 +29,7 @@ import '../models/club.dart';
 import '../services/message_service.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
+import 'explore_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner, CreatePostScreen;
 import '../services/supabase_post_service.dart';
 import '../services/club_notification_service.dart';
@@ -1183,11 +1184,17 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
     Color(0xFF00838F),
   ];
 
+  final Set<String> _dismissedIds = {};
+
   @override
   Widget build(BuildContext context) {
     // Re-check live follow state so a newly followed person disappears at once.
     final shown = widget.suggestions
-        .where((user) => !userState.isFollowingUser(user.id))
+        .where(
+          (user) =>
+              !userState.isFollowingUser(user.id) &&
+              !_dismissedIds.contains(user.id),
+        )
         .take(8)
         .toList();
 
@@ -1210,18 +1217,36 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  S.peopleMightKnow,
+                  S.suggestedForYou,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: AppColors.text,
                   ),
                 ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ExploreScreen(initialTabIndex: 1),
+                    ),
+                  ),
+                  child: Text(
+                    S.seeAll,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
           SizedBox(
-            height: 164,
+            height: 328,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1231,105 +1256,147 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 final u = shown[i];
                 final color = _avatarColors[i % _avatarColors.length];
                 final displayName = userState.displayNameFor(u.id, u.name);
+                final followsMe = peopleService.cachedFollowerIds.contains(
+                  u.id,
+                );
+
+                final mutualIds = userState.followedUserIds.intersection(
+                  Set<String>.from(u.followingUserIds),
+                );
+                final mutualCount = mutualIds.length;
+                final mutualLabel = mutualCount > 30
+                    ? '30+'
+                    : '$mutualCount';
+                final mutualUser = mutualCount > 0
+                    ? peopleService.peopleByIds(mutualIds.take(1)).firstOrNull
+                    : null;
 
                 return Container(
-                  width: 126,
+                  width: 184,
+                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Stack(
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: u),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(user: u),
+                              ),
+                            ),
+                            child: Center(
+                              child: UserAvatar(
+                                userId: u.id,
+                                name: u.name,
+                                size: 148,
+                                fontSize: 56,
+                                backgroundColor: color.withValues(alpha: 0.15),
+                                textColor: color,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: UserAvatar(
-                          userId: u.id,
-                          name: u.name,
-                          size: 52,
-                          fontSize: 22,
-                          backgroundColor: color.withValues(alpha: 0.15),
-                          textColor: color,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: u),
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(user: u),
+                              ),
+                            ),
+                            child: Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Column(
-                            children: [
-                              Text(
-                                displayName,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.text,
+                          if (mutualCount > 0) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                if (mutualUser != null) ...[
+                                  UserAvatar(
+                                    userId: mutualUser.id,
+                                    name: mutualUser.name,
+                                    size: 16,
+                                    fontSize: 8,
+                                  ),
+                                  const SizedBox(width: 5),
+                                ],
+                                Text(
+                                  mutualCount == 1
+                                      ? '1 mutual'
+                                      : '$mutualLabel mutuals',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.secondaryText,
+                                  ),
                                 ),
-                              ),
-                              Builder(
-                                builder: (ctx) {
-                                  final mutualCount = userState.followedUserIds
-                                      .intersection(
-                                        Set<String>.from(u.followingUserIds),
-                                      )
-                                      .length;
-                                  if (mutualCount == 0) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Text(
-                                    '$mutualCount mutual',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.secondaryText,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
+                              ],
+                            ),
+                          ],
+                          const Spacer(),
+                          const SizedBox(height: 10),
+                          UserFollowButton(
+                            userId: u.id,
+                            size: 'large',
+                            followLabel: followsMe ? S.followBack : null,
+                            onTap: () async {
+                              final myId = authService.isStudentSession
+                                  ? authService.currentUser?.id ?? ''
+                                  : '';
+                              if (myId.isEmpty) return;
+                              final follow = !userState.isFollowingUser(u.id);
+                              userState.setFollowingUser(u.id, follow);
+                              userPrefsService.save(myId);
+                              widget.onFollowed();
+                              try {
+                                await peopleService.setFollowing(
+                                  followerId: myId,
+                                  followingId: u.id,
+                                  follow: follow,
+                                );
+                                userPrefsService.save(myId);
+                              } catch (_) {
+                                userState.setFollowingUser(u.id, !follow);
+                                userPrefsService.save(myId);
+                                widget.onFollowed();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _dismissedIds.add(u.id)),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.card.withValues(alpha: 0.85),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: AppColors.secondaryText,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      UserFollowButton(
-                        userId: u.id,
-                        size: 'small',
-                        onTap: () async {
-                          final myId = authService.isStudentSession
-                              ? authService.currentUser?.id ?? ''
-                              : '';
-                          if (myId.isEmpty) return;
-                          final follow = !userState.isFollowingUser(u.id);
-                          userState.setFollowingUser(u.id, follow);
-                          userPrefsService.save(myId);
-                          widget.onFollowed();
-                          try {
-                            await peopleService.setFollowing(
-                              followerId: myId,
-                              followingId: u.id,
-                              follow: follow,
-                            );
-                            userPrefsService.save(myId);
-                          } catch (_) {
-                            userState.setFollowingUser(u.id, !follow);
-                            userPrefsService.save(myId);
-                            widget.onFollowed();
-                          }
-                        },
                       ),
                     ],
                   ),

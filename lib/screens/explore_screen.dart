@@ -26,7 +26,9 @@ import 'user_profile_screen.dart';
 /// rounded search field and horizontally-scrolling category chips for clubs.
 /// Everything is wired to the app's real follow state and navigation.
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
+  final int initialTabIndex;
+
+  const ExploreScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -72,7 +74,11 @@ class _ExploreScreenState extends State<ExploreScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
     _tabController.addListener(() => setState(() {}));
     localeService.addListener(_onLocaleChanged);
     _loadClubContent();
