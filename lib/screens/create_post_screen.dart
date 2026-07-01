@@ -12,6 +12,7 @@ import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/instagram_image_viewer.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/mention_text_field.dart';
 
@@ -85,36 +86,34 @@ Widget buildPostBanner({
   // Network image (Supabase / Picsum / any remote URL)
   if (imagePath != null &&
       (imagePath.startsWith('https://') || imagePath.startsWith('http://'))) {
-    return SizedBox(
-      width: double.infinity,
+    return _ZoomablePostImage(
       height: height,
-      child: ClipRRect(
-        child: Image.network(
-          imagePath,
-          fit: BoxFit.cover,
+      imageProvider: NetworkImage(imagePath),
+      child: Image.network(
+        imagePath,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: height,
+        loadingBuilder: (_, child, progress) => progress == null
+            ? child
+            : SkeletonBox(
+                width: double.infinity,
+                height: height,
+                borderRadius: BorderRadius.zero,
+              ),
+        errorBuilder: (ctx, e, _) => Container(
           width: double.infinity,
           height: height,
-          loadingBuilder: (_, child, progress) => progress == null
-              ? child
-              : SkeletonBox(
-                  width: double.infinity,
-                  height: height,
-                  borderRadius: BorderRadius.zero,
-                ),
-          errorBuilder: (ctx, e, _) => Container(
-            width: double.infinity,
-            height: height,
-            color: Color.lerp(
-              AppColors.surfaceAlt,
-              fallbackColor.withValues(alpha: 0.18),
-              0.35,
-            ),
-            child: Center(
-              child: Icon(
-                Icons.image_not_supported_outlined,
-                color: AppColors.secondaryText.withValues(alpha: 0.45),
-                size: 34,
-              ),
+          color: Color.lerp(
+            AppColors.surfaceAlt,
+            fallbackColor.withValues(alpha: 0.18),
+            0.35,
+          ),
+          child: Center(
+            child: Icon(
+              Icons.image_not_supported_outlined,
+              color: AppColors.secondaryText.withValues(alpha: 0.45),
+              size: 34,
             ),
           ),
         ),
@@ -122,23 +121,16 @@ Widget buildPostBanner({
     );
   }
 
-  // Gallery photo — interactive (pan / pinch-to-zoom)
+  // Gallery photo — tap to open full-screen (pinch/pan/double-tap zoom).
   if (imagePath != null && !imagePath.startsWith('tpl:')) {
-    return SizedBox(
-      width: double.infinity,
+    return _ZoomablePostImage(
       height: height,
-      child: ClipRect(
-        child: InteractiveViewer(
-          boundaryMargin: const EdgeInsets.all(double.infinity),
-          minScale: 0.5,
-          maxScale: 5.0,
-          child: Image.file(
-            File(imagePath),
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: height,
-          ),
-        ),
+      imageProvider: FileImage(File(imagePath)),
+      child: Image.file(
+        File(imagePath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: height,
       ),
     );
   }
@@ -176,6 +168,45 @@ Widget buildPostBanner({
       ),
     ),
   );
+}
+
+class _ZoomablePostImage extends StatefulWidget {
+  final double height;
+  final ImageProvider imageProvider;
+  final Widget child;
+
+  const _ZoomablePostImage({
+    required this.height,
+    required this.imageProvider,
+    required this.child,
+  });
+
+  @override
+  State<_ZoomablePostImage> createState() => _ZoomablePostImageState();
+}
+
+class _ZoomablePostImageState extends State<_ZoomablePostImage> {
+  final Object _heroTag = Object();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => showInstagramImageViewer(
+        context,
+        imageProvider: widget.imageProvider,
+        heroTag: _heroTag,
+      ),
+      child: Hero(
+        tag: _heroTag,
+        child: SizedBox(
+          width: double.infinity,
+          height: widget.height,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
 }
 
 // ── Create Post Screen ───────────────────────────────────────────────────────

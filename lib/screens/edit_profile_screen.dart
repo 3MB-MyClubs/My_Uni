@@ -6,8 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../services/app_colors.dart';
-import '../services/personalization_service.dart'
-    show kAcademicPrograms, kInterests;
+import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -15,7 +14,7 @@ import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 
 /// Full-page profile editor: name, photo, bio, university year, major,
-/// double major(s), minor(s) and interests — all in one place.
+/// double major(s) and minor(s) in one place.
 class EditProfileScreen extends StatefulWidget {
   final String userId;
   final String realName;
@@ -44,7 +43,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String? _year;
   String? _major;
-  late Set<String> _interests;
+  List<String> _interestIds = const [];
   String? _doubleMajor;
   String? _minor;
   List<ProfileLookupItem> _majors = const [];
@@ -60,9 +59,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<String> get _yearOptions => _academicYears.isEmpty
       ? _fallbackYearOptions
       : _academicYears.map((year) => year.name).toList();
-  List<String> get _interestNames => _interestOptions.isEmpty
-      ? kInterests
-      : _interestOptions.map((interest) => interest.name).toList();
 
   @override
   void initState() {
@@ -72,7 +68,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _major = kAcademicPrograms.contains(savedMajor) ? savedMajor : null;
     final y = userState.years[_userId];
     _year = (y != null && y.isNotEmpty) ? y : null;
-    _interests = {...?userState.interests[_userId]};
     _doubleMajor = userState.doubleMajors[_userId]?.firstOrNull;
     _minor = userState.minors[_userId]?.firstOrNull;
     _loadRemoteData();
@@ -104,7 +99,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _bioCtrl.text = profile.bio ?? '';
           _major = profile.majorName;
           _year = profile.academicYearName;
-          _interests = profile.interestNames.toSet();
+          _interestIds = profile.interestIds;
           _doubleMajor = profile.doubleMajorNames.firstOrNull;
           _minor = profile.minorNames.firstOrNull;
         }
@@ -126,6 +121,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       if (_majors.isNotEmpty || _academicYears.isNotEmpty) {
+        final preservedInterestIds = _interestIds.isNotEmpty
+            ? _interestIds
+            : _idsForNames(_interestOptions, {
+                ...?userState.interests[_userId],
+              });
         await studentProfileService.updateProfile(
           UpdateStudentProfileInput(
             userId: _userId,
@@ -133,7 +133,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             bio: _bioCtrl.text,
             majorId: _idForName(_majors, _major),
             academicYearId: _idForName(_academicYears, _year),
-            interestIds: _idsForNames(_interestOptions, _interests),
+            interestIds: preservedInterestIds,
             doubleMajorIds: _idsForNames(_majors, _oneOrEmpty(_doubleMajor)),
             minorIds: _idsForNames(_majors, _oneOrEmpty(_minor)),
           ),
@@ -156,7 +156,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     userState.setBio(_userId, _bioCtrl.text);
     userState.setMajor(_userId, _major ?? '');
     userState.setYear(_userId, _year ?? '');
-    userState.setInterests(_userId, _interests.toList());
     userState.setDoubleMajors(
       _userId,
       _doubleMajor == null ? const [] : [_doubleMajor!],
@@ -533,29 +532,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             value: _minor,
             hint: 'Select a minor',
             onChanged: (value) => setState(() => _minor = value),
-          ),
-          const SizedBox(height: 18),
-
-          _label('Interests'),
-          Wrap(
-            spacing: 9,
-            runSpacing: 10,
-            children:
-                <String>[
-                  ..._interestNames,
-                  ..._interests.where((i) => !_interestNames.contains(i)),
-                ].map((topic) {
-                  final on = _interests.contains(topic);
-                  return _choiceChip(topic, on, () {
-                    setState(() {
-                      if (on) {
-                        _interests.remove(topic);
-                      } else {
-                        _interests.add(topic);
-                      }
-                    });
-                  });
-                }).toList(),
           ),
           const SizedBox(height: 28),
 

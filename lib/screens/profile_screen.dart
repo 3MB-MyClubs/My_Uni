@@ -970,7 +970,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               clubs: followedClubs.length,
               followers: followers.length,
               following: following.length,
-              vibes: userState.interests[user.id] ?? const [],
               minors: userState.minors[user.id] ?? const [],
               doubleMajors: userState.doubleMajors[user.id] ?? const [],
               nextEvent: nextEvent == null ? null : _eventDataFor(nextEvent),

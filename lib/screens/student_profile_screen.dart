@@ -31,7 +31,6 @@ class StudentProfileData {
   final int clubs;
   final int followers;
   final int following;
-  final List<String> vibes;
   final List<String> minors;
   final List<String> doubleMajors;
   final StudentEventData? nextEvent;
@@ -48,7 +47,6 @@ class StudentProfileData {
     required this.clubs,
     required this.followers,
     required this.following,
-    required this.vibes,
     this.minors = const [],
     this.doubleMajors = const [],
     this.nextEvent,
@@ -101,7 +99,6 @@ class StudentProfileScreen extends StatelessWidget {
   // ─── Design tokens ──────────────────────────────────────────────────────────
   static const Color _burgundy = Color(0xFF8D1F2D);
   static const Color _burgundyDeep = Color(0xFF5A0D1B);
-  static Color get _burgundyTint => AppColors.lightRed;
   static Color get _background => AppColors.background;
   static Color get _card => AppColors.card;
   static Color get _text => AppColors.text;
@@ -202,14 +199,6 @@ class StudentProfileScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
                 child: _AboutCard(bio: data.bio),
-              ),
-            ),
-
-            // ── Interests card ──────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: _InterestsCard(vibes: data.vibes),
               ),
             ),
 
@@ -732,42 +721,6 @@ class _AboutCard extends StatelessWidget {
   }
 }
 
-// ─── Interests card ───────────────────────────────────────────────────────────
-
-class _InterestsCard extends StatelessWidget {
-  final List<String> vibes;
-
-  const _InterestsCard({required this.vibes});
-
-  @override
-  Widget build(BuildContext context) {
-    return _ProfileCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardLabel(title: 'Interests'),
-          const SizedBox(height: 12),
-          if (vibes.isEmpty)
-            Text(
-              'Go to Settings to add interests.',
-              style: TextStyle(
-                color: StudentProfileScreen._secondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: vibes.map((v) => InterestTag(label: v)).toList(),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─── Clubs card ───────────────────────────────────────────────────────────────
 
 class _ClubsCard extends StatelessWidget {
@@ -1109,38 +1062,6 @@ class _UpNextHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─── Interest tag ─────────────────────────────────────────────────────────────
-
-class InterestTag extends StatelessWidget {
-  final String label;
-  final VoidCallback? onTap;
-
-  const InterestTag({super.key, required this.label, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return _ScaleTap(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: StudentProfileScreen._burgundyTint,
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: StudentProfileScreen._burgundy,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.1,
-          ),
-        ),
-      ),
     );
   }
 }

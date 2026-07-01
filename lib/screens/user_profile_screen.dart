@@ -387,10 +387,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 // 4 ── Stats card ───────────────────────────────────────────────
                 _buildStatsCard(subClubs, followersList, followingList),
 
-                // 5 ── Interests section ────────────────────────────────────────
-                _buildInterestsSection(_interestsForUser(user)),
-
-                // 6 ── Footer ──────────────────────────────────────────────────
+                // 5 ── Footer ──────────────────────────────────────────────────
                 _buildFooter(),
               ],
             ),
@@ -642,90 +639,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  List<String> _interestsForUser(User user) {
-    final saved = userState.interests[user.id];
-    if (saved != null && saved.isNotEmpty) return saved;
-    const fallback = {
-      'u1': ['Robotics', 'Photography', 'Film', 'Coding', 'AI / ML'],
-      'u2': ['Debate', 'Rowing', 'Film', 'Climate', 'Entrepreneur'],
-      'u3': ['Music', 'Theatre', 'Greek life', 'Dance', 'Esports'],
-      'u4': ['Climate', 'Hiking', 'Volunteering', 'Photography'],
-      'u5': ['Coding', 'AI / ML', 'Robotics', 'Entrepreneur', 'Film'],
-    };
-    return fallback[user.id] ??
-        user.subscribedClubIds.take(5).map((id) {
-          final club = clubs.firstWhere(
-            (c) => c.id == id,
-            orElse: () => clubs.first,
-          );
-          final name = club.name.split('(').first.trim();
-          return name.split(' ').take(2).join(' ');
-        }).toList();
-  }
-
   /// The board role title this student holds at [club], or null if none.
   /// Empty stored titles fall back to a generic "Board Member" label.
   String? _roleTitleFor(Club club) {
     if (!club.boardMemberIds.contains(widget.user.id)) return null;
     final raw = club.boardMemberTitles[widget.user.id]?.trim() ?? '';
     return raw.isEmpty ? 'Board Member' : raw;
-  }
-
-  Widget _buildInterestsSection(List<String> interests) {
-    if (interests.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Interests',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              if (_isOwnProfile)
-                const Text(
-                  'Edit',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: _burgundy,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 9,
-            children: interests
-                .map(
-                  (interest) => Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _burgundy,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      interest,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showClubsSheet(List<Club> subClubs) {

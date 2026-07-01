@@ -27,7 +27,9 @@
       "Skill(run:*)",
       "Bash(tar -xzf \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/0ca6a9a0-851b-4201-b537-8b2b340d6f58/tool-results/webfetch-1781438685750-jsri7l.bin\" -C /tmp/unihub_design)",
       "Bash(tar -xzf \"/Users/hakantuncay/.claude/projects/-Users-hakantuncay-development-Ko--University-App-Prototype/0ca6a9a0-851b-4201-b537-8b2b340d6f58/tool-results/webfetch-1781516468854-bknjqh.bin\" -C /tmp/unihub_alerts)",
-      "Bash(perl -i -pe 's/_Event\\\\x{0424}ilterChip/_EventFilterChip/g' lib/screens/club_profile_screen.dart)"
+      "Bash(perl -i -pe 's/_Event\\\\x{0424}ilterChip/_EventFilterChip/g' lib/screens/club_profile_screen.dart)",
+      "Bash(awk 'NR==3114,NR==4522' lib/services/mock_data.dart)",
+      "Bash(awk ' *)"
     ],
     "additionalDirectories": [
       "/tmp",

@@ -1398,8 +1398,6 @@ class _TrendingEventCard extends StatelessWidget {
         : daysAway == 1
         ? S.tomorrow
         : '${mo[dt.month - 1]} ${dt.day}';
-    final views = viewTracker.viewCount(event.id);
-
     return GestureDetector(
       onTap: () => _showDetail(context, color),
       child: Container(
@@ -1493,21 +1491,6 @@ class _TrendingEventCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      if (views > 0) ...[
-                        Icon(
-                          Icons.visibility_outlined,
-                          size: 14,
-                          color: AppColors.secondaryText,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$views views',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ],
                       const Spacer(),
                       Text(
                         S.tapForDetails,
@@ -2206,21 +2189,6 @@ class _PostCardState extends State<_PostCard>
                 ),
               ),
               const SizedBox(height: 8),
-              tile(
-                icon: Icons.link_rounded,
-                label: 'Copy link',
-                onTap: () {
-                  Clipboard.setData(
-                    ClipboardData(text: 'kuclubs://post/${widget.post.id}'),
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Link copied to clipboard'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-              ),
               tile(
                 icon: Icons.flag_outlined,
                 label: 'Report post',

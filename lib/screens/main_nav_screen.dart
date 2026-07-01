@@ -172,7 +172,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       eyebrow: 'Profile',
       title: 'This is you',
       description:
-          'Tap your photo, name, bio, or interests to edit them so classmates recognize you. Your clubs, RSVPs, and stats live here too.',
+          'Tap your photo, name, or bio to edit them so classmates recognize you. Your clubs, RSVPs, and stats live here too.',
       icon: Icons.account_circle_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileHeader),
       tabIndex: 4,
@@ -183,9 +183,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     ),
     AppTutorialStep(
       eyebrow: 'Settings',
-      title: 'Preferences & replay',
+      title: 'Appearance & replay',
       description:
-          'The gear opens Settings — appearance, your interests, and “Replay App Tutorial” whenever you want this tour again.',
+          'The gear opens Settings — appearance and “Replay App Tutorial” whenever you want this tour again.',
       icon: Icons.settings_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileSettings),
       tabIndex: 4,
@@ -488,8 +488,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppColors.primaryRed
-                                            .withValues(alpha: 0.16),
+                                        color: AppColors.primaryRed.withValues(
+                                          alpha: 0.16,
+                                        ),
                                         blurRadius: 14,
                                         offset: const Offset(0, 4),
                                       ),
