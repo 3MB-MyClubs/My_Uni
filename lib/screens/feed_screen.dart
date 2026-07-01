@@ -2387,7 +2387,7 @@ class _PostCardState extends State<_PostCard>
                             imagePath: widget.post.imagePath,
                             fallbackColor: clubColor,
                             fallbackLetter: club.name[0],
-                            height: 190,
+                            height: 230,
                           ),
                           if (_showHeart)
                             ScaleTransition(

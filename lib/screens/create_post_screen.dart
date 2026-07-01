@@ -12,7 +12,7 @@ import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/club_avatar.dart';
-import '../widgets/instagram_image_viewer.dart';
+import '../widgets/pinch_zoom_image.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/mention_text_field.dart';
 
@@ -88,7 +88,6 @@ Widget buildPostBanner({
       (imagePath.startsWith('https://') || imagePath.startsWith('http://'))) {
     return _ZoomablePostImage(
       height: height,
-      imageProvider: NetworkImage(imagePath),
       child: Image.network(
         imagePath,
         fit: BoxFit.cover,
@@ -125,7 +124,6 @@ Widget buildPostBanner({
   if (imagePath != null && !imagePath.startsWith('tpl:')) {
     return _ZoomablePostImage(
       height: height,
-      imageProvider: FileImage(File(imagePath)),
       child: Image.file(
         File(imagePath),
         fit: BoxFit.cover,
@@ -170,40 +168,19 @@ Widget buildPostBanner({
   );
 }
 
-class _ZoomablePostImage extends StatefulWidget {
+class _ZoomablePostImage extends StatelessWidget {
   final double height;
-  final ImageProvider imageProvider;
   final Widget child;
 
-  const _ZoomablePostImage({
-    required this.height,
-    required this.imageProvider,
-    required this.child,
-  });
-
-  @override
-  State<_ZoomablePostImage> createState() => _ZoomablePostImageState();
-}
-
-class _ZoomablePostImageState extends State<_ZoomablePostImage> {
-  final Object _heroTag = Object();
+  const _ZoomablePostImage({required this.height, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => showInstagramImageViewer(
-        context,
-        imageProvider: widget.imageProvider,
-        heroTag: _heroTag,
-      ),
-      child: Hero(
-        tag: _heroTag,
-        child: SizedBox(
-          width: double.infinity,
-          height: widget.height,
-          child: widget.child,
-        ),
+    return PinchZoomImage(
+      child: SizedBox(
+        width: double.infinity,
+        height: height,
+        child: child,
       ),
     );
   }
