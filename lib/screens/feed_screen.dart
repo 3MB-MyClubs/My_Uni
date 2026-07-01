@@ -124,6 +124,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // not follow back, then other unfollowed profiles. If no eligible profiles
   // remain, the suggestion rail is omitted.
   List<User> _suggestedUsers() {
+    if (!authService.isStudentSession) return const [];
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final myFollowing = userState.followedUserIds;
@@ -173,6 +174,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // Most-viewed upcoming event from the last 14 days.
   Event? _trendingEvent() {
+    if (!authService.isStudentSession) return null;
     final now = DateTime.now();
     final cutoff = now.subtract(const Duration(days: 14));
     final eligible = events
