@@ -461,7 +461,7 @@ class _FeedScreenState extends State<FeedScreen> {
   String get _greetingName {
     final student = authService.currentUser;
     if (authService.isStudentSession && student != null) {
-      return student.name.split(' ').first;
+      return student.name;
     }
 
     final admin = authService.currentAdmin;
