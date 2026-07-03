@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:flutter_application_1/main.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/notification_service.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
@@ -18,7 +18,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   Future<void> boot() async {
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await notificationService.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();

@@ -20,7 +20,13 @@ class ViewTracker extends ChangeNotifier {
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
-    return Supabase.instance.client;
+    // Test processes (flutter drive) don't run Supabase.initialize — treat an
+    // uninitialized instance the same as "not configured".
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> initialize() async {

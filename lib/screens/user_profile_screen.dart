@@ -387,7 +387,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 // 4 ── Stats card ───────────────────────────────────────────────
                 _buildStatsCard(subClubs, followersList, followingList),
 
-                // 5 ── Footer ──────────────────────────────────────────────────
+                // 5 ── Clubs card ───────────────────────────────────────────────
+                if (subClubs.isNotEmpty) _buildClubsCard(subClubs),
+
+                // 6 ── Footer ──────────────────────────────────────────────────
                 _buildFooter(),
               ],
             ),
@@ -636,6 +639,137 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
         );
       },
+    );
+  }
+
+  // ── Clubs card ───────────────────────────────────────────────────────────────
+
+  Widget _buildClubsCard(List<Club> subClubs) {
+    final showSeeAll = subClubs.length > 4;
+    final displayCount = showSeeAll ? 4 : subClubs.length;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.divider, width: 1),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'CLUBS · ${subClubs.length}',
+                style: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.9,
+                ),
+              ),
+              if (showSeeAll) ...[
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => _showClubsSheet(subClubs),
+                  child: const Text(
+                    'See all',
+                    style: TextStyle(
+                      color: _burgundy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (int i = 0; i < displayCount; i++)
+            _buildClubRow(subClubs[i], isLast: i == displayCount - 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClubRow(Club club, {required bool isLast}) {
+    final memberCount = subscriptions.where((s) => s.clubId == club.id).length;
+    final roleTitle = _roleTitleFor(club);
+    final isLeader = roleTitle != null;
+
+    return GestureDetector(
+      onTap: () => _openClub(club),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : Border(
+                  bottom: BorderSide(color: AppColors.divider, width: 1),
+                ),
+        ),
+        child: Row(
+          children: [
+            ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _clubColor(club),
+              imageUrl: club.logoUrl,
+              size: 42,
+              fontSize: 18,
+              borderRadius: 13,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    club.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$memberCount members',
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: isLeader ? _burgundy : AppColors.background,
+                borderRadius: BorderRadius.circular(100),
+                border: isLeader ? null : Border.all(color: AppColors.divider),
+              ),
+              child: Text(
+                roleTitle ?? 'Member',
+                style: TextStyle(
+                  color: isLeader ? Colors.white : AppColors.text,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

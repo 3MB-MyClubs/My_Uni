@@ -1,3 +1,19 @@
+/// Poll attached to a post: a question with 2–4 options students vote on.
+/// The option index doubles as the option id.
+class PollData {
+  final String question;
+  final List<String> options;
+
+  const PollData({required this.question, required this.options});
+
+  Map<String, dynamic> toMap() => {'question': question, 'options': options};
+
+  factory PollData.fromMap(Map<String, dynamic> m) => PollData(
+    question: m['question'] as String,
+    options: List<String>.from(m['options'] as List),
+  );
+}
+
 class NewsPost {
   final String id;
   final String clubId;
@@ -10,6 +26,13 @@ class NewsPost {
   // "tpl:N" = built-in template index N
   // any other string = local file path picked from gallery
   final String? imagePath;
+
+  /// Optional attached poll.
+  final PollData? poll;
+
+  /// Club-wide announcement: gets a megaphone banner and sorts to the top of
+  /// the club's feed section (distinct from per-user pinning).
+  final bool isAnnouncement;
 
   // Legacy — kept only so existing mock data compiles without changes.
   // Not displayed anywhere in the UI.
@@ -25,6 +48,8 @@ class NewsPost {
     this.taggedClubIds = const [],
     this.taggedUserIds = const [],
     this.imagePath,
+    this.poll,
+    this.isAnnouncement = false,
   });
 
   Map<String, dynamic> toMap() => {
@@ -37,6 +62,8 @@ class NewsPost {
     'taggedClubIds': taggedClubIds,
     'taggedUserIds': taggedUserIds,
     'imagePath': imagePath,
+    'poll': poll?.toMap(),
+    'isAnnouncement': isAnnouncement,
   };
 
   factory NewsPost.fromMap(Map<String, dynamic> m) => NewsPost(
@@ -49,5 +76,9 @@ class NewsPost {
     taggedClubIds: List<String>.from(m['taggedClubIds'] as List? ?? []),
     taggedUserIds: List<String>.from(m['taggedUserIds'] as List? ?? []),
     imagePath: m['imagePath'] as String?,
+    poll: m['poll'] == null
+        ? null
+        : PollData.fromMap(Map<String, dynamic>.from(m['poll'] as Map)),
+    isAnnouncement: m['isAnnouncement'] as bool? ?? false,
   );
 }

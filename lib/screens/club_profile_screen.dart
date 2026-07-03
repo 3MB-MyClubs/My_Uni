@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../models/event.dart';
@@ -6,6 +8,7 @@ import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
+import '../services/club_follow_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
@@ -17,6 +20,7 @@ import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import 'club_insights_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
@@ -279,8 +283,25 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             ),
             centerTitle: true,
             actions: [
-              // Owner's Profile tab: a single settings gear. Board management
-              // now lives inside Settings.
+              // Owner's Profile tab: insights + a single settings gear.
+              // Board management now lives inside Settings.
+              if (isCurrentAdminForClub(widget.club))
+                IconButton(
+                  icon: Icon(
+                    Icons.insights_rounded,
+                    color: panelText,
+                    size: 22,
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ClubInsightsScreen(
+                        club: widget.club,
+                        accent: widget.color,
+                      ),
+                    ),
+                  ),
+                ),
               if (widget.onSettings != null)
                 IconButton(
                   icon: Icon(
@@ -3012,6 +3033,43 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
     );
   }
 
+  /// Removes [member] from the club: deletes their club_followers row (and
+  /// any board role) with an optimistic local update.
+  Future<void> _removeMember(User member) async {
+    final hadRole = widget.club.boardMemberIds.contains(member.id);
+    setState(() {
+      _members = _members.where((m) => m.id != member.id).toList();
+      widget.club.boardMemberIds.remove(member.id);
+      widget.club.boardMemberTitles.remove(member.id);
+    });
+    final cached = supabaseClubMemberCounts[widget.club.id];
+    if (cached != null && cached > 0) {
+      supabaseClubMemberCounts[widget.club.id] = cached - 1;
+    }
+    unawaited(contentStore.saveBoardMemberIds());
+    unawaited(contentStore.saveBoardMemberTitles());
+
+    try {
+      if (hadRole) {
+        await supabaseClubService.removeBoardMemberRole(
+          club: widget.club,
+          userId: member.id,
+        );
+      }
+      await clubFollowService.unfollowClub(
+        userId: member.id,
+        clubId: widget.club.id,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _members = _sortMembers([..._members, member]));
+      final rolled = supabaseClubMemberCounts[widget.club.id];
+      if (rolled != null) {
+        supabaseClubMemberCounts[widget.club.id] = rolled + 1;
+      }
+    }
+  }
+
   /// Owner tap → choose: view profile, assign/edit a club role, or remove role.
   void _openMemberActions(User member) {
     final hasRole = widget.club.boardMemberIds.contains(member.id);
@@ -3085,6 +3143,20 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                   _removeRole(member);
                 },
               ),
+            ListTile(
+              leading: const Icon(
+                Icons.person_remove_outlined,
+                color: Colors.red,
+              ),
+              title: const Text(
+                'Remove from club',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+              ),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _removeMember(member);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),

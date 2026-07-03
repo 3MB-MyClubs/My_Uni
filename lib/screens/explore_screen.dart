@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../models/club.dart';
+import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -16,6 +17,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
+import 'event_detail_screen.dart';
 import 'user_profile_screen.dart';
 
 /// Discover Clubs + Find People.
@@ -39,6 +41,10 @@ class _ExploreScreenState extends State<ExploreScreen>
   // Clubs tab state
   final _clubSearchController = TextEditingController();
   String _clubQuery = '';
+
+  // Events & posts tab state
+  final _contentSearchController = TextEditingController();
+  String _contentQuery = '';
 
   // People tab state
   final _peopleSearchController = TextEditingController();
@@ -72,7 +78,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
     localeService.addListener(_onLocaleChanged);
     _loadClubContent();
@@ -83,6 +89,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   void dispose() {
     _tabController.dispose();
     _clubSearchController.dispose();
+    _contentSearchController.dispose();
     _peopleSearchController.dispose();
     localeService.removeListener(_onLocaleChanged);
     super.dispose();
@@ -327,6 +334,7 @@ class _ExploreScreenState extends State<ExploreScreen>
           indicatorColor: AppColors.primaryRed,
           tabs: [
             Tab(text: S.discoverClubs),
+            Tab(text: S.exploreContentTab),
             Tab(text: S.findPeople),
           ],
         ),
@@ -335,7 +343,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         listenable: userState,
         builder: (context, _) => TabBarView(
           controller: _tabController,
-          children: [_buildClubsTab(), _buildPeopleTab()],
+          children: [_buildClubsTab(), _buildContentTab(), _buildPeopleTab()],
         ),
       ),
     );
@@ -568,6 +576,162 @@ class _ExploreScreenState extends State<ExploreScreen>
     );
   }
 
+  // ─── Events tab ──────────────────────────────────────────────────────────
+
+  Club? _clubById(String id) {
+    final i = clubs.indexWhere((c) => c.id == id);
+    return i < 0 ? null : clubs[i];
+  }
+
+  List<Event> get _filteredEvents {
+    final q = _contentQuery.trim().toLowerCase();
+    final now = DateTime.now();
+    final list = events.where((e) {
+      if (q.isEmpty) return e.endTime.isAfter(now);
+      final clubName = _clubById(e.clubId)?.name.toLowerCase() ?? '';
+      return e.title.toLowerCase().contains(q) ||
+          clubName.contains(q) ||
+          e.location.toLowerCase().contains(q) ||
+          e.description.toLowerCase().contains(q);
+    }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return list;
+  }
+
+  Widget _buildContentTab() {
+    final searching = _contentQuery.trim().isNotEmpty;
+    final matchedEvents = _filteredEvents;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: _searchField(
+            controller: _contentSearchController,
+            hint: S.searchEventsPosts,
+            value: _contentQuery,
+            onChanged: (v) => setState(() => _contentQuery = v),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: matchedEvents.isEmpty
+              ? _emptyState(S.noContentMatch, S.tryDifferentSearch)
+              : ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    MediaQuery.of(context).padding.bottom + 112,
+                  ),
+                  children: [
+                    _sectionLabel(
+                      searching
+                          ? '${S.filterEvents} · ${matchedEvents.length}'
+                          : S.upcomingEvents,
+                    ),
+                    ...matchedEvents.map(_eventResultRow),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  static const List<String> _monthLabels = [
+    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+  ];
+
+  Widget _eventResultRow(Event event) {
+    final club = _clubById(event.clubId);
+    final color = _hueFor(clubs.indexWhere((c) => c.id == event.clubId));
+    final date = event.dateTime;
+    final time =
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EventDetailScreen(event: event, color: color),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    _monthLabels[date.month - 1],
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    '${date.day}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${club?.name ?? 'Campus event'} · $time · ${event.location}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppColors.secondaryText),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── Find People tab ─────────────────────────────────────────────────────
 
   Widget _buildPeopleTab() {
@@ -576,7 +740,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
     final label = searching
         ? '${people.length} result${people.length == 1 ? '' : 's'}'
-        : S.peopleMightKnow;
+        : '';
 
     return Column(
       children: [
@@ -691,7 +855,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                 : people.length + 1,
             itemBuilder: (context, i) {
               if (i == 0) {
-                return _sectionLabel(label);
+                return label.isEmpty
+                    ? const SizedBox.shrink()
+                    : _sectionLabel(label);
               }
               if (_peopleLoading && people.isEmpty) {
                 return const _PersonRowSkeleton();

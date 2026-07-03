@@ -5,7 +5,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:flutter_application_1/screens/create_event_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
@@ -19,7 +19,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Create event — date/time opens the wheel sheet', (tester) async {
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await viewTracker.initialize();

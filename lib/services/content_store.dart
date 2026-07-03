@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import '../models/comment.dart';
 import '../models/event.dart';
 import '../models/like.dart';
 import '../models/news_post.dart';
@@ -42,10 +43,11 @@ class ContentStore {
     final storedVersion = _box.get('seedVersion') as int? ?? 0;
     final versionMatch = storedVersion == _seedVersion;
 
-    // Comments are disabled app-wide. Clear older persisted comments so they
-    // cannot reappear from previous simulator sessions.
-    comments.clear();
-    _box.delete('comments');
+    _load(
+      'comments',
+      comments,
+      (m) => Comment.fromMap(Map<String, dynamic>.from(m as Map)),
+    );
 
     // Always load user-generated interaction data (safe across versions)
     _load(

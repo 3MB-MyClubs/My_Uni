@@ -57,55 +57,6 @@ class NotificationService {
     _initialized = true;
   }
 
-  /// Show message notification
-  Future<void> showMessageNotification({
-    required String senderName,
-    required String messageContent,
-    required String senderId,
-  }) async {
-    if (!_initialized) await initialize();
-
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          'messages',
-          'Messages',
-          channelDescription: 'Notifications for incoming messages',
-          importance: Importance.max,
-          priority: Priority.high,
-          showWhen: true,
-          enableVibration: true,
-          playSound: true,
-          sound: RawResourceAndroidNotificationSound('notification'),
-        );
-
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    // Truncate message if too long
-    final displayMessage = messageContent.length > 100
-        ? '${messageContent.substring(0, 100)}...'
-        : messageContent;
-
-    await _notificationsPlugin.show(
-      senderId.hashCode, // Use sender ID as notification ID
-      '$senderName sent you a message',
-      displayMessage,
-      details,
-    );
-  }
-
-  /// Cancel notification
-  Future<void> cancelNotification(String senderId) async {
-    await _notificationsPlugin.cancel(senderId.hashCode);
-  }
 
   Future<void> scheduleEventReminders(Event event) async {
     if (!_initialized) await initialize();
