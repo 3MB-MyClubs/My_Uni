@@ -16,12 +16,14 @@ class UserFollowButton extends StatelessWidget {
   final String userId;
   final VoidCallback onTap;
   final String size; // 'large' | 'medium' | 'small'
+  final String? followLabel; // overrides the "not following" label
 
   const UserFollowButton({
     super.key,
     required this.userId,
     required this.onTap,
     this.size = 'medium',
+    this.followLabel,
   });
 
   @override
@@ -40,7 +42,7 @@ class UserFollowButton extends StatelessWidget {
             ? 'Requested'
             : isFollowing
             ? 'Following'
-            : 'Follow';
+            : (followLabel ?? 'Follow');
 
         final bool filled = !isFollowing && !isPending;
 
@@ -65,6 +67,7 @@ class UserFollowButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: padding,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: filled ? AppColors.primaryRed : Colors.transparent,
               borderRadius: BorderRadius.circular(borderRadius),
