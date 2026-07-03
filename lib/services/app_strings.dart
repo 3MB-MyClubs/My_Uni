@@ -271,8 +271,8 @@ class S {
     'Son 7 gün içinde biten etkinlikler.',
   );
   static String get upcomingEventsHint => _t(
-    "What's on across campus — next 3 weeks.",
-    'Kampüste neler var — önümüzdeki 3 hafta.',
+    "What's on across campus — next month.",
+    'Kampüste neler var — önümüzdeki ay.',
   );
 
   // ── Notifications

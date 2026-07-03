@@ -167,10 +167,10 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     return DateTime(n.year, n.month, n.day);
   }
 
-  // Rolling 21-day pool (3 weeks) — excludes fully-past events, keeps live ones.
+  // Rolling 30-day pool (1 month) — excludes fully-past events, keeps live ones.
   List<Event> get _eventPool {
     final now = DateTime.now();
-    final end = _today.add(const Duration(days: 21));
+    final end = _today.add(const Duration(days: 30));
     return events
         .where((e) => e.endTime.isAfter(now) && e.dateTime.isBefore(end))
         .toList();
@@ -576,7 +576,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             : '${_dateFilters.length} days',
       );
     }
-    if (parts.isEmpty) return '· next 3 weeks';
+    if (parts.isEmpty) return '· next month';
     return '· ${parts.join(' · ')}';
   }
 }
@@ -964,7 +964,7 @@ class _AudienceOption extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Date picker bottom sheet — 3-week calendar grid
+// Date picker bottom sheet — 1-month calendar grid
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DatePickerSheet extends StatefulWidget {
@@ -1022,9 +1022,9 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     return t.subtract(Duration(days: t.weekday - 1));
   }
 
-  // Week rows to display: from current week through the week that covers today+20.
+  // Week rows to display: from current week through the week that covers today+29.
   List<List<DateTime>> get _weeks {
-    final end = _todayDate.add(const Duration(days: 21));
+    final end = _todayDate.add(const Duration(days: 30));
     final List<List<DateTime>> rows = [];
     var ws = _weekStart;
     while (ws.isBefore(end)) {
