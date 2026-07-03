@@ -5,7 +5,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/rsvp_store.dart';
@@ -19,7 +19,7 @@ void main() {
 
   testWidgets('RSVP → clean attending UI (no deform)', (tester) async {
     authService.logout();
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await contentStore.initialize();
     await themeService.initialize();
     await themeService.setDark(false);
@@ -100,7 +100,7 @@ void main() {
 
   testWidgets('Attending state renders at full height', (tester) async {
     authService.logout();
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await contentStore.initialize();
     await themeService.initialize();
     await themeService.setDark(false);

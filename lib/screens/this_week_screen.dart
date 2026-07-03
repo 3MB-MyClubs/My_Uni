@@ -418,13 +418,16 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                 child: Row(
                   children: [
                     // Audience
-                    _FilterPillBtn(
-                      label: _audience == 'following' ? S.following : S.all,
-                      icon: _audience == 'following'
-                          ? Icons.favorite_outline_rounded
-                          : Icons.people_outline_rounded,
-                      active: _audience == 'following',
-                      onTap: _showAudienceSheet,
+                    Expanded(
+                      child: _FilterPillBtn(
+                        label: _audience == 'following' ? S.following : S.all,
+                        icon: _audience == 'following'
+                            ? Icons.favorite_outline_rounded
+                            : Icons.people_outline_rounded,
+                        active: _audience == 'following',
+                        onTap: _showAudienceSheet,
+                        expand: true,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     // Date (multi-select)
@@ -516,7 +519,8 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _EmptyState(
-                  searching: searching || hasFilter,
+                  searching: searching,
+                  hasFilter: hasFilter,
                   onReset: _resetFilters,
                 ),
               )
@@ -1701,12 +1705,29 @@ class _LiveBadge extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final bool searching;
+  final bool hasFilter;
   final VoidCallback onReset;
 
-  const _EmptyState({required this.searching, required this.onReset});
+  const _EmptyState({
+    required this.searching,
+    required this.hasFilter,
+    required this.onReset,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Nothing typed and nothing filtered, yet the list is still empty —
+    // that means there simply aren't any upcoming events, not that the
+    // user's search/filters excluded everything. Show a friendlier nudge
+    // instead of "try a different keyword" / a reset button with nothing
+    // to reset.
+    final trulyEmpty = !searching && !hasFilter;
+    final active = searching || hasFilter;
+    final String title = trulyEmpty ? S.noEventsYet : S.noEventsFound;
+    final String subtitle = searching
+        ? S.tryDifferentKeyword
+        : (hasFilter ? S.nothingScheduled : S.checkBackLater);
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(28, 0, 28, 60),
@@ -1721,14 +1742,18 @@ class _EmptyState extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
-                searching ? Icons.search_off_rounded : Icons.event_busy_rounded,
+                trulyEmpty
+                    ? Icons.event_available_rounded
+                    : (searching
+                          ? Icons.search_off_rounded
+                          : Icons.event_busy_rounded),
                 size: 26,
                 color: AppColors.primaryRed,
               ),
             ),
             const SizedBox(height: 14),
             Text(
-              S.noEventsFound,
+              title,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -1738,7 +1763,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              searching ? S.tryDifferentKeyword : S.nothingScheduled,
+              subtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -1746,28 +1771,30 @@ class _EmptyState extends StatelessWidget {
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: onReset,
-              child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Text(
-                  S.resetFilters,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    letterSpacing: -0.1,
+            if (active) ...[
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: onReset,
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    S.resetFilters,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: -0.1,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

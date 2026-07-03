@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/news_post.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
@@ -204,6 +206,15 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final _contentController = TextEditingController();
+
+  // Poll composer state (2 options minimum, up to 4).
+  bool _pollEnabled = false;
+  final _pollQuestionController = TextEditingController();
+  final List<TextEditingController> _pollOptionControllers = [
+    TextEditingController(),
+    TextEditingController(),
+  ];
+  bool _isAnnouncement = false;
   bool _isPosting = false;
 
   _ClubOption? _selectedClub;
@@ -233,6 +244,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void dispose() {
     _contentController.dispose();
+    _pollQuestionController.dispose();
+    for (final c in _pollOptionControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -297,6 +312,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     ),
   ];
 
+  PollData? get _pollData {
+    if (!_pollEnabled) return null;
+    final question = _pollQuestionController.text.trim();
+    final options = _pollOptionControllers
+        .map((c) => c.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (question.isEmpty || options.length < 2) return null;
+    return PollData(question: question, options: options);
+  }
+
   Future<void> _post() async {
     final content = _contentController.text.trim();
     if (content.isEmpty || _selectedClub == null) return;
@@ -310,11 +336,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         taggedClubIds: _extractTaggedClubIds(content),
         taggedUserIds: _extractTaggedUserIds(content),
         imagePath: _hasUploadedPhoto ? _imagePath : null,
+        poll: _pollData,
+        isAnnouncement: _isAnnouncement,
       );
       if (!mounted) return;
       newsPosts.insert(0, post);
       unawaited(contentStore.saveNewsPosts());
       unawaited(clubNotificationService.notifyFollowersAboutPost(post));
+      clubNotificationService.notifyMentionedUsers(post);
       widget.onPosted?.call();
       Navigator.of(context).pop();
     } catch (error, stackTrace) {
@@ -679,6 +708,133 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     emptySubtitle: 'Tap to pick from camera or library',
                   ),
                 ],
+                const SizedBox(height: 20),
+
+                // ── Poll ───────────────────────────────────────────────────
+                Row(
+                  children: [
+                    Icon(Icons.poll_outlined, size: 16, color: AppColors.text),
+                    const SizedBox(width: 6),
+                    Text(
+                      S.addPoll,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    Switch.adaptive(
+                      value: _pollEnabled,
+                      activeTrackColor: AppColors.primaryRed,
+                      onChanged: (v) => setState(() => _pollEnabled = v),
+                    ),
+                  ],
+                ),
+                if (_pollEnabled) ...[
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _pollQuestionController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppColors.surfaceAlt,
+                      hintText: S.pollQuestionHint,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    style: TextStyle(fontSize: 14, color: AppColors.text),
+                  ),
+                  const SizedBox(height: 8),
+                  for (var i = 0; i < _pollOptionControllers.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _pollOptionControllers[i],
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                filled: true,
+                                fillColor: AppColors.surfaceAlt,
+                                hintText: S.pollOptionHint(i + 1),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ),
+                          if (_pollOptionControllers.length > 2)
+                            IconButton(
+                              onPressed: () => setState(() {
+                                _pollOptionControllers.removeAt(i).dispose();
+                              }),
+                              icon: Icon(
+                                Icons.remove_circle_outline,
+                                size: 19,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  if (_pollOptionControllers.length < 4)
+                    TextButton.icon(
+                      onPressed: () => setState(
+                        () =>
+                            _pollOptionControllers.add(TextEditingController()),
+                      ),
+                      icon: Icon(
+                        Icons.add_rounded,
+                        size: 17,
+                        color: AppColors.primaryRed,
+                      ),
+                      label: Text(
+                        S.pollOptionHint(_pollOptionControllers.length + 1),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 4),
+
+                // ── Announcement toggle ────────────────────────────────────
+                Row(
+                  children: [
+                    Icon(
+                      Icons.campaign_outlined,
+                      size: 17,
+                      color: AppColors.text,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      S.markAsAnnouncement,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    Switch.adaptive(
+                      value: _isAnnouncement,
+                      activeTrackColor: AppColors.primaryRed,
+                      onChanged: (v) => setState(() => _isAnnouncement = v),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 40),
               ],
             ),

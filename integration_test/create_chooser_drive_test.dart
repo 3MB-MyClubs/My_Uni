@@ -4,7 +4,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:flutter_application_1/screens/main_nav_screen.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 
 /// The redesigned "Create" chooser a club admin sees from the central +.
@@ -12,7 +12,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Create chooser — copy + look', (tester) async {
-    await messageService.initialize(); // initializes Hive for themeService
+    await hiveBootstrap.initialize(); // initializes Hive for themeService
     await themeService.initialize();
     await themeService.setDark(true); // match the reported dark-mode screenshot
 

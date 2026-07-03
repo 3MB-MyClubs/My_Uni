@@ -6,7 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter_application_1/screens/theme_choice_screen.dart';
 import 'package:flutter_application_1/screens/this_week_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
@@ -21,7 +21,7 @@ void main() {
 
   testWidgets('First-time theme picker — light, preview dark, proceed',
       (tester) async {
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await themeService.initialize();
@@ -82,7 +82,7 @@ void main() {
   });
 
   testWidgets('Events (Week) — pull to refresh', (tester) async {
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await themeService.initialize();

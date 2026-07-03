@@ -6,7 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/edit_profile_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
@@ -29,7 +29,7 @@ void main() {
 
   testWidgets('Edit profile — dedicated screen with majors/minors/interests',
       (tester) async {
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await viewTracker.initialize();
