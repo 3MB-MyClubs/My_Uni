@@ -23,38 +23,42 @@ void main() {
     expect(service.isComplete('student-1'), isFalse);
   });
 
-  testWidgets('tutorial keeps skip visible and moves through its steps', (
-    tester,
-  ) async {
-    var skipped = false;
-    var completed = false;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AppTutorialOverlay(
-            steps: const [
-              AppTutorialStep(
-                eyebrow: 'First',
-                title: 'Welcome',
-                description: 'First tutorial step.',
-                icon: Icons.home,
-                tabIndex: 0,
-              ),
-              AppTutorialStep(
-                eyebrow: 'Second',
-                title: 'Ready',
-                description: 'Last tutorial step.',
-                icon: Icons.check,
-                tabIndex: 1,
-              ),
-            ],
-            onStepChanged: (_) {},
-            onComplete: () => completed = true,
-            onSkip: () => skipped = true,
-          ),
+  Widget buildOverlay({
+    required VoidCallback onComplete,
+    required VoidCallback onSkip,
+  }) {
+    return MaterialApp(
+      home: Scaffold(
+        body: AppTutorialOverlay(
+          steps: const [
+            AppTutorialStep(
+              eyebrow: 'First',
+              title: 'Welcome',
+              description: 'First tutorial step.',
+              icon: Icons.home,
+              tabIndex: 0,
+            ),
+            AppTutorialStep(
+              eyebrow: 'Second',
+              title: 'Ready',
+              description: 'Last tutorial step.',
+              icon: Icons.check,
+              tabIndex: 1,
+            ),
+          ],
+          onStepChanged: (_) {},
+          onComplete: onComplete,
+          onSkip: onSkip,
         ),
       ),
+    );
+  }
+
+  testWidgets('tutorial can be skipped from a non-final step', (tester) async {
+    var skipped = false;
+
+    await tester.pumpWidget(
+      buildOverlay(onComplete: () {}, onSkip: () => skipped = true),
     );
     await tester.pump();
 
@@ -62,17 +66,30 @@ void main() {
     expect(find.text('1/2'), findsOneWidget);
     expect(find.text('Welcome'), findsOneWidget);
 
+    await tester.tap(find.text('Skip tour'));
+    expect(skipped, isTrue);
+  });
+
+  testWidgets('tutorial hides skip on the last step and completes', (
+    tester,
+  ) async {
+    var completed = false;
+
+    await tester.pumpWidget(
+      buildOverlay(onComplete: () => completed = true, onSkip: () {}),
+    );
+    await tester.pump();
+
     await tester.tap(find.text('Next'));
     await tester.pump();
 
-    expect(find.text('Skip tour'), findsOneWidget);
+    // The last step intentionally hides "Skip tour"; the primary button
+    // finishes the tour instead.
+    expect(find.text('Skip tour'), findsNothing);
     expect(find.text('2/2'), findsOneWidget);
     expect(find.text('Ready'), findsOneWidget);
 
     await tester.tap(find.text('Start exploring'));
     expect(completed, isTrue);
-
-    await tester.tap(find.text('Skip tour'));
-    expect(skipped, isTrue);
   });
 }
