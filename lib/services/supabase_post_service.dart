@@ -30,6 +30,8 @@ class SupabasePostService {
     required List<String> taggedClubIds,
     required List<String> taggedUserIds,
     String? imagePath,
+    PollData? poll,
+    bool isAnnouncement = false,
   }) async {
     final client = _client;
     if (client == null) {
@@ -40,6 +42,8 @@ class SupabasePostService {
         taggedClubIds: taggedClubIds,
         taggedUserIds: taggedUserIds,
         imagePath: imagePath,
+        poll: poll,
+        isAnnouncement: isAnnouncement,
       );
     }
 
@@ -51,6 +55,7 @@ class SupabasePostService {
       payload['image_path'] = uploadedImage.path;
       payload['image_url'] = uploadedImage.publicUrl;
     }
+    if (isAnnouncement) payload['is_announcement'] = true;
 
     final row = await client
         .from('club_posts')
@@ -59,8 +64,23 @@ class SupabasePostService {
         .single();
 
     final data = Map<String, dynamic>.from(row);
+    final postId = data['id']?.toString() ?? '';
+
+    if (poll != null && postId.isNotEmpty) {
+      try {
+        await client.from('polls').insert({
+          'post_id': postId,
+          'question': poll.question,
+          'options': poll.options,
+        });
+      } catch (_) {
+        // Poll table missing or offline — the poll still lives on the local
+        // NewsPost and votes stay local.
+      }
+    }
+
     return NewsPost(
-      id: data['id']?.toString() ?? '',
+      id: postId,
       clubId: data['club_id']?.toString() ?? clubId,
       authorId: authorId,
       content: data['content']?.toString() ?? content,
@@ -73,6 +93,8 @@ class SupabasePostService {
           data['image_url']?.toString() ??
           uploadedImage?.publicUrl ??
           data['image_path']?.toString(),
+      poll: poll,
+      isAnnouncement: isAnnouncement,
     );
   }
 
@@ -114,6 +136,8 @@ class SupabasePostService {
     required List<String> taggedClubIds,
     required List<String> taggedUserIds,
     String? imagePath,
+    PollData? poll,
+    bool isAnnouncement = false,
   }) {
     return NewsPost(
       id: 'p_${DateTime.now().millisecondsSinceEpoch}',
@@ -124,6 +148,8 @@ class SupabasePostService {
       taggedClubIds: taggedClubIds,
       taggedUserIds: taggedUserIds,
       imagePath: imagePath,
+      poll: poll,
+      isAnnouncement: isAnnouncement,
     );
   }
 

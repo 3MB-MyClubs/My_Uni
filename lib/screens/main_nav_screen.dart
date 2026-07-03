@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
-import '../models/notification.dart';
+import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_admin_access.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
@@ -14,7 +15,7 @@ import '../services/locale_service.dart';
 import '../services/tutorial_service.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/app_tutorial_overlay.dart';
-import 'chat_screen.dart';
+import '../widgets/big_picture_post_composer_sheet.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -35,7 +36,6 @@ class MainNavScreen extends ConsumerStatefulWidget {
 
 class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   int _selectedIndex = 0;
-  OverlayEntry? _bannerEntry;
   bool _showTutorial = false;
 
   String get _currentUserId =>
@@ -44,7 +44,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   @override
   void initState() {
     super.initState();
-    userState.incomingMessageNotifier.addListener(_onIncomingMessage);
     tutorialService.replayRequests.addListener(_onTutorialReplayRequested);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _startInitialExperience(),
@@ -159,7 +158,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       eyebrow: 'Alerts',
       title: 'Stay in the loop',
       description:
-          'Follows, club posts, event changes, and messages collect here. Tap an alert to open it, filter with the chips, or clear them all with this button.',
+          'Follows, club posts, and event changes collect here. Tap an alert to open it, filter with the chips, or clear them all with this button.',
       icon: Icons.notifications_active_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
       tabIndex: 3,
@@ -216,55 +215,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
 
   @override
   void dispose() {
-    userState.incomingMessageNotifier.removeListener(_onIncomingMessage);
     tutorialService.replayRequests.removeListener(_onTutorialReplayRequested);
-    _bannerEntry?.remove();
     super.dispose();
-  }
-
-  void _onIncomingMessage() {
-    final notif = userState.incomingMessageNotifier.value;
-    if (notif == null) {
-      _bannerEntry?.remove();
-      _bannerEntry = null;
-      return;
-    }
-    _showInAppBanner(notif);
-  }
-
-  void _showInAppBanner(AppNotification notif) {
-    _bannerEntry?.remove();
-    _bannerEntry = OverlayEntry(
-      builder: (_) => _InAppMessageBanner(
-        notification: notif,
-        onTap: () {
-          _bannerEntry?.remove();
-          _bannerEntry = null;
-          if (notif.targetId != null) {
-            final user = users.firstWhere(
-              (u) => u.id == notif.targetId,
-              orElse: () => users.first,
-            );
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    ChatScreen(otherUserId: user.id, otherUserName: user.name),
-              ),
-            );
-          }
-        },
-        onDismiss: () {
-          _bannerEntry?.remove();
-          _bannerEntry = null;
-        },
-      ),
-    );
-    Overlay.of(context).insert(_bannerEntry!);
-    // Auto-dismiss after 4 seconds.
-    Future.delayed(const Duration(seconds: 4), () {
-      _bannerEntry?.remove();
-      _bannerEntry = null;
-    });
   }
 
   void _onNotificationsOpened() {
@@ -283,12 +235,48 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     return admin.id != appAdmin.id; // not the super admin
   }
 
-  void _onAddTap() {
+  // Same palette used elsewhere (explore/profile) so a club's composer sheet
+  // matches its color everywhere in the app.
+  static const List<Color> _clubColors = [
+    Color(0xFF8C1D40),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFF6A1B9A),
+    Color(0xFFE65100),
+    Color(0xFF00838F),
+  ];
+
+  Color _colorForClub(Club club) {
+    final idx = clubs.indexOf(club);
+    return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
+  }
+
+  void _openCreateEvent() {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => CreateEventScreen(onCreated: () => setState(() {})),
       ),
+    );
+  }
+
+  void _onAddTap() {
+    final club = managedClubForAdmin(authService.currentAdmin?.id ?? '');
+    if (club == null) {
+      // No managed club to post as (shouldn't happen for a club admin) —
+      // fall back to the one action that never needs a club context.
+      _openCreateEvent();
+      return;
+    }
+    showClubCreateSheet(
+      context,
+      onPost: () => showBigPicturePostComposerSheet(
+        context: context,
+        club: club,
+        color: _colorForClub(club),
+        onPosted: () => setState(() {}),
+      ),
+      onEvent: _openCreateEvent,
     );
   }
 
@@ -397,7 +385,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
           key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
           borderRadius: BorderRadius.circular(30),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               height: 72,
               decoration: BoxDecoration(
@@ -407,21 +395,21 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                   end: Alignment.bottomCenter,
                   colors: isDark
                       ? [
-                          Colors.white.withValues(alpha: 0.05),
-                          Colors.black.withValues(alpha: 0.09),
+                          Colors.white.withValues(alpha: 0.008),
+                          Colors.black.withValues(alpha: 0.015),
                         ]
                       : [
-                          Colors.white.withValues(alpha: 0.16),
-                          Colors.white.withValues(alpha: 0.06),
+                          Colors.white.withValues(alpha: 0.03),
+                          Colors.white.withValues(alpha: 0.01),
                         ],
                 ),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.24),
+                  color: Colors.white.withValues(alpha: isDark ? 0.04 : 0.10),
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.08),
+                    color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.03),
                     blurRadius: 32,
                     spreadRadius: 0,
                     offset: const Offset(0, 16),
@@ -447,7 +435,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   Colors.white.withValues(
-                                    alpha: isDark ? 0.04 : 0.13,
+                                    alpha: isDark ? 0.015 : 0.04,
                                   ),
                                   Colors.transparent,
                                 ],
@@ -696,149 +684,6 @@ class _CenterAddButton extends StatelessWidget {
               ],
             ),
             child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── In-App Message Banner ────────────────────────────────────────────────────
-
-class _InAppMessageBanner extends StatefulWidget {
-  final AppNotification notification;
-  final VoidCallback onTap;
-  final VoidCallback onDismiss;
-
-  const _InAppMessageBanner({
-    required this.notification,
-    required this.onTap,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_InAppMessageBanner> createState() => _InAppMessageBannerState();
-}
-
-class _InAppMessageBannerState extends State<_InAppMessageBanner>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _slide = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final senderName = widget.notification.message.contains(' sent you')
-        ? widget.notification.message.split(' sent you').first
-        : 'New message';
-    final content = widget.notification.message.contains(': "')
-        ? widget.notification.message.split(': "').last.replaceAll('"', '')
-        : widget.notification.message;
-
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
-      left: 16,
-      right: 16,
-      child: SlideTransition(
-        position: _slide,
-        child: Material(
-          color: Colors.transparent,
-          child: GestureDetector(
-            onTap: widget.onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.primaryRed.withValues(alpha: 0.4),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.lightRed,
-                    ),
-                    child: Center(
-                      child: Text(
-                        senderName.isNotEmpty
-                            ? senderName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryRed,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          senderName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          content,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: widget.onDismiss,
-                    child: Icon(
-                      Icons.close,
-                      size: 16,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
       ),

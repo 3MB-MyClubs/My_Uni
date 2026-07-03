@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
@@ -174,167 +175,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  String get _myId =>
-      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-
-  void _persist() => userPrefsService.save(_myId);
-
-  Future<void> _handleFollowTap() async {
-    if (!authService.isStudentSession) return;
-
-    final user = widget.user;
-    final isFollowing = userState.isFollowingUser(user.id);
-    final isPending = userState.hasPendingRequest(user.id);
-
-    if (isFollowing && !isPending) {
-      setState(() => userState.toggleFollowUser(user.id));
-      _persist();
-      try {
-        await peopleService.setFollowing(
-          followerId: _myId,
-          followingId: user.id,
-          follow: false,
-        );
-      } catch (_) {
-        setState(() => userState.toggleFollowUser(user.id));
-        _persist();
-      }
-      return;
-    }
-    if (isPending) {
-      setState(() {
-        userState.pendingFollowRequests.remove(user.id);
-        userState.followedUserIds.remove(user.id);
-      });
-      _persist();
-      return;
-    }
-    setState(() => userState.followedUserIds.add(user.id));
-    _persist();
-    try {
-      await peopleService.setFollowing(
-        followerId: _myId,
-        followingId: user.id,
-        follow: true,
-      );
-    } catch (_) {
-      setState(() => userState.followedUserIds.remove(user.id));
-      _persist();
-    }
-  }
+  Future<void> _handleFollowTap() =>
+      _toggleUserFollow(widget.user, () => setState(() {}));
 
   void _openUserProfile(User u) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => UserProfileScreen(user: u)),
-    );
-  }
-
-  void _showPeopleSheet(String title, List<User> people) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.55,
-        minChildSize: 0.35,
-        maxChildSize: 0.85,
-        expand: false,
-        builder: (_, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppColors.divider,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Divider(height: 1),
-              if (people.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(
-                    _connectionsLoading
-                        ? 'Loading connections...'
-                        : _connectionsError ?? 'No one here yet.',
-                    style: TextStyle(color: AppColors.secondaryText),
-                  ),
-                )
-              else
-                Expanded(
-                  child: ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: people.length,
-                    separatorBuilder: (_, i) =>
-                        const Divider(height: 1, indent: 72),
-                    itemBuilder: (ctx, i) {
-                      final u = people[i];
-                      return ListTile(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _openUserProfile(u);
-                        },
-                        leading: UserAvatar(
-                          userId: u.id,
-                          name: u.name,
-                          size: 44,
-                          fontSize: 16,
-                        ),
-                        title: Text(
-                          userState.displayNameFor(u.id, u.name),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: userState.usernameFor(u.id) != null
-                            ? Text(
-                                u.name,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.secondaryText,
-                                ),
-                              )
-                            : null,
-                        trailing: Icon(
-                          Icons.chevron_right,
-                          color: AppColors.secondaryText,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -387,7 +234,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 // 4 ── Stats card ───────────────────────────────────────────────
                 _buildStatsCard(subClubs, followersList, followingList),
 
-                // 5 ── Footer ──────────────────────────────────────────────────
+                // 5 ── Clubs card ───────────────────────────────────────────────
+                if (subClubs.isNotEmpty) _buildClubsCard(subClubs),
+
+                // 6 ── Footer ──────────────────────────────────────────────────
                 _buildFooter(),
               ],
             ),
@@ -603,7 +453,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _showClubsSheet(subClubs),
+                  onTap: () => _openConnections(_ConnTab.clubs),
                   child: _StatBlock(
                     value: '${subClubs.length}',
                     label: 'Clubs',
@@ -614,7 +464,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _showPeopleSheet('Followers', liveFollowers),
+                  onTap: () => _openConnections(_ConnTab.followers),
                   child: _StatBlock(
                     value: '${liveFollowers.length}',
                     label: 'Followers',
@@ -625,7 +475,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _showPeopleSheet('Following', liveFollowing),
+                  onTap: () => _openConnections(_ConnTab.following),
                   child: _StatBlock(
                     value: '${liveFollowing.length}',
                     label: 'Following',
@@ -639,6 +489,137 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  // ── Clubs card ───────────────────────────────────────────────────────────────
+
+  Widget _buildClubsCard(List<Club> subClubs) {
+    final showSeeAll = subClubs.length > 4;
+    final displayCount = showSeeAll ? 4 : subClubs.length;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.divider, width: 1),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'CLUBS · ${subClubs.length}',
+                style: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.9,
+                ),
+              ),
+              if (showSeeAll) ...[
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => _showClubsSheet(subClubs),
+                  child: const Text(
+                    'See all',
+                    style: TextStyle(
+                      color: _burgundy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (int i = 0; i < displayCount; i++)
+            _buildClubRow(subClubs[i], isLast: i == displayCount - 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClubRow(Club club, {required bool isLast}) {
+    final memberCount = subscriptions.where((s) => s.clubId == club.id).length;
+    final roleTitle = _roleTitleFor(club);
+    final isLeader = roleTitle != null;
+
+    return GestureDetector(
+      onTap: () => _openClub(club),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : Border(
+                  bottom: BorderSide(color: AppColors.divider, width: 1),
+                ),
+        ),
+        child: Row(
+          children: [
+            ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _clubColor(club),
+              imageUrl: club.logoUrl,
+              size: 42,
+              fontSize: 18,
+              borderRadius: 13,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    club.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$memberCount members',
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: isLeader ? _burgundy : AppColors.background,
+                borderRadius: BorderRadius.circular(100),
+                border: isLeader ? null : Border.all(color: AppColors.divider),
+              ),
+              child: Text(
+                roleTitle ?? 'Member',
+                style: TextStyle(
+                  color: isLeader ? Colors.white : AppColors.text,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// The board role title this student holds at [club], or null if none.
   /// Empty stored titles fall back to a generic "Board Member" label.
   String? _roleTitleFor(Club club) {
@@ -647,164 +628,142 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return raw.isEmpty ? 'Board Member' : raw;
   }
 
-  void _showClubsSheet(List<Club> subClubs) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.52,
-        minChildSize: 0.35,
-        maxChildSize: 0.84,
-        expand: false,
-        builder: (sheetContext, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
+  // ── Clubs section ────────────────────────────────────────────────────────────
+  // Always-visible club membership + role list, so anyone visiting this
+  // profile immediately sees what clubs the person is in — not just a tap
+  // target buried behind the stats count.
+
+  Widget _buildClubsSection(List<Club> subClubs) {
+    if (subClubs.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(color: AppColors.divider, width: 1),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              const SizedBox(height: 12),
+              Text(
+                S.clubs,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
-                width: 38,
-                height: 4,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
                 decoration: BoxDecoration(
-                  color: AppColors.divider,
+                  color: _burgundySoft,
                   borderRadius: BorderRadius.circular(999),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Followed clubs',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _burgundy,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${subClubs.length}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  '${subClubs.length}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _burgundy,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: subClubs.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No followed clubs yet.',
-                          style: TextStyle(color: AppColors.secondaryText),
-                        ),
-                      )
-                    : ListView.separated(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                        itemCount: subClubs.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final club = subClubs[index];
-                          final color = _clubColor(club);
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              _openClub(club);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceAlt,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.divider),
-                              ),
-                              child: Row(
-                                children: [
-                                  ClubAvatar(
-                                    clubId: club.id,
-                                    clubName: club.name,
-                                    color: color,
-                                    imageUrl: club.logoUrl,
-                                    size: 44,
-                                    fontSize: 18,
-                                    borderRadius: 13,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          club.name,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.text,
-                                          ),
-                                        ),
-                                        if (_roleTitleFor(club) != null) ...[
-                                          const SizedBox(height: 3),
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons
-                                                    .workspace_premium_outlined,
-                                                size: 13,
-                                                color: _burgundy,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Flexible(
-                                                child: Text(
-                                                  _roleTitleFor(club)!,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: _burgundy,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: AppColors.secondaryText,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          for (int i = 0; i < subClubs.length; i++) ...[
+            if (i > 0) ...[
+              const SizedBox(height: 12),
+              Divider(height: 1, color: AppColors.divider),
+              const SizedBox(height: 12),
+            ],
+            _buildClubRow(subClubs[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClubRow(Club club) {
+    final color = _clubColor(club);
+    final role = _roleTitleFor(club);
+    final isLeader = role != null;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openClub(club),
+      child: Row(
+        children: [
+          ClubAvatar(
+            clubId: club.id,
+            clubName: club.name,
+            color: color,
+            imageUrl: club.logoUrl,
+            size: 44,
+            fontSize: 18,
+            borderRadius: 13,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              club.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: isLeader ? _burgundy : AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(999),
+              border: isLeader ? null : Border.all(color: AppColors.divider),
+            ),
+            child: Text(
+              role ?? 'Member',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isLeader ? Colors.white : AppColors.secondaryText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openConnections(_ConnTab tab) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ConnectionsScreen(
+          title: userState.displayNameFor(widget.user.id, widget.user.name),
+          initialTab: tab,
+          clubsOf: () => _subscribedClubs,
+          followersOf: () => _followers,
+          followingOf: () => _following,
+          roleTitleFor: _roleTitleFor,
+          clubColor: _clubColor,
+          onOpenClub: _openClub,
+          onOpenUser: _openUserProfile,
+          peopleLoading: _connectionsLoading,
+          peopleError: _connectionsError,
         ),
       ),
     );
@@ -814,6 +773,388 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Widget _buildFooter() {
     return const SizedBox(height: 28);
+  }
+}
+
+// ── Follow toggle helper ────────────────────────────────────────────────────────
+// Shared by the name-block follow button and every row button inside
+// _ConnectionsScreen, so following/unfollowing works the same way regardless
+// of which list a person is tapped from.
+
+Future<void> _toggleUserFollow(User target, VoidCallback rebuild) async {
+  if (!authService.isStudentSession) return;
+  final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+  if (target.id == myId) return;
+
+  final isFollowing = userState.isFollowingUser(target.id);
+  final isPending = userState.hasPendingRequest(target.id);
+
+  if (isFollowing && !isPending) {
+    userState.toggleFollowUser(target.id);
+    rebuild();
+    userPrefsService.save(myId);
+    try {
+      await peopleService.setFollowing(
+        followerId: myId,
+        followingId: target.id,
+        follow: false,
+      );
+    } catch (_) {
+      userState.toggleFollowUser(target.id);
+      rebuild();
+      userPrefsService.save(myId);
+    }
+    return;
+  }
+  if (isPending) {
+    userState.pendingFollowRequests.remove(target.id);
+    userState.followedUserIds.remove(target.id);
+    rebuild();
+    userPrefsService.save(myId);
+    return;
+  }
+  userState.followedUserIds.add(target.id);
+  rebuild();
+  userPrefsService.save(myId);
+  try {
+    await peopleService.setFollowing(
+      followerId: myId,
+      followingId: target.id,
+      follow: true,
+    );
+  } catch (_) {
+    userState.followedUserIds.remove(target.id);
+    rebuild();
+    userPrefsService.save(myId);
+  }
+}
+
+/// Whether [other] already follows the current session user (drives the
+/// "Follow back" vs. plain "Follow" label, same distinction Instagram makes).
+bool _userFollowsMe(User other) {
+  final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+  if (myId.isEmpty || other.id == myId) return false;
+  if (peopleService.followersFor(myId).any((u) => u.id == other.id)) {
+    return true;
+  }
+  return other.followingUserIds.contains(myId);
+}
+
+// ── Connections screen ──────────────────────────────────────────────────────────
+// Instagram-style full-screen list with tabs to shuffle between a profile's
+// Clubs, Followers and Following, plus a search field — replaces the old
+// separate bottom sheets so all three live behind one consistent UI.
+
+enum _ConnTab { clubs, followers, following }
+
+class _ConnectionsScreen extends StatefulWidget {
+  final String title;
+  final _ConnTab initialTab;
+  final List<Club> Function() clubsOf;
+  final List<User> Function() followersOf;
+  final List<User> Function() followingOf;
+  final String? Function(Club) roleTitleFor;
+  final Color Function(Club) clubColor;
+  final ValueChanged<Club> onOpenClub;
+  final ValueChanged<User> onOpenUser;
+  final bool peopleLoading;
+  final String? peopleError;
+
+  const _ConnectionsScreen({
+    required this.title,
+    required this.initialTab,
+    required this.clubsOf,
+    required this.followersOf,
+    required this.followingOf,
+    required this.roleTitleFor,
+    required this.clubColor,
+    required this.onOpenClub,
+    required this.onOpenUser,
+    required this.peopleLoading,
+    required this.peopleError,
+  });
+
+  @override
+  State<_ConnectionsScreen> createState() => _ConnectionsScreenState();
+}
+
+class _ConnectionsScreenState extends State<_ConnectionsScreen> {
+  late _ConnTab _tab = widget.initialTab;
+  String _query = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Club> _matchClubs(List<Club> list) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return list;
+    return list.where((c) => c.name.toLowerCase().contains(q)).toList();
+  }
+
+  List<User> _matchPeople(List<User> list) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return list;
+    return list.where((u) {
+      final displayName = userState.displayNameFor(u.id, u.name).toLowerCase();
+      return displayName.contains(q) || u.name.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: AppColors.text,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          widget.title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+      ),
+      body: ListenableBuilder(
+        listenable: userState,
+        builder: (_, _) {
+          final clubs = widget.clubsOf();
+          final followers = widget.followersOf();
+          final following = widget.followingOf();
+
+          return Column(
+            children: [
+              _buildTabBar(clubs.length, followers.length, following.length),
+              Divider(height: 1, color: AppColors.divider),
+              _buildSearchBar(),
+              Expanded(
+                child: switch (_tab) {
+                  _ConnTab.clubs => _buildClubsList(_matchClubs(clubs)),
+                  _ConnTab.followers => _buildPeopleList(
+                    _matchPeople(followers),
+                    'No followers yet.',
+                  ),
+                  _ConnTab.following => _buildPeopleList(
+                    _matchPeople(following),
+                    'Not following anyone yet.',
+                  ),
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTabBar(int clubsCount, int followersCount, int followingCount) {
+    Widget tabItem(String label, int count, _ConnTab tab) {
+      final selected = _tab == tab;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _tab = tab),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14, bottom: 12),
+            child: Column(
+              children: [
+                Text(
+                  '$count $label',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? AppColors.text : AppColors.secondaryText,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 2,
+                  color: selected ? _burgundy : Colors.transparent,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        tabItem('Clubs', clubsCount, _ConnTab.clubs),
+        tabItem('Followers', followersCount, _ConnTab.followers),
+        tabItem('Following', followingCount, _ConnTab.following),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search, size: 18, color: AppColors.secondaryText),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+                style: TextStyle(fontSize: 14, color: AppColors.text),
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: 'Search',
+                  hintStyle: TextStyle(color: AppColors.secondaryText),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClubsList(List<Club> clubs) {
+    if (clubs.isEmpty) {
+      return _emptyState(_query.isEmpty ? 'No clubs yet.' : 'No clubs found.');
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: clubs.length,
+      separatorBuilder: (_, _) =>
+          Divider(height: 1, indent: 72, color: AppColors.divider),
+      itemBuilder: (_, i) => _clubTile(clubs[i]),
+    );
+  }
+
+  Widget _buildPeopleList(List<User> people, String emptyFallback) {
+    if (people.isEmpty) {
+      final message = _query.isNotEmpty
+          ? 'No matches found.'
+          : widget.peopleLoading
+          ? 'Loading connections...'
+          : widget.peopleError ?? emptyFallback;
+      return _emptyState(message);
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: people.length,
+      separatorBuilder: (_, _) =>
+          Divider(height: 1, indent: 72, color: AppColors.divider),
+      itemBuilder: (_, i) => _personTile(people[i]),
+    );
+  }
+
+  Widget _emptyState(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+      ),
+    );
+  }
+
+  Widget _clubTile(Club club) {
+    final role = widget.roleTitleFor(club);
+    final isLeader = role != null;
+    return ListTile(
+      onTap: () => widget.onOpenClub(club),
+      leading: ClubAvatar(
+        clubId: club.id,
+        clubName: club.name,
+        color: widget.clubColor(club),
+        imageUrl: club.logoUrl,
+        size: 44,
+        fontSize: 18,
+        borderRadius: 13,
+      ),
+      title: Text(
+        club.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppColors.text,
+        ),
+      ),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isLeader ? _burgundy : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(999),
+          border: isLeader ? null : Border.all(color: AppColors.divider),
+        ),
+        child: Text(
+          role ?? 'Member',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: isLeader ? Colors.white : AppColors.secondaryText,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _personTile(User user) {
+    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final isMe = user.id == myId;
+    final hasUsername = userState.usernameFor(user.id) != null;
+
+    return ListTile(
+      onTap: () => widget.onOpenUser(user),
+      leading: UserAvatar(
+        userId: user.id,
+        name: user.name,
+        size: 44,
+        fontSize: 16,
+      ),
+      title: Text(
+        userState.displayNameFor(user.id, user.name),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppColors.text,
+        ),
+      ),
+      subtitle: hasUsername
+          ? Text(
+              user.name,
+              style: TextStyle(fontSize: 12.5, color: AppColors.secondaryText),
+            )
+          : null,
+      trailing: isMe || !authService.isStudentSession
+          ? null
+          // ListTile.trailing needs a bounded width or it throws — the
+          // longest label ("Follow back") sets the fixed width for all.
+          : SizedBox(
+              width: 108,
+              height: 34,
+              child: _FollowButton(
+                isFollowing: userState.isFollowingUser(user.id),
+                isPending: userState.hasPendingRequest(user.id),
+                followsMe: _userFollowsMe(user),
+                onTap: () => _toggleUserFollow(user, () => setState(() {})),
+              ),
+            ),
+    );
   }
 }
 
@@ -984,11 +1325,13 @@ class _HeroBanner extends StatelessWidget {
 class _FollowButton extends StatelessWidget {
   final bool isFollowing;
   final bool isPending;
+  final bool followsMe;
   final VoidCallback onTap;
 
   const _FollowButton({
     required this.isFollowing,
     required this.isPending,
+    this.followsMe = false,
     required this.onTap,
   });
 
@@ -999,6 +1342,8 @@ class _FollowButton extends StatelessWidget {
         ? 'Requested'
         : isFollowing
         ? 'Following'
+        : followsMe
+        ? 'Follow back'
         : 'Follow';
 
     return GestureDetector(

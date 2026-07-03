@@ -33,10 +33,11 @@ class SupabaseContentService {
         .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
         .where((event) => event.id.isNotEmpty && event.clubId.isNotEmpty)
         .toList();
-    final nextPosts = (results[2] as List)
+    var nextPosts = (results[2] as List)
         .map((row) => _postFromRow(Map<String, dynamic>.from(row as Map)))
         .where((post) => post.id.isNotEmpty && post.clubId.isNotEmpty)
         .toList();
+    nextPosts = await _attachPolls(client, nextPosts);
 
     if (nextClubs.isNotEmpty) {
       clubs
@@ -292,7 +293,58 @@ class SupabaseContentService {
         row['tagged_user_ids'] ?? row['taggedUserIds'],
       ),
       imagePath: _postImagePath(row),
+      isAnnouncement:
+          row['is_announcement'] == true || row['isAnnouncement'] == true,
     );
+  }
+
+  /// Attaches polls to their posts in one query. Missing polls table (older
+  /// Supabase project) degrades gracefully to poll-less posts.
+  Future<List<NewsPost>> _attachPolls(
+    SupabaseClient client,
+    List<NewsPost> posts,
+  ) async {
+    if (posts.isEmpty) return posts;
+    try {
+      final rows = await client
+          .from('polls')
+          .select('post_id, question, options')
+          .inFilter('post_id', posts.map((p) => p.id).toList());
+
+      final pollsByPostId = <String, PollData>{};
+      for (final row in rows) {
+        final map = row as Map;
+        final postId = map['post_id']?.toString() ?? '';
+        final options = map['options'];
+        if (postId.isEmpty || options is! List) continue;
+        pollsByPostId[postId] = PollData(
+          question: map['question']?.toString() ?? '',
+          options: options.map((o) => o.toString()).toList(),
+        );
+      }
+      if (pollsByPostId.isEmpty) return posts;
+
+      return [
+        for (final post in posts)
+          pollsByPostId.containsKey(post.id)
+              ? NewsPost(
+                  id: post.id,
+                  clubId: post.clubId,
+                  authorId: post.authorId,
+                  content: post.content,
+                  createdAt: post.createdAt,
+                  title: post.title,
+                  taggedClubIds: post.taggedClubIds,
+                  taggedUserIds: post.taggedUserIds,
+                  imagePath: post.imagePath,
+                  poll: pollsByPostId[post.id],
+                  isAnnouncement: post.isAnnouncement,
+                )
+              : post,
+      ];
+    } catch (_) {
+      return posts;
+    }
   }
 
   String? _postImagePath(Map<String, dynamic> row) {

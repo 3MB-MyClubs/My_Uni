@@ -13,14 +13,16 @@ import 'screens/language_choice_screen.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
 import 'services/app_colors.dart';
-import 'services/message_service.dart';
+import 'services/hive_bootstrap.dart';
 import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
+import 'services/checkin_store.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
 import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
 import 'services/people_service.dart';
+import 'services/poll_store.dart';
 import 'services/theme_service.dart';
 import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
@@ -36,7 +38,7 @@ void main() async {
       anonKey: SupabaseConfig.clientKey,
     );
   }
-  await messageService.initialize();
+  await hiveBootstrap.initialize();
   await notificationService.initialize();
   await userPrefsService.initialize();
   userPrefsService.loadAllPhotos();
@@ -49,6 +51,8 @@ void main() async {
     );
   }
   await contentStore.initialize();
+  await checkinStore.initialize();
+  await pollStore.initialize();
   await viewTracker.initialize();
   await personalizationService.initialize();
   await themeService.initialize();
@@ -124,7 +128,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showSignUp = false;
     });
     if (currentUserId != null) {
-      messageService.setCurrentUserId(currentUserId);
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
       unawaited(peopleService.hydrateFollowing(currentUserId));
@@ -268,7 +271,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
           if (currentUserId != null) {
-            messageService.setCurrentUserId(currentUserId);
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
           }

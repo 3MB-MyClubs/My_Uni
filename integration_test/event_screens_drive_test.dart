@@ -8,7 +8,7 @@ import 'package:flutter_application_1/screens/create_event_screen.dart';
 import 'package:flutter_application_1/screens/event_detail_screen.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'package:flutter_application_1/services/message_service.dart';
+import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
@@ -24,7 +24,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   Future<void> boot() async {
-    await messageService.initialize();
+    await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await viewTracker.initialize();

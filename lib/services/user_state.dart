@@ -281,7 +281,7 @@ class UserState extends ChangeNotifier {
       targetType: 'follow_accepted',
       targetId: toId,
     );
-    addMessageNotification(notif);
+    addNotification(notif);
     notifyListeners();
   }
 
@@ -313,23 +313,9 @@ class UserState extends ChangeNotifier {
 
   // ── Notifications ─────────────────────────────────────────────────────────────
 
-  /// Dynamic notifications generated at runtime (e.g. incoming messages).
+  /// Dynamic notifications generated at runtime (likes, follows, mentions…).
   final List<AppNotification> dynamicNotifications = [];
   final Set<String> readNotificationIds = {};
-
-  /// Fires whenever a new incoming-message notification is added.
-  final ValueNotifier<AppNotification?> incomingMessageNotifier = ValueNotifier(
-    null,
-  );
-
-  void addMessageNotification(AppNotification n) {
-    addNotification(n);
-    incomingMessageNotifier.value = n;
-    Future.delayed(
-      const Duration(seconds: 4),
-      () => incomingMessageNotifier.value = null,
-    );
-  }
 
   void addNotification(AppNotification n) {
     if (n.targetType == 'story') return;

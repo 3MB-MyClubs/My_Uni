@@ -39,10 +39,16 @@ class S {
   static String get explore => _t('Explore', 'Keşfet');
   static String get discoverClubs => _t('Discover Clubs', 'Kulüpleri Keşfet');
   static String get findPeople => _t('Find People', 'Kişileri Bul');
-  static String get searchClubs => _t('Search clubs…', 'Kulüp ara…');
-  static String get searchPeople =>
-      _t('Search by name or surname…', 'İsim veya soyisim ile ara…');
+  static String get searchClubs => _t('Search…', 'Ara…');
+  static String get searchPeople => _t('Search…', 'Ara…');
   static String get allClubs => _t('All clubs', 'Tüm kulüpler');
+  static String get exploreContentTab => _t('Events', 'Etkinlikler');
+  static String get searchEventsPosts =>
+      _t('Search events…', 'Etkinlik ara…');
+  static String get upcomingEvents =>
+      _t('Upcoming events', 'Yaklaşan etkinlikler');
+  static String get noContentMatch =>
+      _t('No matches found', 'Sonuç bulunamadı');
   static String get noClubsMatch => _t('No clubs match', 'Eşleşen kulüp yok');
   static String get tryDifferentSearch =>
       _t('Try a different search term', 'Farklı bir arama terimi dene');
@@ -83,6 +89,10 @@ class S {
     'Nothing scheduled here yet — check another date.',
     'Henüz planlanmış bir şey yok — başka bir tarih deneyin.',
   );
+  static String get checkBackLater => _t(
+    'Nothing on the calendar right now — check back soon!',
+    'Şu anda takvimde bir şey yok — yakında tekrar bak!',
+  );
   static String get resetFilters => _t('Reset filters', 'Filtreleri Sıfırla');
   static String get newEvents => _t('New events', 'Yeni Etkinlikler');
   static String get allCaughtUp => _t('All caught up', 'Hepsi Görüldü');
@@ -104,6 +114,52 @@ class S {
   static String get accept => _t('Accept', 'Kabul Et');
   static String get decline => _t('Decline', 'Reddet');
   static String get nothingHereNotif => _t('Nothing here', 'Henüz bir şey yok');
+
+  // ── Event Pass / check-in
+  static String get eventPass => _t('Event Pass', 'Etkinlik Kartı');
+  static String get eventPassHint => _t(
+    'Show this code at the door to check in.',
+    'Girişte bu kodu göstererek yoklamaya katıl.',
+  );
+  static String get showMyPass => _t('Show my pass', 'Kartımı göster');
+  static String get scanCheckins => _t('Scan check-ins', 'Yoklama tara');
+  static String get scanInvalidPass =>
+      _t('Not a valid Event Pass', 'Geçersiz Etkinlik Kartı');
+  static String get scanWrongEvent =>
+      _t('Pass belongs to another event', 'Kart başka bir etkinliğe ait');
+  static String get scanAlreadyIn =>
+      _t('already checked in', 'zaten giriş yaptı');
+  static String get scanNotAdmitted => _t('Not admitted', 'Alınmadı');
+  static String get scanNoRsvpTitle => _t('No RSVP found', 'RSVP bulunamadı');
+  static String scanNoRsvpBody(String name) => _t(
+    "$name didn't RSVP to this event. Admit anyway?",
+    '$name bu etkinliğe RSVP yapmamış. Yine de alınsın mı?',
+  );
+  static String get scanAdmitAnyway => _t('Admit anyway', 'Yine de al');
+  static String checkedInCounter(int checked, int total) =>
+      _t('$checked / $total checked in', '$checked / $total giriş yaptı');
+  static String get checkedIn => _t('Checked in', 'Giriş yaptı');
+
+  // ── Polls & announcements
+  static String get addPoll => _t('Add poll', 'Anket ekle');
+  static String get pollQuestionHint =>
+      _t('Ask a question…', 'Bir soru sor…');
+  static String pollOptionHint(int n) =>
+      _t('Option $n', 'Seçenek $n');
+  static String pollVotes(int n) =>
+      _t(n == 1 ? '1 vote' : '$n votes', '$n oy');
+  static String get announcement => _t('Announcement', 'Duyuru');
+  static String get markAsAnnouncement =>
+      _t('Post as announcement', 'Duyuru olarak paylaş');
+
+  // ── Comments
+  static String get comments => _t('Comments', 'Yorumlar');
+  static String get addComment => _t('Add a comment…', 'Yorum ekle…');
+  static String get noCommentsYet => _t(
+    'No comments yet. Be the first!',
+    'Henüz yorum yok. İlk yorumu sen yap!',
+  );
+  static String get deleteComment => _t('Delete comment', 'Yorumu sil');
 
   // ── Profile
   static String get posts => _t('Posts', 'Gönderiler');
@@ -274,8 +330,8 @@ class S {
     'Son 7 gün içinde biten etkinlikler.',
   );
   static String get upcomingEventsHint => _t(
-    "What's on across campus — next 3 weeks.",
-    'Kampüste neler var — önümüzdeki 3 hafta.',
+    "What's on across campus — next month.",
+    'Kampüste neler var — önümüzdeki ay.',
   );
 
   // ── Notifications

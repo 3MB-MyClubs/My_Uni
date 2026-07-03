@@ -9,7 +9,6 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
-import 'chat_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -34,6 +33,8 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  String _filter = 'all'; // 'all' | 'you' | 'events' | 'clubs'
+
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
@@ -61,6 +62,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
+
+  /// Which filter chip a notification belongs to. Personal alerts (likes,
+  /// RSVPs and mentions aimed at you, follows, DMs) come first because their
+  /// targetType overlaps with the Events/Clubs buckets.
+  String _categoryOf(AppNotification n) {
+    if (n.id.startsWith('post_like_') ||
+        n.id.startsWith('post_comment_') ||
+        n.id.startsWith('event_rsvp_') ||
+        n.id.startsWith('mention_')) {
+      return 'you';
+    }
+    switch (n.targetType) {
+      case 'user':
+      case 'follow_request':
+      case 'follow_accepted':
+        return 'you';
+      case 'event':
+        return 'events';
+      default:
+        return 'clubs';
+    }
+  }
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
@@ -173,18 +196,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           context,
           MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
         );
-      case 'message':
-        final sender = users.firstWhere(
-          (u) => u.id == id,
-          orElse: () => users.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ChatScreen(otherUserId: sender.id, otherUserName: sender.name),
-          ),
-        );
     }
   }
 
@@ -201,8 +212,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     switch (n.targetType) {
       case 'event':
         return (Icons.event_rounded, const Color(0xFF2E9E5B));
-      case 'message':
-        return (Icons.chat_bubble_rounded, const Color(0xFF00838F));
       case 'follow_request':
         return (Icons.person_add_alt_1_rounded, AppColors.primaryRed);
       case 'follow_accepted':
@@ -217,6 +226,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'post':
         if (msg.contains('lik')) {
           return (Icons.favorite_rounded, AppColors.primaryRed);
+        }
+        if (msg.contains('comment')) {
+          return (Icons.mode_comment_rounded, const Color(0xFF1565C0));
         }
         if (msg.contains('mention')) {
           return (Icons.alternate_email_rounded, const Color(0xFF00838F));
@@ -253,10 +265,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
-          final list = _allNotifs;
+          final all = _allNotifs;
+          final list = _filter == 'all'
+              ? all
+              : all.where((n) => _categoryOf(n) == _filter).toList();
           final news = list.where(_isUnread).toList();
           final earlier = list.where((n) => !_isUnread(n)).toList();
-          final totalUnread = _allNotifs.where(_isUnread).length;
+          final totalUnread = all.where(_isUnread).length;
 
           return Column(
             children: [
@@ -371,9 +386,96 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ],
               ),
               const SizedBox(height: 12),
+              _buildFilterChips(),
+              const SizedBox(height: 12),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Filter chips (All / You / Events / Clubs) with live unread counts ────────
+  Widget _buildFilterChips() {
+    final all = _allNotifs;
+    int unreadIn(String key) => all
+        .where((n) => key == 'all' || _categoryOf(n) == key)
+        .where(_isUnread)
+        .length;
+
+    final chips = [
+      ('all', S.all),
+      ('you', S.filterYou),
+      ('events', S.filterEvents),
+      ('clubs', S.filterClubs),
+    ];
+
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: chips.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final (key, label) = chips[i];
+          final selected = _filter == key;
+          final unread = unreadIn(key);
+          return GestureDetector(
+            onTap: () => setState(() => _filter = key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected ? AppColors.primaryRed : AppColors.divider,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? Colors.white : AppColors.text,
+                    ),
+                  ),
+                  if (unread > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Colors.white.withValues(alpha: 0.25)
+                            : AppColors.primaryRed.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        '$unread',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: selected
+                              ? Colors.white
+                              : AppColors.primaryRed,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

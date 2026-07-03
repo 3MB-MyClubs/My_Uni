@@ -574,10 +574,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   if (mounted) setState(() {});
                                   Navigator.of(ctx).pop();
                                   unawaited(
-                                    userPrefsService.saveClubCategory(
-                                      club.id,
-                                      club.categoryName,
-                                    ),
+                                    userPrefsService
+                                        .saveClubCategory(
+                                          club.id,
+                                          club.categoryName,
+                                        )
+                                        .catchError((_) {}),
                                   );
                                 }
                               : null,
@@ -756,7 +758,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListenableBuilder(
                 listenable: userState,
                 builder: (context, _) {
-                  final club = _managedClub!;
+                  final club = _managedClub;
+                  if (club == null) return const SizedBox.shrink();
                   return Container(
                     color: AppColors.card,
                     child: Column(

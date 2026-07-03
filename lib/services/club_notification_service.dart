@@ -167,6 +167,39 @@ class ClubNotificationService {
     }
   }
 
+  /// Notifies every user @-mentioned in [post] that they were tagged.
+  /// Mentioned clubs are notified through their club notification account.
+  void notifyMentionedUsers(NewsPost post) {
+    final club = clubs.firstWhere(
+      (c) => c.id == post.clubId,
+      orElse: () => clubs.first,
+    );
+
+    final recipientIds = <String>{...post.taggedUserIds};
+    for (final clubId in post.taggedClubIds) {
+      final clubRecipient = _clubNotificationUserId(clubId);
+      if (clubRecipient != null) recipientIds.add(clubRecipient);
+    }
+    recipientIds.remove(post.authorId);
+    recipientIds.remove('');
+
+    for (final userId in recipientIds) {
+      final notifId = 'mention_${post.id}_$userId';
+      if (_alreadyNotified(notifId)) continue;
+      _emit(
+        AppNotification(
+          id: notifId,
+          userId: userId,
+          message: '${club.name} mentioned you in a post',
+          createdAt: DateTime.now(),
+          targetType: 'post',
+          targetId: post.id,
+          fromId: post.clubId,
+        ),
+      );
+    }
+  }
+
   void notifyClubAboutPostLike({
     required NewsPost post,
     required String actorUserId,
@@ -181,6 +214,31 @@ class ClubNotificationService {
         id: notifId,
         userId: recipientId,
         message: '${_actorName(actorUserId)} liked your post',
+        createdAt: DateTime.now(),
+        targetType: 'post',
+        targetId: post.id,
+        fromId: actorUserId,
+      ),
+    );
+  }
+
+  /// Notifies the club account that a student commented on its post.
+  /// Unlike likes, repeat comments notify again (each has a unique timestamp).
+  void notifyClubAboutComment({
+    required NewsPost post,
+    required String actorUserId,
+  }) {
+    final recipientId = _clubNotificationUserId(post.clubId);
+    if (recipientId == null || recipientId == actorUserId) return;
+
+    final notifId =
+        'post_comment_${post.id}_${actorUserId}_'
+        '${DateTime.now().millisecondsSinceEpoch}';
+    _emit(
+      AppNotification(
+        id: notifId,
+        userId: recipientId,
+        message: '${_actorName(actorUserId)} commented on your post',
         createdAt: DateTime.now(),
         targetType: 'post',
         targetId: post.id,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
@@ -21,12 +22,10 @@ import '../widgets/club_follow_button.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/user_follow_button.dart';
 import '../models/share.dart';
-import '../models/message.dart';
 import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../models/club.dart';
-import '../services/message_service.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'explore_screen.dart';
@@ -37,10 +36,11 @@ import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
-import '../services/group_chat_service.dart';
+import '../widgets/poll_card.dart';
 import '../services/supabase_interaction_service.dart';
-import 'group_chat_screen.dart';
+import '../services/comment_store.dart';
 import 'notifications_screen.dart';
+import 'post_detail_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
 
@@ -125,6 +125,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // not follow back, then other unfollowed profiles. If no eligible profiles
   // remain, the suggestion rail is omitted.
   List<User> _suggestedUsers() {
+    if (!authService.isStudentSession) return const [];
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final myFollowing = userState.followedUserIds;
@@ -174,6 +175,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // Most-viewed upcoming event from the last 14 days.
   Event? _trendingEvent() {
+    if (!authService.isStudentSession) return null;
     final now = DateTime.now();
     final cutoff = now.subtract(const Duration(days: 14));
     final eligible = events
@@ -237,7 +239,16 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _onViewCountsChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // recordView fires from _PostCard.initState while the list is laying out
+    // new children — defer the rebuild until after the current frame.
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      setState(() {});
+    } else {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   void _onLocaleChanged() {
@@ -726,16 +737,6 @@ class _FeedScreenState extends State<FeedScreen> {
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
         child: Row(
           children: [
-            Text(
-              S.fromYourClubs,
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColors.secondaryText,
-                letterSpacing: 0.9,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
             Row(
               key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
               children: tabs.asMap().entries.map((entry) {
@@ -883,11 +884,11 @@ class _FeedPostSkeleton extends StatelessWidget {
 
 // ─── Quick Post Composer ──────────────────────────────────────────────────────
 
-/// Inline composer card shown at the top of the feed for the managing club
-/// admin. Collapsed it's a single-line prompt; once focused it expands to a
-/// multi-line field with a photo / event action row, a 280-char counter, and a
-/// Post button. Text posts publish through the same path as CreatePostScreen.
-class _QuickPostComposer extends StatefulWidget {
+/// Tappable prompt shown at the top of the feed for the managing club admin.
+/// Tapping it opens the "Option C — Big Picture Cards" bottom sheet composer
+/// (see [showBigPicturePostComposerSheet]), which handles both text and
+/// photo posts and publishes through the same path as CreatePostScreen.
+class _QuickPostComposer extends StatelessWidget {
   final dynamic club; // Club
   final Color color;
   final VoidCallback onPosted;
@@ -898,96 +899,12 @@ class _QuickPostComposer extends StatefulWidget {
     required this.onPosted,
   });
 
-  @override
-  State<_QuickPostComposer> createState() => _QuickPostComposerState();
-}
-
-class _QuickPostComposerState extends State<_QuickPostComposer> {
-  static const int _maxChars = 500;
-
-  final _controller = TextEditingController();
-  final _focusNode = FocusNode();
-  bool _focused = false;
-  bool _posting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode.addListener(_onFocusChanged);
-    _controller.addListener(_onTextChanged);
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocusChanged);
-    _focusNode.dispose();
-    _controller.removeListener(_onTextChanged);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onFocusChanged() {
-    if (_focusNode.hasFocus && !_focused) {
-      setState(() => _focused = true);
-    }
-  }
-
-  void _onTextChanged() => setState(() {});
-
-  int get _remaining => _maxChars - _controller.text.length;
-
-  bool get _canPost =>
-      !_posting && _controller.text.trim().isNotEmpty && _remaining >= 0;
-
-  Future<void> _post() async {
-    if (!_canPost) return;
-    final content = _controller.text.trim();
-    setState(() => _posting = true);
-    try {
-      final post = await supabasePostService.createPost(
-        clubId: widget.club.id as String,
-        authorId: authService.currentAdmin?.id ?? '',
-        content: content,
-        taggedClubIds: const [],
-        taggedUserIds: const [],
-        imagePath: null,
-      );
-      if (!mounted) return;
-      newsPosts.insert(0, post);
-      unawaited(contentStore.saveNewsPosts());
-      unawaited(clubNotificationService.notifyFollowersAboutPost(post));
-      _controller.clear();
-      _focusNode.unfocus();
-      setState(() {
-        _focused = false;
-        _posting = false;
-      });
-      widget.onPosted();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _posting = false);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not publish post. Check Supabase settings.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    }
-  }
-
-  // Opens the full post creation screen (with photo upload). Used by the
-  // image-add button in the composer action bar.
-  void _openFullComposer() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreatePostScreen(
-          onPosted: widget.onPosted,
-          startWithPhotoUpload: true,
-        ),
-      ),
+  void _openComposerSheet(BuildContext context) {
+    showBigPicturePostComposerSheet(
+      context: context,
+      club: club,
+      color: color,
+      onPosted: onPosted,
     );
   }
 
@@ -999,160 +916,55 @@ class _QuickPostComposerState extends State<_QuickPostComposer> {
 
     return Material(
       color: surfaceColor,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClubAvatar(
-              key: ValueKey('quick-post-club-avatar-${widget.club.id}'),
-              clubId: widget.club.id as String,
-              clubName: widget.club.name as String,
-              color: textColor,
-              size: 42,
-              fontSize: 18,
-              shape: 'circle',
-              borderRadius: 13,
-              imageUrl: widget.club.logoUrl as String?,
-              profilePhotoFallbackId: authService.currentAdmin?.id,
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Read-only club label
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      widget.club.name as String,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: secondaryTextColor,
-                        letterSpacing: -0.1,
+      child: InkWell(
+        onTap: () => _openComposerSheet(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClubAvatar(
+                key: ValueKey('quick-post-club-avatar-${club.id}'),
+                clubId: club.id as String,
+                clubName: club.name as String,
+                color: textColor,
+                size: 42,
+                fontSize: 18,
+                shape: 'circle',
+                borderRadius: 13,
+                imageUrl: club.logoUrl as String?,
+                profilePhotoFallbackId: authService.currentAdmin?.id,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Read-only club label
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        club.name as String,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: secondaryTextColor,
+                          letterSpacing: -0.1,
+                        ),
                       ),
                     ),
-                  ),
-                  // Expanding text field — selection handles/highlight forced to
-                  // the current text color so no burgundy accent appears.
-                  Theme(
-                    data: Theme.of(context).copyWith(
-                      primaryColor: textColor,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      splashColor: Colors.transparent,
-                      colorScheme: Theme.of(context).colorScheme.copyWith(
-                        primary: textColor,
-                        onPrimary: surfaceColor,
-                        surface: surfaceColor,
-                        onSurface: textColor,
-                      ),
-                      textSelectionTheme: TextSelectionThemeData(
-                        cursorColor: textColor,
-                        selectionColor: textColor.withValues(alpha: 0.18),
-                        selectionHandleColor: textColor,
-                      ),
-                      inputDecorationTheme: InputDecorationTheme(
-                        filled: true,
-                        fillColor: surfaceColor,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      minLines: 1,
-                      maxLines: _focused ? 5 : 1,
-                      maxLength: _maxChars,
-                      maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                      textCapitalization: TextCapitalization.sentences,
-                      cursorColor: textColor,
+                    Text(
+                      S.whatsHappeningAtClub,
                       style: TextStyle(
                         fontSize: 15,
-                        color: textColor,
+                        color: secondaryTextColor,
                         height: 1.55,
                       ),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        filled: true,
-                        fillColor: surfaceColor,
-                        counterText: '',
-                        hintText: S.whatsHappeningAtClub,
-                        hintStyle: TextStyle(
-                          fontSize: 15,
-                          color: secondaryTextColor,
-                          height: 1.55,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Action bar — revealed once focused
-                  if (_focused) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Tooltip(
-                          message: S.addPhoto,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _openFullComposer,
-                            child: Icon(
-                              Icons.image_outlined,
-                              size: 19,
-                              color: textColor,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        _PostButton(enabled: _canPost, onTap: _post),
-                      ],
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PostButton extends StatelessWidget {
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _PostButton({required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        alignment: Alignment.center,
-        child: Text(
-          S.post,
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.1,
-            color: enabled ? const Color(0xFFFFFFFF) : const Color(0xFF8A8A8E),
+            ],
           ),
         ),
       ),
@@ -2113,6 +1925,8 @@ String _timeAgo(DateTime dt) {
   return '${diff.inDays}d ago';
 }
 
+/// Copies a deep link for the post/event to the clipboard and records the
+/// share (messaging was removed, so sharing is link-based).
 void _openShareSheet(
   BuildContext context,
   String targetId,
@@ -2122,17 +1936,39 @@ void _openShareSheet(
   final currentUser = authService.currentUser;
   if (!authService.isStudentSession || currentUser == null) return;
 
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (_) => _ShareSheet(
-      targetId: targetId,
-      contentPrefix: isEvent ? 'kuevent' : 'kupost',
-      userId: currentUser.id,
-      onShared: onShared,
-    ),
+  Clipboard.setData(
+    ClipboardData(text: 'kuclubs://${isEvent ? 'event' : 'post'}/$targetId'),
   );
+
+  final alreadyShared = shares.any(
+    (s) => s.targetId == targetId && s.userId == currentUser.id,
+  );
+  if (!alreadyShared) {
+    shares.add(
+      Share(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        targetId: targetId,
+        userId: currentUser.id,
+        createdAt: DateTime.now(),
+      ),
+    );
+    contentStore.saveShares();
+    onShared();
+  }
+
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(
+          isEvent
+              ? 'Event link copied to clipboard'
+              : 'Post link copied to clipboard',
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
 }
 
 /// True only when the current session belongs to an admin of [clubId].
@@ -2422,6 +2258,44 @@ class _PostCardState extends State<_PostCard>
                     ),
                   ],
                 ),
+                // ── Announcement banner ──
+                if (widget.post.isAnnouncement) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: clubColor.withValues(alpha: 0.09),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: clubColor.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.campaign_rounded,
+                          size: 15,
+                          color: clubColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          S.announcement.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: clubColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 // ── Content ──
                 if (widget.post.content.trim().isNotEmpty) ...[
                   const SizedBox(height: 5),
@@ -2440,6 +2314,9 @@ class _PostCardState extends State<_PostCard>
                     ),
                   ),
                 ],
+                // ── Poll ──
+                if (widget.post.poll != null)
+                  PollCard(post: widget.post, accent: clubColor),
                 // ── Media (indented, rounded) ──
                 if (hasImage) ...[
                   const SizedBox(height: 10),
@@ -2503,19 +2380,42 @@ class _PostCardState extends State<_PostCard>
                 const SizedBox(height: 4),
                 // ── Action row (counts inline, X-style) ──
                 if (isStudent)
-                  Row(
-                    children: [
-                      _twAction(
-                        icon: isLiked
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        count: null,
-                        color: isLiked
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
-                        onTap: _toggleLike,
-                      ),
-                    ],
+                  ListenableBuilder(
+                    listenable: commentStore,
+                    builder: (_, _) {
+                      final commentCount = commentStore.countFor(
+                        widget.post.id,
+                      );
+                      return Row(
+                        children: [
+                          _twAction(
+                            icon: isLiked
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            count: null,
+                            color: isLiked
+                                ? AppColors.primaryRed
+                                : AppColors.secondaryText,
+                            onTap: _toggleLike,
+                          ),
+                          const SizedBox(width: 4),
+                          _twAction(
+                            icon: Icons.mode_comment_outlined,
+                            count: commentCount > 0 ? '$commentCount' : null,
+                            color: AppColors.secondaryText,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PostDetailScreen(
+                                  post: widget.post,
+                                  clubColor: clubColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
               ],
             ),
@@ -3019,414 +2919,6 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-// ─── Share Bottom Sheet ───────────────────────────────────────────────────────
-
-class _ShareSheet extends StatefulWidget {
-  final String targetId;
-  final String contentPrefix; // 'kupost' or 'kuevent'
-  final String userId;
-  final VoidCallback onShared;
-
-  const _ShareSheet({
-    required this.targetId,
-    required this.contentPrefix,
-    required this.userId,
-    required this.onShared,
-  });
-
-  @override
-  State<_ShareSheet> createState() => _ShareSheetState();
-}
-
-class _ShareSheetState extends State<_ShareSheet> {
-  final Set<String> _selected = {};
-  bool _sending = false;
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-
-  String get _myId =>
-      authService.isStudentSession ? authService.currentUser?.id ?? '' : '';
-
-  String get _contentPayload => '${widget.contentPrefix}:${widget.targetId}';
-
-  List<User> get _friends => users
-      .where((u) => userState.isFollowingUser(u.id) && u.id != _myId)
-      .toList();
-
-  List<User> get _filtered {
-    if (_query.isEmpty) return _friends;
-    final q = _query.toLowerCase();
-    return _friends.where((u) => u.name.toLowerCase().contains(q)).toList();
-  }
-
-  void _toggleSelect(String uid) => setState(
-    () => _selected.contains(uid) ? _selected.remove(uid) : _selected.add(uid),
-  );
-
-  void _recordShare() {
-    final alreadyShared = shares.any(
-      (s) => s.targetId == widget.targetId && s.userId == widget.userId,
-    );
-    if (!alreadyShared) {
-      shares.add(
-        Share(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          targetId: widget.targetId,
-          userId: widget.userId,
-          createdAt: DateTime.now(),
-        ),
-      );
-      contentStore.saveShares();
-      widget.onShared();
-    }
-  }
-
-  Future<void> _sendSeparately() async {
-    if (_selected.isEmpty || _sending) return;
-    setState(() => _sending = true);
-    _recordShare();
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    for (final uid in _selected) {
-      await messageService.saveMessage(
-        Message(
-          id: 'share_${ts}_$uid',
-          senderId: _myId,
-          receiverId: uid,
-          content: _contentPayload,
-          sentAt: DateTime.now(),
-        ),
-      );
-    }
-    if (mounted) {
-      setState(() => _sending = false);
-      Navigator.pop(context);
-    }
-  }
-
-  void _createGroup() {
-    if (_selected.length < 2 || _sending) return;
-    _recordShare();
-    final group = groupChatService.createGroup(
-      creatorId: _myId,
-      memberIds: _selected.toList(),
-      initialContent: _contentPayload,
-    );
-    Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => GroupChatScreen(group: group)),
-    );
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = _filtered;
-    final hasSelection = _selected.isNotEmpty;
-    final canGroup = _selected.length >= 2;
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      snap: true,
-      builder: (_, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.lightGray,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Send to…',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Select people, then choose how to send',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: AppColors.lightGray),
-
-            Expanded(
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.only(bottom: 8),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                    child: Text(
-                      'SELECT PEOPLE',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.secondaryText,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Container(
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (v) => setState(() => _query = v),
-                        style: const TextStyle(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Search friends…',
-                          hintStyle: TextStyle(
-                            color: AppColors.secondaryText,
-                            fontSize: 14,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            size: 18,
-                            color: AppColors.secondaryText,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  if (filtered.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 28),
-                      child: Center(
-                        child: Text(
-                          'Follow people to send them content',
-                          style: TextStyle(
-                            color: AppColors.secondaryText,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    ...filtered.map((u) {
-                      final selected = _selected.contains(u.id);
-                      return InkWell(
-                        onTap: () => _toggleSelect(u.id),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            children: [
-                              UserAvatar(userId: u.id, name: u.name, size: 42),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      userState.displayNameFor(u.id, u.name),
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.text,
-                                      ),
-                                    ),
-                                    Text(
-                                      u.email,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.secondaryText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                width: 26,
-                                height: 26,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: selected
-                                      ? AppColors.primaryRed
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color: selected
-                                        ? AppColors.primaryRed
-                                        : AppColors.divider,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: selected
-                                    ? const Icon(
-                                        Icons.check_rounded,
-                                        size: 15,
-                                        color: Colors.white,
-                                      )
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
-
-            Container(
-              color: AppColors.card,
-              padding: EdgeInsets.fromLTRB(
-                16,
-                10,
-                16,
-                MediaQuery.of(context).padding.bottom + 12,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (hasSelection)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '${_selected.length} ${_selected.length == 1 ? "person" : "people"} selected',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.secondaryText,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: hasSelection ? _sendSeparately : null,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: hasSelection
-                                  ? AppColors.primaryRed
-                                  : AppColors.lightGray,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            alignment: Alignment.center,
-                            child: _sending
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.send_rounded,
-                                        size: 16,
-                                        color: hasSelection
-                                            ? Colors.white
-                                            : AppColors.secondaryText,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Send Separately',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: hasSelection
-                                              ? Colors.white
-                                              : AppColors.secondaryText,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        ),
-                      ),
-                      if (canGroup) ...[
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _createGroup,
-                            child: Container(
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: AppColors.primaryRed),
-                              ),
-                              alignment: Alignment.center,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.group_rounded,
-                                    size: 16,
-                                    color: AppColors.primaryRed,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Create Group',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primaryRed,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ─── Event Rail Card ──────────────────────────────────────────────────────────
 
