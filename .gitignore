@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Drive-test screenshots and stray captures (dev output, not shipped assets)
+/screenshots/
+/flutter_01.png
