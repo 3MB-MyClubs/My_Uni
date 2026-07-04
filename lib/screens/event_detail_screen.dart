@@ -21,8 +21,6 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../widgets/club_avatar.dart';
-import '../widgets/event_pass_sheet.dart';
-import 'checkin_scanner_screen.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/rsvp_button.dart';
 import 'club_profile_screen.dart';
@@ -995,41 +993,6 @@ class _AdminAttendees extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        // Door scanner entry
-        GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  CheckinScannerScreen(event: event, accent: accent),
-            ),
-          ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: accent.withValues(alpha: 0.35)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.qr_code_scanner_rounded, size: 18, color: accent),
-                const SizedBox(width: 8),
-                Text(
-                  S.scanCheckins,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
             color: AppColors.card,
@@ -2461,42 +2424,6 @@ class _StickyCtaState extends State<_StickyCta> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  ListenableBuilder(
-                    listenable: rsvpStore,
-                    builder: (_, _) {
-                      final user = authService.currentUser;
-                      if (user == null ||
-                          !rsvpStore.isAttending(widget.event.id)) {
-                        return const SizedBox.shrink();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: GestureDetector(
-                          onTap: () => showEventPassSheet(
-                            context: context,
-                            event: widget.event,
-                            userId: user.id,
-                            userName: user.name,
-                            accent: accent,
-                          ),
-                          child: Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: accent, width: 1.5),
-                            ),
-                            child: Icon(
-                              Icons.qr_code_2_rounded,
-                              color: accent,
-                              size: 24,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
                   Expanded(
                     child: RsvpButton(
                       eventId: widget.event.id,
