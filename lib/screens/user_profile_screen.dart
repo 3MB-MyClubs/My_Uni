@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
@@ -520,7 +519,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               if (showSeeAll) ...[
                 const Spacer(),
                 GestureDetector(
-                  onTap: () => _showClubsSheet(subClubs),
+                  onTap: () => _openConnections(_ConnTab.clubs),
                   child: const Text(
                     'See all',
                     style: TextStyle(
@@ -626,126 +625,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (!club.boardMemberIds.contains(widget.user.id)) return null;
     final raw = club.boardMemberTitles[widget.user.id]?.trim() ?? '';
     return raw.isEmpty ? 'Board Member' : raw;
-  }
-
-  // ── Clubs section ────────────────────────────────────────────────────────────
-  // Always-visible club membership + role list, so anyone visiting this
-  // profile immediately sees what clubs the person is in — not just a tap
-  // target buried behind the stats count.
-
-  Widget _buildClubsSection(List<Club> subClubs) {
-    if (subClubs.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.divider, width: 1),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                S.clubs,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.text,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: _burgundySoft,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${subClubs.length}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _burgundy,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (int i = 0; i < subClubs.length; i++) ...[
-            if (i > 0) ...[
-              const SizedBox(height: 12),
-              Divider(height: 1, color: AppColors.divider),
-              const SizedBox(height: 12),
-            ],
-            _buildClubRow(subClubs[i]),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildClubRow(Club club) {
-    final color = _clubColor(club);
-    final role = _roleTitleFor(club);
-    final isLeader = role != null;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _openClub(club),
-      child: Row(
-        children: [
-          ClubAvatar(
-            clubId: club.id,
-            clubName: club.name,
-            color: color,
-            imageUrl: club.logoUrl,
-            size: 44,
-            fontSize: 18,
-            borderRadius: 13,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              club.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.text,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isLeader ? _burgundy : AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(999),
-              border: isLeader ? null : Border.all(color: AppColors.divider),
-            ),
-            child: Text(
-              role ?? 'Member',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: isLeader ? Colors.white : AppColors.secondaryText,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _openConnections(_ConnTab tab) {
