@@ -230,7 +230,7 @@ class _SegmentedBar extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.all(Radius.circular(999)),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -252,7 +252,7 @@ class _SegmentedBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: selected ? AppColors.card : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.all(Radius.circular(999)),
             border: selected ? Border.all(color: AppColors.divider) : null,
           ),
           child: Center(
@@ -377,8 +377,18 @@ class _SavedEventRow extends StatelessWidget {
   });
 
   static const List<String> _months = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
 
   @override
@@ -401,7 +411,7 @@ class _SavedEventRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: isPast ? 0.06 : 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
                 border: Border.all(color: color.withValues(alpha: 0.25)),
               ),
               child: Column(

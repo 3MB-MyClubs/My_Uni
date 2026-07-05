@@ -12,6 +12,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
+import '../widgets/app_network_image.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/pinch_zoom_image.dart';
@@ -90,19 +91,21 @@ Widget buildPostBanner({
       (imagePath.startsWith('https://') || imagePath.startsWith('http://'))) {
     return _ZoomablePostImage(
       height: height,
-      child: Image.network(
-        imagePath,
+      child: AppNetworkImage(
+        url: imagePath,
         fit: BoxFit.cover,
         width: double.infinity,
         height: height,
-        loadingBuilder: (_, child, progress) => progress == null
-            ? child
-            : SkeletonBox(
-                width: double.infinity,
-                height: height,
-                borderRadius: BorderRadius.zero,
-              ),
-        errorBuilder: (ctx, e, _) => Container(
+        // Banners span device width but rarely need more than this to look
+        // sharp, even on high-density screens — avoids decoding the full
+        // up-to-1920px upload for what's usually a ~200-400dp-tall card.
+        cacheWidth: 500,
+        placeholderBuilder: (_) => SkeletonBox(
+          width: double.infinity,
+          height: height,
+          borderRadius: BorderRadius.zero,
+        ),
+        errorBuilder: (ctx) => Container(
           width: double.infinity,
           height: height,
           color: Color.lerp(
@@ -179,11 +182,7 @@ class _ZoomablePostImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PinchZoomImage(
-      child: SizedBox(
-        width: double.infinity,
-        height: height,
-        child: child,
-      ),
+      child: SizedBox(width: double.infinity, height: height, child: child),
     );
   }
 }
@@ -427,7 +426,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     vertical: 8,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.all(Radius.circular(20)),
                   ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -516,7 +515,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   Container(
                     decoration: BoxDecoration(
                       color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                       border: Border.all(color: AppColors.divider),
                     ),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -742,7 +741,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       fillColor: AppColors.surfaceAlt,
                       hintText: S.pollQuestionHint,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -764,7 +763,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 fillColor: AppColors.surfaceAlt,
                                 hintText: S.pollOptionHint(i + 1),
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(12),
+                                  ),
                                   borderSide: BorderSide.none,
                                 ),
                               ),
@@ -870,7 +871,7 @@ class _TemplateSwatch extends StatelessWidget {
         decoration: BoxDecoration(
           color: gradient == null ? AppColors.surfaceAlt : null,
           gradient: gradient,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.all(Radius.circular(8)),
           border: Border.all(
             color: isActive ? AppColors.primaryRed : AppColors.divider,
             width: isActive ? 2 : 1,

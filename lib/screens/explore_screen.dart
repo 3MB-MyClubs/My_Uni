@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
@@ -81,12 +82,13 @@ class _ExploreScreenState extends State<ExploreScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 2,
+      length: 3,
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
     _tabController.addListener(() => setState(() {}));
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
     _loadClubContent();
     _loadPeople();
   }
@@ -98,6 +100,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     _contentSearchController.dispose();
     _peopleSearchController.dispose();
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -370,7 +373,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.all(Radius.circular(13)),
         border: Border.all(color: AppColors.divider, width: 1.5),
       ),
       child: Row(
@@ -454,7 +457,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? AppColors.lightRed : AppColors.primaryRed,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(
             color: active ? AppColors.primaryRed : Colors.transparent,
             width: 1.5,
@@ -477,7 +480,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.all(Radius.circular(100)),
       ),
       child: Text(
         text,
@@ -622,21 +625,24 @@ class _ExploreScreenState extends State<ExploreScreen>
         Expanded(
           child: matchedEvents.isEmpty
               ? _emptyState(S.noContentMatch, S.tryDifferentSearch)
-              : ListView(
+              : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
                     0,
                     16,
                     MediaQuery.of(context).padding.bottom + 112,
                   ),
-                  children: [
-                    _sectionLabel(
-                      searching
-                          ? '${S.filterEvents} · ${matchedEvents.length}'
-                          : S.upcomingEvents,
-                    ),
-                    ...matchedEvents.map(_eventResultRow),
-                  ],
+                  itemCount: matchedEvents.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return _sectionLabel(
+                        searching
+                            ? '${S.filterEvents} · ${matchedEvents.length}'
+                            : S.upcomingEvents,
+                      );
+                    }
+                    return _eventResultRow(matchedEvents[i - 1]);
+                  },
                 ),
         ),
       ],
@@ -644,8 +650,18 @@ class _ExploreScreenState extends State<ExploreScreen>
   }
 
   static const List<String> _monthLabels = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
 
   Widget _eventResultRow(Event event) {
@@ -656,6 +672,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
     return GestureDetector(
+      key: ValueKey(event.id),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -667,7 +684,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(
@@ -677,7 +694,7 @@ class _ExploreScreenState extends State<ExploreScreen>
               padding: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
                 border: Border.all(color: color.withValues(alpha: 0.25)),
               ),
               child: Column(
@@ -806,7 +823,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                             color: _peopleFeedbackIsFollowing
                                 ? AppColors.lightRed
                                 : AppColors.card,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
                             border: Border.all(
                               color: _peopleFeedbackIsFollowing
                                   ? AppColors.primaryRed.withValues(alpha: 0.25)
@@ -970,7 +987,7 @@ class _ClubRow extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(
@@ -1039,7 +1056,7 @@ class _PersonRowSkeleton extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -1054,19 +1071,19 @@ class _PersonRowSkeleton extends StatelessWidget {
                 SkeletonBox(
                   width: 130,
                   height: 14,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
                 ),
                 const SizedBox(height: 8),
                 SkeletonBox(
                   width: double.infinity,
                   height: 12,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
                 const SizedBox(height: 9),
                 SkeletonBox(
                   width: 86,
                   height: 18,
-                  borderRadius: BorderRadius.circular(100),
+                  borderRadius: BorderRadius.all(Radius.circular(100)),
                 ),
               ],
             ),
@@ -1075,7 +1092,7 @@ class _PersonRowSkeleton extends StatelessWidget {
           SkeletonBox(
             width: 76,
             height: 34,
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.all(Radius.circular(100)),
           ),
         ],
       ),
@@ -1153,7 +1170,7 @@ class _PersonRowState extends State<_PersonRow> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(
             color: _changing && _displayFollowing
                 ? AppColors.primaryRed.withValues(alpha: 0.35)
@@ -1238,7 +1255,7 @@ class _PersonRowState extends State<_PersonRow> {
                       color: _displayFollowing
                           ? AppColors.lightRed
                           : AppColors.primaryRed,
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius: BorderRadius.all(Radius.circular(100)),
                       border: Border.all(
                         color: _displayFollowing
                             ? AppColors.primaryRed

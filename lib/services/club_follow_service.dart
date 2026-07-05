@@ -69,11 +69,13 @@ class ClubFollowService {
     await client.from('club_followers').delete().eq('profile_id', userId);
     final rows = clubIds
         .where((clubId) => clubId.isNotEmpty)
-        .map((clubId) => {
-              'profile_id': userId,
-              'club_id': clubId,
-              'role': 'member',
-            })
+        .map(
+          (clubId) => {
+            'profile_id': userId,
+            'club_id': clubId,
+            'role': 'member',
+          },
+        )
         .toList();
     if (rows.isNotEmpty) {
       await client.from('club_followers').insert(rows);

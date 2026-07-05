@@ -59,12 +59,11 @@ class SupabaseInteractionService {
         )
         .eq('post_id', postId);
 
-    final users = <User>[];
-    for (final row in rows) {
-      final profile = (row as Map)['profiles'];
-      if (profile is! Map) continue;
-      users.add(await peopleService.userFromProfileMap(profile));
-    }
+    final profiles = rows
+        .map((row) => (row as Map)['profiles'])
+        .whereType<Map>()
+        .toList();
+    final users = await peopleService.usersFromProfileMaps(profiles);
     users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return users;
   }
@@ -80,12 +79,11 @@ class SupabaseInteractionService {
         )
         .eq('post_id', postId);
 
-    final users = <User>[];
-    for (final row in rows) {
-      final profile = (row as Map)['profiles'];
-      if (profile is! Map) continue;
-      users.add(await peopleService.userFromProfileMap(profile));
-    }
+    final profiles = rows
+        .map((row) => (row as Map)['profiles'])
+        .whereType<Map>()
+        .toList();
+    final users = await peopleService.usersFromProfileMaps(profiles);
     users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return users;
   }
@@ -116,12 +114,11 @@ class SupabaseInteractionService {
         )
         .eq('event_id', eventId);
 
-    final users = <User>[];
-    for (final row in rows) {
-      final profile = (row as Map)['profiles'];
-      if (profile is! Map) continue;
-      users.add(await peopleService.userFromProfileMap(profile));
-    }
+    final profiles = rows
+        .map((row) => (row as Map)['profiles'])
+        .whereType<Map>()
+        .toList();
+    final users = await peopleService.usersFromProfileMaps(profiles);
     users.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return users;
   }
@@ -293,16 +290,13 @@ class SupabaseInteractionService {
         .eq('post_id', postId)
         .order('created_at', ascending: true);
 
-    final result = <Comment>[];
-    for (final row in rows) {
-      final map = row as Map;
-      final profile = map['profiles'];
-      if (profile is Map) {
-        await peopleService.userFromProfileMap(profile);
-      }
-      result.add(_commentFromRow(map));
-    }
-    return result;
+    final profiles = rows
+        .map((row) => (row as Map)['profiles'])
+        .whereType<Map>()
+        .toList();
+    await peopleService.usersFromProfileMaps(profiles);
+
+    return [for (final row in rows) _commentFromRow(row as Map)];
   }
 
   /// Comment counts for many posts in one query (feed badges).
@@ -346,7 +340,9 @@ class SupabaseInteractionService {
           'profile_id': profileId,
           'content': content,
         })
-        .select('id, post_id, profile_id, content, parent_comment_id, created_at')
+        .select(
+          'id, post_id, profile_id, content, parent_comment_id, created_at',
+        )
         .single();
     return _commentFromRow(row);
   }

@@ -195,9 +195,39 @@ class PeopleService {
     }
   }
 
+  // Same-visit cache: club_profile_screen.dart independently opens the Board
+  // tab and the Members sheet, each of which used to re-fetch this list (plus
+  // the majors/academic_years lookups) from scratch.
+  final Map<String, List<User>> _clubMembersCache = {};
+  final Map<String, Future<List<User>>> _clubMembersInFlight = {};
+
   Future<List<User>> fetchClubMembers(String clubId) async {
+    if (_client == null || clubId.isEmpty) return const [];
+
+    final cached = _clubMembersCache[clubId];
+    if (cached != null) return cached;
+
+    final inFlight = _clubMembersInFlight[clubId];
+    if (inFlight != null) return inFlight;
+
+    final future = _fetchClubMembers(clubId);
+    _clubMembersInFlight[clubId] = future;
+    try {
+      final result = await future;
+      if (result.isNotEmpty) _clubMembersCache[clubId] = result;
+      return result;
+    } finally {
+      _clubMembersInFlight.remove(clubId);
+    }
+  }
+
+  /// Call after a membership/board-role change so the next [fetchClubMembers]
+  /// re-fetches instead of serving a now-stale cached list.
+  void invalidateClubMembers(String clubId) => _clubMembersCache.remove(clubId);
+
+  Future<List<User>> _fetchClubMembers(String clubId) async {
     final client = _client;
-    if (client == null || clubId.isEmpty) return const [];
+    if (client == null) return const [];
 
     final followerRows = await client
         .from('club_followers')
@@ -294,16 +324,31 @@ class PeopleService {
     return peopleByIds(_followingByUserId[userId] ?? const {});
   }
 
-  Future<User> userFromProfileMap(Map<dynamic, dynamic> profile) async {
-    final majorNames = await _lookupNames('majors');
-    final yearNames = await _lookupNames('academic_years');
-    final user = _userFromProfileRow(
-      Map<String, dynamic>.from(profile),
-      majorNames: majorNames,
-      yearNames: yearNames,
-    );
-    _upsertCachedUser(user);
-    return user;
+  /// Maps many profile rows at once, sharing a single majors/academic_years
+  /// lookup instead of re-querying them per row (avoids N+1 round trips when
+  /// hydrating e.g. a post's likers/viewers/attendees/commenters).
+  Future<List<User>> usersFromProfileMaps(
+    List<Map<dynamic, dynamic>> profiles,
+  ) async {
+    if (profiles.isEmpty) return const [];
+    final lookups = await Future.wait([
+      _lookupNames('majors'),
+      _lookupNames('academic_years'),
+    ]);
+    final majorNames = lookups[0];
+    final yearNames = lookups[1];
+    final users = [
+      for (final profile in profiles)
+        _userFromProfileRow(
+          Map<String, dynamic>.from(profile),
+          majorNames: majorNames,
+          yearNames: yearNames,
+        ),
+    ];
+    for (final user in users) {
+      _upsertCachedUser(user);
+    }
+    return users;
   }
 
   List<User> randomProfiles({String? excludeId}) {
@@ -352,7 +397,32 @@ class PeopleService {
     }
   }
 
+  // majors/academic_years are static reference tables — cache them for the
+  // life of the app session instead of re-querying on every profile mapped.
+  final Map<String, Map<String, String>> _lookupNameCache = {};
+  final Map<String, Future<Map<String, String>>> _lookupNameInFlight = {};
+
   Future<Map<String, String>> _lookupNames(String tableName) async {
+    final cached = _lookupNameCache[tableName];
+    if (cached != null) return cached;
+
+    final inFlight = _lookupNameInFlight[tableName];
+    if (inFlight != null) return inFlight;
+
+    final future = _fetchLookupNames(tableName);
+    _lookupNameInFlight[tableName] = future;
+    try {
+      final result = await future;
+      // Don't cache empty results — could be a transient error or an
+      // unconfigured client, and either deserves a retry on the next call.
+      if (result.isNotEmpty) _lookupNameCache[tableName] = result;
+      return result;
+    } finally {
+      _lookupNameInFlight.remove(tableName);
+    }
+  }
+
+  Future<Map<String, String>> _fetchLookupNames(String tableName) async {
     final client = _client;
     if (client == null) return const {};
 

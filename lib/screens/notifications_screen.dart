@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -49,11 +50,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
   }
 
   @override
   void dispose() {
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -279,18 +282,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               Expanded(
                 child: (news.isEmpty && earlier.isEmpty)
                     ? const _BEmpty()
-                    : ListView(
-                        padding: EdgeInsets.zero,
-                        children: [
+                    : CustomScrollView(
+                        slivers: [
                           if (news.isNotEmpty) ...[
-                            _Sec(label: S.newSection),
-                            ...news.map(_row),
+                            SliverToBoxAdapter(
+                              child: _Sec(label: S.newSection),
+                            ),
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, i) => _row(news[i]),
+                                childCount: news.length,
+                              ),
+                            ),
                           ],
                           if (earlier.isNotEmpty) ...[
-                            _Sec(label: S.earlier),
-                            ...earlier.map(_row),
+                            SliverToBoxAdapter(child: _Sec(label: S.earlier)),
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, i) => _row(earlier[i]),
+                                childCount: earlier.length,
+                              ),
+                            ),
                           ],
-                          const SizedBox(height: 16),
+                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
                         ],
                       ),
               ),
@@ -348,7 +362,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
                       child: Text(
                         '$totalUnread',
@@ -373,7 +387,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       height: 38,
                       decoration: BoxDecoration(
                         color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         border: Border.all(color: AppColors.divider),
                       ),
                       child: Icon(
@@ -428,7 +442,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.all(Radius.circular(999)),
                 border: Border.all(
                   color: selected ? AppColors.primaryRed : AppColors.divider,
                 ),
@@ -456,7 +470,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         color: selected
                             ? Colors.white.withValues(alpha: 0.25)
                             : AppColors.primaryRed.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: BorderRadius.all(Radius.circular(9)),
                       ),
                       child: Text(
                         '$unread',
@@ -464,9 +478,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
-                          color: selected
-                              ? Colors.white
-                              : AppColors.primaryRed,
+                          color: selected ? Colors.white : AppColors.primaryRed,
                         ),
                       ),
                     ),
@@ -546,7 +558,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 height: 46,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(color: accent.withValues(alpha: 0.20)),
                 ),
                 child: Icon(icon, size: 22, color: accent),
@@ -645,7 +657,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
             decoration: BoxDecoration(
               color: AppColors.primaryRed,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.all(Radius.circular(100)),
             ),
             child: Text(
               S.accept,
@@ -668,7 +680,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.all(Radius.circular(100)),
               border: Border.all(color: AppColors.divider),
             ),
             child: Text(
@@ -727,7 +739,7 @@ class _BEmpty extends StatelessWidget {
               height: 80,
               decoration: BoxDecoration(
                 color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.all(Radius.circular(24)),
               ),
               child: Icon(
                 Icons.done_all_rounded,

@@ -86,7 +86,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
               height: 4,
               decoration: BoxDecoration(
                 color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.all(Radius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -148,7 +148,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
               border: Border.all(color: AppColors.divider),
             ),
             child: Row(
@@ -181,7 +181,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
         height: widget.height,
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           border: Border.all(color: AppColors.divider),
         ),
         clipBehavior: Clip.antiAlias,
@@ -215,7 +215,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                       ),
                       decoration: BoxDecoration(
                         color: Colors.black54,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,

@@ -23,6 +23,8 @@ class S {
     'Follow clubs to see their posts\nand events in your feed',
     'Gönderilerini görmek için\nkulüp takip et',
   );
+  static String get endOfFeed =>
+      _t("That's it for today 😀", 'Bugünlük bu kadar 😀');
   static String get exploreClubs =>
       _t('Explore All Clubs', 'Tüm Kulüpleri Keşfet');
   static String get peopleMightKnow =>
@@ -43,8 +45,7 @@ class S {
   static String get searchPeople => _t('Search…', 'Ara…');
   static String get allClubs => _t('All clubs', 'Tüm kulüpler');
   static String get exploreContentTab => _t('Events', 'Etkinlikler');
-  static String get searchEventsPosts =>
-      _t('Search events…', 'Etkinlik ara…');
+  static String get searchEventsPosts => _t('Search events…', 'Etkinlik ara…');
   static String get upcomingEvents =>
       _t('Upcoming events', 'Yaklaşan etkinlikler');
   static String get noContentMatch =>
@@ -142,12 +143,9 @@ class S {
 
   // ── Polls & announcements
   static String get addPoll => _t('Add poll', 'Anket ekle');
-  static String get pollQuestionHint =>
-      _t('Ask a question…', 'Bir soru sor…');
-  static String pollOptionHint(int n) =>
-      _t('Option $n', 'Seçenek $n');
-  static String pollVotes(int n) =>
-      _t(n == 1 ? '1 vote' : '$n votes', '$n oy');
+  static String get pollQuestionHint => _t('Ask a question…', 'Bir soru sor…');
+  static String pollOptionHint(int n) => _t('Option $n', 'Seçenek $n');
+  static String pollVotes(int n) => _t(n == 1 ? '1 vote' : '$n votes', '$n oy');
   static String get announcement => _t('Announcement', 'Duyuru');
   static String get markAsAnnouncement =>
       _t('Post as announcement', 'Duyuru olarak paylaş');

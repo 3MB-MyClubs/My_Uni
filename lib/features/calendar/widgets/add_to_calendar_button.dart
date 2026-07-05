@@ -22,50 +22,53 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<CalendarAddState>(
-      calendarEventProvider(widget.event.id),
-      (previous, next) {
-        if (next is CalendarAddPermissionRequired) {
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _showPermissionDialog(next.permission),
+    ref.listen<CalendarAddState>(calendarEventProvider(widget.event.id), (
+      previous,
+      next,
+    ) {
+      if (next is CalendarAddPermissionRequired) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _showPermissionDialog(next.permission),
+        );
+      } else if (next is CalendarAddFailure) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(next.error),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+            ),
           );
-        } else if (next is CalendarAddFailure) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                content: Text(next.error),
-                backgroundColor: Colors.red.shade700,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+      } else if (next is CalendarAddSuccess &&
+          previous is! CalendarAddSuccess) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  SizedBox(width: 8),
+                  Text('Event added to calendar'),
+                ],
               ),
-            );
-        } else if (next is CalendarAddSuccess &&
-            previous is! CalendarAddSuccess) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                content: const Row(
-                  children: [
-                    Icon(Icons.check_circle_rounded,
-                        color: Colors.white, size: 18),
-                    SizedBox(width: 8),
-                    Text('Event added to calendar'),
-                  ],
-                ),
-                backgroundColor: const Color(0xFF2E7D32),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              backgroundColor: const Color(0xFF2E7D32),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
-            );
-        }
-      },
-    );
+            ),
+          );
+      }
+    });
 
     final state = ref.watch(calendarEventProvider(widget.event.id));
     return _buildButton(state);
@@ -86,7 +89,7 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
           color: isSuccess
               ? successColor.withValues(alpha: 0.08)
               : _accent.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           border: Border.all(
             color: isSuccess
                 ? successLight.withValues(alpha: 0.5)
@@ -97,12 +100,11 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.all(Radius.circular(14)),
             onTap: (isLoading || isSuccess)
                 ? null
                 : () {
-                    final model =
-                        CalendarEventModel.fromAppEvent(widget.event);
+                    final model = CalendarEventModel.fromAppEvent(widget.event);
                     ref
                         .read(calendarEventProvider(widget.event.id).notifier)
                         .add(model);
@@ -135,8 +137,8 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     isLoading
                         ? 'Adding…'
                         : isSuccess
-                            ? '✓ Added to Calendar'
-                            : 'Add to Calendar',
+                        ? '✓ Added to Calendar'
+                        : 'Add to Calendar',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -154,7 +156,8 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
   }
 
   void _showPermissionDialog(CalendarPermissionState permission) {
-    final isPermanent = permission == CalendarPermissionState.permanentlyDenied ||
+    final isPermanent =
+        permission == CalendarPermissionState.permanentlyDenied ||
         permission == CalendarPermissionState.restricted;
 
     showDialog<void>(
@@ -162,7 +165,9 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         content: Column(
@@ -187,9 +192,7 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
             ),
             const SizedBox(height: 16),
             Text(
-              isPermanent
-                  ? 'Calendar Access Denied'
-                  : 'Allow Calendar Access',
+              isPermanent ? 'Calendar Access Denied' : 'Allow Calendar Access',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -228,11 +231,13 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     side: BorderSide(color: AppColors.divider),
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                   ),
-                  child: const Text('Not Now',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Not Now',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -242,19 +247,17 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     Navigator.pop(ctx);
                     if (isPermanent) {
                       ref
-                          .read(
-                              calendarEventProvider(widget.event.id).notifier)
+                          .read(calendarEventProvider(widget.event.id).notifier)
                           .openSettings();
                     } else {
                       ref
-                          .read(
-                              calendarEventProvider(widget.event.id).notifier)
+                          .read(calendarEventProvider(widget.event.id).notifier)
                           .resetToIdle();
-                      final model =
-                          CalendarEventModel.fromAppEvent(widget.event);
+                      final model = CalendarEventModel.fromAppEvent(
+                        widget.event,
+                      );
                       ref
-                          .read(
-                              calendarEventProvider(widget.event.id).notifier)
+                          .read(calendarEventProvider(widget.event.id).notifier)
                           .add(model);
                     }
                   },
@@ -263,7 +266,7 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     elevation: 0,
                   ),

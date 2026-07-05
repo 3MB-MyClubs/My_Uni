@@ -46,7 +46,7 @@ class _ProfilePhotoViewer extends StatelessWidget {
                 minScale: 0.7,
                 maxScale: 5,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.all(Radius.circular(28)),
                   child: Image(
                     image: imageProvider,
                     width: imageSize,

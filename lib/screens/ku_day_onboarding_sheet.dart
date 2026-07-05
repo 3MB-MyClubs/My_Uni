@@ -138,7 +138,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
           margin: const EdgeInsets.only(right: 4),
           decoration: BoxDecoration(
             color: active ? AppColors.primaryRed : AppColors.divider,
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.all(Radius.circular(3)),
           ),
         );
       }),
@@ -151,7 +151,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       height: 4,
       decoration: BoxDecoration(
         color: AppColors.divider,
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.all(Radius.circular(2)),
       ),
     ),
   );
@@ -188,7 +188,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               height: 42,
               decoration: BoxDecoration(
                 color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               child: const Icon(
                 Icons.auto_awesome_rounded,
@@ -262,7 +262,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 ),
                 decoration: BoxDecoration(
                   color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.all(Radius.circular(24)),
                   border: Border.all(
                     color: selected ? AppColors.primaryRed : AppColors.divider,
                   ),
@@ -299,7 +299,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               elevation: 0,
             ),
@@ -383,7 +383,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 ),
                 decoration: BoxDecoration(
                   color: selected ? AppColors.lightRed : AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(
                     color: selected ? AppColors.primaryRed : AppColors.divider,
                     width: selected ? 1.5 : 1,
@@ -396,7 +396,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                       height: 36,
                       decoration: BoxDecoration(
                         color: AppColors.lightRed,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
                       child: Icon(
                         Icons.school_outlined,
@@ -470,7 +470,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               disabledForegroundColor: AppColors.secondaryText,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               elevation: 0,
             ),
@@ -561,7 +561,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 duration: const Duration(milliseconds: 180),
                 decoration: BoxDecoration(
                   color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(
                     color: selected ? AppColors.primaryRed : AppColors.divider,
                   ),
@@ -600,7 +600,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               elevation: 0,
             ),
@@ -654,7 +654,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               height: 36,
               decoration: BoxDecoration(
                 color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
               child: Icon(
                 Icons.groups_rounded,
@@ -718,7 +718,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryRed.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.all(Radius.circular(20)),
                       border: Border.all(
                         color: AppColors.primaryRed.withValues(alpha: 0.25),
                       ),
@@ -774,7 +774,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 ),
                 decoration: BoxDecoration(
                   color: isFollowed ? AppColors.lightRed : AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(
                     color: isFollowed
                         ? AppColors.primaryRed.withValues(alpha: 0.45)
@@ -817,7 +817,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                                 color: AppColors.accentGold.withValues(
                                   alpha: 0.15,
                                 ),
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(20),
+                                ),
                               ),
                               child: Text(
                                 '$matchCount interest match${matchCount > 1 ? 'es' : ''}',
@@ -851,7 +853,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                           color: isFollowed
                               ? AppColors.primaryRed
                               : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.all(Radius.circular(20)),
                           border: Border.all(
                             color: isFollowed
                                 ? AppColors.primaryRed
@@ -885,7 +887,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               elevation: 0,
             ),

@@ -23,6 +23,12 @@ class _Entry {
 class RsvpStore extends ChangeNotifier {
   final Map<String, _Entry> _map = {};
 
+  // debugPrint alone isn't stripped in release/profile builds, so gate it
+  // behind kDebugMode to avoid string-building/log I/O on every RSVP tap.
+  void _log(String message) {
+    if (kDebugMode) debugPrint(message);
+  }
+
   bool isAttending(String eventId) => _map[eventId]?.attending ?? false;
 
   // Kept for existing widgets, but RSVP no longer has a loading UI.
@@ -61,7 +67,7 @@ class RsvpStore extends ChangeNotifier {
     if (userId.isEmpty || eventId.isEmpty) return;
     if (!authService.isStudentSession ||
         authService.currentUser?.id != userId) {
-      debugPrint(
+      _log(
         'RSVP toggle skipped: current session is not a student '
         'eventId=$eventId userId=$userId',
       );
@@ -71,13 +77,13 @@ class RsvpStore extends ChangeNotifier {
     final wasAttending = isAttending(eventId);
     final idx = events.indexWhere((e) => e.id == eventId);
     if (idx == -1) {
-      debugPrint('RSVP toggle skipped: event not found eventId=$eventId');
+      _log('RSVP toggle skipped: event not found eventId=$eventId');
       return;
     }
 
     final event = _mutableEventAt(idx);
     final previousTimestamp = event.rsvpTimestamps[userId];
-    debugPrint(
+    _log(
       'RSVP toggle local start: eventId=$eventId userId=$userId '
       'wasAttending=$wasAttending next=${!wasAttending}',
     );
@@ -96,7 +102,7 @@ class RsvpStore extends ChangeNotifier {
     try {
       final studentUserId = authService.currentUser?.id;
       if (studentUserId != null && studentUserId.isNotEmpty) {
-        debugPrint(
+        _log(
           'RSVP supabase write start: eventId=$eventId '
           'profileId=$studentUserId attending=${!wasAttending}',
         );
@@ -105,12 +111,12 @@ class RsvpStore extends ChangeNotifier {
           eventId: eventId,
           attending: !wasAttending,
         );
-        debugPrint(
+        _log(
           'RSVP supabase write success: eventId=$eventId '
           'profileId=$studentUserId attending=${!wasAttending}',
         );
       } else {
-        debugPrint(
+        _log(
           'RSVP supabase write skipped: no current student user '
           'eventId=$eventId userId=$userId',
         );
@@ -122,11 +128,11 @@ class RsvpStore extends ChangeNotifier {
         );
       }
     } catch (error, stackTrace) {
-      debugPrint(
+      _log(
         'RSVP supabase write failed: eventId=$eventId userId=$userId '
         'error=$error',
       );
-      debugPrintStack(stackTrace: stackTrace);
+      if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
       _setLocalRsvp(
         event: event,
         userId: userId,
@@ -139,7 +145,7 @@ class RsvpStore extends ChangeNotifier {
         _ignore(notificationService.cancelEventReminders(event.id));
       }
       unawaited(contentStore.saveEvents());
-      debugPrint(
+      _log(
         'RSVP local rollback complete: eventId=$eventId '
         'restoredAttending=$wasAttending',
       );

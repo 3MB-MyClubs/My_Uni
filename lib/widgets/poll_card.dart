@@ -26,7 +26,9 @@ class PollCard extends StatelessWidget {
       listenable: pollStore,
       builder: (_, _) {
         pollStore.hydrate(post.id);
-        final myVote = userId.isEmpty ? null : pollStore.myVote(post.id, userId);
+        final myVote = userId.isEmpty
+            ? null
+            : pollStore.myVote(post.id, userId);
         final total = pollStore.totalVotes(post.id);
         final showResults = myVote != null;
 
@@ -35,7 +37,7 @@ class PollCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.surfaceAlt,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.all(Radius.circular(14)),
             border: Border.all(color: AppColors.divider),
           ),
           child: Column(
@@ -110,7 +112,7 @@ class PollCard extends StatelessWidget {
         height: 38,
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
           border: Border.all(
             color: isMine ? accent : AppColors.divider,
             width: isMine ? 1.5 : 1,

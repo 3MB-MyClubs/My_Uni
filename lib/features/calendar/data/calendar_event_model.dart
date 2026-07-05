@@ -19,7 +19,8 @@ class CalendarEventModel {
     this.url,
   });
 
-  factory CalendarEventModel.fromAppEvent(app.Event event) => CalendarEventModel(
+  factory CalendarEventModel.fromAppEvent(app.Event event) =>
+      CalendarEventModel(
         appEventId: event.id,
         title: event.title,
         description: event.description,

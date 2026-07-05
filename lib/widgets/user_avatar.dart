@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/user_state.dart';
 import '../services/app_colors.dart';
 import 'loading_skeleton.dart';
@@ -7,7 +9,7 @@ import 'profile_photo_viewer.dart';
 
 /// Shows a user's profile photo if they have one, otherwise their initial.
 /// Used everywhere a user avatar appears so photo changes are visible app-wide.
-class UserAvatar extends StatelessWidget {
+class UserAvatar extends ConsumerWidget {
   final String userId;
   final String name;
   final double size;
@@ -28,72 +30,92 @@ class UserAvatar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: userState,
-      builder: (context, _) {
-        final photoPath = userState.profilePhotoPaths[userId];
-        final mockUrl = userState.mockPhotoUrls[userId];
-        final bg = backgroundColor ?? AppColors.lightRed;
-        final fg = textColor ?? AppColors.primaryRed;
-        final isCircle = borderRadius == null;
-        final clip = isCircle ? BorderRadius.circular(size / 2) : borderRadius!;
-
-        // User-uploaded photo takes highest priority
-        if (photoPath != null) {
-          final file = File(photoPath);
-          if (file.existsSync()) {
-            final imageProvider = FileImage(file);
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => showProfilePhotoViewer(
-                context: context,
-                imageProvider: imageProvider,
-              ),
-              child: ClipRRect(
-                borderRadius: clip,
-                child: Image(
-                  image: imageProvider,
-                  width: size,
-                  height: size,
-                  fit: BoxFit.cover,
-                  errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
-                ),
-              ),
-            );
-          }
-        }
-
-        // Fall back to mock network photo for demo users
-        if (mockUrl != null) {
-          final imageProvider = NetworkImage(mockUrl);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => showProfilePhotoViewer(
-              context: context,
-              imageProvider: imageProvider,
-            ),
-            child: ClipRRect(
-              borderRadius: clip,
-              child: Image(
-                image: imageProvider,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, e, st) => _initial(bg, fg, isCircle),
-                loadingBuilder: (ctx, child, progress) =>
-                    progress == null ? child : _skeleton(isCircle),
-              ),
-            ),
-          );
-        }
-
-        return _initial(bg, fg, isCircle);
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Only rebuilds when one of these three values actually changes for this
+    // user, instead of on any unrelated UserState mutation app-wide.
+    final (photoPath, mockUrl, displayName) = ref.watch(
+      userStateProvider.select(
+        (s) => (
+          s.profilePhotoPaths[userId],
+          s.mockPhotoUrls[userId],
+          s.displayNameFor(userId, name),
+        ),
+      ),
     );
+    final bg = backgroundColor ?? AppColors.lightRed;
+    final fg = textColor ?? AppColors.primaryRed;
+    final isCircle = borderRadius == null;
+    final clip = isCircle
+        ? BorderRadius.all(Radius.circular(size / 2))
+        : borderRadius!;
+    // Decode at the actual rendered size (accounting for screen density)
+    // instead of the full uploaded resolution (up to 1024px for a ~40px
+    // avatar slot).
+    final decodeSize = (size * MediaQuery.devicePixelRatioOf(context)).round();
+
+    // User-uploaded photo takes highest priority
+    if (photoPath != null) {
+      final file = File(photoPath);
+      if (file.existsSync()) {
+        final imageProvider = FileImage(file);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showProfilePhotoViewer(
+            context: context,
+            imageProvider: imageProvider,
+          ),
+          child: ClipRRect(
+            borderRadius: clip,
+            child: Image(
+              image: ResizeImage(
+                imageProvider,
+                width: decodeSize,
+                height: decodeSize,
+              ),
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (ctx, e, st) =>
+                  _initial(bg, fg, isCircle, displayName),
+            ),
+          ),
+        );
+      }
+    }
+
+    // Fall back to mock network photo for demo users
+    if (mockUrl != null) {
+      final imageProvider = CachedNetworkImageProvider(mockUrl);
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => showProfilePhotoViewer(
+          context: context,
+          imageProvider: imageProvider,
+        ),
+        child: ClipRRect(
+          borderRadius: clip,
+          child: Image(
+            image: ResizeImage(
+              imageProvider,
+              width: decodeSize,
+              height: decodeSize,
+            ),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (ctx, e, st) =>
+                _initial(bg, fg, isCircle, displayName),
+            loadingBuilder: (ctx, child, progress) =>
+                progress == null ? child : _skeleton(isCircle),
+          ),
+        ),
+      );
+    }
+
+    return _initial(bg, fg, isCircle, displayName);
   }
 
-  Widget _initial(Color bg, Color fg, bool isCircle) {
+  Widget _initial(Color bg, Color fg, bool isCircle, String displayName) {
     return Container(
       width: size,
       height: size,
@@ -103,18 +125,13 @@ class UserAvatar extends StatelessWidget {
         borderRadius: isCircle ? null : borderRadius,
       ),
       child: Center(
-        child: Builder(
-          builder: (context) {
-            final display = userState.displayNameFor(userId, name);
-            return Text(
-              display.isNotEmpty ? display[0].toUpperCase() : '?',
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.bold,
-                color: fg,
-              ),
-            );
-          },
+        child: Text(
+          displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.bold,
+            color: fg,
+          ),
         ),
       ),
     );

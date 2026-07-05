@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/signup_service.dart';
+import '../../widgets/app_network_image.dart';
 import '../../widgets/loading_skeleton.dart';
 import 'signup_theme.dart';
 
@@ -117,7 +118,9 @@ class _StepProfileState extends State<StepProfile> {
   void _onMajorChanged(String query) {
     if (query.isEmpty) {
       setState(() {
-        _suggestions = _majors;
+        // Capped so focusing the empty field doesn't lay out the entire
+        // major catalog inside the shrinkWrap suggestion list below.
+        _suggestions = _majors.take(20).toList();
         _showSuggestions = true;
       });
       return;
@@ -178,7 +181,7 @@ class _StepProfileState extends State<StepProfile> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: SC.hair,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -222,7 +225,7 @@ class _StepProfileState extends State<StepProfile> {
         height: 42,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
         child: Icon(icon, color: color),
       ),
@@ -369,14 +372,13 @@ class _StepProfileState extends State<StepProfile> {
 
   Widget _selectedAvatarImage(String path) {
     if (kIsWeb) {
-      return Image.network(
-        path,
+      return AppNetworkImage(
+        url: path,
         width: 92,
         height: 92,
         fit: BoxFit.cover,
-        loadingBuilder: (_, child, progress) =>
-            progress == null ? child : const SkeletonBox.circle(size: 92),
-        errorBuilder: (_, _, _) => Container(
+        placeholderBuilder: (_) => const SkeletonBox.circle(size: 92),
+        errorBuilder: (_) => Container(
           width: 92,
           height: 92,
           decoration: const BoxDecoration(
@@ -433,7 +435,7 @@ class _StepProfileState extends State<StepProfile> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: SC.burgundyTint,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
                     ),
                     child: Text(
                       _lookupError!,
@@ -657,7 +659,7 @@ class _YearSelector extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: SC.card,
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.all(Radius.circular(11)),
               border: Border.all(color: SC.hair),
             ),
             child: SizedBox(
@@ -683,7 +685,7 @@ class _YearSelector extends StatelessWidget {
                       height: 44,
                       decoration: BoxDecoration(
                         color: sel ? SC.burgundy : SC.card,
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.all(Radius.circular(11)),
                         border: Border.all(
                           color: sel ? SC.burgundy : SC.hair,
                           width: sel ? 1.5 : 1,
@@ -842,6 +844,9 @@ class _MajorField extends StatelessWidget {
             child: ListView.separated(
               padding: EdgeInsets.zero,
               shrinkWrap: true,
+              // Content can still exceed the 210px cap above even after
+              // capping suggestions, so keep it scrollable (not Never).
+              physics: const ClampingScrollPhysics(),
               itemCount: suggestions.length,
               separatorBuilder: (_, _) => Divider(height: 1, color: SC.hair),
               itemBuilder: (_, i) {

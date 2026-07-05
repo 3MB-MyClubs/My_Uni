@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import 'loading_skeleton.dart';
@@ -8,11 +10,12 @@ import 'profile_photo_viewer.dart';
 /// Shows a club's profile photo if one has been set, otherwise falls back to
 /// the first letter of the club name on a colored background.
 ///
-/// Wraps itself in a [ListenableBuilder] so it rebuilds instantly when any
-/// club admin changes their club photo — visible to all users app-wide.
+/// Rebuilds only when one of the specific UserState entries this club's
+/// photo can come from actually changes, instead of on any unrelated
+/// mutation app-wide.
 ///
 /// [shape] — 'circle' | 'rounded' (default 'rounded')
-class ClubAvatar extends StatelessWidget {
+class ClubAvatar extends ConsumerWidget {
   final String clubId;
   final String clubName;
   final Color color;
@@ -36,43 +39,49 @@ class ClubAvatar extends StatelessWidget {
     this.profilePhotoFallbackId,
   });
 
+  // The set of profile ids (club + fallback + club admins) is fixed for a
+  // given widget instance (it only depends on clubs/adminUserIds, not
+  // UserState), so this resolves to the same two strings .select() would
+  // otherwise need a variable-length dependency list for — records compare
+  // by value, so .select() only fires when the resolved photo/fallback
+  // actually changes, not on unrelated UserState mutations.
+  (String?, String?) _selectPhoto(UserState s) {
+    final profileIds = _profileIdsForClub();
+    final photoPath =
+        s.clubPhotoPaths[clubId] ??
+        _firstValue(profileIds.map((id) => s.profilePhotoPaths[id]));
+    final fallbackUrl = _firstNetworkImage([
+      ...profileIds.map((id) => s.mockPhotoUrls[id]),
+      s.mockClubPhotoUrls[clubId],
+    ]);
+    return (photoPath, fallbackUrl);
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: userState,
-      builder: (context, _) {
-        final profileIds = _profileIdsForClub();
-        final logoUrl = imageUrl?.trim();
-        final photoPath =
-            userState.clubPhotoPaths[clubId] ??
-            _firstValue(
-              profileIds.map((id) => userState.profilePhotoPaths[id]),
-            );
-        final fallbackUrl = _firstNetworkImage([
-          ...profileIds.map((id) => userState.mockPhotoUrls[id]),
-          userState.mockClubPhotoUrls[clubId],
-        ]);
-        final isCircle = shape == 'circle';
-
-        if (logoUrl != null && _isNetworkImage(logoUrl)) {
-          return _photo(context, NetworkImage(logoUrl), isCircle);
-        }
-
-        if (photoPath != null && _isNetworkImage(photoPath)) {
-          return _photo(context, NetworkImage(photoPath), isCircle);
-        }
-
-        final file = photoPath != null ? File(photoPath) : null;
-        if (file != null && file.existsSync()) {
-          return _photo(context, FileImage(file), isCircle);
-        }
-
-        if (fallbackUrl != null) {
-          return _photo(context, NetworkImage(fallbackUrl), isCircle);
-        }
-        return _initial(isCircle);
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (photoPath, fallbackUrl) = ref.watch(
+      userStateProvider.select(_selectPhoto),
     );
+    final logoUrl = imageUrl?.trim();
+    final isCircle = shape == 'circle';
+
+    if (logoUrl != null && _isNetworkImage(logoUrl)) {
+      return _photo(context, CachedNetworkImageProvider(logoUrl), isCircle);
+    }
+
+    if (photoPath != null && _isNetworkImage(photoPath)) {
+      return _photo(context, CachedNetworkImageProvider(photoPath), isCircle);
+    }
+
+    final file = photoPath != null ? File(photoPath) : null;
+    if (file != null && file.existsSync()) {
+      return _photo(context, FileImage(file), isCircle);
+    }
+
+    if (fallbackUrl != null) {
+      return _photo(context, CachedNetworkImageProvider(fallbackUrl), isCircle);
+    }
+    return _initial(isCircle);
   }
 
   bool _isNetworkImage(String path) =>
@@ -107,6 +116,11 @@ class ClubAvatar extends StatelessWidget {
     ImageProvider imageProvider,
     bool isCircle,
   ) {
+    // Decode at the actual rendered size (accounting for screen density)
+    // instead of the full uploaded resolution (up to 1920px for a ~48px
+    // avatar slot). The full-resolution provider is kept for the tap-to-view
+    // full-screen viewer below.
+    final decodeSize = (size * MediaQuery.devicePixelRatioOf(context)).round();
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => showProfilePhotoViewer(
@@ -115,10 +129,14 @@ class ClubAvatar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: isCircle
-            ? BorderRadius.circular(size / 2)
-            : BorderRadius.circular(borderRadius),
+            ? BorderRadius.all(Radius.circular(size / 2))
+            : BorderRadius.all(Radius.circular(borderRadius)),
         child: Image(
-          image: imageProvider,
+          image: ResizeImage(
+            imageProvider,
+            width: decodeSize,
+            height: decodeSize,
+          ),
           width: size,
           height: size,
           fit: BoxFit.cover,
@@ -135,7 +153,9 @@ class ClubAvatar extends StatelessWidget {
       width: size,
       height: size,
       shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
-      borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
+      borderRadius: isCircle
+          ? null
+          : BorderRadius.all(Radius.circular(borderRadius)),
     );
   }
 
@@ -146,7 +166,9 @@ class ClubAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: isCircle ? null : BorderRadius.circular(borderRadius),
+        borderRadius: isCircle
+            ? null
+            : BorderRadius.all(Radius.circular(borderRadius)),
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Center(

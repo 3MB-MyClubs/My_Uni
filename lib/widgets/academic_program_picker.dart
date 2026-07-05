@@ -20,15 +20,15 @@ class AcademicProgramField extends StatelessWidget {
     final hasValue = value != null && value!.isNotEmpty;
     return Material(
       color: AppColors.card,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.all(Radius.circular(14)),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         onTap: onTap,
         child: Container(
           constraints: const BoxConstraints(minHeight: 54),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.all(Radius.circular(14)),
             border: Border.all(color: AppColors.divider),
           ),
           child: Row(
@@ -165,7 +165,7 @@ class _AcademicProgramPickerSheetState
               height: 5,
               decoration: BoxDecoration(
                 color: AppColors.divider,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.all(Radius.circular(999)),
               ),
             ),
             Padding(
@@ -235,15 +235,15 @@ class _AcademicProgramPickerSheetState
                   filled: true,
                   fillColor: AppColors.card,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide(
                       color: AppColors.primaryRed,
                       width: 1.5,

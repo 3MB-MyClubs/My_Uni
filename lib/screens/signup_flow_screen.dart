@@ -162,7 +162,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
                     child: LinearProgressIndicator(
                       value: (_currentStep + 1) / _totalSteps,
                       backgroundColor: SC.hair,

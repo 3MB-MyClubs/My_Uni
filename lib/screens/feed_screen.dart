@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
@@ -28,7 +28,6 @@ import '../models/user.dart';
 import '../models/club.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
-import 'explore_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
 import '../widgets/user_avatar.dart';
@@ -224,33 +223,26 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    viewTracker.addListener(_onViewCountsChanged);
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
+    contentStore.addListener(_onContentChanged);
     _loadFeedContent();
     _loadPeopleDirectory();
   }
 
   @override
   void dispose() {
-    viewTracker.removeListener(_onViewCountsChanged);
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
+    contentStore.removeListener(_onContentChanged);
     super.dispose();
   }
 
-  void _onViewCountsChanged() {
-    if (!mounted) return;
-    // recordView fires from _PostCard.initState while the list is laying out
-    // new children — defer the rebuild until after the current frame.
-    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
-      setState(() {});
-    } else {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() {});
-      });
-    }
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
-  void _onLocaleChanged() {
+  void _onContentChanged() {
     if (mounted) setState(() {});
   }
 
@@ -361,7 +353,9 @@ class _FeedScreenState extends State<FeedScreen> {
                               vertical: 12,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(12),
+                              ),
                             ),
                             elevation: 0,
                           ),
@@ -422,6 +416,21 @@ class _FeedScreenState extends State<FeedScreen> {
                 }, childCount: mixed.length),
               ),
               SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 28),
+                  child: Center(
+                    child: Text(
+                      S.endOfFeed,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
                 child: SizedBox(
                   height: MediaQuery.of(context).padding.bottom + 112,
                 ),
@@ -441,7 +450,7 @@ class _FeedScreenState extends State<FeedScreen> {
           child: SkeletonBox(
             width: 70,
             height: 18,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
           ),
         ),
       ),
@@ -460,15 +469,21 @@ class _FeedScreenState extends State<FeedScreen> {
   String get _greetingName {
     final student = authService.currentUser;
     if (authService.isStudentSession && student != null) {
-      return student.name;
+      return _firstName(student.name);
     }
 
     final admin = authService.currentAdmin;
     if (admin != null) {
-      return managedClubForAdmin(admin.id)?.name ?? admin.name;
+      final club = managedClubForAdmin(admin.id);
+      return club?.name ?? _firstName(admin.name);
     }
 
     return '';
+  }
+
+  String _firstName(String fullName) {
+    final parts = fullName.trim().split(' ');
+    return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : fullName;
   }
 
   // ── UniHub top bar ───────────────────────────────────────────────────────
@@ -526,7 +541,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   height: 38,
                   decoration: BoxDecoration(
                     color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                     border: Border.all(color: AppColors.divider),
                   ),
                   child: Stack(
@@ -753,7 +768,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: active ? AppColors.primaryRed : Colors.transparent,
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius: BorderRadius.all(Radius.circular(100)),
                       border: Border.all(
                         color: active
                             ? AppColors.primaryRed
@@ -819,7 +834,6 @@ class _FeedScreenState extends State<FeedScreen> {
       post: item.data as NewsPost,
       score: item.score,
       rank: rank,
-      onUpdate: () => setState(() {}),
     );
   }
 }
@@ -852,25 +866,25 @@ class _FeedPostSkeleton extends StatelessWidget {
                 SkeletonBox(
                   width: 128,
                   height: 14,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
                 ),
                 const SizedBox(height: 8),
                 SkeletonBox(
                   width: double.infinity,
                   height: 12,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
                 const SizedBox(height: 6),
                 SkeletonBox(
                   width: MediaQuery.sizeOf(context).width * 0.46,
                   height: 12,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
                 const SizedBox(height: 12),
                 SkeletonBox(
                   width: double.infinity,
                   height: 176,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
                 ),
               ],
             ),
@@ -996,14 +1010,17 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
   ];
 
   final Set<String> _dismissedIds = {};
+  final Set<String> _followingTransitionIds = {};
 
   @override
   Widget build(BuildContext context) {
-    // Re-check live follow state so a newly followed person disappears at once.
+    // Re-check live follow state so newly followed people disappear, but keep
+    // them around briefly while their card animates out.
     final shown = widget.suggestions
         .where(
           (user) =>
-              !userState.isFollowingUser(user.id) &&
+              (!userState.isFollowingUser(user.id) ||
+                  _followingTransitionIds.contains(user.id)) &&
               !_dismissedIds.contains(user.id),
         )
         .take(8)
@@ -1018,51 +1035,33 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
                 Icon(
                   Icons.people_outline,
-                  size: 18,
+                  size: 17,
                   color: AppColors.primaryRed,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   S.suggestedForYou,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: AppColors.text,
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ExploreScreen(initialTabIndex: 1),
-                    ),
-                  ),
-                  child: Text(
-                    S.seeAll,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.primaryRed,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.1,
-                    ),
                   ),
                 ),
               ],
             ),
           ),
           SizedBox(
-            height: 328,
+            height: 258,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: shown.length,
-              separatorBuilder: (_, i) => const SizedBox(width: 10),
+              separatorBuilder: (_, i) => const SizedBox(width: 8),
               itemBuilder: (ctx, i) {
                 final u = shown[i];
                 final color = _avatarColors[i % _avatarColors.length];
@@ -1070,146 +1069,295 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 final followsMe = peopleService.cachedFollowerIds.contains(
                   u.id,
                 );
+                final isFollowingTransition = _followingTransitionIds.contains(
+                  u.id,
+                );
 
                 final mutualIds = userState.followedUserIds.intersection(
                   Set<String>.from(u.followingUserIds),
                 );
                 final mutualCount = mutualIds.length;
-                final mutualLabel = mutualCount > 30
-                    ? '30+'
-                    : '$mutualCount';
+                final mutualLabel = mutualCount > 30 ? '30+' : '$mutualCount';
                 final mutualUser = mutualCount > 0
                     ? peopleService.peopleByIds(mutualIds.take(1)).firstOrNull
                     : null;
+                final mutualName = mutualUser == null
+                    ? null
+                    : userState.displayNameFor(mutualUser.id, mutualUser.name);
+                final mutualText = mutualName == null
+                    ? (mutualCount == 1
+                          ? '1 mutual friend'
+                          : '$mutualLabel mutual friends')
+                    : (mutualCount == 1
+                          ? 'Mutual friend: $mutualName'
+                          : 'Mutual friend: $mutualName + ${mutualCount - 1} more');
 
-                return Container(
-                  width: 184,
-                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Stack(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: u),
-                              ),
-                            ),
-                            child: Center(
-                              child: UserAvatar(
-                                userId: u.id,
-                                name: u.name,
-                                size: 148,
-                                fontSize: 56,
-                                backgroundColor: color.withValues(alpha: 0.15),
-                                textColor: color,
-                              ),
-                            ),
+                return SizedBox(
+                  width: 164,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final scale = Tween<double>(begin: 0.96, end: 1).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      );
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: scale, child: child),
+                      );
+                    },
+                    child: AnimatedSlide(
+                      key: ValueKey('person-suggestion-${u.id}'),
+                      offset: isFollowingTransition
+                          ? const Offset(0.14, 0)
+                          : Offset.zero,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedOpacity(
+                        opacity: isFollowingTransition ? 0 : 1,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(9, 10, 9, 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                            border: Border.all(color: AppColors.divider),
                           ),
-                          const SizedBox(height: 10),
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: u),
-                              ),
-                            ),
-                            child: Text(
-                              displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                              ),
-                            ),
-                          ),
-                          if (mutualCount > 0) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (mutualUser != null) ...[
-                                  UserAvatar(
-                                    userId: mutualUser.id,
-                                    name: mutualUser.name,
-                                    size: 16,
-                                    fontSize: 8,
+                          child: Stack(
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            UserProfileScreen(user: u),
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        alignment: Alignment.bottomCenter,
+                                        children: [
+                                          UserAvatar(
+                                            userId: u.id,
+                                            name: u.name,
+                                            size: 78,
+                                            fontSize: 29,
+                                            backgroundColor: color.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                            textColor: color,
+                                          ),
+                                          if (mutualCount > 0)
+                                            Positioned(
+                                              bottom: -10,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 7,
+                                                      vertical: 3,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.background,
+                                                  borderRadius:
+                                                      BorderRadius.all(
+                                                        Radius.circular(20),
+                                                      ),
+                                                  border: Border.all(
+                                                    color: AppColors.divider,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (mutualUser != null) ...[
+                                                      UserAvatar(
+                                                        userId: mutualUser.id,
+                                                        name: mutualUser.name,
+                                                        size: 12,
+                                                        fontSize: 6,
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                    ],
+                                                    Text(
+                                                      mutualCount == 1
+                                                          ? '1 mutual'
+                                                          : '$mutualLabel mutuals',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  const SizedBox(width: 5),
+                                  SizedBox(height: mutualCount > 0 ? 15 : 8),
+                                  GestureDetector(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            UserProfileScreen(user: u),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                  ),
+                                  if (mutualCount > 0) ...[
+                                    const SizedBox(height: 5),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (mutualUser != null) ...[
+                                            UserAvatar(
+                                              userId: mutualUser.id,
+                                              name: mutualUser.name,
+                                              size: 16,
+                                              fontSize: 8,
+                                            ),
+                                            const SizedBox(width: 4),
+                                          ],
+                                          Flexible(
+                                            child: Text(
+                                              mutualText,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                height: 1.2,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  const Spacer(),
+                                  const SizedBox(height: 8),
+                                  UserFollowButton(
+                                    userId: u.id,
+                                    size: 'small',
+                                    followLabel: followsMe
+                                        ? S.followBack
+                                        : null,
+                                    onTap: () async {
+                                      final myId = authService.isStudentSession
+                                          ? authService.currentUser?.id ?? ''
+                                          : '';
+                                      if (myId.isEmpty ||
+                                          isFollowingTransition) {
+                                        return;
+                                      }
+                                      final follow = !userState.isFollowingUser(
+                                        u.id,
+                                      );
+                                      if (follow) {
+                                        setState(
+                                          () =>
+                                              _followingTransitionIds.add(u.id),
+                                        );
+                                      }
+                                      userState.setFollowingUser(u.id, follow);
+                                      userPrefsService.save(myId);
+                                      try {
+                                        if (follow) {
+                                          await Future<void>.delayed(
+                                            const Duration(milliseconds: 260),
+                                          );
+                                          if (mounted) {
+                                            setState(
+                                              () => _followingTransitionIds
+                                                  .remove(u.id),
+                                            );
+                                            widget.onFollowed();
+                                          }
+                                        } else {
+                                          widget.onFollowed();
+                                        }
+                                        await peopleService.setFollowing(
+                                          followerId: myId,
+                                          followingId: u.id,
+                                          follow: follow,
+                                        );
+                                        userPrefsService.save(myId);
+                                      } catch (_) {
+                                        userState.setFollowingUser(
+                                          u.id,
+                                          !follow,
+                                        );
+                                        userPrefsService.save(myId);
+                                        if (mounted) {
+                                          setState(
+                                            () => _followingTransitionIds
+                                                .remove(u.id),
+                                          );
+                                          widget.onFollowed();
+                                        }
+                                      }
+                                    },
+                                  ),
                                 ],
-                                Text(
-                                  mutualCount == 1
-                                      ? '1 mutual'
-                                      : '$mutualLabel mutuals',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.secondaryText,
+                              ),
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _dismissedIds.add(u.id)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.card.withValues(
+                                        alpha: 0.85,
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: AppColors.secondaryText,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
-                          const Spacer(),
-                          const SizedBox(height: 10),
-                          UserFollowButton(
-                            userId: u.id,
-                            size: 'large',
-                            followLabel: followsMe ? S.followBack : null,
-                            onTap: () async {
-                              final myId = authService.isStudentSession
-                                  ? authService.currentUser?.id ?? ''
-                                  : '';
-                              if (myId.isEmpty) return;
-                              final follow = !userState.isFollowingUser(u.id);
-                              userState.setFollowingUser(u.id, follow);
-                              userPrefsService.save(myId);
-                              widget.onFollowed();
-                              try {
-                                await peopleService.setFollowing(
-                                  followerId: myId,
-                                  followingId: u.id,
-                                  follow: follow,
-                                );
-                                userPrefsService.save(myId);
-                              } catch (_) {
-                                userState.setFollowingUser(u.id, !follow);
-                                userPrefsService.save(myId);
-                                widget.onFollowed();
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                      Positioned(
-                        top: -2,
-                        right: -2,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _dismissedIds.add(u.id)),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppColors.card.withValues(alpha: 0.85),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.close,
-                              size: 14,
-                              color: AppColors.secondaryText,
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -1290,7 +1438,7 @@ class _TrendingEventCard extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.background,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
                 border: Border.all(color: color.withValues(alpha: 0.25)),
               ),
               child: Column(
@@ -1304,7 +1452,7 @@ class _TrendingEventCard extends StatelessWidget {
                         height: 40,
                         decoration: BoxDecoration(
                           color: color,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1465,7 +1613,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: AppColors.background,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(color: color.withValues(alpha: 0.25)),
                 ),
                 child: Row(
@@ -1576,7 +1724,7 @@ class _PeopleEngagementSheet extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.all(Radius.circular(2)),
             ),
           ),
         ),
@@ -1694,7 +1842,7 @@ class _PeopleEngagementSkeleton extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.all(Radius.circular(2)),
             ),
           ),
         ),
@@ -1707,7 +1855,7 @@ class _PeopleEngagementSkeleton extends StatelessWidget {
               SkeletonBox(
                 width: 118,
                 height: 16,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
               ),
             ],
           ),
@@ -1746,13 +1894,13 @@ class _PeopleEngagementSkeletonRow extends StatelessWidget {
                 SkeletonBox(
                   width: 140,
                   height: 13,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
                 ),
                 const SizedBox(height: 8),
                 SkeletonBox(
                   width: 190,
                   height: 11,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
               ],
             ),
@@ -1965,7 +2113,9 @@ void _openShareSheet(
               : 'Post link copied to clipboard',
         ),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
       ),
     );
 }
@@ -1988,14 +2138,12 @@ class _PostCard extends StatefulWidget {
   final NewsPost post;
   final double score;
   final int rank;
-  final VoidCallback onUpdate;
 
   const _PostCard({
     super.key,
     required this.post,
     required this.score,
     required this.rank,
-    required this.onUpdate,
   });
 
   @override
@@ -2037,14 +2185,12 @@ class _PostCardState extends State<_PostCard>
     ensurePostLiked(widget.post.id);
     setState(() => _showHeart = true);
     _heartController.forward();
-    widget.onUpdate();
   }
 
   void _toggleLike() {
     if (!authService.isStudentSession) return;
     togglePostLike(widget.post.id);
     setState(() {});
-    widget.onUpdate();
   }
 
   void _showPostOptions() {
@@ -2087,7 +2233,7 @@ class _PostCardState extends State<_PostCard>
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -2268,7 +2414,7 @@ class _PostCardState extends State<_PostCard>
                     ),
                     decoration: BoxDecoration(
                       color: clubColor.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
                       border: Border.all(
                         color: clubColor.withValues(alpha: 0.3),
                       ),
@@ -2322,7 +2468,7 @@ class _PostCardState extends State<_PostCard>
                   GestureDetector(
                     onDoubleTap: isStudent ? _doubleTapLike : null,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -2354,25 +2500,28 @@ class _PostCardState extends State<_PostCard>
                 // ── Engagement stats (own-club admin only) ──
                 if (ownContent) ...[
                   const SizedBox(height: 10),
-                  _EngagementBar(
-                    likes: likeCount,
-                    shares: shareCount,
-                    score: widget.score,
-                    views: viewTracker.viewCount(widget.post.id),
-                    onViewTap: () => showModalBottomSheet<void>(
-                      context: context,
-                      backgroundColor: Colors.transparent,
-                      isScrollControlled: true,
-                      builder: (_) => _ViewersSheet(
-                        contentId: widget.post.id,
-                        title: 'Post Viewers',
+                  ListenableBuilder(
+                    listenable: viewTracker,
+                    builder: (context, _) => _EngagementBar(
+                      likes: likeCount,
+                      shares: shareCount,
+                      score: widget.score,
+                      views: viewTracker.viewCount(widget.post.id),
+                      onViewTap: () => showModalBottomSheet<void>(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (_) => _ViewersSheet(
+                          contentId: widget.post.id,
+                          title: 'Post Viewers',
+                        ),
                       ),
-                    ),
-                    onLikeTap: () => showModalBottomSheet<void>(
-                      context: context,
-                      backgroundColor: Colors.transparent,
-                      isScrollControlled: true,
-                      builder: (_) => _LikersSheet(postId: widget.post.id),
+                      onLikeTap: () => showModalBottomSheet<void>(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (_) => _LikersSheet(postId: widget.post.id),
+                      ),
                     ),
                   ),
                 ],
@@ -2433,7 +2582,7 @@ class _PostCardState extends State<_PostCard>
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.all(Radius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         child: Row(
@@ -2659,7 +2808,7 @@ class _EventCardState extends State<_EventCard> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
                           ),
                           child: Text(
                             '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
@@ -2738,18 +2887,21 @@ class _EventCardState extends State<_EventCard> {
             if (_isOwnerOfClub(widget.event.clubId)) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: _EngagementBar(
-                  likes: 0,
-                  shares: shareCount,
-                  score: widget.score,
-                  views: viewTracker.viewCount(widget.event.id),
-                  onViewTap: () => showModalBottomSheet<void>(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    builder: (_) => _ViewersSheet(
-                      contentId: widget.event.id,
-                      title: 'Event Viewers',
+                child: ListenableBuilder(
+                  listenable: viewTracker,
+                  builder: (context, _) => _EngagementBar(
+                    likes: 0,
+                    shares: shareCount,
+                    score: widget.score,
+                    views: viewTracker.viewCount(widget.event.id),
+                    onViewTap: () => showModalBottomSheet<void>(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (_) => _ViewersSheet(
+                        contentId: widget.event.id,
+                        title: 'Event Viewers',
+                      ),
                     ),
                   ),
                 ),
@@ -2918,7 +3070,6 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-
 // ─── Event Rail Card ──────────────────────────────────────────────────────────
 
 class _EventRailCard extends StatefulWidget {
@@ -2977,7 +3128,7 @@ class _EventRailCardState extends State<_EventRailCard> {
         width: 188,
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
@@ -2999,7 +3150,7 @@ class _EventRailCardState extends State<_EventRailCard> {
                   height: 36,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                   child: Center(
                     child: Text(
@@ -3109,7 +3260,7 @@ class _EventRailCardState extends State<_EventRailCard> {
               height: 34,
               decoration: BoxDecoration(
                 color: AppColors.primaryRed,
-                borderRadius: BorderRadius.circular(100),
+                borderRadius: BorderRadius.all(Radius.circular(100)),
               ),
               alignment: Alignment.center,
               child: const Text(

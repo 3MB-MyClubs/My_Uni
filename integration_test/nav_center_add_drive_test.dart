@@ -13,12 +13,12 @@ import 'package:flutter_application_1/services/tutorial_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 
-/// The real nav-bar "+" a club admin sees must open the Post/Event chooser —
-/// not jump straight to event creation.
+/// The real nav-bar "+" a club admin sees must jump straight to event
+/// creation — no Post/Event chooser in between.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Club admin center + opens the Post/Event chooser', (
+  testWidgets('Club admin center + opens event creation directly', (
     tester,
   ) async {
     authService.logout();
@@ -43,19 +43,13 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_rounded));
     await tester.pump(const Duration(milliseconds: 500));
 
-    // The chooser sheet is up, not the event composer.
-    expect(find.text('Create'), findsOneWidget);
-    expect(find.text('Post'), findsOneWidget);
-    expect(find.text('Event'), findsOneWidget);
+    // Straight to the event form — no chooser sheet in between.
+    expect(find.text('Create'), findsNothing);
+    expect(find.text('New Event'), findsOneWidget);
 
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();
-    await binding.takeScreenshot('nav-center-add-chooser');
-
-    // Tapping Post opens the club's quick composer sheet (not event creation).
-    await tester.tap(find.text('Post'));
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Create Event'), findsNothing);
+    await binding.takeScreenshot('nav-center-add-event-form');
 
     expect(tester.takeException(), isNull);
   });

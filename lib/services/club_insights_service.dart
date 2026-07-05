@@ -27,7 +27,11 @@ class PostStat {
   final int likes;
   final int views;
 
-  const PostStat({required this.post, required this.likes, required this.views});
+  const PostStat({
+    required this.post,
+    required this.likes,
+    required this.views,
+  });
 }
 
 class ClubInsightsData {
@@ -53,12 +57,45 @@ class ClubInsightsData {
 /// optional remote refresh of check-in counts.
 class ClubInsightsService {
   ClubInsightsData compute(Club club) {
-    final clubEvents = events.where((e) => e.clubId == club.id).toList()
+    return _computeFrom(
+      club,
+      events.where((e) => e.clubId == club.id).toList(),
+      newsPosts.where((p) => p.clubId == club.id).toList(),
+    );
+  }
+
+  /// Computes insights for many clubs at once, grouping [events]/[newsPosts]
+  /// by club id in a single pass instead of re-scanning both full lists once
+  /// per club (what calling [compute] in a loop would do).
+  Map<String, ClubInsightsData> computeAll(List<Club> clubsList) {
+    final eventsByClub = <String, List<Event>>{};
+    for (final e in events) {
+      (eventsByClub[e.clubId] ??= []).add(e);
+    }
+    final postsByClub = <String, List<NewsPost>>{};
+    for (final p in newsPosts) {
+      (postsByClub[p.clubId] ??= []).add(p);
+    }
+    return {
+      for (final club in clubsList)
+        club.id: _computeFrom(
+          club,
+          eventsByClub[club.id] ?? const [],
+          postsByClub[club.id] ?? const [],
+        ),
+    };
+  }
+
+  ClubInsightsData _computeFrom(
+    Club club,
+    List<Event> clubEvents,
+    List<NewsPost> clubPosts,
+  ) {
+    final sortedEvents = [...clubEvents]
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    final clubPosts = newsPosts.where((p) => p.clubId == club.id).toList();
 
     final eventStats = [
-      for (final event in clubEvents)
+      for (final event in sortedEvents)
         EventAttendanceStat(
           event: event,
           rsvpCount: event.attendeeUserIds.length,
@@ -66,16 +103,14 @@ class ClubInsightsService {
         ),
     ];
 
-    final postStats =
-        [
-            for (final post in clubPosts)
-              PostStat(
-                post: post,
-                likes: postLikeCount(post.id),
-                views: viewTracker.viewCount(post.id),
-              ),
-          ]
-          ..sort((a, b) => b.likes.compareTo(a.likes));
+    final postStats = [
+      for (final post in clubPosts)
+        PostStat(
+          post: post,
+          likes: postLikeCount(post.id),
+          views: viewTracker.viewCount(post.id),
+        ),
+    ]..sort((a, b) => b.likes.compareTo(a.likes));
 
     return ClubInsightsData(
       followers: clubMemberCount(club.id),

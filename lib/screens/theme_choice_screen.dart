@@ -39,10 +39,13 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                 height: 54,
                 decoration: BoxDecoration(
                   color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.all(Radius.circular(18)),
                 ),
-                child: Icon(Icons.palette_outlined,
-                    color: AppColors.primaryRed, size: 28),
+                child: Icon(
+                  Icons.palette_outlined,
+                  color: AppColors.primaryRed,
+                  size: 28,
+                ),
               ),
               const SizedBox(height: 20),
               Text(
@@ -96,14 +99,19 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Continue with ${_dark ? 'Dark' : 'Light'}',
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Continue with ${_dark ? 'Dark' : 'Light'}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       const Icon(Icons.arrow_forward_rounded, size: 20),
                     ],
@@ -157,7 +165,7 @@ class _ThemePreviewCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(5),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.all(Radius.circular(26)),
           border: Border.all(
             color: selected ? AppColors.primaryRed : AppColors.divider,
             width: selected ? 2.5 : 1.5,
@@ -179,7 +187,7 @@ class _ThemePreviewCard extends StatelessWidget {
               height: 168,
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.all(Radius.circular(20)),
               ),
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -201,12 +209,17 @@ class _ThemePreviewCard extends StatelessWidget {
                         height: 8,
                         decoration: BoxDecoration(
                           color: text.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
                       ),
                       const Spacer(),
-                      Icon(dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                          size: 16, color: _accent),
+                      Icon(
+                        dark
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        size: 16,
+                        color: _accent,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -216,7 +229,7 @@ class _ThemePreviewCard extends StatelessWidget {
                       height: 30,
                       decoration: BoxDecoration(
                         color: card,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
                       ),
                       child: Row(
                         children: [
@@ -226,7 +239,9 @@ class _ThemePreviewCard extends StatelessWidget {
                             height: 16,
                             decoration: BoxDecoration(
                               color: _accent.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(5),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(5),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -235,7 +250,9 @@ class _ThemePreviewCard extends StatelessWidget {
                             height: 7,
                             decoration: BoxDecoration(
                               color: sub,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(4),
+                              ),
                             ),
                           ),
                         ],

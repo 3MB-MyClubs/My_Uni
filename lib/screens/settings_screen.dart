@@ -85,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
                   ),
                 ),
               ),
@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         height: 42,
         decoration: BoxDecoration(
           color: AppColors.lightRed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
         child: Icon(icon, color: AppColors.primaryRed),
       ),
@@ -168,13 +168,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           S.useThisPhoto,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
           child: Image.file(File(cropped.path), fit: BoxFit.cover),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -191,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: AppColors.primaryRed,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -260,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
                       ),
                     ),
                   ),
@@ -294,11 +296,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       filled: true,
                       fillColor: AppColors.background,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide(
                           color: AppColors.primaryRed,
                           width: 1.5,
@@ -333,7 +335,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 : AppColors.divider,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(12),
+                              ),
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
@@ -464,7 +468,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
                       ),
                     ),
                   ),
@@ -526,11 +530,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       filled: true,
                       fillColor: AppColors.background,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide(
                           color: AppColors.primaryRed,
                           width: 1.5,
@@ -561,7 +565,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 : AppColors.divider,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(12),
+                              ),
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
@@ -663,7 +669,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 36,
                             decoration: BoxDecoration(
                               color: AppColors.lightRed,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                             ),
                             child: Icon(
                               Icons.person_outline_rounded,
@@ -714,7 +722,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 36,
                             decoration: BoxDecoration(
                               color: AppColors.lightRed,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                             ),
                             child: Icon(
                               Icons.badge_outlined,
@@ -770,7 +780,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 36,
                             decoration: BoxDecoration(
                               color: AppColors.lightRed,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                             ),
                             child: Icon(
                               Icons.edit_outlined,
@@ -807,7 +819,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         ListTile(
                           leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
                             child: ClubAvatar(
                               clubId: club.id,
                               clubName: club.name,
@@ -849,7 +861,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 36,
                             decoration: BoxDecoration(
                               color: AppColors.lightRed,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                             ),
                             child: Icon(
                               Icons.sell_outlined,
@@ -892,7 +906,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 36,
                             decoration: BoxDecoration(
                               color: AppColors.lightRed,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                             ),
                             child: Icon(
                               Icons.description_outlined,
@@ -933,7 +949,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 36,
                             decoration: BoxDecoration(
                               color: AppColors.lightRed,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                             ),
                             child: Icon(
                               Icons.manage_accounts_outlined,
@@ -984,7 +1002,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         height: 36,
                         decoration: BoxDecoration(
                           color: AppColors.lightRed,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
                         ),
                         child: Icon(
                           themeService.isDark
@@ -1019,7 +1037,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         height: 36,
                         decoration: BoxDecoration(
                           color: AppColors.lightRed,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
                         ),
                         child: Icon(
                           Icons.language_rounded,
@@ -1054,7 +1072,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.all(Radius.circular(16)),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.primaryRed.withValues(alpha: 0.35),
@@ -1066,7 +1084,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
                       onTap: _replayTutorial,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -1077,7 +1095,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 46,
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(13),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(13),
+                                ),
                               ),
                               child: const Icon(
                                 Icons.play_circle_fill_rounded,
@@ -1138,7 +1158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   height: 36,
                   decoration: BoxDecoration(
                     color: Colors.red.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
                   ),
                   child: Icon(Icons.logout, color: Colors.red, size: 20),
                 ),
@@ -1260,7 +1280,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
             ),
@@ -1290,11 +1310,11 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide(
                     color: AppColors.primaryRed,
                     width: 1.5,
@@ -1329,7 +1349,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                           : AppColors.divider,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -1362,7 +1382,7 @@ class _LanguageToggle extends StatelessWidget {
       height: 34,
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.all(Radius.circular(10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1382,7 +1402,7 @@ class _LanguageToggle extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? AppColors.primaryRed : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
         ),
         child: Text(
           label,
@@ -1476,7 +1496,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
             ),
@@ -1507,11 +1527,11 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide(
                     color: AppColors.primaryRed,
                     width: 1.5,
@@ -1546,7 +1566,7 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                           : AppColors.divider,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),

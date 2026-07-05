@@ -2,34 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../models/club.dart';
 import '../services/app_colors.dart';
-import '../services/checkin_store.dart';
 import '../services/club_insights_service.dart';
 import '../widgets/club_avatar.dart';
 
-/// Club admin insights: overview tiles, per-event RSVP vs check-in bars, and
-/// top posts by likes. All bars are hand-rolled containers — no chart lib.
-class ClubInsightsScreen extends StatefulWidget {
+/// Club admin insights: overview tiles and top posts by likes. All bars are
+/// hand-rolled containers — no chart lib.
+class ClubInsightsScreen extends StatelessWidget {
   final Club club;
   final Color accent;
 
-  const ClubInsightsScreen({
-    super.key,
-    required this.club,
-    required this.accent,
-  });
-
-  @override
-  State<ClubInsightsScreen> createState() => _ClubInsightsScreenState();
-}
-
-class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
-  @override
-  void initState() {
-    super.initState();
-    clubInsightsService.refreshRemote(widget.club).then((_) {
-      if (mounted) setState(() {});
-    });
-  }
+  const ClubInsightsScreen({super.key, required this.club, required this.accent});
 
   @override
   Widget build(BuildContext context) {
@@ -43,10 +25,10 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ClubAvatar(
-              clubId: widget.club.id,
-              clubName: widget.club.name,
-              color: widget.accent,
-              imageUrl: widget.club.logoUrl,
+              clubId: club.id,
+              clubName: club.name,
+              color: accent,
+              imageUrl: club.logoUrl,
               size: 28,
               fontSize: 12,
               borderRadius: 9,
@@ -59,10 +41,9 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
           ],
         ),
       ),
-      body: ListenableBuilder(
-        listenable: checkinStore,
-        builder: (context, _) {
-          final data = clubInsightsService.compute(widget.club);
+      body: Builder(
+        builder: (context) {
+          final data = clubInsightsService.compute(club);
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 40),
             children: [
@@ -86,14 +67,6 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
                   ),
                 ],
               ),
-
-              // ── Events: RSVP vs check-in ──
-              if (data.events.isNotEmpty) ...[
-                const SizedBox(height: 22),
-                _sectionHead('Event attendance'),
-                const SizedBox(height: 10),
-                for (final stat in data.events) _eventBar(stat),
-              ],
 
               // ── Top posts ──
               if (data.topPosts.isNotEmpty) ...[
@@ -127,13 +100,13 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 17, color: widget.accent),
+            Icon(icon, size: 17, color: accent),
             const SizedBox(height: 8),
             Text(
               '$value',
@@ -153,77 +126,13 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
     );
   }
 
-  Widget _eventBar(EventAttendanceStat stat) {
-    final ratePercent = (stat.checkinRate * 100).round();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  stat.event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.text,
-                  ),
-                ),
-              ),
-              Text(
-                '${stat.checkinCount}/${stat.rsvpCount} · $ratePercent%',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: widget.accent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // RSVP track with check-in fill
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: SizedBox(
-              height: 8,
-              child: Stack(
-                children: [
-                  Container(color: widget.accent.withValues(alpha: 0.14)),
-                  FractionallySizedBox(
-                    widthFactor: stat.checkinRate.clamp(0.0, 1.0),
-                    child: Container(color: widget.accent),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'RSVPs vs check-ins',
-            style: TextStyle(fontSize: 10.5, color: AppColors.secondaryText),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _postRow(PostStat stat) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -237,7 +146,7 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          Icon(Icons.favorite, size: 13, color: widget.accent),
+          Icon(Icons.favorite, size: 13, color: accent),
           const SizedBox(width: 3),
           Text(
             '${stat.likes}',

@@ -86,7 +86,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           'Delete post?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -108,7 +110,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -194,110 +196,115 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-            // ── Club header ──
-            Container(
-              color: AppColors.card,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              child: Row(
-                children: [
-                  ClubAvatar(
-                    clubId: club.id,
-                    clubName: club.name,
-                    size: 42,
-                    fontSize: 18,
-                    color: widget.clubColor,
-                    imageUrl: club.logoUrl,
-                    shape: 'circle',
+                  // ── Club header ──
+                  Container(
+                    color: AppColors.card,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    child: Row(
+                      children: [
+                        ClubAvatar(
+                          clubId: club.id,
+                          clubName: club.name,
+                          size: 42,
+                          fontSize: 18,
+                          color: widget.clubColor,
+                          imageUrl: club.logoUrl,
+                          shape: 'circle',
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                club.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                              Text(
+                                _timeAgo(widget.post.createdAt),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+
+                  // ── Banner image ──
+                  if (hasImage)
+                    buildPostBanner(
+                      imagePath: widget.post.imagePath,
+                      fallbackColor: widget.clubColor,
+                      fallbackLetter: club.name[0],
+                      height: 220,
+                    ),
+
+                  // ── Like count ──
+                  Container(
+                    color: AppColors.card,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: isStudent ? _toggleLike : null,
+                          child: Row(
+                            children: [
+                              Icon(
+                                isLiked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: isLiked
+                                    ? Colors.pink
+                                    : AppColors.secondaryText,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                '$likeCount',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ── Full content ──
+                  Container(
+                    color: AppColors.card,
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          club.name,
+                          widget.post.content,
                           style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: 15,
                             color: AppColors.text,
+                            height: 1.6,
                           ),
                         ),
-                        Text(
-                          _timeAgo(widget.post.createdAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
+                        if (widget.post.poll != null)
+                          PollCard(post: widget.post, accent: widget.clubColor),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            // ── Banner image ──
-            if (hasImage)
-              buildPostBanner(
-                imagePath: widget.post.imagePath,
-                fallbackColor: widget.clubColor,
-                fallbackLetter: club.name[0],
-                height: 220,
-              ),
-
-            // ── Like count ──
-            Container(
-              color: AppColors.card,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: isStudent ? _toggleLike : null,
-                    child: Row(
-                      children: [
-                        Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: isLiked
-                              ? Colors.pink
-                              : AppColors.secondaryText,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '$likeCount',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Full content ──
-            Container(
-              color: AppColors.card,
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.post.content,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: AppColors.text,
-                      height: 1.6,
-                    ),
-                  ),
-                  if (widget.post.poll != null)
-                    PollCard(post: widget.post, accent: widget.clubColor),
-                ],
-              ),
-            ),
 
                   const SizedBox(height: 8),
 
@@ -470,7 +477,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     vertical: 10,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.all(Radius.circular(22)),
                     borderSide: BorderSide.none,
                   ),
                 ),

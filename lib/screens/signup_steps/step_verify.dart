@@ -331,7 +331,7 @@ class _OtpBoxState extends State<_OtpBox> {
         height: 60,
         decoration: BoxDecoration(
           color: SC.card,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
           border: Border.all(
             color: _focused ? SC.burgundy : SC.hairStrong,
             width: _focused ? 1.5 : 1,

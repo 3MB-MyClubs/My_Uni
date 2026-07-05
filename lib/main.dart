@@ -31,47 +31,66 @@ import 'services/tutorial_service.dart';
 import 'services/event_cleanup_service.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized(); //örnek yorum
-  if (SupabaseConfig.isConfigured) {
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      anonKey: SupabaseConfig.clientKey,
-    );
-  }
-  await hiveBootstrap.initialize();
-  await notificationService.initialize();
-  await userPrefsService.initialize();
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Future.wait([
+    if (SupabaseConfig.isConfigured)
+      Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.clientKey,
+      ),
+    hiveBootstrap.initialize(),
+  ]);
+
+  // These each open their own Hive box (or SharedPreferences) and don't
+  // depend on each other, so there's no need to await them one at a time.
+  await Future.wait([
+    userPrefsService.initialize(),
+    contentStore.initialize(),
+    checkinStore.initialize(),
+    pollStore.initialize(),
+    viewTracker.initialize(),
+    personalizationService.initialize(),
+    themeService.initialize(),
+    localeService.initialize(),
+    calendarSyncService.initialize(),
+    tutorialService.initialize(),
+  ]);
   userPrefsService.loadAllPhotos();
-  // Give every demo student a stable mock profile photo so avatars show up in
-  // members/board lists etc. Curated seeds and real uploads are not overridden.
-  for (final u in users) {
-    userState.mockPhotoUrls.putIfAbsent(
-      u.id,
-      () => 'https://i.pravatar.cc/150?u=${u.id}',
-    );
-  }
-  await contentStore.initialize();
-  await checkinStore.initialize();
-  await pollStore.initialize();
-  await viewTracker.initialize();
-  await personalizationService.initialize();
-  await themeService.initialize();
-  await localeService.initialize();
-  await calendarSyncService.initialize();
-  await tutorialService.initialize();
-  contentStore.applyToLists();
-  await eventCleanupService.cleanupExpiredEvents();
-  contentStore.loadBoardMemberIds();
-  contentStore.loadBoardMemberTitles();
-  // Restore any dynamic notifications that were generated at runtime.
-  final dynNotifs = contentStore.loadDynamicNotifications();
-  if (dynNotifs != null) {
-    userState.dynamicNotifications
-      ..clear()
-      ..addAll(dynNotifs);
-  }
-  userState.replaceReadNotificationIds(contentStore.loadReadNotificationIds());
+
   runApp(const ProviderScope(child: MyApp()));
+
+  // The app always opens on the login screen (there's no session restore on
+  // launch), so none of this needs to finish before first paint: the
+  // notification permission prompt, materializing mock_data.dart's seed
+  // lists, and the network cleanup call are all deferred to right after.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(notificationService.initialize());
+
+    // Give every demo student a stable mock profile photo so avatars show up
+    // in members/board lists etc. Curated seeds and real uploads are not
+    // overridden.
+    for (final u in users) {
+      userState.mockPhotoUrls.putIfAbsent(
+        u.id,
+        () => 'https://i.pravatar.cc/150?u=${u.id}',
+      );
+    }
+    contentStore.applyToLists();
+    unawaited(eventCleanupService.cleanupExpiredEvents());
+    contentStore.loadBoardMemberIds();
+    contentStore.loadBoardMemberTitles();
+    // Restore any dynamic notifications that were generated at runtime.
+    final dynNotifs = contentStore.loadDynamicNotifications();
+    if (dynNotifs != null) {
+      userState.dynamicNotifications
+        ..clear()
+        ..addAll(dynNotifs);
+    }
+    userState.replaceReadNotificationIds(
+      contentStore.loadReadNotificationIds(),
+    );
+  });
 }
 
 class MyApp extends StatefulWidget {

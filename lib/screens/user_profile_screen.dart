@@ -358,7 +358,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         ),
                         style: IconButton.styleFrom(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(999),
+                            ),
                             side: BorderSide(
                               color: AppColors.divider,
                               width: 1,
@@ -445,7 +447,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           decoration: BoxDecoration(
             color: AppColors.card,
             border: Border.all(color: AppColors.divider, width: 1),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
           ),
           child: Row(
             children: [
@@ -500,7 +502,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border.all(color: AppColors.divider, width: 1),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.all(Radius.circular(18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -553,9 +555,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         decoration: BoxDecoration(
           border: isLast
               ? null
-              : Border(
-                  bottom: BorderSide(color: AppColors.divider, width: 1),
-                ),
+              : Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
         ),
         child: Row(
           children: [
@@ -600,7 +600,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: isLeader ? _burgundy : AppColors.background,
-                borderRadius: BorderRadius.circular(100),
+                borderRadius: BorderRadius.all(Radius.circular(100)),
                 border: isLeader ? null : Border.all(color: AppColors.divider),
               ),
               child: Text(
@@ -662,7 +662,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
 Future<void> _toggleUserFollow(User target, VoidCallback rebuild) async {
   if (!authService.isStudentSession) return;
-  final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+  final myId =
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
   if (target.id == myId) return;
 
   final isFollowing = userState.isFollowingUser(target.id);
@@ -711,7 +712,8 @@ Future<void> _toggleUserFollow(User target, VoidCallback rebuild) async {
 /// Whether [other] already follows the current session user (drives the
 /// "Follow back" vs. plain "Follow" label, same distinction Instagram makes).
 bool _userFollowsMe(User other) {
-  final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+  final myId =
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
   if (myId.isEmpty || other.id == myId) return false;
   if (peopleService.followersFor(myId).any((u) => u.id == other.id)) {
     return true;
@@ -880,7 +882,7 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
         child: Row(
           children: [
@@ -977,7 +979,7 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: isLeader ? _burgundy : AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.all(Radius.circular(999)),
           border: isLeader ? null : Border.all(color: AppColors.divider),
         ),
         child: Text(
@@ -993,7 +995,8 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
   }
 
   Widget _personTile(User user) {
-    final myId = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final myId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final isMe = user.id == myId;
     final hasUsername = userState.usernameFor(user.id) != null;
 
@@ -1060,7 +1063,7 @@ class _HeroBanner extends StatelessWidget {
                 // Banner gradient container
                 Positioned.fill(
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.all(Radius.circular(20)),
                     child: Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
@@ -1109,7 +1112,7 @@ class _HeroBanner extends StatelessWidget {
                     top: 10,
                     right: 12,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                         child: Container(
@@ -1119,7 +1122,9 @@ class _HeroBanner extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(999),
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1233,7 +1238,7 @@ class _FollowButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: filled ? _burgundy : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.all(Radius.circular(999)),
           border: Border.all(
             color: filled ? _burgundy : AppColors.divider,
             width: 1,

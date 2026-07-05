@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/notification.dart';
 import 'content_store.dart';
@@ -73,8 +76,13 @@ class UserState extends ChangeNotifier {
   /// Sets the club photo path for [clubId] and notifies all listeners.
   void setClubPhoto(String clubId, String path) {
     // Club photos are overwritten at a stable path. Remove the old decoded
-    // bitmap so every ClubAvatar immediately displays the newly edited photo.
+    // bitmap (in-memory) and, for a network URL, the disk-cached bytes too —
+    // otherwise CachedNetworkImage would keep serving the old photo from
+    // disk indefinitely, even across app restarts.
     PaintingBinding.instance.imageCache.evict(_imageProviderFor(path));
+    if (_isNetworkPath(path)) {
+      unawaited(CachedNetworkImage.evictFromCache(path));
+    }
     clubPhotoPaths[clubId] = path;
     notifyListeners();
   }
@@ -86,12 +94,18 @@ class UserState extends ChangeNotifier {
   /// Sets the profile photo path for [userId] and notifies all listeners.
   void setProfilePhoto(String userId, String path) {
     PaintingBinding.instance.imageCache.evict(_imageProviderFor(path));
+    if (_isNetworkPath(path)) {
+      unawaited(CachedNetworkImage.evictFromCache(path));
+    }
     profilePhotoPaths[userId] = path;
     notifyListeners();
   }
 
+  bool _isNetworkPath(String path) =>
+      path.startsWith('http://') || path.startsWith('https://');
+
   ImageProvider _imageProviderFor(String path) {
-    if (path.startsWith('http://') || path.startsWith('https://')) {
+    if (_isNetworkPath(path)) {
       return NetworkImage(path);
     }
     return FileImage(File(path));
@@ -114,6 +128,10 @@ class UserState extends ChangeNotifier {
     if (value.isEmpty) {
       mockPhotoUrls.remove(userId);
     } else {
+      // The URL is a stable storage path reused on every re-upload, so a
+      // changed photo needs its old disk-cached bytes evicted too or every
+      // avatar would keep showing the previous photo until reinstall.
+      unawaited(CachedNetworkImage.evictFromCache(value));
       mockPhotoUrls[userId] = value;
     }
     notifyListeners();
@@ -464,6 +482,23 @@ class UserState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  // This is a process-lifetime singleton shared by ~20+ plain
+  // ListenableBuilder(listenable: userState) call sites app-wide, in
+  // addition to userStateProvider below. Riverpod's ChangeNotifierProvider
+  // calls dispose() on the notifier it's given whenever its own scope tears
+  // down (e.g. a fresh ProviderScope per widget test) — since that scope
+  // doesn't own this singleton, disposing it would permanently break every
+  // other consumer. Overriding dispose() to a no-op keeps it alive for the
+  // whole process, matching every other singleton service in this codebase.
+  @override
+  // ignore: must_call_super
+  void dispose() {}
 }
 
 final userState = UserState();
+
+/// Bridges the existing [userState] singleton into Riverpod so widgets can
+/// `.select()` a single field instead of rebuilding on every mutation via a
+/// whole-object [ListenableBuilder].
+final userStateProvider = ChangeNotifierProvider<UserState>((ref) => userState);

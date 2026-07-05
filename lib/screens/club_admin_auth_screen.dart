@@ -111,7 +111,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
                 ),
                 child: Center(
                   child: Icon(
@@ -184,15 +184,15 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   filled: true,
                   fillColor: Colors.transparent,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide(color: AppColors.divider, width: 1),
                   ),
                 ),
@@ -233,7 +233,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.all(Radius.circular(14)),
                     ),
                     elevation: 2,
                     shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
@@ -286,23 +286,23 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         filled: true,
         fillColor: Colors.transparent,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.primaryRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
       ),

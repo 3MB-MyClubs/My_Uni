@@ -18,10 +18,26 @@ class SupabaseContentService {
     final client = _client;
     if (client == null) return;
 
+    // Events older than EventCleanupService's 24h-past-end retention window
+    // are already permanently deleted, so this cutoff (with margin for
+    // long-running events) doesn't hide anything the app doesn't already
+    // intend to remove — it just avoids re-downloading it every refresh.
+    final eventsCutoff = DateTime.now()
+        .subtract(const Duration(days: 2))
+        .toIso8601String();
     final results = await Future.wait([
       client.from('clubs').select('*, club_categories(name)'),
-      client.from('events').select().order('starts_at', ascending: true),
-      client.from('club_posts').select().order('created_at', ascending: false),
+      client
+          .from('events')
+          .select()
+          .gte('starts_at', eventsCutoff)
+          .order('starts_at', ascending: true)
+          .limit(500),
+      client
+          .from('club_posts')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(500),
     ]);
 
     final nextClubs = (results[0] as List)
@@ -97,16 +113,20 @@ class SupabaseContentService {
       nextPostLikeCounts.addAll(supabasePostLikeCounts);
     }
 
+    final eventIds = events.map((e) => e.id).toList();
     try {
-      final rows = await client
-          .from('event_rsvps')
-          .select('event_id, profile_id');
-      for (final row in rows) {
-        final raw = row as Map;
-        final eventId = raw['event_id']?.toString() ?? '';
-        final profileId = raw['profile_id']?.toString() ?? '';
-        if (eventId.isEmpty || profileId.isEmpty) continue;
-        (nextEventRsvpIds[eventId] ??= []).add(profileId);
+      if (eventIds.isNotEmpty) {
+        final rows = await client
+            .from('event_rsvps')
+            .select('event_id, profile_id')
+            .inFilter('event_id', eventIds);
+        for (final row in rows) {
+          final raw = row as Map;
+          final eventId = raw['event_id']?.toString() ?? '';
+          final profileId = raw['profile_id']?.toString() ?? '';
+          if (eventId.isEmpty || profileId.isEmpty) continue;
+          (nextEventRsvpIds[eventId] ??= []).add(profileId);
+        }
       }
     } catch (_) {
       // Keep existing event attendee ids if the RSVP table is unavailable.

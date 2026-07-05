@@ -148,7 +148,7 @@ class RsvpListScreen extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(100),
+                          borderRadius: BorderRadius.all(Radius.circular(100)),
                           border: Border.all(
                             color: color.withValues(alpha: 0.4),
                           ),

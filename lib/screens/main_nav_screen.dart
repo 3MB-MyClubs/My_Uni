@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
-import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
-import '../services/club_admin_access.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
@@ -15,7 +13,6 @@ import '../services/locale_service.dart';
 import '../services/tutorial_service.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/app_tutorial_overlay.dart';
-import '../widgets/big_picture_post_composer_sheet.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -24,6 +21,117 @@ import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
+
+/// Presents the older club-admin create chooser used by visual drive tests and
+/// any explicit callers that still need a Post/Event split.
+///
+/// The center nav "+" does not call this helper anymore; it opens event
+/// creation directly.
+Future<void> showClubCreateSheet(
+  BuildContext context, {
+  required VoidCallback onPost,
+  required VoidCallback onEvent,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.42),
+    builder: (sheetContext) {
+      final theme = Theme.of(sheetContext);
+      final isDark = theme.brightness == Brightness.dark;
+      final surface = isDark ? const Color(0xFF16181D) : Colors.white;
+      final primaryText = isDark ? Colors.white : AppColors.text;
+      final secondaryText = isDark
+          ? Colors.white.withValues(alpha: 0.68)
+          : AppColors.secondaryText;
+
+      void choose(VoidCallback callback) {
+        Navigator.of(sheetContext).pop();
+        callback();
+      }
+
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: const BorderRadius.all(Radius.circular(28)),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.45),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                  blurRadius: 28,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: secondaryText.withValues(alpha: 0.34),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Create',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: primaryText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Update your community',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: secondaryText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Create something inspiring',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: primaryText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _CreateSheetAction(
+                    icon: Icons.article_outlined,
+                    title: 'Post',
+                    subtitle: 'Share an update with your followers',
+                    onTap: () => choose(onPost),
+                  ),
+                  const SizedBox(height: 10),
+                  _CreateSheetAction(
+                    icon: Icons.event_available_outlined,
+                    title: 'Event',
+                    subtitle: 'Add an event to the campus calendar',
+                    onTap: () => choose(onEvent),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
 
 class MainNavScreen extends ConsumerStatefulWidget {
   final bool isAdmin;
@@ -38,6 +146,23 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   int _selectedIndex = 0;
   bool _showTutorial = false;
 
+  // Built once and never replaced by nav taps or content-creation callbacks,
+  // so IndexedStack sees the same widget instances and Flutter's element-
+  // identity fast path skips rebuilding every off-screen tab. Each tab
+  // listens for theme/locale changes itself, so this list doesn't need to be
+  // rebuilt for that either — only this screen's own chrome (the nav bar)
+  // does, via _onThemeOrLocaleChanged below.
+  late final List<Widget> _screens = _buildScreens();
+
+  List<Widget> _buildScreens() => <Widget>[
+    FeedScreen(), // 0
+    ThisWeekScreen(isTutorialHost: true), // 1
+    ExploreScreen(), // 2
+    NotificationsScreen(isTutorialHost: true), // 3
+    ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
+    if (widget.isAdmin) AdminDashboard(), // 5
+  ];
+
   String get _currentUserId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
@@ -45,9 +170,17 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   void initState() {
     super.initState();
     tutorialService.replayRequests.addListener(_onTutorialReplayRequested);
+    themeService.addListener(_onThemeOrLocaleChanged);
+    localeService.addListener(_onThemeOrLocaleChanged);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _startInitialExperience(),
     );
+  }
+
+  void _onThemeOrLocaleChanged() {
+    // Only this screen's own chrome (nav bar colors/labels) needs to redraw;
+    // _screens is left untouched so the tab bodies aren't force-rebuilt.
+    if (mounted) setState(() {});
   }
 
   // The tour covers the student-facing UI only — it never runs for club admins
@@ -216,6 +349,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   @override
   void dispose() {
     tutorialService.replayRequests.removeListener(_onTutorialReplayRequested);
+    themeService.removeListener(_onThemeOrLocaleChanged);
+    localeService.removeListener(_onThemeOrLocaleChanged);
     super.dispose();
   }
 
@@ -235,86 +370,41 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     return admin.id != appAdmin.id; // not the super admin
   }
 
-  // Same palette used elsewhere (explore/profile) so a club's composer sheet
-  // matches its color everywhere in the app.
-  static const List<Color> _clubColors = [
-    Color(0xFF8C1D40),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
-  Color _colorForClub(Club club) {
-    final idx = clubs.indexOf(club);
-    return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-  }
-
   void _openCreateEvent() {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => CreateEventScreen(onCreated: () => setState(() {})),
+        // FeedScreen/ThisWeekScreen refresh themselves via contentStore's
+        // change notification — no need to rebuild this screen too.
+        builder: (_) => const CreateEventScreen(),
       ),
     );
   }
 
-  void _onAddTap() {
-    final club = managedClubForAdmin(authService.currentAdmin?.id ?? '');
-    if (club == null) {
-      // No managed club to post as (shouldn't happen for a club admin) —
-      // fall back to the one action that never needs a club context.
-      _openCreateEvent();
-      return;
-    }
-    showClubCreateSheet(
-      context,
-      onPost: () => showBigPicturePostComposerSheet(
-        context: context,
-        club: club,
-        color: _colorForClub(club),
-        onPosted: () => setState(() {}),
-      ),
-      onEvent: _openCreateEvent,
-    );
-  }
+  // The center "+" is event-creation only — club admins post from the quick
+  // composer inline in their feed instead, so this button skips straight to
+  // the event form rather than asking Post-or-Event first.
+  void _onAddTap() => _openCreateEvent();
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([themeService, localeService]),
-      builder: (context, _) {
-        // Non-const instances so Flutter creates new widget objects each rebuild,
-        // which triggers element.update() → markNeedsBuild() on each screen state.
-        final screens = <Widget>[
-          FeedScreen(), // 0
-          ThisWeekScreen(isTutorialHost: true), // 1
-          ExploreScreen(), // 2
-          NotificationsScreen(isTutorialHost: true), // 3
-          ProfileScreen(onLogout: widget.onLogout), // 4
-          if (widget.isAdmin) AdminDashboard(), // 5
-        ];
-
-        return Stack(
-          children: [
-            Scaffold(
-              extendBody: true,
-              body: IndexedStack(index: _selectedIndex, children: screens),
-              bottomNavigationBar: _buildBottomNav(context),
+    return Stack(
+      children: [
+        Scaffold(
+          extendBody: true,
+          body: IndexedStack(index: _selectedIndex, children: _screens),
+          bottomNavigationBar: _buildBottomNav(context),
+        ),
+        if (_showTutorial)
+          Positioned.fill(
+            child: AppTutorialOverlay(
+              steps: _tutorialSteps,
+              onStepChanged: _onTutorialStepChanged,
+              onComplete: _finishTutorial,
+              onSkip: _finishTutorial,
             ),
-            if (_showTutorial)
-              Positioned.fill(
-                child: AppTutorialOverlay(
-                  steps: _tutorialSteps,
-                  onStepChanged: _onTutorialStepChanged,
-                  onComplete: _finishTutorial,
-                  onSkip: _finishTutorial,
-                ),
-              ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 
@@ -383,13 +473,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: ClipRRect(
           key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.all(Radius.circular(30)),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               height: 72,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.all(Radius.circular(30)),
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -429,7 +519,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(30),
+                              ),
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
@@ -446,6 +538,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                         ),
                       ),
                       // Brighter glass capsule sliding under the selected tab.
+                      // No blur here (that's still on the outer bar) — a
+                      // solid-ish highlight is visually close at a fraction
+                      // of the compositing cost of two stacked BackdropFilters.
                       if (selectedSlot != -1)
                         AnimatedPositioned(
                           duration: const Duration(milliseconds: 260),
@@ -455,36 +550,29 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                           width: slotWidth - 12,
                           height: 72 - 16,
                           child: IgnorePointer(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(22),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10,
-                                  sigmaY: 10,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(22),
                                 ),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(22),
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.10)
-                                        : Colors.white.withValues(alpha: 0.36),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: isDark ? 0.17 : 0.52,
-                                      ),
-                                      width: 1,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primaryRed.withValues(
-                                          alpha: 0.16,
-                                        ),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.10)
+                                    : Colors.white.withValues(alpha: 0.36),
+                                border: Border.all(
+                                  color: Colors.white.withValues(
+                                    alpha: isDark ? 0.17 : 0.52,
                                   ),
+                                  width: 1,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primaryRed.withValues(
+                                      alpha: 0.16,
+                                    ),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -652,6 +740,85 @@ class _NavItem extends StatelessWidget {
   }
 }
 
+class _CreateSheetAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _CreateSheetAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : AppColors.text;
+    final subtitleColor = isDark
+        ? Colors.white.withValues(alpha: 0.64)
+        : AppColors.secondaryText;
+
+    return Material(
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.06)
+          : AppColors.lightRed.withValues(alpha: 0.55),
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      child: InkWell(
+        borderRadius: const BorderRadius.all(Radius.circular(18)),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.14),
+                  borderRadius: const BorderRadius.all(Radius.circular(14)),
+                ),
+                child: Icon(icon, color: AppColors.primaryRed, size: 22),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: titleColor,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: subtitleColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, color: subtitleColor, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Center Add Button ────────────────────────────────────────────────────────
 
 class _CenterAddButton extends StatelessWidget {
@@ -684,185 +851,6 @@ class _CenterAddButton extends StatelessWidget {
               ],
             ),
             child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom-sheet chooser shown when a club admin taps the central +.
-/// Pops itself before invoking [onPost] / [onEvent].
-void showClubCreateSheet(
-  BuildContext context, {
-  required VoidCallback onPost,
-  required VoidCallback onEvent,
-}) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetContext) => Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Create',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Share something with your club',
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
-            ),
-            const SizedBox(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: _CreateOption(
-                    icon: Icons.edit_square,
-                    label: 'Post',
-                    subtitle: 'Update your community',
-                    color: AppColors.primaryRed,
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      onPost();
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CreateOption(
-                    icon: Icons.event_rounded,
-                    label: 'Event',
-                    subtitle: 'Create something inspiring',
-                    color: const Color(0xFF1565C0),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      onEvent();
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _CreateOption extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _CreateOption({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  State<_CreateOption> createState() => _CreateOptionState();
-}
-
-class _CreateOptionState extends State<_CreateOption> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = widget.color;
-    final deep = Color.lerp(color, Colors.black, 0.22)!;
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color.withValues(alpha: 0.12),
-                color.withValues(alpha: 0.04),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withValues(alpha: 0.25)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [color, deep],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.35),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Icon(widget.icon, color: Colors.white, size: 26),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.2,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                widget.subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.secondaryText,
-                ),
-              ),
-            ],
           ),
         ),
       ),

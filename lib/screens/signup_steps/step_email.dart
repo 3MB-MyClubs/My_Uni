@@ -129,7 +129,7 @@ class _StepEmailState extends State<StepEmail> {
                   ),
                   decoration: BoxDecoration(
                     color: SC.burgundyTint,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

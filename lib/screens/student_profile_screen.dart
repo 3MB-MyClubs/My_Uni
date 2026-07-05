@@ -264,7 +264,7 @@ class StudentProfileScreen extends StatelessWidget {
                 height: 4,
                 decoration: BoxDecoration(
                   color: _secondary.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.all(Radius.circular(999)),
                 ),
               ),
               Padding(
@@ -329,7 +329,9 @@ class StudentProfileScreen extends StatelessWidget {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: _card,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(20),
+                                ),
                                 border: Border.all(color: _hair),
                               ),
                               child: Row(
@@ -426,7 +428,7 @@ class _AvatarRow extends StatelessWidget {
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: StudentProfileScreen._card,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.all(Radius.circular(30)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(
@@ -441,13 +443,15 @@ class _AvatarRow extends StatelessWidget {
           ),
           child: Container(
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(26)),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.all(Radius.circular(26)),
+            ),
             child: UserAvatar(
               userId: userId,
               name: name.isEmpty ? initials : name,
               size: 84,
               fontSize: 32,
-              borderRadius: BorderRadius.circular(26),
+              borderRadius: BorderRadius.all(Radius.circular(26)),
               backgroundColor: const Color(0xFFE8CFD2),
               textColor: StudentProfileScreen._burgundyDeep,
             ),
@@ -597,7 +601,7 @@ class StatsCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: StudentProfileScreen._card,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.all(Radius.circular(18)),
         border: Border.all(color: StudentProfileScreen._hair, width: 1),
       ),
       child: IntrinsicHeight(
@@ -874,7 +878,7 @@ class _ClubRow extends StatelessWidget {
                 color: isLeader
                     ? StudentProfileScreen._burgundy
                     : StudentProfileScreen._background,
-                borderRadius: BorderRadius.circular(100),
+                borderRadius: BorderRadius.all(Radius.circular(100)),
                 border: isLeader
                     ? null
                     : Border.all(color: StudentProfileScreen._hair),
@@ -954,7 +958,7 @@ class _ClubRowFallback extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: StudentProfileScreen._background,
-                borderRadius: BorderRadius.circular(100),
+                borderRadius: BorderRadius.all(Radius.circular(100)),
                 border: Border.all(color: StudentProfileScreen._hair),
               ),
               child: Text(
@@ -986,7 +990,7 @@ class _ProfileCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
         color: StudentProfileScreen._card,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.all(Radius.circular(18)),
         border: Border.all(color: StudentProfileScreen._hair, width: 1),
       ),
       child: child,
@@ -1082,7 +1086,7 @@ class EventCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: StudentProfileScreen._card,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.all(Radius.circular(24)),
           boxShadow: [
             BoxShadow(
               color: StudentProfileScreen._hair,
@@ -1099,7 +1103,7 @@ class EventCard extends StatelessWidget {
               height: 64,
               decoration: BoxDecoration(
                 color: StudentProfileScreen._burgundy,
-                borderRadius: BorderRadius.circular(17),
+                borderRadius: BorderRadius.all(Radius.circular(17)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1183,7 +1187,7 @@ class EventCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
                 color: StudentProfileScreen._burgundy.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.all(Radius.circular(999)),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1226,7 +1230,7 @@ class CapsuleBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.all(Radius.circular(999)),
         border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(

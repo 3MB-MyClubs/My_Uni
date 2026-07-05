@@ -347,7 +347,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                 width: 104,
                                 height: 104,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(28),
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(28),
+                                  ),
                                   gradient: LinearGradient(
                                     begin: const Alignment(-0.8, -0.8),
                                     end: const Alignment(0.8, 0.8),
@@ -371,7 +373,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                   ],
                                 ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(26),
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(26),
+                                  ),
                                   child: ClubAvatar(
                                     clubId: widget.club.id,
                                     clubName: widget.club.name,
@@ -448,7 +452,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                 ),
                                 decoration: BoxDecoration(
                                   color: widget.color.withValues(alpha: 0.13),
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(999),
+                                  ),
                                 ),
                                 child: Text(
                                   '@$handle',
@@ -472,7 +478,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                       color: AppColors.primaryRed.withValues(
                                         alpha: 0.18,
                                       ),
-                                      borderRadius: BorderRadius.circular(999),
+                                      borderRadius: BorderRadius.all(
+                                        Radius.circular(999),
+                                      ),
                                     ),
                                     child: Text(
                                       category,
@@ -677,38 +685,31 @@ class _PostsTab extends StatelessWidget {
             .toList();
         final newThisWeek = [...pinned, ...fresh];
 
-        final children = <Widget>[];
+        // Mix of section-label strings and post objects, built lazily below
+        // instead of eagerly materializing every row up front.
+        final items = <dynamic>[];
         if (newThisWeek.isNotEmpty) {
-          children.add(const _FeedLabel('NEW THIS WEEK'));
-          children.addAll(
-            newThisWeek.map(
-              (p) => _ClubPostCompact(
-                post: p,
-                club: club,
-                clubColor: clubColor,
-                isAdmin: isAdmin,
-                onChanged: onChanged,
-              ),
-            ),
-          );
+          items.add('NEW THIS WEEK');
+          items.addAll(newThisWeek);
         }
         if (earlier.isNotEmpty) {
-          children.add(const _FeedLabel('EARLIER'));
-          children.addAll(
-            earlier.map(
-              (p) => _ClubPostCompact(
-                post: p,
-                club: club,
-                clubColor: clubColor,
-                isAdmin: isAdmin,
-                onChanged: onChanged,
-              ),
-            ),
-          );
+          items.add('EARLIER');
+          items.addAll(earlier);
         }
-        return ListView(
+        return ListView.builder(
           padding: const EdgeInsets.only(bottom: 90),
-          children: children,
+          itemCount: items.length,
+          itemBuilder: (context, i) {
+            final item = items[i];
+            if (item is String) return _FeedLabel(item);
+            return _ClubPostCompact(
+              post: item,
+              club: club,
+              clubColor: clubColor,
+              isAdmin: isAdmin,
+              onChanged: onChanged,
+            );
+          },
         );
       },
     );
@@ -792,7 +793,9 @@ class _ClubPostCompact extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           'Delete post?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -814,7 +817,7 @@ class _ClubPostCompact extends StatelessWidget {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -876,7 +879,7 @@ class _ClubPostCompact extends StatelessWidget {
               children: [
                 // Thumbnail / accent tile
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.all(Radius.circular(11)),
                   child: SizedBox(
                     width: 52,
                     height: 52,
@@ -1086,7 +1089,7 @@ class _EventsTabState extends State<_EventsTab> {
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: panelColor,
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.all(Radius.circular(11)),
             ),
             child: Row(
               children: segments.map((seg) {
@@ -1105,7 +1108,7 @@ class _EventsTabState extends State<_EventsTab> {
                         color: active
                             ? AppColors.primaryRed
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1225,12 +1228,19 @@ class _EventCardV2 extends StatelessWidget {
 
   static const Color _green = Color(0xFF2E9E5B);
 
+  // Applies the same dimming an outer Opacity(opacity: dim) would, without
+  // the offscreen saveLayer that wrapping the whole card in Opacity forces.
+  static Color _dim(Color c, double dim) =>
+      dim == 1.0 ? c : c.withValues(alpha: c.a * dim);
+
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           'Delete event?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -1252,7 +1262,7 @@ class _EventCardV2 extends StatelessWidget {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -1303,6 +1313,9 @@ class _EventCardV2 extends StatelessWidget {
         : isLive
         ? 'attending'
         : 'going';
+    // Same visual dimming a wrapping Opacity(opacity: dim) would give, but
+    // applied per-color so the card avoids an offscreen saveLayer.
+    final dim = isPast ? 0.82 : 1.0;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -1312,169 +1325,176 @@ class _EventCardV2 extends StatelessWidget {
               EventDetailScreen(event: event as dynamic, color: clubColor),
         ),
       ),
-      child: Opacity(
-        opacity: isPast ? 0.82 : 1,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cardColor,
-            border: Border.all(
-              color: isLive ? _green.withValues(alpha: 0.4) : borderColor,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _dim(cardColor, dim),
+          border: Border.all(
+            color: _dim(
+              isLive ? _green.withValues(alpha: 0.4) : borderColor,
+              dim,
             ),
-            borderRadius: BorderRadius.circular(16),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Date badge
-              Container(
-                width: 50,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                decoration: BoxDecoration(
-                  color: panelColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      monthAbbr(dt.month),
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: isPast ? AppColors.secondaryText : accent,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      '${dt.day}',
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.text,
-                        height: 1.1,
-                      ),
-                    ),
-                  ],
-                ),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Date badge
+            Container(
+              width: 50,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: _dim(panelColor, dim),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Status pill
-                    _statusPill(),
-                    const SizedBox(height: 6),
-                    Text(
-                      event.title as String,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: AppColors.text,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _infoRow(Icons.access_time_rounded, timeLabel),
-                    const SizedBox(height: 4),
-                    _infoRow(
-                      Icons.location_on_outlined,
-                      event.location as String,
-                    ),
-                    if (canViewEventAttendance(event)) ...[
-                      const SizedBox(height: 4),
-                      _infoRow(
-                        Icons.people_outline,
-                        '${(event.attendeeUserIds as List).length} $countLabel',
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Action (+ admin delete menu on the club's own profile)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isAdmin) ...[
-                    PopupMenuButton<String>(
-                      icon: Icon(
-                        Icons.more_horiz_rounded,
-                        color: AppColors.secondaryText,
-                        size: 20,
+                  Text(
+                    monthAbbr(dt.month),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: _dim(
+                        isPast ? AppColors.secondaryText : accent,
+                        dim,
                       ),
-                      color: AppColors.card,
-                      padding: EdgeInsets.zero,
-                      onSelected: (v) {
-                        if (v == 'delete') _confirmDelete(context);
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.delete_outline_rounded,
-                                size: 19,
-                                color: Colors.red,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Delete event',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      letterSpacing: 0.5,
                     ),
-                    const SizedBox(height: 2),
-                  ],
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isPast ? Colors.transparent : accent,
-                      border: isPast ? Border.all(color: strongBorder) : null,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Text(
-                      authService.isStudentSession
-                          ? (isLive
-                                ? 'Join'
-                                : isPast
-                                ? 'Recap'
-                                : 'RSVP')
-                          : (isPast ? 'Recap' : 'View'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isPast ? AppColors.text : Colors.white,
-                      ),
+                  ),
+                  Text(
+                    '${dt.day}',
+                    style: TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                      color: _dim(AppColors.text, dim),
+                      height: 1.1,
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Status pill
+                  _statusPill(dim),
+                  const SizedBox(height: 6),
+                  Text(
+                    event.title as String,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: _dim(AppColors.text, dim),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.access_time_rounded, timeLabel, dim),
+                  const SizedBox(height: 4),
+                  _infoRow(
+                    Icons.location_on_outlined,
+                    event.location as String,
+                    dim,
+                  ),
+                  if (canViewEventAttendance(event)) ...[
+                    const SizedBox(height: 4),
+                    _infoRow(
+                      Icons.people_outline,
+                      '${(event.attendeeUserIds as List).length} $countLabel',
+                      dim,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Action (+ admin delete menu on the club's own profile)
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isAdmin) ...[
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      color: _dim(AppColors.secondaryText, dim),
+                      size: 20,
+                    ),
+                    color: AppColors.card,
+                    padding: EdgeInsets.zero,
+                    onSelected: (v) {
+                      if (v == 'delete') _confirmDelete(context);
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              size: 19,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Delete event',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isPast ? Colors.transparent : _dim(accent, dim),
+                    border: isPast
+                        ? Border.all(color: _dim(strongBorder, dim))
+                        : null,
+                    borderRadius: BorderRadius.all(Radius.circular(9)),
+                  ),
+                  child: Text(
+                    authService.isStudentSession
+                        ? (isLive
+                              ? 'Join'
+                              : isPast
+                              ? 'Recap'
+                              : 'RSVP')
+                        : (isPast ? 'Recap' : 'View'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isPast ? _dim(AppColors.text, dim) : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _statusPill() {
+  Widget _statusPill(double dim) {
     if (status == 'now') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
         decoration: BoxDecoration(
-          color: _green.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(999),
+          color: _dim(_green.withValues(alpha: 0.14), dim),
+          borderRadius: BorderRadius.all(Radius.circular(999)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1487,7 +1507,7 @@ class _EventCardV2 extends StatelessWidget {
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.6,
-                color: _green,
+                color: _dim(_green, dim),
               ),
             ),
           ],
@@ -1499,8 +1519,8 @@ class _EventCardV2 extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
+        color: _dim(c.withValues(alpha: 0.14), dim),
+        borderRadius: BorderRadius.all(Radius.circular(999)),
       ),
       child: Text(
         isPast ? 'PAST' : 'UPCOMING',
@@ -1508,23 +1528,26 @@ class _EventCardV2 extends StatelessWidget {
           fontSize: 9,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.6,
-          color: c,
+          color: _dim(c, dim),
         ),
       ),
     );
   }
 
-  Widget _infoRow(IconData icon, String text) {
+  Widget _infoRow(IconData icon, String text, double dim) {
     return Row(
       children: [
-        Icon(icon, size: 11, color: AppColors.secondaryText),
+        Icon(icon, size: 11, color: _dim(AppColors.secondaryText, dim)),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+            style: TextStyle(
+              fontSize: 11,
+              color: _dim(AppColors.secondaryText, dim),
+            ),
           ),
         ),
       ],
@@ -1605,6 +1628,242 @@ class _CollaborationsTab extends StatelessWidget {
     Color(0xFF00838F),
   ];
 
+  Widget _partnerClubRow(
+    BuildContext context,
+    Club club,
+    Color cardColor,
+    Color borderColor,
+    Color strongBorderColor,
+  ) {
+    final color = _colors[clubs.indexOf(club) % _colors.length];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ClubProfileScreen(club: club, color: color),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: cardColor,
+            border: Border.all(color: borderColor),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          child: Row(
+            children: [
+              ClubAvatar(
+                clubId: club.id,
+                clubName: club.name,
+                color: color,
+                imageUrl: club.logoUrl,
+                size: 48,
+                fontSize: 20,
+                borderRadius: 14,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      club.name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${clubMemberCount(club.id)} members',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: strongBorderColor),
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+                child: Text(
+                  'View ›',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _taggedPostRow(
+    BuildContext context,
+    dynamic post,
+    Color cardColor,
+    Color borderColor,
+  ) {
+    final authorClub = clubs.firstWhere(
+      (c) => c.id == post.clubId,
+      orElse: () => clubs.first,
+    );
+    final color = _colors[clubs.indexOf(authorClub) % _colors.length];
+    final likeCount = postLikeCount(post.id as String);
+    final hasImage =
+        post.imagePath != null && (post.imagePath as String).isNotEmpty;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PostDetailScreen(post: post, clubColor: color),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        decoration: BoxDecoration(
+          color: cardColor,
+          border: Border.all(color: borderColor),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+              child: Row(
+                children: [
+                  ClubAvatar(
+                    clubId: authorClub.id,
+                    clubName: authorClub.name,
+                    color: color,
+                    imageUrl: authorClub.logoUrl,
+                    size: 36,
+                    fontSize: 15,
+                    borderRadius: 10,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          authorClub.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.text,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          timeAgo(post.createdAt as DateTime),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Collab badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: clubColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.all(Radius.circular(20)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.handshake_outlined,
+                          size: 12,
+                          color: clubColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Collab',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: clubColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Banner / club avatar fallback
+            if (hasImage)
+              buildPostBanner(
+                imagePath: post.imagePath as String?,
+                fallbackColor: color,
+                fallbackLetter: authorClub.name[0],
+                height: 140,
+              )
+            else
+              Container(
+                height: 140,
+                width: double.infinity,
+                color: color.withValues(alpha: 0.08),
+                alignment: Alignment.center,
+                child: ClubAvatar(
+                  clubId: authorClub.id,
+                  clubName: authorClub.name,
+                  color: color,
+                  imageUrl: authorClub.logoUrl,
+                  size: 72,
+                  fontSize: 30,
+                  borderRadius: 20,
+                ),
+              ),
+            // Stats
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.favorite, size: 14, color: Colors.pink),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$likeCount',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cardColor = _clubPageCard(context);
@@ -1612,10 +1871,10 @@ class _CollaborationsTab extends StatelessWidget {
     final strongBorderColor = _clubPageStrongBorder(context);
     final isEmpty = taggedPosts.isEmpty && partnerClubs.isEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.only(top: 8, bottom: 80),
-      children: [
-        if (isEmpty)
+    if (isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.only(top: 8, bottom: 80),
+        children: [
           Padding(
             padding: EdgeInsets.all(40),
             child: Center(
@@ -1626,270 +1885,67 @@ class _CollaborationsTab extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      );
+    }
 
-        // ── Partner clubs ──
-        if (partnerClubs.isNotEmpty) ...[
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text(
-              'PARTNER CLUBS',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
-                color: AppColors.secondaryText,
-              ),
+    // Mix of fixed section-header chrome (cheap, at most 2 of them) and
+    // partner-club/tagged-post rows, the latter built lazily below instead
+    // of eagerly materializing every row up front.
+    final items = <dynamic>[];
+    if (partnerClubs.isNotEmpty) {
+      items.add(
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text(
+            'PARTNER CLUBS',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              color: AppColors.secondaryText,
             ),
           ),
-          ...partnerClubs.map((club) {
-            final color = _colors[clubs.indexOf(club) % _colors.length];
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ClubProfileScreen(club: club, color: color),
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    border: Border.all(color: borderColor),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      ClubAvatar(
-                        clubId: club.id,
-                        clubName: club.name,
-                        color: color,
-                        imageUrl: club.logoUrl,
-                        size: 48,
-                        fontSize: 20,
-                        borderRadius: 14,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              club.name,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.text,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${clubMemberCount(club.id)} members',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: strongBorderColor),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'View ›',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-          const SizedBox(height: 4),
-        ],
-
-        // ── Tagged posts ──
-        if (taggedPosts.isNotEmpty) ...[
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'POSTS FEATURING THIS CLUB',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
-                color: AppColors.secondaryText,
-              ),
+        ),
+      );
+      items.addAll(partnerClubs);
+      items.add(const SizedBox(height: 4));
+    }
+    if (taggedPosts.isNotEmpty) {
+      items.add(
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            'POSTS FEATURING THIS CLUB',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              color: AppColors.secondaryText,
             ),
           ),
-          ...taggedPosts.map((post) {
-            final authorClub = clubs.firstWhere(
-              (c) => c.id == post.clubId,
-              orElse: () => clubs.first,
-            );
-            final color = _colors[clubs.indexOf(authorClub) % _colors.length];
-            final likeCount = postLikeCount(post.id as String);
-            final hasImage =
-                post.imagePath != null && (post.imagePath as String).isNotEmpty;
+        ),
+      );
+      items.addAll(taggedPosts);
+    }
 
-            return GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PostDetailScreen(post: post, clubColor: color),
-                ),
-              ),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                decoration: BoxDecoration(
-                  color: cardColor,
-                  border: Border.all(color: borderColor),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                      child: Row(
-                        children: [
-                          ClubAvatar(
-                            clubId: authorClub.id,
-                            clubName: authorClub.name,
-                            color: color,
-                            imageUrl: authorClub.logoUrl,
-                            size: 36,
-                            fontSize: 15,
-                            borderRadius: 10,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  authorClub.name,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                    color: AppColors.text,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  timeAgo(post.createdAt as DateTime),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.secondaryText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Collab badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: clubColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.handshake_outlined,
-                                  size: 12,
-                                  color: clubColor,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Collab',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: clubColor,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Banner / club avatar fallback
-                    if (hasImage)
-                      buildPostBanner(
-                        imagePath: post.imagePath as String?,
-                        fallbackColor: color,
-                        fallbackLetter: authorClub.name[0],
-                        height: 140,
-                      )
-                    else
-                      Container(
-                        height: 140,
-                        width: double.infinity,
-                        color: color.withValues(alpha: 0.08),
-                        alignment: Alignment.center,
-                        child: ClubAvatar(
-                          clubId: authorClub.id,
-                          clubName: authorClub.name,
-                          color: color,
-                          imageUrl: authorClub.logoUrl,
-                          size: 72,
-                          fontSize: 30,
-                          borderRadius: 20,
-                        ),
-                      ),
-                    // Stats
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.favorite, size: 14, color: Colors.pink),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$likeCount',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ],
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 8, bottom: 80),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        if (item is Widget) return item;
+        if (item is Club) {
+          return _partnerClubRow(
+            context,
+            item,
+            cardColor,
+            borderColor,
+            strongBorderColor,
+          );
+        }
+        return _taggedPostRow(context, item, cardColor, borderColor);
+      },
     );
   }
 }
@@ -2216,7 +2272,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
                       ),
                     ),
                   ),
@@ -2268,7 +2324,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                       fillColor: AppColors.background,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -2281,198 +2337,188 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
             Divider(height: 1),
 
             Expanded(
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: [
-                  if (_loadingFollowers)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: LinearProgressIndicator(
-                        color: AppColors.primaryRed,
-                        minHeight: 2,
-                      ),
-                    ),
-
-                  if (availableFollowers.isNotEmpty) ...[
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: Text(
-                        'Followers (${availableFollowers.length})',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.secondaryText,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ),
-                    ...availableFollowers.map(
-                      (u) => ListTile(
-                        leading: UserAvatar(
-                          userId: u.id,
-                          name: u.name,
-                          size: 40,
-                          fontSize: 16,
-                          backgroundColor: AppColors.lightRed,
-                          textColor: AppColors.primaryRed,
-                        ),
-                        title: Text(
-                          userState.displayNameFor(u.id, u.name),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          u.email,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                        trailing: TextButton(
-                          onPressed: () => _addMember(u.id),
-                          style: TextButton.styleFrom(
-                            backgroundColor: AppColors.lightRed,
-                            foregroundColor: AppColors.primaryRed,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 6,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Text(
-                            'Add',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Divider(height: 16),
-                  ],
-
-                  // Current board members
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                    child: Text(
-                      boardMembers.isEmpty
-                          ? 'No board members yet'
-                          : 'Current Board Members (${boardMembers.length})',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.secondaryText,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                  if (boardMembers.isEmpty)
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
-                      child: Text(
-                        _followersError ??
-                            (_followers.isEmpty
-                                ? 'No followers yet.'
-                                : 'Add a follower above to show them publicly on the Board tab.'),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                    )
-                  else
-                    ...boardMembers.map(
-                      (u) => ListTile(
-                        leading: UserAvatar(
-                          userId: u.id,
-                          name: u.name,
-                          size: 40,
-                          fontSize: 16,
-                          backgroundColor: const Color(
-                            0xFF1565C0,
-                          ).withValues(alpha: 0.12),
-                          textColor: const Color(0xFF1565C0),
-                        ),
-                        title: Text(
-                          userState.displayNameFor(u.id, u.name),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.club.boardMemberTitles[u.id]?.isNotEmpty ==
-                                      true
-                                  ? widget.club.boardMemberTitles[u.id]!
-                                  : 'No title set',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color:
-                                    widget
-                                            .club
-                                            .boardMemberTitles[u.id]
-                                            ?.isNotEmpty ==
-                                        true
-                                    ? const Color(0xFF1565C0)
-                                    : AppColors.secondaryText,
-                                fontWeight:
-                                    widget
-                                            .club
-                                            .boardMemberTitles[u.id]
-                                            ?.isNotEmpty ==
-                                        true
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            Text(
-                              u.email,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.edit_outlined,
-                                color: Color(0xFF1565C0),
-                                size: 20,
-                              ),
-                              tooltip: 'Set title',
-                              onPressed: () => _editTitleInSheet(u),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.remove_circle_outline,
-                                color: AppColors.secondaryText,
-                                size: 22,
-                              ),
-                              tooltip: 'Remove from board',
-                              onPressed: () => _removeMember(u),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+              child: _buildFollowersAndBoardList(
+                scrollController,
+                availableFollowers,
+                boardMembers,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _sectionHeader(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        color: AppColors.secondaryText,
+        letterSpacing: 0.4,
+      ),
+    ),
+  );
+
+  Widget _followerTile(User u) => ListTile(
+    leading: UserAvatar(
+      userId: u.id,
+      name: u.name,
+      size: 40,
+      fontSize: 16,
+      backgroundColor: AppColors.lightRed,
+      textColor: AppColors.primaryRed,
+    ),
+    title: Text(
+      userState.displayNameFor(u.id, u.name),
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: AppColors.text,
+      ),
+    ),
+    subtitle: Text(
+      u.email,
+      style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+    ),
+    trailing: TextButton(
+      onPressed: () => _addMember(u.id),
+      style: TextButton.styleFrom(
+        backgroundColor: AppColors.lightRed,
+        foregroundColor: AppColors.primaryRed,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(8)),
+        ),
+      ),
+      child: Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+    ),
+  );
+
+  Widget _boardMemberTile(User u) {
+    final title = widget.club.boardMemberTitles[u.id];
+    final hasTitle = title?.isNotEmpty == true;
+    return ListTile(
+      leading: UserAvatar(
+        userId: u.id,
+        name: u.name,
+        size: 40,
+        fontSize: 16,
+        backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.12),
+        textColor: const Color(0xFF1565C0),
+      ),
+      title: Text(
+        userState.displayNameFor(u.id, u.name),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AppColors.text,
+        ),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasTitle ? title! : 'No title set',
+            style: TextStyle(
+              fontSize: 12,
+              color: hasTitle
+                  ? const Color(0xFF1565C0)
+                  : AppColors.secondaryText,
+              fontWeight: hasTitle ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          Text(
+            u.email,
+            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+          ),
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(Icons.edit_outlined, color: Color(0xFF1565C0), size: 20),
+            tooltip: 'Set title',
+            onPressed: () => _editTitleInSheet(u),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.remove_circle_outline,
+              color: AppColors.secondaryText,
+              size: 22,
+            ),
+            tooltip: 'Remove from board',
+            onPressed: () => _removeMember(u),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Mix of fixed chrome (loading indicator, headers/divider/empty state —
+  /// cheap and few regardless of data size) and person rows, the latter
+  /// built lazily instead of eagerly materializing every row up front.
+  Widget _buildFollowersAndBoardList(
+    ScrollController scrollController,
+    List<User> availableFollowers,
+    List<User> boardMembers,
+  ) {
+    final items = <Object>[];
+    if (_loadingFollowers) {
+      items.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: LinearProgressIndicator(
+            color: AppColors.primaryRed,
+            minHeight: 2,
+          ),
+        ),
+      );
+    }
+    if (availableFollowers.isNotEmpty) {
+      items.add(_sectionHeader('Followers (${availableFollowers.length})'));
+      items.addAll(availableFollowers.map((u) => (user: u, isFollower: true)));
+      items.add(const Divider(height: 16));
+    }
+    items.add(
+      _sectionHeader(
+        boardMembers.isEmpty
+            ? 'No board members yet'
+            : 'Current Board Members (${boardMembers.length})',
+      ),
+    );
+    if (boardMembers.isEmpty) {
+      items.add(
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Text(
+            _followersError ??
+                (_followers.isEmpty
+                    ? 'No followers yet.'
+                    : 'Add a follower above to show them publicly on the Board tab.'),
+            style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+          ),
+        ),
+      );
+    } else {
+      items.addAll(boardMembers.map((u) => (user: u, isFollower: false)));
+    }
+
+    return ListView.builder(
+      controller: scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        if (item is Widget) return item;
+        final row = item as ({User user, bool isFollower});
+        return row.isFollower
+            ? _followerTile(row.user)
+            : _boardMemberTile(row.user);
+      },
     );
   }
 }
@@ -2647,175 +2693,166 @@ class _BoardTabState extends State<_BoardTab> {
     final panelText = AppColors.text;
     final mutedText = AppColors.secondaryText;
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 80),
-      children: [
-        // ── Board Members header ───────────────────────────────────────────────
-        Container(
-          width: double.infinity,
-          color: cardColor,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.shield_outlined,
-                color: Color(0xFF1565C0),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Board Members',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: panelText,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0x1E1565C0),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${members.length}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1565C0),
-                  ),
-                ),
-              ),
-            ],
+    final headerRow = Container(
+      width: double.infinity,
+      color: cardColor,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(
+        children: [
+          const Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'Board Members',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: panelText,
+            ),
           ),
-        ),
-        Divider(height: 1, color: borderColor),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0x1E1565C0),
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
+            child: Text(
+              '${members.length}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1565C0),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 
-        // ── Board Members list ─────────────────────────────────────────────────
-        if (members.isEmpty)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 48),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    Widget buildMemberRow(User u) {
+      final title = widget.club.boardMemberTitles[u.id];
+      final isAdmin = _isClubAdmin;
+      return Column(
+        children: [
+          ListTile(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => UserProfileScreen(user: u)),
+            ),
+            leading: UserAvatar(
+              userId: u.id,
+              name: u.name,
+              size: 44,
+              fontSize: 18,
+              backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.12),
+              textColor: const Color(0xFF1565C0),
+            ),
+            title: Text(
+              userState.displayNameFor(u.id, u.name),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: panelText,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.shield_outlined, size: 48, color: mutedText),
-                SizedBox(height: 12),
-                Text(
-                  'No board members yet.',
-                  style: TextStyle(fontSize: 15, color: mutedText),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Club admins can add members from Manage board members.',
-                  style: TextStyle(fontSize: 12, color: mutedText),
-                ),
+                if (title != null && title.isNotEmpty)
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF1565C0),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else
+                  Text(
+                    'Board Member',
+                    style: TextStyle(fontSize: 12, color: mutedText),
+                  ),
+                Text(u.email, style: TextStyle(fontSize: 11, color: mutedText)),
               ],
             ),
-          )
-        else
-          ...members.map((u) {
-            final title = widget.club.boardMemberTitles[u.id];
-            final isAdmin = _isClubAdmin;
-            return Column(
-              children: [
-                ListTile(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => UserProfileScreen(user: u),
-                    ),
-                  ),
-                  leading: UserAvatar(
-                    userId: u.id,
-                    name: u.name,
-                    size: 44,
-                    fontSize: 18,
-                    backgroundColor: const Color(
-                      0xFF1565C0,
-                    ).withValues(alpha: 0.12),
-                    textColor: const Color(0xFF1565C0),
-                  ),
-                  title: Text(
-                    userState.displayNameFor(u.id, u.name),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: panelText,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            trailing: authorized
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (title != null && title.isNotEmpty)
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 12,
+                      if (isAdmin)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.edit_outlined,
                             color: Color(0xFF1565C0),
-                            fontWeight: FontWeight.w600,
+                            size: 20,
                           ),
-                        )
-                      else
-                        Text(
-                          'Board Member',
-                          style: TextStyle(fontSize: 12, color: mutedText),
+                          tooltip: 'Set title',
+                          onPressed: () => _editTitle(u),
                         ),
-                      Text(
-                        u.email,
-                        style: TextStyle(fontSize: 11, color: mutedText),
+                      IconButton(
+                        icon: Icon(
+                          Icons.remove_circle_outline,
+                          color: mutedText,
+                          size: 22,
+                        ),
+                        tooltip: 'Remove from board',
+                        onPressed: () => _confirmRemove(u),
                       ),
                     ],
+                  )
+                : Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0x1E1565C0),
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                    ),
+                    child: const Text(
+                      'Board',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1565C0),
+                      ),
+                    ),
                   ),
-                  trailing: authorized
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (isAdmin)
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit_outlined,
-                                  color: Color(0xFF1565C0),
-                                  size: 20,
-                                ),
-                                tooltip: 'Set title',
-                                onPressed: () => _editTitle(u),
-                              ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.remove_circle_outline,
-                                color: mutedText,
-                                size: 22,
-                              ),
-                              tooltip: 'Remove from board',
-                              onPressed: () => _confirmRemove(u),
-                            ),
-                          ],
-                        )
-                      : Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0x1E1565C0),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Board',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1565C0),
-                            ),
-                          ),
-                        ),
-                ),
-                Divider(height: 1, indent: 72, color: borderColor),
-              ],
-            );
-          }),
-      ],
+          ),
+          Divider(height: 1, indent: 72, color: borderColor),
+        ],
+      );
+    }
+
+    final emptyState = Padding(
+      padding: EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.shield_outlined, size: 48, color: mutedText),
+          SizedBox(height: 12),
+          Text(
+            'No board members yet.',
+            style: TextStyle(fontSize: 15, color: mutedText),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Club admins can add members from Manage board members.',
+            style: TextStyle(fontSize: 12, color: mutedText),
+          ),
+        ],
+      ),
+    );
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 80),
+      itemCount: 2 + (members.isEmpty ? 1 : members.length),
+      itemBuilder: (context, i) {
+        if (i == 0) return headerRow;
+        if (i == 1) return Divider(height: 1, color: borderColor);
+        if (members.isEmpty) return emptyState;
+        return buildMemberRow(members[i - 2]);
+      },
     );
   }
 }
@@ -3060,6 +3097,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
         userId: member.id,
         clubId: widget.club.id,
       );
+      peopleService.invalidateClubMembers(widget.club.id);
     } catch (_) {
       if (!mounted) return;
       setState(() => _members = _sortMembers([..._members, member]));
@@ -3090,7 +3128,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
               height: 4,
               decoration: BoxDecoration(
                 color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.all(Radius.circular(2)),
               ),
             ),
             const SizedBox(height: 8),
@@ -3150,7 +3188,10 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
               ),
               title: const Text(
                 'Remove from club',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               onTap: () {
                 Navigator.pop(sheetCtx);
@@ -3221,7 +3262,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
               margin: const EdgeInsets.only(top: 12, bottom: 8),
               decoration: BoxDecoration(
                 color: AppColors.divider,
-                borderRadius: BorderRadius.circular(99),
+                borderRadius: BorderRadius.all(Radius.circular(99)),
               ),
             ),
             Padding(

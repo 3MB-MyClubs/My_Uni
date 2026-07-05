@@ -186,7 +186,7 @@ class _StepPasswordState extends State<StepPassword> {
                 ),
                 const SizedBox(height: 18),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                   child: LinearProgressIndicator(
                     value: passedRules / 4,
                     minHeight: 4,

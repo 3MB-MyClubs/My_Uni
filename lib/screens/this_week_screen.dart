@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
@@ -134,6 +136,8 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     super.initState();
     _loadEventContent();
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
+    contentStore.addListener(_onContentChanged);
     final now = DateTime.now();
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -146,10 +150,16 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   void dispose() {
     _searchController.dispose();
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
+    contentStore.removeListener(_onContentChanged);
     super.dispose();
   }
 
   void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onContentChanged() {
     if (mounted) setState(() {});
   }
 
@@ -347,7 +357,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           margin: const EdgeInsets.only(right: 10, top: 2),
                           decoration: BoxDecoration(
                             color: AppColors.lightGray,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
                           ),
                           child: Icon(
                             Icons.arrow_back_ios_new_rounded,
@@ -460,7 +470,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           height: 34,
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(100),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(100),
+                            ),
                             border: Border.all(
                               color: AppColors.primaryRed.withValues(
                                 alpha: 0.25,
@@ -621,7 +633,7 @@ class _SearchBarState extends State<_SearchBar> {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         border: Border.all(color: AppColors.divider, width: 1.5),
       ),
       child: Row(
@@ -715,7 +727,7 @@ class _FilterPillBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: active ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(
             color: active ? AppColors.primaryRed : AppColors.divider,
             width: 1.5,
@@ -780,7 +792,7 @@ class _LiveToggleBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: active ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(
             color: active ? AppColors.primaryRed : AppColors.divider,
             width: 1.5,
@@ -841,7 +853,7 @@ class _AudienceSheet extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
           ),
           const SizedBox(height: 18),
@@ -902,7 +914,7 @@ class _AudienceOption extends StatelessWidget {
           color: selected
               ? AppColors.primaryRed.withValues(alpha: 0.08)
               : AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(
             color: selected
                 ? AppColors.primaryRed.withValues(alpha: 0.4)
@@ -919,7 +931,7 @@ class _AudienceOption extends StatelessWidget {
                 color: selected
                     ? AppColors.primaryRed.withValues(alpha: 0.15)
                     : AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.all(Radius.circular(11)),
               ),
               child: Icon(
                 icon,
@@ -1132,7 +1144,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
           ),
           const SizedBox(height: 18),
@@ -1295,7 +1307,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primaryRed.withValues(alpha: 0.30),
@@ -1358,7 +1370,7 @@ class _WeekEventRow extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
           border: Border.all(
             color: live
                 ? AppColors.primaryRed.withValues(alpha: 0.5)
@@ -1542,7 +1554,7 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.all(Radius.circular(100)),
         border: border ? Border.all(color: AppColors.divider) : null,
       ),
       child: Row(
@@ -1587,7 +1599,7 @@ class _WeekRsvpPill extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Text(
@@ -1621,7 +1633,7 @@ class _WeekRsvpPill extends StatelessWidget {
               color: attending
                   ? AppColors.primaryRed.withValues(alpha: 0.10)
                   : AppColors.primaryRed,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.all(Radius.circular(100)),
               border: Border.all(
                 color: attending
                     ? AppColors.primaryRed.withValues(alpha: 0.3)
@@ -1677,7 +1689,7 @@ class _LiveBadge extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(7, 3, 8, 3),
       decoration: BoxDecoration(
         color: AppColors.primaryRed.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.all(Radius.circular(100)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1739,7 +1751,7 @@ class _EmptyState extends StatelessWidget {
               height: 56,
               decoration: BoxDecoration(
                 color: AppColors.primaryRed.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.all(Radius.circular(16)),
               ),
               child: Icon(
                 trulyEmpty
@@ -1781,7 +1793,7 @@ class _EmptyState extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(100),
+                    borderRadius: BorderRadius.all(Radius.circular(100)),
                   ),
                   child: Text(
                     S.resetFilters,
@@ -1827,7 +1839,7 @@ class _HeaderIconBtn extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   border: Border.all(color: AppColors.divider),
                 ),
                 child: Icon(icon, size: 18, color: AppColors.secondaryText),
@@ -1844,7 +1856,7 @@ class _HeaderIconBtn extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
                     border: Border.all(color: AppColors.background, width: 2),
                   ),
                   child: Text(
@@ -1907,7 +1919,7 @@ class _NewEventsSheet extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
           ),
           Padding(
@@ -1919,7 +1931,7 @@ class _NewEventsSheet extends StatelessWidget {
                   height: 38,
                   decoration: BoxDecoration(
                     color: AppColors.primaryRed.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.all(Radius.circular(13)),
                   ),
                   child: Icon(
                     Icons.notifications_active_outlined,
@@ -1995,7 +2007,7 @@ class _NoNewEventsState extends StatelessWidget {
             height: 66,
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.all(Radius.circular(22)),
               border: Border.all(color: AppColors.divider),
             ),
             child: Icon(
@@ -2053,7 +2065,7 @@ class _NewEventNotificationCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
@@ -2070,7 +2082,7 @@ class _NewEventNotificationCard extends StatelessWidget {
               height: 58,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.all(Radius.circular(15)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

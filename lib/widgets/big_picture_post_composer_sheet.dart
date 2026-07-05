@@ -34,8 +34,11 @@ Future<void> showBigPicturePostComposerSheet({
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) =>
-        _BigPicturePostComposerSheet(club: club, color: color, onPosted: onPosted),
+    builder: (_) => _BigPicturePostComposerSheet(
+      club: club,
+      color: color,
+      onPosted: onPosted,
+    ),
   );
 }
 
@@ -146,7 +149,7 @@ class _BigPicturePostComposerSheetState
               height: 4,
               decoration: BoxDecoration(
                 color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.all(Radius.circular(2)),
               ),
             ),
             const SizedBox(height: 16),
@@ -155,7 +158,10 @@ class _BigPicturePostComposerSheetState
                 Icons.camera_alt_rounded,
                 color: AppColors.primaryRed,
               ),
-              title: Text('Take a photo', style: TextStyle(color: AppColors.text)),
+              title: Text(
+                'Take a photo',
+                style: TextStyle(color: AppColors.text),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.camera);
@@ -198,6 +204,7 @@ class _BigPicturePostComposerSheetState
       if (!mounted) return;
       newsPosts.insert(0, post);
       unawaited(contentStore.saveNewsPosts());
+      contentStore.notifyContentChanged();
       unawaited(clubNotificationService.notifyFollowersAboutPost(post));
       widget.onPosted();
       Navigator.of(context).pop();
@@ -226,7 +233,9 @@ class _BigPicturePostComposerSheetState
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.9,
@@ -246,7 +255,7 @@ class _BigPicturePostComposerSheetState
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
               Flexible(
@@ -273,7 +282,8 @@ class _BigPicturePostComposerSheetState
                             maxChars: _maxChars,
                             imagePath: _imagePath,
                             onAddPhoto: _showPhotoPickerSheet,
-                            onRemovePhoto: () => setState(() => _imagePath = null),
+                            onRemovePhoto: () =>
+                                setState(() => _imagePath = null),
                           ),
                   ),
                 ),
@@ -324,7 +334,7 @@ class _BigPicturePostComposerSheetState
                           vertical: 12,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.all(Radius.circular(22)),
                         ),
                       ),
                       child: _posting
@@ -456,7 +466,7 @@ class _ComposeStep extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
                 color: AppColors.background,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.all(Radius.circular(20)),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Row(
@@ -487,14 +497,14 @@ class _ComposeStep extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
               decoration: BoxDecoration(
                 color: AppColors.background,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.all(Radius.circular(20)),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     child: Image.file(
                       File(imagePath!),
                       width: 26,
@@ -612,7 +622,7 @@ class _FeedStylePreviewCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
         border: Border.all(color: AppColors.divider),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
@@ -644,7 +654,10 @@ class _FeedStylePreviewCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'Just now',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.secondaryText),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.secondaryText,
+                  ),
                 ),
                 if (trimmed.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -660,7 +673,7 @@ class _FeedStylePreviewCard extends StatelessWidget {
                 if (hasImage) ...[
                   const SizedBox(height: 10),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                     child: buildPostBanner(
                       imagePath: imagePath,
                       fallbackColor: color,

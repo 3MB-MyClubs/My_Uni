@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/comment.dart';
 import '../models/event.dart';
@@ -17,7 +18,7 @@ import 'mock_data.dart';
 /// [_seedVersion] must be incremented whenever mock_data.dart changes event or
 /// post seed data. A version mismatch causes stored events/posts to be
 /// discarded so the fresh mock data is used instead.
-class ContentStore {
+class ContentStore extends ChangeNotifier {
   static const _boxName = 'content_v1';
 
   /// Bump this integer any time you change mock event / post seed data.
@@ -35,6 +36,11 @@ class ContentStore {
     _box = await Hive.openBox<dynamic>(_boxName);
     _initialized = true;
   }
+
+  /// Call after a post/event is created or edited so screens showing that
+  /// content (Feed, This Week) can refresh themselves directly instead of
+  /// relying on their host screen to force a rebuild.
+  void notifyContentChanged() => notifyListeners();
 
   /// Call once after [initialize] to replace in-memory lists with stored data.
   /// If nothing is stored yet, or the seed version has changed, the lists keep
