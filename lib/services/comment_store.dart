@@ -4,8 +4,6 @@ import 'package:flutter/foundation.dart';
 
 import '../models/comment.dart';
 import '../models/news_post.dart';
-import 'auth_service.dart';
-import 'club_notification_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
 import 'supabase_interaction_service.dart';
@@ -58,50 +56,10 @@ class CommentStore extends ChangeNotifier {
     }
   }
 
-  /// Optimistically adds a comment; Supabase write in the background with the
-  /// local row swapped for the server row (or kept local-only on failure).
+  /// Comment creation is disabled app-wide. Keep this method as a no-op so
+  /// older call sites and tests still compile while the feature is removed.
   Future<void> add({required NewsPost post, required String content}) async {
-    final trimmed = content.trim();
-    final userId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    if (trimmed.isEmpty || userId.isEmpty) return;
-
-    final local = Comment(
-      id: 'local_${DateTime.now().microsecondsSinceEpoch}_$userId',
-      postId: post.id,
-      userId: userId,
-      content: trimmed,
-      createdAt: DateTime.now(),
-    );
-    comments.add(local);
-    unawaited(contentStore.saveComments());
-    notifyListeners();
-
-    clubNotificationService.notifyClubAboutComment(
-      post: post,
-      actorUserId: userId,
-    );
-
-    // Seed posts / mock sessions can't be written remotely — stay local.
-    if (!_looksLikeUuid(post.id) || !_looksLikeUuid(userId)) return;
-
-    try {
-      final remote = await supabaseInteractionService.addComment(
-        postId: post.id,
-        profileId: userId,
-        content: trimmed,
-      );
-      if (remote == null) return;
-      final idx = comments.indexWhere((c) => c.id == local.id);
-      if (idx != -1) comments[idx] = remote;
-      unawaited(contentStore.saveComments());
-      notifyListeners();
-    } catch (error) {
-      debugPrint('Comment supabase write failed: $error');
-      comments.removeWhere((c) => c.id == local.id);
-      unawaited(contentStore.saveComments());
-      notifyListeners();
-    }
+    return;
   }
 
   /// Removes a comment locally and remotely (best-effort).

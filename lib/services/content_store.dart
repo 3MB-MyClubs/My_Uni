@@ -239,6 +239,7 @@ class ContentStore extends ChangeNotifier {
     if (!canDeletePost(postId, requestingUserId)) return false;
     newsPosts.removeAt(idx);
     saveNewsPosts();
+    notifyContentChanged();
     return true;
   }
 

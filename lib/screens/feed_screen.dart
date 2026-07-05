@@ -36,9 +36,7 @@ import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../services/supabase_interaction_service.dart';
-import '../services/comment_store.dart';
 import 'notifications_screen.dart';
-import 'post_detail_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
 
@@ -2194,6 +2192,11 @@ class _PostCardState extends State<_PostCard>
   }
 
   void _showPostOptions() {
+    final canDelete = contentStore.canDeletePost(
+      widget.post.id,
+      authService.currentAdmin?.id ?? '',
+    );
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,
@@ -2237,6 +2240,13 @@ class _PostCardState extends State<_PostCard>
                 ),
               ),
               const SizedBox(height: 8),
+              if (canDelete)
+                tile(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete post',
+                  color: Colors.red,
+                  onTap: _confirmDeletePost,
+                ),
               tile(
                 icon: Icons.flag_outlined,
                 label: 'Report post',
@@ -2248,6 +2258,62 @@ class _PostCardState extends State<_PostCard>
           ),
         );
       },
+    );
+  }
+
+  void _confirmDeletePost() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          'Delete post?',
+          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This post will be removed from the home feed.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              final deleted = contentStore.deletePost(
+                widget.post.id,
+                authService.currentAdmin?.id ?? '',
+              );
+              if (!mounted) return;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      deleted
+                          ? 'Post deleted'
+                          : 'Only the club that owns this post can delete it.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2526,44 +2592,21 @@ class _PostCardState extends State<_PostCard>
                   ),
                 ],
                 const SizedBox(height: 4),
-                // ── Action row (counts inline, X-style) ──
+                // ── Action row (X-style) ──
                 if (isStudent)
-                  ListenableBuilder(
-                    listenable: commentStore,
-                    builder: (_, _) {
-                      final commentCount = commentStore.countFor(
-                        widget.post.id,
-                      );
-                      return Row(
-                        children: [
-                          _twAction(
-                            icon: isLiked
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            count: null,
-                            color: isLiked
-                                ? AppColors.primaryRed
-                                : AppColors.secondaryText,
-                            onTap: _toggleLike,
-                          ),
-                          const SizedBox(width: 4),
-                          _twAction(
-                            icon: Icons.mode_comment_outlined,
-                            count: commentCount > 0 ? '$commentCount' : null,
-                            color: AppColors.secondaryText,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PostDetailScreen(
-                                  post: widget.post,
-                                  clubColor: clubColor,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                  Row(
+                    children: [
+                      _twAction(
+                        icon: isLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        count: null,
+                        color: isLiked
+                            ? AppColors.primaryRed
+                            : AppColors.secondaryText,
+                        onTap: _toggleLike,
+                      ),
+                    ],
                   ),
               ],
             ),
