@@ -13,6 +13,7 @@ import '../services/locale_service.dart';
 import '../services/tutorial_service.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/app_tutorial_overlay.dart';
+import '../widgets/lazy_indexed_stack.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -183,11 +184,11 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     if (mounted) setState(() {});
   }
 
-  // The tour covers the student-facing UI only — it never runs for club admins
-  // or the super admin.
+  // Students get the student tour; club admins get the separate club tour
+  // (_clubTutorialSteps). Neither runs for the super admin.
   void _startInitialExperience() {
     if (!mounted) return;
-    if (authService.isStudentSession &&
+    if ((authService.isStudentSession || _isClubAdmin) &&
         !tutorialService.isComplete(_currentUserId)) {
       _startTutorial();
       return;
@@ -196,7 +197,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   }
 
   void _onTutorialReplayRequested() {
-    if (!mounted || !authService.isStudentSession) return;
+    if (!mounted || !(authService.isStudentSession || _isClubAdmin)) return;
     _startTutorial();
   }
 
@@ -221,6 +222,11 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     if (_selectedIndex == step.tabIndex) return;
     setState(() => _selectedIndex = step.tabIndex);
   }
+
+  // Whichever tour applies to the current session. Kept as a single getter so
+  // build() and the orchestration methods don't need to branch themselves.
+  List<AppTutorialStep> get _activeTutorialSteps =>
+      _isClubAdmin ? _clubTutorialSteps : _tutorialSteps;
 
   // Student-only walkthrough. Each anchored step points at the real widget via
   // a shared key from [tutorialAnchors]; welcome/finale are centered heroes.
@@ -334,6 +340,103 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     ),
   ];
 
+  // Club-admin walkthrough. Separate from _tutorialSteps because clubs get a
+  // different nav (no Search tab, a center "+" instead) and a different
+  // Profile tab (ClubProfileScreen, not personal info).
+  List<AppTutorialStep> get _clubTutorialSteps => <AppTutorialStep>[
+    const AppTutorialStep(
+      eyebrow: 'Welcome',
+      title: 'Run your club from here',
+      description:
+          'A quick tour of the tools you get as a club admin — we’ll point to the real buttons as we go.',
+      icon: Icons.waving_hand_rounded,
+      tabIndex: 0,
+      tips: [
+        'Tap Next, or tap anywhere, to advance.',
+        'Skip tour is always in the top-right.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Getting around',
+      title: 'Your four sections',
+      description:
+          'Home, Events, Alerts, and Profile stay with you everywhere. The center button replaces Search — it’s reserved for posting.',
+      icon: Icons.touch_app_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
+      tabIndex: 0,
+      tips: ['The active section turns red.', 'Badges flag new activity.'],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Create',
+      title: 'Post a new event',
+      description:
+          'Tap the center button anytime to open the event form — title, time, location, and audience.',
+      icon: Icons.add_circle_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubCreateButton),
+      tabIndex: 0,
+      tips: ['Your event shows up in Events for everyone right away.'],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Home',
+      title: 'Quick text updates',
+      description:
+          'This composer posts a quick update to your club’s followers — no need for the full event form for a text-only post.',
+      icon: Icons.dynamic_feed_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
+      tabIndex: 0,
+      tips: ['Add a photo for a bigger, more visible post.'],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Your club',
+      title: 'Posts, Events, Collabs, Board',
+      description:
+          'This is your club’s public profile. Switch tabs to manage posts and events — tap the ⋯ menu on any of yours to pin or delete it, or tap an event’s attendee count to see who’s coming.',
+      icon: Icons.view_agenda_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs),
+      tabIndex: 4,
+      tips: [
+        'Board lists your club’s board members and titles.',
+        'Collabs shows joint events with other clubs.',
+      ],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Insights',
+      title: 'See what’s landing',
+      description:
+          'Track views, likes, and top posts so you know what your followers respond to.',
+      icon: Icons.insights_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubInsights),
+      tabIndex: 4,
+    ),
+    AppTutorialStep(
+      eyebrow: 'Settings',
+      title: 'Board, appearance & replay',
+      description:
+          'The gear opens Settings — add or remove board members, switch appearance, and replay this tour whenever you want.',
+      icon: Icons.settings_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubProfileSettings),
+      tabIndex: 4,
+      tips: ['Board management lives under your club’s section in Settings.'],
+    ),
+    AppTutorialStep(
+      eyebrow: 'Alerts',
+      title: 'Stay in the loop',
+      description:
+          'New followers and event activity collect here. Tap an alert to open it, or clear them all with this button.',
+      icon: Icons.notifications_active_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
+      tabIndex: 3,
+    ),
+    const AppTutorialStep(
+      eyebrow: 'You’re set',
+      title: 'Run your club at your own pace',
+      description:
+          'That’s the tour. It won’t pop up again automatically — replay it anytime from Profile → Settings.',
+      icon: Icons.rocket_launch_rounded,
+      tabIndex: 0,
+    ),
+  ];
+
   Future<void> _requestCalendarIfNeeded() async {
     final service = ref.read(calendarServiceProvider);
     final permission = await service.checkPermission();
@@ -388,23 +491,27 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Scaffold(
-          extendBody: true,
-          body: IndexedStack(index: _selectedIndex, children: _screens),
-          bottomNavigationBar: _buildBottomNav(context),
-        ),
-        if (_showTutorial)
-          Positioned.fill(
-            child: AppTutorialOverlay(
-              steps: _tutorialSteps,
-              onStepChanged: _onTutorialStepChanged,
-              onComplete: _finishTutorial,
-              onSkip: _finishTutorial,
-            ),
+    // BackdropGroup lets the nav bar's and the feed top bar's grouped blurs
+    // share a single backdrop readback per frame instead of one each.
+    return BackdropGroup(
+      child: Stack(
+        children: [
+          Scaffold(
+            extendBody: true,
+            body: LazyIndexedStack(index: _selectedIndex, children: _screens),
+            bottomNavigationBar: _buildBottomNav(context),
           ),
-      ],
+          if (_showTutorial)
+            Positioned.fill(
+              child: AppTutorialOverlay(
+                steps: _activeTutorialSteps,
+                onStepChanged: _onTutorialStepChanged,
+                onComplete: _finishTutorial,
+                onSkip: _finishTutorial,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -474,7 +581,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         child: ClipRRect(
           key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
           borderRadius: BorderRadius.all(Radius.circular(30)),
-          child: BackdropFilter(
+          child: BackdropFilter.grouped(
             filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               height: 72,
@@ -577,6 +684,39 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                             ),
                           ),
                         ),
+                      // Thin maroon underline with a soft glow, sliding in
+                      // step with the capsule above.
+                      if (selectedSlot != -1)
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                          left: slotWidth * selectedSlot,
+                          bottom: 6,
+                          width: slotWidth,
+                          height: 3,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: Container(
+                                width: 22,
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryRed,
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(100),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primaryRed.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       // Foreground row of nav items.
                       Positioned.fill(
                         child: Row(
@@ -584,7 +724,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                           children: [
                             for (final slot in slots)
                               slot.isCenterButton
-                                  ? _CenterAddButton(onTap: _onAddTap)
+                                  ? _CenterAddButton(
+                                      key: tutorialAnchors.keyFor(
+                                        TutorialAnchors.clubCreateButton,
+                                      ),
+                                      onTap: _onAddTap,
+                                    )
                                   : _NavItem(
                                       icon: slot.icon!,
                                       activeIcon: slot.activeIcon!,
@@ -823,7 +968,7 @@ class _CreateSheetAction extends StatelessWidget {
 
 class _CenterAddButton extends StatelessWidget {
   final VoidCallback onTap;
-  const _CenterAddButton({required this.onTap});
+  const _CenterAddButton({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

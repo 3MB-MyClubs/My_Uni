@@ -10,6 +10,7 @@ import 'screens/signup_flow_screen.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
 import 'screens/language_choice_screen.dart';
+import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
 import 'services/app_colors.dart';
@@ -42,21 +43,23 @@ void main() async {
     hiveBootstrap.initialize(),
   ]);
 
-  // These each open their own Hive box (or SharedPreferences) and don't
-  // depend on each other, so there's no need to await them one at a time.
-  await Future.wait([
+  // The first screen is always Login, which needs only the theme + locale
+  // boxes to build the MaterialApp. The other boxes don't depend on each
+  // other and nothing before login reads them, so they open in the
+  // background; readers await appBootstrap.ready (the post-frame hydration
+  // below and the login/club-admin submit handlers — a login's network
+  // round-trip dwarfs that wait).
+  await Future.wait([themeService.initialize(), localeService.initialize()]);
+  appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
     contentStore.initialize(),
     checkinStore.initialize(),
     pollStore.initialize(),
     viewTracker.initialize(),
     personalizationService.initialize(),
-    themeService.initialize(),
-    localeService.initialize(),
     calendarSyncService.initialize(),
     tutorialService.initialize(),
-  ]);
-  userPrefsService.loadAllPhotos();
+  ]).then((_) => userPrefsService.loadAllPhotos());
 
   runApp(const ProviderScope(child: MyApp()));
 
@@ -65,30 +68,34 @@ void main() async {
   // notification permission prompt, materializing mock_data.dart's seed
   // lists, and the network cleanup call are all deferred to right after.
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(notificationService.initialize());
+    unawaited(
+      appBootstrap.ready.then((_) {
+        unawaited(notificationService.initialize());
 
-    // Give every demo student a stable mock profile photo so avatars show up
-    // in members/board lists etc. Curated seeds and real uploads are not
-    // overridden.
-    for (final u in users) {
-      userState.mockPhotoUrls.putIfAbsent(
-        u.id,
-        () => 'https://i.pravatar.cc/150?u=${u.id}',
-      );
-    }
-    contentStore.applyToLists();
-    unawaited(eventCleanupService.cleanupExpiredEvents());
-    contentStore.loadBoardMemberIds();
-    contentStore.loadBoardMemberTitles();
-    // Restore any dynamic notifications that were generated at runtime.
-    final dynNotifs = contentStore.loadDynamicNotifications();
-    if (dynNotifs != null) {
-      userState.dynamicNotifications
-        ..clear()
-        ..addAll(dynNotifs);
-    }
-    userState.replaceReadNotificationIds(
-      contentStore.loadReadNotificationIds(),
+        // Give every demo student a stable mock profile photo so avatars show
+        // up in members/board lists etc. Curated seeds and real uploads are
+        // not overridden.
+        for (final u in users) {
+          userState.mockPhotoUrls.putIfAbsent(
+            u.id,
+            () => 'https://i.pravatar.cc/150?u=${u.id}',
+          );
+        }
+        contentStore.applyToLists();
+        unawaited(eventCleanupService.cleanupExpiredEvents());
+        contentStore.loadBoardMemberIds();
+        contentStore.loadBoardMemberTitles();
+        // Restore any dynamic notifications that were generated at runtime.
+        final dynNotifs = contentStore.loadDynamicNotifications();
+        if (dynNotifs != null) {
+          userState.dynamicNotifications
+            ..clear()
+            ..addAll(dynNotifs);
+        }
+        userState.replaceReadNotificationIds(
+          contentStore.loadReadNotificationIds(),
+        );
+      }),
     );
   });
 }
@@ -104,6 +111,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _showSignUp = false;
   bool _loggedIn = false;
   String _signupEmail = '';
+
+  // Prefs/personalization are loaded once per logged-in user (from _onLogin or
+  // the first build that sees the session) — not on every theme/locale
+  // rebuild: personalizationService.load ends with notifyListeners(), which
+  // must not fire during build.
+  String? _prefsLoadedForUserId;
+
+  // _buildTheme reads only const palettes (DarkColors/LightColors), so both
+  // ThemeData graphs are immutable for the process lifetime.
+  ThemeData? _lightTheme;
+  ThemeData? _darkTheme;
 
   @override
   void initState() {
@@ -131,6 +149,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       userPrefsService.save(uid);
       personalizationService.save(uid);
     }
+    // saveAll rewrites every debounced kind, flushing any pending
+    // scheduleSave along the way (pause/detach and logout both land here).
     contentStore.saveAll(userState.dynamicNotifications);
   }
 
@@ -147,6 +167,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showSignUp = false;
     });
     if (currentUserId != null) {
+      _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
       unawaited(peopleService.hydrateFollowing(currentUserId));
@@ -289,7 +310,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final isAdmin = isSuperAdmin;
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
-          if (currentUserId != null) {
+          if (currentUserId != null && currentUserId != _prefsLoadedForUserId) {
+            _prefsLoadedForUserId = currentUserId;
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
           }
@@ -310,6 +332,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               isAdmin: isAdmin,
               onLogout: () {
                 _savePrefs();
+                _prefsLoadedForUserId = null;
                 setState(() {
                   _loggedIn = false;
                   _showSignUp = false;
@@ -349,8 +372,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           debugShowCheckedModeBanner: false,
           title: 'University Social App',
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          theme: _buildTheme(false),
-          darkTheme: _buildTheme(true),
+          theme: _lightTheme ??= _buildTheme(false),
+          darkTheme: _darkTheme ??= _buildTheme(true),
           home: homeWidget,
         );
       },

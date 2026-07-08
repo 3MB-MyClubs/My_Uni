@@ -20,18 +20,60 @@ class PeopleService {
     return Supabase.instance.client;
   }
 
-  Future<List<User>> fetchPeople({String query = '', String? excludeId}) async {
+  // The people-directory query is identical for every caller (query/excludeId
+  // are applied client-side), and at startup Feed, Explore and Profile all
+  // trigger it concurrently because the tab stack mounts them together — so
+  // the raw rows are in-flight-deduped and cached for a short TTL. Explicit
+  // pull-to-refresh passes force: true.
+  List<Map<String, dynamic>> _peopleRows = const [];
+  DateTime? _peopleRowsFetchedAt;
+  Future<List<Map<String, dynamic>>>? _peopleRowsInFlight;
+  static const _peopleRowsTtl = Duration(seconds: 60);
+
+  Future<List<Map<String, dynamic>>> _peopleRowsFor({required bool force}) {
+    final fetchedAt = _peopleRowsFetchedAt;
+    if (!force &&
+        fetchedAt != null &&
+        _peopleRows.isNotEmpty &&
+        DateTime.now().difference(fetchedAt) < _peopleRowsTtl) {
+      return Future.value(_peopleRows);
+    }
+
+    final inFlight = _peopleRowsInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _fetchPeopleRows();
+    _peopleRowsInFlight = future;
+    return future;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPeopleRows() async {
+    try {
+      final rows = await _client!
+          .from('profiles')
+          .select(
+            'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+          )
+          .eq('role', 'student')
+          .order('full_name', ascending: true)
+          .limit(100);
+      _peopleRows = [for (final row in rows) Map<String, dynamic>.from(row)];
+      _peopleRowsFetchedAt = DateTime.now();
+      return _peopleRows;
+    } finally {
+      _peopleRowsInFlight = null;
+    }
+  }
+
+  Future<List<User>> fetchPeople({
+    String query = '',
+    String? excludeId,
+    bool force = false,
+  }) async {
     final client = _client;
     if (client == null) return const [];
 
-    final rows = await client
-        .from('profiles')
-        .select(
-          'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
-        )
-        .eq('role', 'student')
-        .order('full_name', ascending: true)
-        .limit(100);
+    final rows = await _peopleRowsFor(force: force);
 
     final majorNames = await _lookupNames('majors');
     final yearNames = await _lookupNames('academic_years');
@@ -78,37 +120,79 @@ class PeopleService {
     return people;
   }
 
-  Future<void> hydrateFollowing(String userId) async {
+  // Multiple screens hydrate the same user's follow graph at startup; run the
+  // network fetch once per session (join any in-flight call) unless forced.
+  final Set<String> _followingHydratedThisSession = {};
+  final Map<String, Future<void>> _followingInFlight = {};
+
+  Future<void> hydrateFollowing(String userId, {bool force = false}) {
     final client = _client;
-    if (client == null || userId.isEmpty) return;
+    if (client == null || userId.isEmpty) return Future.value();
 
-    final followingRows = await client
-        .from('profile_follows')
-        .select('following_id')
-        .eq('follower_id', userId);
+    if (!force && _followingHydratedThisSession.contains(userId)) {
+      return Future.value();
+    }
 
-    userState.replaceFollowedUsers(
-      followingRows.map((row) => row['following_id'].toString()),
-    );
-    _followingByUserId[userId] = followingRows
-        .map((row) => row['following_id'].toString())
-        .toSet();
+    final inFlight = _followingInFlight[userId];
+    if (inFlight != null) return inFlight;
 
-    final followerRows = await client
-        .from('profile_follows')
-        .select('follower_id')
-        .eq('following_id', userId);
+    final future = _hydrateFollowing(client, userId);
+    _followingInFlight[userId] = future;
+    return future;
+  }
 
-    _cachedFollowerIds = followerRows
-        .map((row) => row['follower_id'].toString())
-        .toSet();
-    _followersByUserId[userId] = _cachedFollowerIds;
+  Future<void> _hydrateFollowing(SupabaseClient client, String userId) async {
+    try {
+      final results = await Future.wait([
+        client
+            .from('profile_follows')
+            .select('following_id')
+            .eq('follower_id', userId),
+        client
+            .from('profile_follows')
+            .select('follower_id')
+            .eq('following_id', userId),
+      ]);
+      final followingRows = results[0];
+      final followerRows = results[1];
+
+      userState.replaceFollowedUsers(
+        followingRows.map((row) => row['following_id'].toString()),
+      );
+      _followingByUserId[userId] = followingRows
+          .map((row) => row['following_id'].toString())
+          .toSet();
+
+      _cachedFollowerIds = followerRows
+          .map((row) => row['follower_id'].toString())
+          .toSet();
+      _followersByUserId[userId] = _cachedFollowerIds;
+
+      _followingHydratedThisSession.add(userId);
+    } finally {
+      _followingInFlight.remove(userId);
+    }
   }
 
   Future<void> hydrateConnectionsFor(String userId) async {
     final client = _client;
     if (client == null || userId.isEmpty) return;
     if (_cachedPeople.isEmpty) await fetchPeople();
+
+    // For the current user, hydrateFollowing fetches the same two halves of
+    // the follow graph — join a live run (the startup race) or reuse this
+    // session's result instead of issuing the or() query again.
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    if (myId == userId) {
+      await _followingInFlight[userId];
+      if (_followingHydratedThisSession.contains(userId)) {
+        await _cacheProfilesByIds({
+          ...?_followersByUserId[userId],
+          ...?_followingByUserId[userId],
+        });
+        return;
+      }
+    }
 
     final rows = await client
         .from('profile_follows')
@@ -129,7 +213,6 @@ class PeopleService {
       ...?_followingByUserId[userId],
     });
 
-    final myId = Supabase.instance.client.auth.currentUser?.id;
     if (myId == userId) {
       _cachedFollowerIds = _followersByUserId[userId] ?? const {};
       userState.replaceFollowedUsers(_followingByUserId[userId] ?? const {});
@@ -140,58 +223,74 @@ class PeopleService {
     final client = _client;
     if (client == null || userId.isEmpty) return;
 
-    final majorNames = await _lookupNames('majors');
-    final yearNames = await _lookupNames('academic_years');
-
-    try {
-      final profile = await client
+    // Everything here is independent: the reference lookups are
+    // session-cached, and the three per-user reads fire together instead of
+    // one after another. A null result preserves that branch's old
+    // swallow-and-continue semantics.
+    final results = await Future.wait<dynamic>([
+      _lookupNames('majors'),
+      _lookupNames('academic_years'),
+      _lookupNames('interests'),
+      client
           .from('profiles')
           .select(
             'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
           )
           .eq('id', userId)
-          .maybeSingle();
-      if (profile != null) {
-        final user = _userFromProfileRow(
-          Map<String, dynamic>.from(profile),
-          majorNames: majorNames,
-          yearNames: yearNames,
-          subscribedClubIds: _clubIdsByUserId[userId]?.toList() ?? const [],
-        );
-        _upsertCachedUser(user);
-      }
-    } catch (_) {
-      // Keep whatever profile details are already cached locally.
-    }
-
-    try {
-      final interestRows = await client
+          .maybeSingle()
+          .then<dynamic>((row) => row)
+          .catchError((_) => null),
+      client
           .from('student_interests')
           .select('interest_id')
-          .eq('user_id', userId);
-      final interestIds = interestRows
-          .map((row) => _nullableString(row['interest_id']))
-          .whereType<String>()
-          .toList();
-      final interestNames = await _lookupNamesByIds('interests', interestIds);
-      userState.setInterests(userId, interestNames);
-    } catch (_) {
-      // Missing permissions/tables should not block opening a profile.
-    }
-
-    try {
-      final clubRows = await client
+          .eq('user_id', userId)
+          .then<dynamic>((rows) => rows)
+          .catchError((_) => null),
+      client
           .from('club_followers')
           .select('club_id')
-          .eq('profile_id', userId);
-      final clubIds = clubRows
-          .map((row) => _nullableString(row['club_id']))
+          .eq('profile_id', userId)
+          .then<dynamic>((rows) => rows)
+          .catchError((_) => null),
+    ]);
+
+    final majorNames = results[0] as Map<String, String>;
+    final yearNames = results[1] as Map<String, String>;
+    final interestNames = results[2] as Map<String, String>;
+
+    final profile = results[3];
+    if (profile != null) {
+      final user = _userFromProfileRow(
+        Map<String, dynamic>.from(profile as Map),
+        majorNames: majorNames,
+        yearNames: yearNames,
+        subscribedClubIds: _clubIdsByUserId[userId]?.toList() ?? const [],
+      );
+      _upsertCachedUser(user);
+    }
+
+    final interestRows = results[4];
+    if (interestRows != null) {
+      final interestIds = (interestRows as List)
+          .map((row) => _nullableString((row as Map)['interest_id']))
+          .whereType<String>()
+          .toList();
+      // Resolved from the session-cached map in join-row order — the same
+      // order the old per-ids lookup query produced.
+      userState.setInterests(userId, [
+        for (final id in interestIds)
+          if ((interestNames[id] ?? '').isNotEmpty) interestNames[id]!,
+      ]);
+    }
+
+    final clubRows = results[5];
+    if (clubRows != null) {
+      final clubIds = (clubRows as List)
+          .map((row) => _nullableString((row as Map)['club_id']))
           .whereType<String>()
           .toSet();
       _clubIdsByUserId[userId] = clubIds;
       _replaceCachedUserClubIds(userId, clubIds.toList());
-    } catch (_) {
-      // Fall back to static/mock subscribedClubIds.
     }
   }
 
@@ -267,10 +366,19 @@ class PeopleService {
     return members;
   }
 
-  Future<void> refreshPeopleDirectory({String? excludeId}) async {
+  Future<void> refreshPeopleDirectory({
+    String? excludeId,
+    bool force = false,
+  }) async {
     final currentUserId = excludeId ?? '';
-    await hydrateFollowing(currentUserId);
-    await fetchPeople(excludeId: currentUserId.isEmpty ? null : currentUserId);
+    // The follow graph and the directory rows are independent queries.
+    await Future.wait([
+      hydrateFollowing(currentUserId, force: force),
+      fetchPeople(
+        excludeId: currentUserId.isEmpty ? null : currentUserId,
+        force: force,
+      ),
+    ]);
   }
 
   void setCachedFollower(String userId, bool followsMe) {
@@ -374,17 +482,14 @@ class PeopleService {
     if (client == null || followerId.isEmpty || followingId.isEmpty) return;
 
     if (follow) {
-      final existing = await client
-          .from('profile_follows')
-          .select('id')
-          .eq('follower_id', followerId)
-          .eq('following_id', followingId)
-          .limit(1);
-      if (existing.isEmpty) {
+      // Insert-ignoring-duplicate: one round trip instead of check-then-insert.
+      try {
         await client.from('profile_follows').insert({
           'follower_id': followerId,
           'following_id': followingId,
         });
+      } on PostgrestException catch (error) {
+        if (error.code != '23505') rethrow;
       }
       setCachedFollowing(followingId, true);
     } else {
@@ -397,10 +502,17 @@ class PeopleService {
     }
   }
 
-  // majors/academic_years are static reference tables — cache them for the
-  // life of the app session instead of re-querying on every profile mapped.
+  // majors/academic_years/interests are static reference tables — cache them
+  // for the life of the app session instead of re-querying on every profile
+  // mapped. Shared with StudentProfileService so login detail hydration and
+  // the people directory reuse the same fetch.
   final Map<String, Map<String, String>> _lookupNameCache = {};
   final Map<String, Future<Map<String, String>>> _lookupNameInFlight = {};
+
+  /// Session-cached id→name map for a reference table, in `sort_order` — so
+  /// iterating entries reproduces the chip ordering the profile screens show.
+  Future<Map<String, String>> lookupNameMap(String tableName) =>
+      _lookupNames(tableName);
 
   Future<Map<String, String>> _lookupNames(String tableName) async {
     final cached = _lookupNameCache[tableName];
@@ -427,7 +539,10 @@ class PeopleService {
     if (client == null) return const {};
 
     try {
-      final rows = await client.from(tableName).select('id, name');
+      final rows = await client
+          .from(tableName)
+          .select('id, name')
+          .order('sort_order', ascending: true);
       return {
         for (final row in rows)
           if (_nullableString(row['id']) != null)
@@ -435,32 +550,6 @@ class PeopleService {
       };
     } catch (_) {
       return const {};
-    }
-  }
-
-  Future<List<String>> _lookupNamesByIds(
-    String tableName,
-    List<String> ids,
-  ) async {
-    final client = _client;
-    if (client == null || ids.isEmpty) return const [];
-
-    try {
-      final rows = await client
-          .from(tableName)
-          .select('id, name')
-          .inFilter('id', ids);
-      final byId = {
-        for (final row in rows)
-          if (_nullableString(row['id']) != null)
-            row['id'].toString(): _string(row['name']),
-      };
-      return [
-        for (final id in ids)
-          if ((byId[id] ?? '').isNotEmpty) byId[id]!,
-      ];
-    } catch (_) {
-      return const [];
     }
   }
 

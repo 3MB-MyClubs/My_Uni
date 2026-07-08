@@ -34,7 +34,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   ];
 
   Color _clubColor(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final idx = clubOrdinal(clubId);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
   }
 

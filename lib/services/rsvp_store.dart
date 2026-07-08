@@ -89,7 +89,7 @@ class RsvpStore extends ChangeNotifier {
     );
 
     _setLocalRsvp(event: event, userId: userId, attending: !wasAttending);
-    unawaited(contentStore.saveEvents());
+    contentStore.scheduleSave('events');
 
     if (wasAttending) {
       _ignore(calendarSyncService.removeEventFromDeviceCalendar(event, userId));
@@ -144,7 +144,7 @@ class RsvpStore extends ChangeNotifier {
       } else {
         _ignore(notificationService.cancelEventReminders(event.id));
       }
-      unawaited(contentStore.saveEvents());
+      contentStore.scheduleSave('events');
       _log(
         'RSVP local rollback complete: eventId=$eventId '
         'restoredAttending=$wasAttending',

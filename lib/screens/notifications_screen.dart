@@ -91,7 +91,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   ];
 
   Color _colorForClub(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final idx = clubOrdinal(clubId);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
   }
 
@@ -112,8 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         if (idx >= 0) clubId = events[idx].clubId;
     }
     if (clubId == null) return null;
-    final ci = clubs.indexWhere((c) => c.id == clubId);
-    return ci >= 0 ? clubs[ci] : null;
+    return clubForId(clubId);
   }
 
   void _openTarget(AppNotification n) {

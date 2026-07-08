@@ -18,6 +18,7 @@ import '../services/event_access.dart';
 import '../services/supabase_club_service.dart';
 import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import 'club_insights_screen.dart';
@@ -219,6 +220,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   @override
   Widget build(BuildContext context) {
     final memberCount = clubMemberCount(widget.club.id);
+    // Each getter filters+sorts a global list; capture once per build instead
+    // of evaluating twice (stat cells + tab views). No UserState mutation can
+    // change posts/events, so the captured values can't go stale within a
+    // build (same reasoning as the memberCount local above).
+    final clubPosts = _clubPosts;
+    final clubEvents = _clubEvents;
+    final taggedPosts = _taggedPosts;
+    final partnerClubs = _partnerClubs;
     final bg = AppColors.background;
     final borderColor = _clubPageBorder(context);
     final subText = AppColors.secondaryText;
@@ -287,6 +296,12 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               // Board management now lives inside Settings.
               if (isCurrentAdminForClub(widget.club))
                 IconButton(
+                  // Only the logged-in club's own Profile tab root is a
+                  // singleton — other visits to this screen (e.g. via search)
+                  // must not share the same GlobalKey.
+                  key: widget.onSettings != null
+                      ? tutorialAnchors.keyFor(TutorialAnchors.clubInsights)
+                      : null,
                   icon: Icon(
                     Icons.insights_rounded,
                     color: panelText,
@@ -304,6 +319,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 ),
               if (widget.onSettings != null)
                 IconButton(
+                  key: tutorialAnchors.keyFor(
+                    TutorialAnchors.clubProfileSettings,
+                  ),
                   icon: Icon(
                     Icons.settings_outlined,
                     color: panelText,
@@ -394,7 +412,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                       MainAxisAlignment.spaceAround,
                                   children: [
                                     _StatCell(
-                                      value: '${_clubPosts.length}',
+                                      value: '${clubPosts.length}',
                                       label: 'Posts',
                                       dark: true,
                                     ),
@@ -415,7 +433,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                       color: borderColor,
                                     ),
                                     _StatCell(
-                                      value: '${_clubEvents.length}',
+                                      value: '${clubEvents.length}',
                                       label: 'Events',
                                       dark: true,
                                     ),
@@ -540,6 +558,10 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             pinned: true,
             delegate: _StickyTabBarDelegate(
               TabBar(
+                // Same singleton guard as the insights/settings icons above.
+                key: widget.onSettings != null
+                    ? tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs)
+                    : null,
                 controller: _tabController,
                 labelColor: AppColors.primaryRed,
                 unselectedLabelColor: subText,
@@ -563,7 +585,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
           controller: _tabController,
           children: [
             _PostsTab(
-              posts: _clubPosts,
+              posts: clubPosts,
               club: widget.club,
               clubColor: widget.color,
               isAdmin: _isThisClubAdmin,
@@ -572,7 +594,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               },
             ),
             _EventsTab(
-              events: _clubEvents,
+              events: clubEvents,
               monthAbbr: _monthAbbr,
               clubColor: widget.color,
               isAdmin: _isThisClubAdmin,
@@ -581,8 +603,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               },
             ),
             _CollaborationsTab(
-              taggedPosts: _taggedPosts,
-              partnerClubs: _partnerClubs,
+              taggedPosts: taggedPosts,
+              partnerClubs: partnerClubs,
               thisClub: widget.club,
               clubColor: widget.color,
               timeAgo: _timeAgo,
@@ -1635,7 +1657,7 @@ class _CollaborationsTab extends StatelessWidget {
     Color borderColor,
     Color strongBorderColor,
   ) {
-    final color = _colors[clubs.indexOf(club) % _colors.length];
+    final color = _colors[clubOrdinal(club.id) % _colors.length];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: GestureDetector(
@@ -1719,11 +1741,8 @@ class _CollaborationsTab extends StatelessWidget {
     Color cardColor,
     Color borderColor,
   ) {
-    final authorClub = clubs.firstWhere(
-      (c) => c.id == post.clubId,
-      orElse: () => clubs.first,
-    );
-    final color = _colors[clubs.indexOf(authorClub) % _colors.length];
+    final authorClub = clubForId(post.clubId as String) ?? clubs.first;
+    final color = _colors[clubOrdinal(authorClub.id) % _colors.length];
     final likeCount = postLikeCount(post.id as String);
     final hasImage =
         post.imagePath != null && (post.imagePath as String).isNotEmpty;
@@ -1996,8 +2015,10 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
+  // No tabBar term: a fresh (non-const) TabBar instance is built every parent
+  // rebuild, so comparing instances made this always-true. The TabBar's config
+  // is static per theme, and theme flips still rebuild via the color terms.
   bool shouldRebuild(_StickyTabBarDelegate old) =>
-      old.tabBar != tabBar ||
       old.backgroundColor != backgroundColor ||
       old.borderColor != borderColor ||
       old.height != height;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/comment.dart';
@@ -95,6 +97,41 @@ class ContentStore extends ChangeNotifier {
     target
       ..clear()
       ..addAll((raw as List).map(fromRaw));
+  }
+
+  // ── Debounced persistence ────────────────────────────────────────────────────
+  // Each like/RSVP/comment/share tap used to re-serialize its ENTIRE list to
+  // Hive on the main isolate (a rollback re-serialized it twice). Interaction
+  // handlers call [scheduleSave] instead: dirty kinds coalesce and flush 1s
+  // after the last mutation. The Supabase write still happens per-tap — only
+  // this local mirror is coalesced — and app pause/detach and logout flush
+  // through saveAll, so a hard crash inside the window loses at most 1s of
+  // local mirror that the next launch re-derives from Supabase anyway.
+
+  Timer? _saveDebounce;
+  final Set<String> _dirtyKinds = {};
+
+  void scheduleSave(String kind) {
+    _dirtyKinds.add(kind);
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 1), () {
+      unawaited(flushPendingSaves());
+    });
+  }
+
+  Future<void> flushPendingSaves() async {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    if (!_initialized || _dirtyKinds.isEmpty) return;
+    final kinds = Set.of(_dirtyKinds);
+    _dirtyKinds.clear();
+    await Future.wait([
+      if (kinds.contains('posts')) saveNewsPosts(),
+      if (kinds.contains('events')) saveEvents(),
+      if (kinds.contains('comments')) saveComments(),
+      if (kinds.contains('likes')) saveLikes(),
+      if (kinds.contains('shares')) saveShares(),
+    ]);
   }
 
   // ── Save helpers ─────────────────────────────────────────────────────────────
@@ -246,6 +283,13 @@ class ContentStore extends ChangeNotifier {
   // ── Save everything at once ───────────────────────────────────────────────────
 
   Future<void> saveAll(List<AppNotification> dynamicNotifs) async {
+    // Everything below rewrites the debounced kinds anyway.
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    _dirtyKinds.clear();
+    // Boxes open in the background after first paint; a lifecycle pause on
+    // the login screen can land here before they're ready.
+    if (!_initialized) return;
     await Future.wait([
       saveNewsPosts(),
       saveEvents(),

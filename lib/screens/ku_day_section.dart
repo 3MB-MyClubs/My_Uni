@@ -32,7 +32,7 @@ const _kColors = [
 ];
 
 Color _colorFor(String id) {
-  final idx = clubs.indexWhere((c) => c.id == id);
+  final idx = clubOrdinal(id);
   return _kColors[(idx < 0 ? math.Random(id.hashCode).nextInt(6) : idx) %
       _kColors.length];
 }
@@ -672,10 +672,7 @@ class _PersonBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final sharedClubs = user.subscribedClubIds
         .where(userState.followedClubIds.contains)
-        .map(
-          (id) =>
-              clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first),
-        )
+        .map((id) => clubForId(id) ?? clubs.first)
         .take(2)
         .map((c) => _shortClubName(c.name))
         .join(', ');

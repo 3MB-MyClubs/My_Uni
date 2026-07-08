@@ -30,19 +30,18 @@ class ClubFollowService {
     final client = _client;
     if (client == null || userId.isEmpty || clubId.isEmpty) return;
 
-    final existing = await client
-        .from('club_followers')
-        .select('id')
-        .eq('profile_id', userId)
-        .eq('club_id', clubId)
-        .limit(1);
-    if (existing.isNotEmpty) return;
-
-    await client.from('club_followers').insert({
-      'profile_id': userId,
-      'club_id': clubId,
-      'role': 'member',
-    });
+    // Insert-ignoring-duplicate: one round trip instead of check-then-insert,
+    // and an existing row (e.g. a board_member role) is left untouched.
+    try {
+      await client.from('club_followers').insert({
+        'profile_id': userId,
+        'club_id': clubId,
+        'role': 'member',
+      });
+    } on PostgrestException catch (error) {
+      if (error.code == '23505') return;
+      rethrow;
+    }
   }
 
   Future<void> unfollowClub({

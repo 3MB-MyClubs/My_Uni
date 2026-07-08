@@ -50,7 +50,7 @@ Color _clubColor(String clubId) {
     Color(0xFF4527A0),
     Color(0xFFC62828),
   ];
-  final idx = clubs.indexWhere((c) => c.id == clubId);
+  final idx = clubOrdinal(clubId);
   return colors[(idx < 0 ? 0 : idx) % colors.length];
 }
 
@@ -326,7 +326,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
+    final topPad = MediaQuery.paddingOf(context).top;
     final results = _results();
     final newEventCount = _newUnopenedEvents().length;
     final searching = _query.trim().isNotEmpty;
@@ -564,7 +564,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
             SliverToBoxAdapter(
               child: SizedBox(
-                height: MediaQuery.of(context).padding.bottom + 90,
+                height: MediaQuery.paddingOf(context).bottom + 90,
               ),
             ),
           ],
@@ -831,7 +831,7 @@ class _AudienceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(20, 10, 20, bottom + 20),
       decoration: BoxDecoration(
@@ -1118,7 +1118,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     final today = _todayDate;
     final weeks = _weeks;
 
@@ -1894,10 +1894,10 @@ class _NewEventsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.74,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.74,
       ),
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -1996,7 +1996,7 @@ class _NoNewEventsState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(28, 26, 28, bottom + 30),
       child: Column(
@@ -2220,13 +2220,15 @@ class _PulseDotState extends State<_PulseDot>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (ctx, child) => Container(
+    // Opacity-only repaint of a cached child (visually identical for a solid
+    // dot) instead of rebuilding the Container every animation tick.
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
         width: 6,
         height: 6,
         decoration: BoxDecoration(
-          color: widget.color.withValues(alpha: _anim.value),
+          color: widget.color,
           shape: BoxShape.circle,
         ),
       ),

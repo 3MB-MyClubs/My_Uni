@@ -40,7 +40,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   ];
 
   Color _clubColor(Club club) {
-    final idx = clubs.indexOf(club);
+    final idx = clubOrdinal(club.id);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
   }
 

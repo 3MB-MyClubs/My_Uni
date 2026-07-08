@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
+import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
@@ -82,6 +83,9 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
       _isSubmitting = true;
     });
+    // Post-login screens read Hive boxes that open in the background after
+    // first paint; by the time credentials are typed this is a no-op.
+    await appBootstrap.ready;
     final success = await authService.loginStudent(email, password);
     if (!mounted) return;
     if (success) {

@@ -86,7 +86,6 @@ class _ExploreScreenState extends State<ExploreScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
-    _tabController.addListener(() => setState(() {}));
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
     _loadClubContent();
@@ -350,9 +349,17 @@ class _ExploreScreenState extends State<ExploreScreen>
       ),
       body: ListenableBuilder(
         listenable: userState,
+        // Builder defers each tab's filter/sort work from children-list
+        // construction to the page actually building — TabBarView only builds
+        // the visible page (plus its neighbor mid-swipe), so only that tab
+        // recomputes on a userState notify instead of all three.
         builder: (context, _) => TabBarView(
           controller: _tabController,
-          children: [_buildClubsTab(), _buildContentTab(), _buildPeopleTab()],
+          children: [
+            Builder(builder: (_) => _buildClubsTab()),
+            Builder(builder: (_) => _buildContentTab()),
+            Builder(builder: (_) => _buildPeopleTab()),
+          ],
         ),
       ),
     );
@@ -550,7 +557,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                     16,
                     0,
                     16,
-                    MediaQuery.of(context).padding.bottom + 112,
+                    MediaQuery.paddingOf(context).bottom + 112,
                   ),
                   itemCount: filtered.length + 1,
                   itemBuilder: (context, i) {
@@ -560,7 +567,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                       club: club,
                       category: categoryFor(club),
                       members: clubMemberCount(club.id),
-                      color: _hueFor(clubs.indexOf(club)),
+                      color: _hueFor(clubOrdinal(club.id)),
                       joined: userState.isFollowing(club.id),
                       onJoin: () => handleFollowTap(context, club.id, () {
                         _persist();
@@ -571,7 +578,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                         MaterialPageRoute(
                           builder: (_) => ClubProfileScreen(
                             club: club,
-                            color: _hueFor(clubs.indexOf(club)),
+                            color: _hueFor(clubOrdinal(club.id)),
                           ),
                         ),
                       ),
@@ -587,10 +594,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   // ─── Events tab ──────────────────────────────────────────────────────────
 
-  Club? _clubById(String id) {
-    final i = clubs.indexWhere((c) => c.id == id);
-    return i < 0 ? null : clubs[i];
-  }
+  Club? _clubById(String id) => clubForId(id);
 
   List<Event> get _filteredEvents {
     final q = _contentQuery.trim().toLowerCase();
@@ -630,7 +634,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                     16,
                     0,
                     16,
-                    MediaQuery.of(context).padding.bottom + 112,
+                    MediaQuery.paddingOf(context).bottom + 112,
                   ),
                   itemCount: matchedEvents.length + 1,
                   itemBuilder: (context, i) {
@@ -666,7 +670,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   Widget _eventResultRow(Event event) {
     final club = _clubById(event.clubId);
-    final color = _hueFor(clubs.indexWhere((c) => c.id == event.clubId));
+    final color = _hueFor(clubOrdinal(event.clubId));
     final date = event.dateTime;
     final time =
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
@@ -867,7 +871,7 @@ class _ExploreScreenState extends State<ExploreScreen>
               16,
               0,
               16,
-              MediaQuery.of(context).padding.bottom + 112,
+              MediaQuery.paddingOf(context).bottom + 112,
             ),
             physics: const AlwaysScrollableScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

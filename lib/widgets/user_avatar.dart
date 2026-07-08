@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/photo_file_cache.dart';
 import '../services/user_state.dart';
 import '../services/app_colors.dart';
 import 'loading_skeleton.dart';
@@ -56,7 +57,7 @@ class UserAvatar extends ConsumerWidget {
     // User-uploaded photo takes highest priority
     if (photoPath != null) {
       final file = File(photoPath);
-      if (file.existsSync()) {
+      if (photoFileCache.existsSync(photoPath)) {
         final imageProvider = FileImage(file);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,

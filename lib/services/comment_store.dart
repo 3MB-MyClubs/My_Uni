@@ -47,7 +47,7 @@ class CommentStore extends ChangeNotifier {
         added = true;
       }
       if (added) {
-        unawaited(contentStore.saveComments());
+        contentStore.scheduleSave('comments');
         notifyListeners();
       }
     } catch (error) {
@@ -65,7 +65,7 @@ class CommentStore extends ChangeNotifier {
   /// Removes a comment locally and remotely (best-effort).
   Future<void> remove(Comment comment) async {
     comments.removeWhere((c) => c.id == comment.id);
-    unawaited(contentStore.saveComments());
+    contentStore.scheduleSave('comments');
     notifyListeners();
 
     if (!_looksLikeUuid(comment.id)) return;

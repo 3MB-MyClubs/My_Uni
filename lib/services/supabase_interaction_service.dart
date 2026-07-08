@@ -220,11 +220,16 @@ class SupabaseInteractionService {
   }
 
   /// Remote votes for the poll attached to [postId]: profileId → optionIndex.
-  Future<Map<String, int>> fetchPollVotes(String postId) async {
+  /// A known [pollId] (carried on PollData since content load) skips the
+  /// poll-id lookup query.
+  Future<Map<String, int>> fetchPollVotes(
+    String postId, {
+    String? pollId,
+  }) async {
     final client = _client;
     if (client == null || postId.isEmpty) return const {};
 
-    final pollId = await _pollIdForPost(client, postId);
+    pollId ??= await _pollIdForPost(client, postId);
     if (pollId == null) return const {};
 
     final rows = await client
@@ -248,11 +253,12 @@ class SupabaseInteractionService {
     required String postId,
     required String profileId,
     required int optionIndex,
+    String? pollId,
   }) async {
     final client = _client;
     if (client == null || postId.isEmpty || profileId.isEmpty) return;
 
-    final pollId = await _pollIdForPost(client, postId);
+    pollId ??= await _pollIdForPost(client, postId);
     if (pollId == null) return;
 
     await client.from('poll_votes').upsert({

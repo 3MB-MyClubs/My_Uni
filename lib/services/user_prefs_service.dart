@@ -63,18 +63,18 @@ class UserPrefsService {
       } else if (k.startsWith('clubDesc_')) {
         final cid = k.substring('clubDesc_'.length);
         final desc = _box.get(k);
-        final idx = clubs.indexWhere((c) => c.id == cid);
-        if (desc != null && idx >= 0) clubs[idx].description = desc as String;
+        final club = clubForId(cid);
+        if (desc != null && club != null) club.description = desc as String;
       } else if (k.startsWith('clubName_')) {
         final cid = k.substring('clubName_'.length);
         final name = _box.get(k);
-        final idx = clubs.indexWhere((c) => c.id == cid);
-        if (name != null && idx >= 0) clubs[idx].name = name as String;
+        final club = clubForId(cid);
+        if (name != null && club != null) club.name = name as String;
       } else if (k.startsWith('clubCategory_')) {
         final cid = k.substring('clubCategory_'.length);
         final category = _box.get(k);
-        final idx = clubs.indexWhere((c) => c.id == cid);
-        if (idx >= 0) clubs[idx].categoryName = category as String?;
+        final club = clubForId(cid);
+        if (club != null) club.categoryName = category as String?;
       }
     }
     // Pinned club posts (global, set by club admins).

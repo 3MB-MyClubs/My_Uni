@@ -63,7 +63,34 @@ class ViewTracker extends ChangeNotifier {
     return users.where((u) => ids.contains(u.id)).toList();
   }
 
-  Future<void> hydratePostViewCounts(Iterable<String> postIds) async {
+  // The feed re-requests view counts on every load; the underlying rows
+  // change slowly, so repeats within the TTL are skipped (pull-to-refresh
+  // passes force) and concurrent callers join the in-flight fetch.
+  DateTime? _lastPostViewHydrate;
+  Future<void>? _inFlightHydrate;
+  static const _postViewTtl = Duration(minutes: 5);
+
+  Future<void> hydratePostViewCounts(
+    Iterable<String> postIds, {
+    bool force = false,
+  }) {
+    final last = _lastPostViewHydrate;
+    if (!force &&
+        last != null &&
+        DateTime.now().difference(last) < _postViewTtl) {
+      return Future.value();
+    }
+    final inFlight = _inFlightHydrate;
+    if (inFlight != null) return inFlight;
+
+    final future = _hydratePostViewCounts(postIds).whenComplete(() {
+      _inFlightHydrate = null;
+    });
+    _inFlightHydrate = future;
+    return future;
+  }
+
+  Future<void> _hydratePostViewCounts(Iterable<String> postIds) async {
     final client = _client;
     if (client == null) return;
 
@@ -82,6 +109,7 @@ class ViewTracker extends ChangeNotifier {
         counts[id] = (counts[id] ?? 0) + 1;
       }
       _remotePostViewCounts.addAll(counts);
+      _lastPostViewHydrate = DateTime.now();
       notifyListeners();
     } catch (_) {
       // Keep local Hive counts if Supabase view tracking is unavailable.

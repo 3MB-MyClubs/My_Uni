@@ -490,7 +490,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Color _colorForClubId(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final idx = clubOrdinal(clubId);
     return _clubColor(idx < 0 ? 0 : idx);
   }
 
@@ -1014,7 +1014,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               MaterialPageRoute(
                 builder: (_) => ClubProfileScreen(
                   club: club,
-                  color: _clubColor(clubs.indexOf(club)),
+                  color: _clubColor(clubOrdinal(club.id)),
                 ),
               ),
             ),
@@ -1032,7 +1032,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final managed = managedClubForAdmin(adminId) ?? clubs.first;
       return ClubProfileScreen(
         club: managed,
-        color: _clubColor(clubs.indexOf(managed)),
+        color: _clubColor(clubOrdinal(managed.id)),
         onSettings: () => Navigator.push(
           context,
           MaterialPageRoute(

@@ -9,11 +9,28 @@ import '../services/poll_store.dart';
 /// Poll attached to a feed post: tappable options before voting, percentage
 /// bars (plain filled containers, no chart lib) once the viewer has voted.
 /// Tapping another option changes the vote.
-class PollCard extends StatelessWidget {
+class PollCard extends StatefulWidget {
   final NewsPost post;
   final Color accent;
 
   const PollCard({super.key, required this.post, required this.accent});
+
+  @override
+  State<PollCard> createState() => _PollCardState();
+}
+
+class _PollCardState extends State<PollCard> {
+  NewsPost get post => widget.post;
+  Color get accent => widget.accent;
+
+  @override
+  void initState() {
+    super.initState();
+    // Feed polls were already seeded (votes batched at content load), making
+    // this a no-op; it only fetches for polls created after the load. Lives
+    // here rather than in the builder so rebuilds never trigger network work.
+    pollStore.hydrate(post.id, pollId: post.poll?.pollId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +42,6 @@ class PollCard extends StatelessWidget {
     return ListenableBuilder(
       listenable: pollStore,
       builder: (_, _) {
-        pollStore.hydrate(post.id);
         final myVote = userId.isEmpty
             ? null
             : pollStore.myVote(post.id, userId);

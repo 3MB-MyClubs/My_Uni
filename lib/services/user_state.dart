@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/notification.dart';
 import 'content_store.dart';
+import 'photo_file_cache.dart';
 
 // Global state singleton. Extends ChangeNotifier so any ListenableBuilder
 // that wraps a follow button will rebuild instantly when state changes,
@@ -83,12 +84,16 @@ class UserState extends ChangeNotifier {
     if (_isNetworkPath(path)) {
       unawaited(CachedNetworkImage.evictFromCache(path));
     }
+    photoFileCache.invalidate(clubPhotoPaths[clubId]);
+    photoFileCache.invalidate(path);
     clubPhotoPaths[clubId] = path;
     notifyListeners();
   }
 
   void removeClubPhoto(String clubId) {
-    if (clubPhotoPaths.remove(clubId) != null) notifyListeners();
+    final removed = clubPhotoPaths.remove(clubId);
+    photoFileCache.invalidate(removed);
+    if (removed != null) notifyListeners();
   }
 
   /// Sets the profile photo path for [userId] and notifies all listeners.
@@ -97,6 +102,8 @@ class UserState extends ChangeNotifier {
     if (_isNetworkPath(path)) {
       unawaited(CachedNetworkImage.evictFromCache(path));
     }
+    photoFileCache.invalidate(profilePhotoPaths[userId]);
+    photoFileCache.invalidate(path);
     profilePhotoPaths[userId] = path;
     notifyListeners();
   }
@@ -113,9 +120,10 @@ class UserState extends ChangeNotifier {
 
   /// Removes the profile photo for [userId] and notifies all listeners.
   void removeProfilePhoto(String userId) {
-    final removedLocal = profilePhotoPaths.remove(userId) != null;
+    final removedLocal = profilePhotoPaths.remove(userId);
+    photoFileCache.invalidate(removedLocal);
     final removedRemote = mockPhotoUrls.remove(userId) != null;
-    if (removedLocal || removedRemote) notifyListeners();
+    if (removedLocal != null || removedRemote) notifyListeners();
   }
 
   /// Sets a remote profile photo URL for [userId] and notifies all listeners.
@@ -124,6 +132,7 @@ class UserState extends ChangeNotifier {
     final localPath = profilePhotoPaths.remove(userId);
     if (localPath != null) {
       PaintingBinding.instance.imageCache.evict(FileImage(File(localPath)));
+      photoFileCache.invalidate(localPath);
     }
     if (value.isEmpty) {
       mockPhotoUrls.remove(userId);

@@ -26,6 +26,13 @@ class TutorialAnchors {
   static const String alertsMarkAllRead = 'alerts.markAllRead';
   static const String profileHeader = 'profile.header';
   static const String profileSettings = 'profile.settings';
+
+  // Club-admin-only anchors (see the club tour in main_nav_screen.dart).
+  static const String clubCreateButton = 'club.createButton';
+  static const String clubQuickComposer = 'club.quickComposer';
+  static const String clubProfileTabs = 'club.profileTabs';
+  static const String clubInsights = 'club.insights';
+  static const String clubProfileSettings = 'club.profileSettings';
 }
 
 final tutorialAnchors = TutorialAnchors();

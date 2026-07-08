@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
@@ -69,11 +70,17 @@ class _ClubSuggestion {
   const _ClubSuggestion(this.club);
 }
 
-Club? _clubById(String id) {
-  for (final club in clubs) {
-    if (club.id == id) return club;
-  }
-  return null;
+Club? _clubById(String id) => clubForId(id);
+
+/// Memoized output of the feed pipeline. The pipeline (filter + sort of all
+/// posts, three suggestion rankers, the events-rail window) used to rerun on
+/// every rebuild — theme/locale ticks, contentStore notifies, any card
+/// callback. Now it reruns only when [_FeedScreenState._feedSignature]
+/// changes; everything else costs one hash comparison.
+class _FeedCache {
+  int? sig;
+  List<dynamic>? mixed;
+  List<Event>? railShown;
 }
 
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
@@ -88,6 +95,76 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   // 0 = Following (followed clubs only), 1 = All
   int _feedTab = 1;
+
+  // At rest nothing but the scaffold background sits under the pinned glass
+  // bar, so its sigma-14 backdrop blur is visually a no-op at full GPU price.
+  // Only render the blur once content has actually scrolled under the bar —
+  // pixel-identical in both states (the translucent fill is the same).
+  bool _scrolledUnder = false;
+
+  _FeedCache? _feedCache;
+
+  /// Structural hash of every input the feed pipeline reads. Bulk hydration
+  /// clears+refills the global lists with new instances, so first/last
+  /// identity flips even at equal length; a like/unlike changes likes.length;
+  /// follows change the unordered set hashes; people-directory loads reassign
+  /// the cached lists. Theme/locale are deliberately NOT inputs. The 1-minute
+  /// bucket bounds staleness of DateTime.now()-derived output (rail window,
+  /// trending recency) — the same class of staleness it had when it only
+  /// refreshed on incidental rebuilds.
+  int _feedSignature() {
+    return Object.hash(
+      newsPosts.length,
+      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.first),
+      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.last),
+      events.length,
+      events.isEmpty ? 0 : identityHashCode(events.first),
+      clubs.length,
+      clubs.isEmpty ? 0 : identityHashCode(clubs.first),
+      likes.length,
+      shares.length,
+      _feedTab,
+      Object.hashAllUnordered(userState.followedClubIds),
+      Object.hashAllUnordered(userState.followedUserIds),
+      identityHashCode(peopleService.cachedPeople),
+      identityHashCode(peopleService.cachedFollowerIds),
+      Object.hashAllUnordered(personalizationService.interests),
+      supabaseClubMemberCounts.length,
+      supabasePostLikeCounts.length,
+      DateTime.now().millisecondsSinceEpoch ~/ 60000,
+    );
+  }
+
+  List<dynamic> _mixedFeed() {
+    final sig = _feedSignature();
+    final cache = _feedCache ??= _FeedCache();
+    if (cache.sig != sig || cache.mixed == null) {
+      cache.sig = sig;
+      cache.mixed = _buildMixedFeed(_buildFeed());
+      cache.railShown = _computeRailShown();
+      // Seeding the RSVP store belongs with the (re)computation, not with
+      // every rebuild: seedAll is idempotent and doesn't notify.
+      final userId =
+          authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+      rsvpStore.seedAll(cache.railShown!, userId);
+    }
+    return cache.mixed!;
+  }
+
+  List<Event> _computeRailShown() {
+    final now = DateTime.now();
+    final weekEnd = now.add(const Duration(days: 7));
+    final weekEvents =
+        events
+            .where(
+              (e) =>
+                  e.dateTime.isAfter(now.subtract(const Duration(hours: 2))) &&
+                  e.dateTime.isBefore(weekEnd),
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return weekEvents.take(10).toList();
+  }
 
   bool get _followedOnly => authService.isStudentSession && _feedTab == 0;
 
@@ -244,8 +321,11 @@ class _FeedScreenState extends State<FeedScreen> {
     if (mounted) setState(() {});
   }
 
-  void _hydrateVisiblePostViews() {
-    viewTracker.hydratePostViewCounts(newsPosts.map((post) => post.id));
+  void _hydrateVisiblePostViews({bool force = false}) {
+    viewTracker.hydratePostViewCounts(
+      newsPosts.map((post) => post.id),
+      force: force,
+    );
   }
 
   Future<void> _onRefresh() async {
@@ -254,8 +334,8 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (_) {
       // Keep currently loaded content if the network request fails.
     }
-    await _loadPeopleDirectory();
-    _hydrateVisiblePostViews();
+    await _loadPeopleDirectory(force: true);
+    _hydrateVisiblePostViews(force: true);
     setState(() {});
   }
 
@@ -271,13 +351,13 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  Future<void> _loadPeopleDirectory() async {
+  Future<void> _loadPeopleDirectory({bool force = false}) async {
     if (_loadingPeopleDirectory) return;
     _loadingPeopleDirectory = true;
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     try {
-      await peopleService.refreshPeopleDirectory(excludeId: myId);
+      await peopleService.refreshPeopleDirectory(excludeId: myId, force: force);
       if (mounted) setState(() {});
     } catch (_) {
       // Keep the feed usable; the card simply won't render until profiles load.
@@ -288,153 +368,162 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mixed = _buildMixedFeed(_buildFeed());
+    final mixed = _mixedFeed();
     final showFeedSkeleton = _loadingFeedContent && mixed.isEmpty;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         color: AppColors.primaryRed,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            _buildTopBar(),
-            _buildGreeting(),
-            _buildEventsRail(),
-            _buildFeedTabs(),
-            _buildComposer(),
-            if (showFeedSkeleton) ...[
-              ..._buildFeedSkeletonSlivers(),
-            ] else if (mixed.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.explore_outlined,
-                          size: 64,
-                          color: AppColors.secondaryText.withValues(
-                            alpha: 0.35,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          S.nothingHere,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          S.followClubs,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.secondaryText,
-                            height: 1.4,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () => setState(() => _feedTab = 1),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryRed,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
+        child: NotificationListener<ScrollUpdateNotification>(
+          onNotification: (n) {
+            // Vertical feed scroll only (depth 0) — not the horizontal events
+            // rail. setState fires only on threshold crossings (≤2 per
+            // gesture), and post-_FeedCache such a rebuild is just a hash
+            // compare. Top overscroll is negative, so pull-to-refresh stays
+            // unblurred.
+            if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+            final under = n.metrics.pixels > 1.0;
+            if (under != _scrolledUnder) {
+              setState(() => _scrolledUnder = under);
+            }
+            return false;
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              _buildTopBar(),
+              _buildGreeting(),
+              _buildEventsRail(),
+              _buildFeedTabs(),
+              _buildComposer(),
+              if (showFeedSkeleton) ...[
+                ..._buildFeedSkeletonSlivers(),
+              ] else if (mixed.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const _EmptyFeedArt(),
+                          const SizedBox(height: 18),
+                          Text(
+                            S.nothingHere,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(12),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            S.followClubs,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.secondaryText,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () => setState(() => _feedTab = 1),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryRed,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                              ),
+                              elevation: 0,
+                            ),
+                            icon: Icon(Icons.explore_rounded, size: 18),
+                            label: Text(
+                              S.exploreClubs,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
                               ),
                             ),
-                            elevation: 0,
                           ),
-                          icon: Icon(Icons.explore_rounded, size: 18),
-                          label: Text(
-                            S.exploreClubs,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                    child: Row(
+                      children: [
+                        Text(
+                          S.latest,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              )
-            else ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-                  child: Row(
-                    children: [
-                      Text(
-                        S.latest,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text,
-                        ),
-                      ),
-                    ],
-                  ),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final item = mixed[i];
+                    if (item is List<User>) {
+                      return _PeopleSuggestionCard(
+                        suggestions: item,
+                        onFollowed: () => setState(() {}),
+                      );
+                    }
+                    if (item is _EventSuggestion) {
+                      return _TrendingEventCard(
+                        event: item.event,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    if (item is _ClubSuggestion) {
+                      return _ClubSuggestionCard(
+                        club: item.club,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    return _buildFeedCard(item as _FeedItem, i);
+                  }, childCount: mixed.length),
                 ),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate((context, i) {
-                  final item = mixed[i];
-                  if (item is List<User>) {
-                    return _PeopleSuggestionCard(
-                      suggestions: item,
-                      onFollowed: () => setState(() {}),
-                    );
-                  }
-                  if (item is _EventSuggestion) {
-                    return _TrendingEventCard(
-                      event: item.event,
-                      onUpdate: () => setState(() {}),
-                    );
-                  }
-                  if (item is _ClubSuggestion) {
-                    return _ClubSuggestionCard(
-                      club: item.club,
-                      onUpdate: () => setState(() {}),
-                    );
-                  }
-                  return _buildFeedCard(item as _FeedItem, i);
-                }, childCount: mixed.length),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 28),
-                  child: Center(
-                    child: Text(
-                      S.endOfFeed,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.secondaryText,
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 28),
+                    child: Center(
+                      child: Text(
+                        S.endOfFeed,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.secondaryText,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).padding.bottom + 112,
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: MediaQuery.paddingOf(context).bottom + 112,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -459,7 +548,7 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
       SliverToBoxAdapter(
-        child: SizedBox(height: MediaQuery.of(context).padding.bottom + 112),
+        child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 112),
       ),
     ];
   }
@@ -489,18 +578,31 @@ class _FeedScreenState extends State<FeedScreen> {
     return SliverAppBar(
       pinned: true,
       floating: false,
-      backgroundColor: AppColors.card,
+      backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       toolbarHeight: 56,
       leading: const SizedBox.shrink(),
       leadingWidth: 0,
       titleSpacing: 0,
+      // Blurred glass bar: the translucent fill lives inside the blur layer so
+      // scrolled content stays readable through it. The blur only renders once
+      // content is under the bar (identical fill either way — same pixels at
+      // rest, no per-frame backdrop readback while idle), and .grouped shares
+      // one backdrop snapshot with the bottom nav's blur while scrolling.
+      flexibleSpace: ClipRect(
+        child: _scrolledUnder
+            ? BackdropFilter.grouped(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(color: AppColors.card.withValues(alpha: 0.72)),
+              )
+            : Container(color: AppColors.card.withValues(alpha: 0.72)),
+      ),
       title: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           children: [
-            // UniHub logotype
+            // UniHub logotype — "Uni" in maroon, "Hub" in foreground, gold dot.
             RichText(
               text: TextSpan(
                 children: [
@@ -509,7 +611,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.text,
+                      color: AppColors.primaryRed,
                       letterSpacing: -0.8,
                     ),
                   ),
@@ -517,62 +619,40 @@ class _FeedScreenState extends State<FeedScreen> {
                     text: 'Hub',
                     style: TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text,
                       letterSpacing: -0.8,
                     ),
                   ),
                 ],
               ),
             ),
-            const Spacer(),
-            // Bell button with unread badge
-            ListenableBuilder(
-              listenable: userState,
-              builder: (_, x) => GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => NotificationsScreen()),
-                ),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Center(
-                        child: Icon(
-                          Icons.notifications_none_rounded,
-                          size: 18,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      if (userState.unreadNotifications > 0)
-                        Positioned(
-                          top: 7,
-                          right: 8,
-                          child: Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryRed,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.card,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+            Padding(
+              padding: const EdgeInsets.only(left: 3, bottom: 12),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: AppColors.accentGold,
+                  shape: BoxShape.circle,
                 ),
               ),
+            ),
+            const Spacer(),
+            // Bell button with unread-count badge
+            ListenableBuilder(
+              listenable: userState,
+              builder: (_, x) {
+                final unread = userState.unreadNotifications;
+                return _TopBarIconButton(
+                  icon: Icons.notifications_none_rounded,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => NotificationsScreen()),
+                  ),
+                  badgeCount: unread,
+                );
+              },
             ),
           ],
         ),
@@ -597,46 +677,40 @@ class _FeedScreenState extends State<FeedScreen> {
         : h < 17
         ? S.goodAfternoon
         : S.goodEvening;
+    final isAdmin = authService.currentAdmin != null;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                  letterSpacing: -1.0,
+                  height: 1.15,
+                ),
+                children: [
+                  TextSpan(text: '$greet, '),
+                  TextSpan(
+                    text: _greetingName,
+                    style: const TextStyle(color: AppColors.primaryRed),
+                  ),
+                  const TextSpan(text: ' 👋'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 5),
             Text(
-              '$greet,',
+              isAdmin ? S.membersHappening : S.campusHappening,
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.secondaryText,
                 fontWeight: FontWeight.w500,
                 letterSpacing: -0.1,
-              ),
-            ),
-            const SizedBox(height: 2),
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: _greetingName,
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                      letterSpacing: -1.2,
-                      height: 1.02,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '.',
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryRed,
-                      letterSpacing: -1.2,
-                      height: 1.02,
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -647,26 +721,13 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── This Week events rail ─────────────────────────────────────────────────
   SliverToBoxAdapter _buildEventsRail() {
-    final now = DateTime.now();
-    final weekEnd = now.add(const Duration(days: 7));
-    final weekEvents =
-        events
-            .where(
-              (e) =>
-                  e.dateTime.isAfter(now.subtract(const Duration(hours: 2))) &&
-                  e.dateTime.isBefore(weekEnd),
-            )
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    // Computed (and the RSVP store seeded) in _mixedFeed, once per data
+    // change; build() runs _mixedFeed first so the cache is always warm here.
+    final shown = _feedCache?.railShown ?? const <Event>[];
 
-    if (weekEvents.isEmpty) {
+    if (shown.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
-
-    final shown = weekEvents.take(10).toList();
-    final userId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    rsvpStore.seedAll(shown, userId);
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -677,29 +738,60 @@ class _FeedScreenState extends State<FeedScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    S.thisWeek,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: AppColors.secondaryText,
-                      letterSpacing: 0.9,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          S.thisWeek,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppColors.accentGold,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          S.eventsOnCampus,
+                          style: TextStyle(
+                            fontSize: 19,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
                   GestureDetector(
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
                     ),
-                    child: Text(
-                      S.seeAll,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.1,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            S.seeAll,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.primaryRed,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 13,
+                            color: AppColors.primaryRed,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -742,52 +834,74 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // tab 0 = Following, tab 1 = All
-    final tabs = [('following', S.following), ('all', S.all)];
+    // tab 0 = Following, tab 1 = All — pill segmented control with a sliding
+    // maroon thumb (300ms ease-out) behind the active label.
+    final labels = [S.following, S.all];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-        child: Row(
-          children: [
-            Row(
-              key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
-              children: tabs.asMap().entries.map((entry) {
-                final i = entry.key;
-                final label = entry.value.$2;
-                final active = _feedTab == i;
-                return GestureDetector(
-                  onTap: () => setState(() => _feedTab = i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 13,
-                      vertical: 5,
-                    ),
+        child: Container(
+          key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
+          height: 42,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.all(Radius.circular(100)),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Stack(
+            children: [
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                alignment: _feedTab == 0
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
+                child: FractionallySizedBox(
+                  widthFactor: 0.5,
+                  heightFactor: 1,
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: active ? AppColors.primaryRed : Colors.transparent,
+                      color: AppColors.primaryRed,
                       borderRadius: BorderRadius.all(Radius.circular(100)),
-                      border: Border.all(
-                        color: active
-                            ? AppColors.primaryRed
-                            : AppColors.divider.withValues(alpha: 1.4),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: active ? Colors.white : AppColors.secondaryText,
-                        letterSpacing: -0.1,
-                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryRed.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-          ],
+                ),
+              ),
+              Row(
+                children: [
+                  for (var i = 0; i < labels.length; i++)
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _feedTab = i),
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 250),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _feedTab == i
+                                  ? Colors.white
+                                  : AppColors.secondaryText,
+                              letterSpacing: -0.1,
+                            ),
+                            child: Text(labels[i]),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -808,6 +922,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
     return SliverToBoxAdapter(
       child: Padding(
+        key: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
         child: _QuickPostComposer(
           club: club,
@@ -832,6 +947,141 @@ class _FeedScreenState extends State<FeedScreen> {
       post: item.data as NewsPost,
       score: item.score,
       rank: rank,
+    );
+  }
+}
+
+/// Empty-feed illustration: a tilted cluster of three icon tiles with a gold
+/// sparkle badge, matching the design's Following-tab empty state.
+class _EmptyFeedArt extends StatelessWidget {
+  const _EmptyFeedArt();
+
+  Widget _tile(IconData icon, {double angle = 0, bool raised = false}) {
+    return Transform.rotate(
+      angle: angle,
+      child: Transform.translate(
+        offset: Offset(0, raised ? -8 : 0),
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: raised ? AppColors.lightRed : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+            border: Border.all(
+              color: raised
+                  ? AppColors.primaryRed.withValues(alpha: 0.25)
+                  : AppColors.divider,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: raised ? AppColors.primaryRed : AppColors.secondaryText,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _tile(Icons.calendar_today_rounded, angle: -0.14),
+            const SizedBox(width: 2),
+            _tile(Icons.people_alt_rounded, raised: true),
+            const SizedBox(width: 2),
+            _tile(Icons.image_rounded, angle: 0.14),
+          ],
+        ),
+        Positioned(
+          top: -16,
+          right: -8,
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: AppColors.accentGold.withValues(alpha: 0.18),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.accentGold.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 13,
+              color: AppColors.accentGold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Squared glass icon button used in the UniHub top bar (theme toggle, bell).
+/// [badgeCount] > 0 shows a maroon unread-count pill on the top-right corner.
+class _TopBarIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final int badgeCount;
+
+  const _TopBarIconButton({
+    required this.icon,
+    required this.onTap,
+    this.badgeCount = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.background.withValues(alpha: 0.65),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(child: Icon(icon, size: 18, color: AppColors.text)),
+            if (badgeCount > 0)
+              Positioned(
+                top: -5,
+                right: -5,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: BorderRadius.all(Radius.circular(100)),
+                    border: Border.all(color: AppColors.card, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    badgeCount > 9 ? '9+' : '$badgeCount',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1033,7 +1283,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
             child: Row(
               children: [
                 Icon(
@@ -1054,7 +1304,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
             ),
           ),
           SizedBox(
-            height: 258,
+            height: 225,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1091,7 +1341,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                           : 'Mutual friend: $mutualName + ${mutualCount - 1} more');
 
                 return SizedBox(
-                  width: 164,
+                  width: 148,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 260),
                     switchInCurve: Curves.easeOutCubic,
@@ -1147,8 +1397,8 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                           UserAvatar(
                                             userId: u.id,
                                             name: u.name,
-                                            size: 78,
-                                            fontSize: 29,
+                                            size: 72,
+                                            fontSize: 27,
                                             backgroundColor: color.withValues(
                                               alpha: 0.15,
                                             ),
@@ -1205,7 +1455,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       ),
                                     ),
                                   ),
-                                  SizedBox(height: mutualCount > 0 ? 15 : 8),
+                                  SizedBox(height: mutualCount > 0 ? 14 : 6),
                                   GestureDetector(
                                     onTap: () => Navigator.push(
                                       context,
@@ -1220,7 +1470,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       overflow: TextOverflow.ellipsis,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        fontSize: 14,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.text,
                                       ),
@@ -1399,7 +1649,7 @@ class _TrendingEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final club = _clubById(event.clubId);
     if (club == null) return const SizedBox.shrink();
-    final idx = clubs.indexOf(club);
+    final idx = clubOrdinal(club.id);
     final color = _colors[idx % _colors.length];
     final dt = event.dateTime;
     const mo = [
@@ -1564,7 +1814,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
   @override
   Widget build(BuildContext context) {
     final c = widget.club;
-    final idx = clubs.indexOf(c);
+    final idx = clubOrdinal(c.id as String);
     final color = _colors[idx < 0 ? 0 : idx % _colors.length];
     final memberCount = clubMemberCount(c.id as String);
     final matches = personalizationService.interestMatchCount(c.id as String);
@@ -2059,7 +2309,7 @@ const List<Color> _clubColors = [
 ];
 
 Color _colorForClub(String clubId) {
-  final idx = clubs.indexWhere((c) => c.id == clubId);
+  final idx = clubOrdinal(clubId);
   return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
 }
 
@@ -2097,7 +2347,7 @@ void _openShareSheet(
         createdAt: DateTime.now(),
       ),
     );
-    contentStore.saveShares();
+    contentStore.scheduleSave('shares');
     onShared();
   }
 
@@ -2123,10 +2373,7 @@ void _openShareSheet(
 bool _isOwnerOfClub(String clubId) {
   final admin = authService.currentAdmin;
   if (admin == null) return false;
-  final club = clubs.firstWhere(
-    (c) => c.id == clubId,
-    orElse: () => clubs.first,
-  );
+  final club = clubForId(clubId) ?? clubs.first;
   return clubIsManagedByAdmin(club, admin.id);
 }
 
@@ -3138,11 +3385,8 @@ class _EventRailCardState extends State<_EventRailCard> {
   @override
   Widget build(BuildContext context) {
     final ev = widget.event;
-    final club = clubs.firstWhere(
-      (c) => c.id == ev.clubId,
-      orElse: () => clubs.first,
-    );
-    final idx = clubs.indexOf(club);
+    final club = clubForId(ev.clubId) ?? clubs.first;
+    final idx = clubOrdinal(club.id);
     final color = _colors[idx < 0 ? 0 : idx % _colors.length];
     final now = DateTime.now();
     final isLive = ev.dateTime.isBefore(now) && ev.endTime.isAfter(now);

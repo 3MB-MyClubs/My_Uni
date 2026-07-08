@@ -808,7 +808,7 @@ class _AdminHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = AppColors.background;
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
-    final topInset = MediaQuery.of(context).padding.top;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return SizedBox(
       height: 340,
@@ -1250,7 +1250,7 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = AppColors.background;
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
-    final topInset = MediaQuery.of(context).padding.top;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return SizedBox(
       height: 360,

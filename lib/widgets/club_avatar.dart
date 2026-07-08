@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/mock_data.dart';
+import '../services/photo_file_cache.dart';
 import '../services/user_state.dart';
 import 'loading_skeleton.dart';
 import 'profile_photo_viewer.dart';
@@ -74,7 +75,7 @@ class ClubAvatar extends ConsumerWidget {
     }
 
     final file = photoPath != null ? File(photoPath) : null;
-    if (file != null && file.existsSync()) {
+    if (file != null && photoFileCache.existsSync(photoPath!)) {
       return _photo(context, FileImage(file), isCircle);
     }
 

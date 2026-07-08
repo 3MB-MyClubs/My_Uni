@@ -4,6 +4,7 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import 'mock_data.dart';
+import 'poll_store.dart';
 import 'supabase_config.dart';
 import 'supabase_club_service.dart';
 import 'user_state.dart';
@@ -80,17 +81,41 @@ class SupabaseContentService {
     final nextPostLikeCounts = <String, int>{};
     final nextEventRsvpIds = <String, List<String>>{};
 
-    try {
-      final rows = await client
+    // The three reads are independent — fire them together instead of one
+    // after another. A null result stands in for the branch's old catch
+    // fallback, so per-branch degradation is unchanged.
+    final eventIds = events.map((e) => e.id).toList();
+    final results = await Future.wait<List<dynamic>?>([
+      client
           .from('club_member_counts')
-          .select('club_id, member_count');
-      for (final row in rows) {
+          .select('club_id, member_count')
+          .then<List<dynamic>?>((rows) => rows)
+          .catchError((_) => null),
+      client
+          .from('post_like_counts')
+          .select('post_id, like_count')
+          .then<List<dynamic>?>((rows) => rows)
+          .catchError((_) => null),
+      if (eventIds.isEmpty)
+        Future<List<dynamic>?>.value(const [])
+      else
+        client
+            .from('event_rsvps')
+            .select('event_id, profile_id')
+            .inFilter('event_id', eventIds)
+            .then<List<dynamic>?>((rows) => rows)
+            .catchError((_) => null),
+    ]);
+
+    final memberRows = results[0];
+    if (memberRows != null) {
+      for (final row in memberRows) {
         final raw = row as Map;
         final clubId = raw['club_id']?.toString() ?? '';
         final count = int.tryParse(raw['member_count']?.toString() ?? '') ?? 0;
         if (clubId.isNotEmpty) nextMemberCounts[clubId] = count;
       }
-    } catch (_) {
+    } else {
       nextMemberCounts.addAll(supabaseClubMemberCounts);
     }
 
@@ -99,37 +124,28 @@ class SupabaseContentService {
       if (current < 1) nextMemberCounts[clubId] = 1;
     }
 
-    try {
-      final rows = await client
-          .from('post_like_counts')
-          .select('post_id, like_count');
-      for (final row in rows) {
+    final likeRows = results[1];
+    if (likeRows != null) {
+      for (final row in likeRows) {
         final raw = row as Map;
         final postId = raw['post_id']?.toString() ?? '';
         final count = int.tryParse(raw['like_count']?.toString() ?? '') ?? 0;
         if (postId.isNotEmpty) nextPostLikeCounts[postId] = count;
       }
-    } catch (_) {
+    } else {
       nextPostLikeCounts.addAll(supabasePostLikeCounts);
     }
 
-    final eventIds = events.map((e) => e.id).toList();
-    try {
-      if (eventIds.isNotEmpty) {
-        final rows = await client
-            .from('event_rsvps')
-            .select('event_id, profile_id')
-            .inFilter('event_id', eventIds);
-        for (final row in rows) {
-          final raw = row as Map;
-          final eventId = raw['event_id']?.toString() ?? '';
-          final profileId = raw['profile_id']?.toString() ?? '';
-          if (eventId.isEmpty || profileId.isEmpty) continue;
-          (nextEventRsvpIds[eventId] ??= []).add(profileId);
-        }
+    // null (fetch failed) keeps existing event attendee ids, as before.
+    final rsvpRows = results[2];
+    if (rsvpRows != null) {
+      for (final row in rsvpRows) {
+        final raw = row as Map;
+        final eventId = raw['event_id']?.toString() ?? '';
+        final profileId = raw['profile_id']?.toString() ?? '';
+        if (eventId.isEmpty || profileId.isEmpty) continue;
+        (nextEventRsvpIds[eventId] ??= []).add(profileId);
       }
-    } catch (_) {
-      // Keep existing event attendee ids if the RSVP table is unavailable.
     }
 
     for (final event in events) {
@@ -328,7 +344,7 @@ class SupabaseContentService {
     try {
       final rows = await client
           .from('polls')
-          .select('post_id, question, options')
+          .select('id, post_id, question, options')
           .inFilter('post_id', posts.map((p) => p.id).toList());
 
       final pollsByPostId = <String, PollData>{};
@@ -340,9 +356,14 @@ class SupabaseContentService {
         pollsByPostId[postId] = PollData(
           question: map['question']?.toString() ?? '',
           options: options.map((o) => o.toString()).toList(),
+          pollId: map['id']?.toString(),
         );
       }
       if (pollsByPostId.isEmpty) return posts;
+
+      // One batched poll_votes query for every poll on the feed, instead of
+      // two queries per poll card at render time.
+      await _seedPollVotes(client, pollsByPostId);
 
       return [
         for (final post in posts)
@@ -364,6 +385,44 @@ class SupabaseContentService {
       ];
     } catch (_) {
       return posts;
+    }
+  }
+
+  /// Batch-fetches every feed poll's votes in one query and seeds them into
+  /// [pollStore], so poll cards render without issuing their own per-card
+  /// hydrate queries. Degrades independently of poll attachment.
+  Future<void> _seedPollVotes(
+    SupabaseClient client,
+    Map<String, PollData> pollsByPostId,
+  ) async {
+    try {
+      final postIdByPollId = <String, String>{
+        for (final entry in pollsByPostId.entries)
+          if (entry.value.pollId != null) entry.value.pollId!: entry.key,
+      };
+      if (postIdByPollId.isEmpty) return;
+
+      final rows = await client
+          .from('poll_votes')
+          .select('poll_id, profile_id, option_index')
+          .inFilter('poll_id', postIdByPollId.keys.toList());
+
+      final votesByPostId = <String, Map<String, int>>{
+        for (final postId in pollsByPostId.keys) postId: {},
+      };
+      for (final row in rows) {
+        final map = row as Map;
+        final postId = postIdByPollId[map['poll_id']?.toString() ?? ''];
+        final profileId = map['profile_id']?.toString() ?? '';
+        final optionIndex = map['option_index'];
+        if (postId == null || profileId.isEmpty || optionIndex is! int) {
+          continue;
+        }
+        votesByPostId[postId]![profileId] = optionIndex;
+      }
+      pollStore.seedRemoteVotes(votesByPostId);
+    } catch (_) {
+      // Poll cards fall back to their own lazy hydrate.
     }
   }
 

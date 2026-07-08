@@ -4,13 +4,23 @@ class PollData {
   final String question;
   final List<String> options;
 
-  const PollData({required this.question, required this.options});
+  /// Supabase `polls.id` when known (attached at content load). Lets vote
+  /// reads/writes skip the extra poll-id lookup query. Null for local polls
+  /// composed in-app and for data persisted before this field existed.
+  final String? pollId;
 
-  Map<String, dynamic> toMap() => {'question': question, 'options': options};
+  const PollData({required this.question, required this.options, this.pollId});
+
+  Map<String, dynamic> toMap() => {
+    'question': question,
+    'options': options,
+    if (pollId != null) 'pollId': pollId,
+  };
 
   factory PollData.fromMap(Map<String, dynamic> m) => PollData(
     question: m['question'] as String,
     options: List<String>.from(m['options'] as List),
+    pollId: m['pollId'] as String?,
   );
 }
 

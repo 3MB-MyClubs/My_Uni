@@ -52,7 +52,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       Color(0xFF4527A0),
       Color(0xFFC62828),
     ];
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final idx = clubOrdinal(clubId);
     return colors[(idx < 0 ? 0 : idx) % colors.length];
   }
 
