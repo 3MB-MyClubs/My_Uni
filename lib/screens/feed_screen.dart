@@ -748,7 +748,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           S.thisWeek,
                           style: TextStyle(
                             fontSize: 10.5,
-                            color: AppColors.accentGold,
+                            color: AppColors.secondaryText,
                             letterSpacing: 1.4,
                             fontWeight: FontWeight.w800,
                           ),
