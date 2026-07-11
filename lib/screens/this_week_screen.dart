@@ -13,7 +13,7 @@ import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../services/tutorial_anchors.dart';
-import '../widgets/club_avatar.dart';
+import '../widgets/event_cover_image.dart';
 import 'event_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,12 +90,6 @@ String _shortDay(DateTime d) {
   if (_isDateToday(d)) return S.today;
   if (_isDateTomorrow(d)) return S.tomorrow;
   return '${_kWeekdays[d.weekday].substring(0, 3)} ${d.day}';
-}
-
-String _relativeDay(DateTime d) {
-  if (_isDateToday(d)) return S.today;
-  if (_isDateTomorrow(d)) return S.tomorrow;
-  return _kWeekdays[d.weekday].substring(0, 3);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1355,225 +1349,199 @@ class _WeekEventRow extends StatelessWidget {
     this.rsvpAnchorKey,
   });
 
+  String _dateTimeChipLabel() {
+    if (_isLive(event)) return 'LIVE · ${_timeStr(event.dateTime)}';
+    if (_isDateToday(event.dateTime)) {
+      return '${S.today} · ${_timeStr(event.dateTime)}';
+    }
+    if (_isDateTomorrow(event.dateTime)) {
+      return '${S.tomorrow} · ${_timeStr(event.dateTime)}';
+    }
+    return '${_kWeekdays[event.dateTime.weekday].substring(0, 3)}. ${_timeStr(event.dateTime)}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
     final live = _isLive(event);
     final canSeeAttendance = canViewEventAttendance(event);
+    final rsvpPill = rsvpAnchorKey == null
+        ? _WeekRsvpPill(event: event)
+        : KeyedSubtree(
+            key: rsvpAnchorKey,
+            child: _WeekRsvpPill(event: event),
+          );
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(18)),
+          borderRadius: BorderRadius.all(Radius.circular(22)),
           border: Border.all(
             color: live
                 ? AppColors.primaryRed.withValues(alpha: 0.5)
-                : AppColors.divider,
+                : AppColors.primaryRed.withValues(
+                    alpha: themeService.isDark ? 0.34 : 0.18,
+                  ),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: themeService.isDark ? 0.22 : 0.06,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClubAvatar(
-                  clubId: club.id,
-                  clubName: club.name,
-                  color: color,
-                  imageUrl: club.logoUrl,
-                  size: 46,
-                  fontSize: 19,
-                  shape: 'rounded',
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              club.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.secondaryText,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (live)
-                            const _LiveBadge()
-                          else
-                            Text(
-                              _relativeDay(event.dateTime),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.secondaryText,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
+            SizedBox(
+              height: 150,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  EventCoverImage(
+                    event: event,
+                    color: color,
+                    width: double.infinity,
+                    height: 150,
+                    cacheWidth: 700,
+                    cacheHeight: 300,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.46),
                         ],
                       ),
-                      const SizedBox(height: 3),
-                      SizedBox(
-                        height: 38.4,
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Text(
-                            event.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.text,
-                              letterSpacing: -0.4,
-                              height: 1.2,
-                            ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 12,
+                    top: 11,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.68),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Text(
+                        _dateTimeChipLabel(),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.text,
+                      letterSpacing: -0.42,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                            letterSpacing: -0.1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _Pill(
-                            label: _shortDay(event.dateTime),
-                            fg: color,
-                            bg: color.withValues(alpha: 0.12),
+                      if (authService.isStudentSession) ...[
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 92,
+                          height: 34,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: rsvpPill,
                           ),
-                          if (canSeeAttendance) ...[
-                            const SizedBox(width: 7),
-                            _Pill(
-                              label:
-                                  '${event.attendeeUserIds.length} attending',
-                              icon: Icons.people_outline,
-                              fg: AppColors.secondaryText,
-                              bg: Colors.transparent,
-                              border: true,
-                            ),
-                          ],
-                        ],
-                      ),
+                        ),
+                      ],
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 13,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    event.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 13,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  live
-                      ? 'Now · ${_timeStr(event.dateTime)}'
-                      : _timeStr(event.dateTime),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 92,
-                  height: 34,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: rsvpAnchorKey == null
-                        ? _WeekRsvpPill(event: event)
-                        : KeyedSubtree(
-                            key: rsvpAnchorKey,
-                            child: _WeekRsvpPill(event: event),
+                  if (canSeeAttendance) ...[
+                    const SizedBox(height: 9),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(color: color.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 13,
+                            color: color.withValues(alpha: 0.9),
                           ),
-                  ),
-                ),
-              ],
+                          const SizedBox(width: 5),
+                          Text(
+                            '${event.attendeeUserIds.length} attending',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: color.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  final String label;
-  final Color fg;
-  final Color bg;
-  final IconData? icon;
-  final bool border;
-
-  const _Pill({
-    required this.label,
-    required this.fg,
-    required this.bg,
-    this.icon,
-    this.border = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.all(Radius.circular(100)),
-        border: border ? Border.all(color: AppColors.divider) : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 11, color: fg),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: fg,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1672,41 +1640,6 @@ class _WeekRsvpPill extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Live badge (pulsing dot + LIVE)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LiveBadge extends StatelessWidget {
-  const _LiveBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(7, 3, 8, 3),
-      decoration: BoxDecoration(
-        color: AppColors.primaryRed.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.all(Radius.circular(100)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const _PulseDot(color: AppColors.primaryRed),
-          const SizedBox(width: 4),
-          Text(
-            'LIVE',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primaryRed,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -2227,10 +2160,7 @@ class _PulseDotState extends State<_PulseDot>
       child: Container(
         width: 6,
         height: 6,
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

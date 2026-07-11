@@ -20,6 +20,7 @@ import '../services/view_tracker.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/user_follow_button.dart';
 import '../models/share.dart';
@@ -677,7 +678,6 @@ class _FeedScreenState extends State<FeedScreen> {
         : h < 17
         ? S.goodAfternoon
         : S.goodEvening;
-    final isAdmin = authService.currentAdmin != null;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
@@ -701,16 +701,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   ),
                   const TextSpan(text: ' 👋'),
                 ],
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              isAdmin ? S.membersHappening : S.campusHappening,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.secondaryText,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.1,
               ),
             ),
           ],
@@ -800,7 +790,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 200,
+              height: 178,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -3056,21 +3046,32 @@ class _EventCardState extends State<_EventCard> {
             ),
 
             // ── Event banner ──
-            Container(
+            SizedBox(
               width: double.infinity,
               height: 160,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    clubColor.withValues(alpha: 0.8),
-                    clubColor.withValues(alpha: 0.3),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
               child: Stack(
+                fit: StackFit.expand,
                 children: [
+                  EventCoverImage(
+                    event: widget.event,
+                    color: clubColor,
+                    width: double.infinity,
+                    height: 160,
+                    cacheWidth: 700,
+                    cacheHeight: 320,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.64),
+                        ],
+                      ),
+                    ),
+                  ),
                   // Big date in background
                   Positioned(
                     right: 16,
@@ -3390,18 +3391,9 @@ class _EventRailCardState extends State<_EventRailCard> {
     final color = _colors[idx < 0 ? 0 : idx % _colors.length];
     final now = DateTime.now();
     final isLive = ev.dateTime.isBefore(now) && ev.endTime.isAfter(now);
-    final daysAway = ev.dateTime.difference(now).inDays;
-    final String dayLabel;
-    if (isLive) {
-      dayLabel = 'LIVE';
-    } else if (daysAway == 0) {
-      dayLabel = S.today;
-    } else if (daysAway == 1) {
-      dayLabel = S.tomorrow;
-    } else {
-      const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      dayLabel = wd[ev.dateTime.weekday - 1];
-    }
+    final dateTimeLabel = isLive
+        ? 'LIVE · ${_time24(ev.dateTime)}'
+        : '${_weekdayShort(ev.dateTime)}. ${_time24(ev.dateTime)}';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -3412,151 +3404,126 @@ class _EventRailCardState extends State<_EventRailCard> {
         ),
       ),
       child: Container(
-        width: 188,
+        width: 218,
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(18)),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.all(Radius.circular(19)),
+          border: Border.all(
+            color: AppColors.primaryRed.withValues(
+              alpha: themeService.isDark ? 0.46 : 0.22,
+            ),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(
+                alpha: themeService.isDark ? 0.24 : 0.06,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
-        padding: const EdgeInsets.all(14),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Club monogram + live/day badge
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
+            SizedBox(
+              height: 108,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  EventCoverImage(
+                    event: ev,
+                    color: color,
+                    width: double.infinity,
+                    height: 108,
+                    cacheWidth: 440,
+                    cacheHeight: 220,
                   ),
-                  child: Center(
-                    child: Text(
-                      club.name.replaceFirst(RegExp(r'^KU\s+'), '').isNotEmpty
-                          ? club.name.replaceFirst(RegExp(r'^KU\s+'), '')[0]
-                          : club.name[0],
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.32),
+                        ],
                       ),
                     ),
                   ),
-                ),
-                const Spacer(),
-                if (isLive)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _PulsingDot(color: AppColors.primaryRed),
-                      const SizedBox(width: 4),
-                      Text(
-                        'LIVE',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryRed,
-                          letterSpacing: 0.6,
+                  Positioned(
+                    left: 9,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.68),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
                         ),
                       ),
-                    ],
-                  )
-                else
-                  Text(
-                    dayLabel,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: AppColors.secondaryText,
-                      letterSpacing: 0.3,
+                      child: Text(
+                        dateTimeLabel,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            // Event title
             Expanded(
-              child: Text(
-                ev.title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.text,
-                  letterSpacing: -0.3,
-                  height: 1.2,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            // Location
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 12,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    ev.location,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.secondaryText,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ev.title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                        letterSpacing: -0.35,
+                        height: 1.15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            // Time
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 12,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isLive
-                      ? 'Now · ${_fmt(ev.dateTime)}'
-                      : '$dayLabel · ${_fmt(ev.dateTime)}',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              height: 34,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed,
-                borderRadius: BorderRadius.all(Radius.circular(100)),
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'View details',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 13,
+                          color: AppColors.secondaryText,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            ev.location,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.secondaryText,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -3566,11 +3533,11 @@ class _EventRailCardState extends State<_EventRailCard> {
     );
   }
 
-  String _fmt(DateTime dt) {
-    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m ${dt.hour < 12 ? 'AM' : 'PM'}';
-  }
+  String _time24(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  String _weekdayShort(DateTime dt) =>
+      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dt.weekday - 1];
 }
 
 // ─── Pulsing dot (live indicator) ─────────────────────────────────────────────

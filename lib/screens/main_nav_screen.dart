@@ -146,6 +146,7 @@ class MainNavScreen extends ConsumerStatefulWidget {
 class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   int _selectedIndex = 0;
   bool _showTutorial = false;
+  double? _navDragDx;
 
   // Built once and never replaced by nav taps or content-creation callbacks,
   // so IndexedStack sees the same widget instances and Flutter's element-
@@ -467,6 +468,48 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     userState.markNotificationsRead(visible);
   }
 
+  void _selectNavIndex(int index) {
+    if (_selectedIndex != index) {
+      setState(() => _selectedIndex = index);
+    }
+    if (index == 3) {
+      _onNotificationsOpened();
+    }
+  }
+
+  void _handleNavDragPosition(
+    Offset localPosition,
+    double barWidth,
+    List<_NavSlot> slots,
+  ) {
+    if (slots.isEmpty || barWidth <= 0) return;
+
+    final clampedDx = localPosition.dx.clamp(0.0, barWidth).toDouble();
+    final slotWidth = barWidth / slots.length;
+    final slotIndex = (clampedDx / slotWidth).floor().clamp(
+      0,
+      slots.length - 1,
+    );
+    final navIndex = slots[slotIndex].index;
+    final shouldOpenNotifications = navIndex == 3 && _selectedIndex != 3;
+
+    setState(() {
+      _navDragDx = clampedDx;
+      if (navIndex != null) {
+        _selectedIndex = navIndex;
+      }
+    });
+
+    if (shouldOpenNotifications) {
+      _onNotificationsOpened();
+    }
+  }
+
+  void _endNavDrag() {
+    if (_navDragDx == null) return;
+    setState(() => _navDragDx = null);
+  }
+
   bool get _isClubAdmin {
     final admin = authService.currentAdmin;
     if (admin == null) return false;
@@ -619,136 +662,162 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                   final slotWidth = slotCount > 0
                       ? barWidth / slotCount
                       : barWidth;
-                  return Stack(
-                    children: [
-                      // Soft inner highlight sheen along the top edge.
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(30),
-                              ),
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.white.withValues(
-                                    alpha: isDark ? 0.015 : 0.04,
-                                  ),
-                                  Colors.transparent,
-                                ],
-                                stops: const [0.0, 0.55],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Brighter glass capsule sliding under the selected tab.
-                      // No blur here (that's still on the outer bar) — a
-                      // solid-ish highlight is visually close at a fraction
-                      // of the compositing cost of two stacked BackdropFilters.
-                      if (selectedSlot != -1)
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutCubic,
-                          left: slotWidth * selectedSlot + 6,
-                          top: 8,
-                          width: slotWidth - 12,
-                          height: 72 - 16,
+                  final isNavDragging = _navDragDx != null;
+                  final capsuleWidth = slotWidth - 12;
+                  final capsuleLeft = isNavDragging
+                      ? (_navDragDx! - capsuleWidth / 2)
+                            .clamp(6.0, barWidth - capsuleWidth - 6)
+                            .toDouble()
+                      : slotWidth * selectedSlot + 6;
+                  final underlineLeft = isNavDragging
+                      ? (_navDragDx! - slotWidth / 2)
+                            .clamp(0.0, barWidth - slotWidth)
+                            .toDouble()
+                      : slotWidth * selectedSlot;
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onLongPressStart: (details) => _handleNavDragPosition(
+                      details.localPosition,
+                      barWidth,
+                      slots,
+                    ),
+                    onLongPressMoveUpdate: (details) => _handleNavDragPosition(
+                      details.localPosition,
+                      barWidth,
+                      slots,
+                    ),
+                    onLongPressEnd: (_) => _endNavDrag(),
+                    onLongPressCancel: _endNavDrag,
+                    child: Stack(
+                      children: [
+                        // Soft inner highlight sheen along the top edge.
+                        Positioned.fill(
                           child: IgnorePointer(
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.all(
-                                  Radius.circular(22),
+                                  Radius.circular(30),
                                 ),
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.10)
-                                    : Colors.white.withValues(alpha: 0.36),
-                                border: Border.all(
-                                  color: Colors.white.withValues(
-                                    alpha: isDark ? 0.17 : 0.52,
-                                  ),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primaryRed.withValues(
-                                      alpha: 0.16,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.white.withValues(
+                                      alpha: isDark ? 0.015 : 0.04,
                                     ),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
+                                    Colors.transparent,
+                                  ],
+                                  stops: const [0.0, 0.55],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      // Thin maroon underline with a soft glow, sliding in
-                      // step with the capsule above.
-                      if (selectedSlot != -1)
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutCubic,
-                          left: slotWidth * selectedSlot,
-                          bottom: 6,
-                          width: slotWidth,
-                          height: 3,
-                          child: IgnorePointer(
-                            child: Center(
-                              child: Container(
-                                width: 22,
-                                height: 3,
+                        // Brighter glass capsule sliding under the selected tab.
+                        // No blur here (that's still on the outer bar) — a
+                        // solid-ish highlight is visually close at a fraction
+                        // of the compositing cost of two stacked BackdropFilters.
+                        if (selectedSlot != -1)
+                          AnimatedPositioned(
+                            duration: isNavDragging
+                                ? Duration.zero
+                                : const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
+                            left: capsuleLeft,
+                            top: 8,
+                            width: capsuleWidth,
+                            height: 72 - 16,
+                            child: IgnorePointer(
+                              child: DecoratedBox(
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryRed,
                                   borderRadius: BorderRadius.all(
-                                    Radius.circular(100),
+                                    Radius.circular(22),
+                                  ),
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.10)
+                                      : Colors.white.withValues(alpha: 0.36),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(
+                                      alpha: isDark ? 0.17 : 0.52,
+                                    ),
+                                    width: 1,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: AppColors.primaryRed.withValues(
-                                        alpha: 0.55,
+                                        alpha: 0.16,
                                       ),
-                                      blurRadius: 8,
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 4),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      // Foreground row of nav items.
-                      Positioned.fill(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            for (final slot in slots)
-                              slot.isCenterButton
-                                  ? _CenterAddButton(
-                                      key: tutorialAnchors.keyFor(
-                                        TutorialAnchors.clubCreateButton,
-                                      ),
-                                      onTap: _onAddTap,
-                                    )
-                                  : _NavItem(
-                                      icon: slot.icon!,
-                                      activeIcon: slot.activeIcon!,
-                                      label: slot.label!,
-                                      selected: _selectedIndex == slot.index,
-                                      badge: slot.badge,
-                                      onTap: () {
-                                        setState(
-                                          () => _selectedIndex = slot.index!,
-                                        );
-                                        if (slot.index == 3) {
-                                          _onNotificationsOpened();
-                                        }
-                                      },
+                        // Thin maroon underline with a soft glow, sliding in
+                        // step with the capsule above.
+                        if (selectedSlot != -1)
+                          AnimatedPositioned(
+                            duration: isNavDragging
+                                ? Duration.zero
+                                : const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
+                            left: underlineLeft,
+                            bottom: 6,
+                            width: slotWidth,
+                            height: 3,
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Container(
+                                  width: 22,
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryRed,
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(100),
                                     ),
-                          ],
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.primaryRed.withValues(
+                                          alpha: 0.55,
+                                        ),
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Foreground row of nav items.
+                        Positioned.fill(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              for (final slot in slots)
+                                slot.isCenterButton
+                                    ? _CenterAddButton(
+                                        key: tutorialAnchors.keyFor(
+                                          TutorialAnchors.clubCreateButton,
+                                        ),
+                                        onTap: _onAddTap,
+                                      )
+                                    : _NavItem(
+                                        icon: slot.icon!,
+                                        activeIcon: slot.activeIcon!,
+                                        label: slot.label!,
+                                        selected: _selectedIndex == slot.index,
+                                        badge: slot.badge,
+                                        onTap: () =>
+                                            _selectNavIndex(slot.index!),
+                                      ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),
