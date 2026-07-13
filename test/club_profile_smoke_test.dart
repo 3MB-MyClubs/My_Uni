@@ -5,11 +5,11 @@ import 'package:flutter_application_1/screens/club_profile_screen.dart';
 import 'package:flutter_application_1/screens/explore_screen.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
-import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
+import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 
 void main() {
   setUp(() async {
@@ -59,7 +59,9 @@ void main() {
   testWidgets('ExploreScreen opens a club profile without a render exception', (
     tester,
   ) async {
-    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ExploreScreen())));
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: ExploreScreen())),
+    );
 
     await tester.pumpAndSettle();
 
@@ -73,7 +75,9 @@ void main() {
   testWidgets('Find People previews up to 10 random profiles and searches', (
     tester,
   ) async {
-    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ExploreScreen())));
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: ExploreScreen())),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Find People'));
@@ -99,7 +103,9 @@ void main() {
     await themeService.setDark(false);
     authService.login(users.first.email, users.first.password);
 
-    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ProfileScreen())));
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: ProfileScreen())),
+    );
 
     await tester.pumpAndSettle();
 
@@ -112,7 +118,9 @@ void main() {
   ) async {
     authService.login(users.first.email, users.first.password);
 
-    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ProfileScreen())));
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp(home: ProfileScreen())),
+    );
 
     await tester.pumpAndSettle();
 
@@ -123,7 +131,7 @@ void main() {
         matching: find.byType(Scaffold),
       ),
     );
-    expect(scaffold.backgroundColor, DarkColors.background);
+    expect(scaffold.backgroundColor, StudentCampusPalette.background);
     expect(tester.takeException(), isNull);
   });
 }

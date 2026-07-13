@@ -10,7 +10,14 @@ class SupabaseClubService {
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
-    return Supabase.instance.client;
+    // Widget/integration tests and offline mock sessions do not always run
+    // Supabase.initialize. In that case the existing local persistence path
+    // remains available instead of treating the missing client as a failure.
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<String?> updateClubLogo({

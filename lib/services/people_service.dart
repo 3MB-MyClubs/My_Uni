@@ -299,6 +299,7 @@ class PeopleService {
   // the majors/academic_years lookups) from scratch.
   final Map<String, List<User>> _clubMembersCache = {};
   final Map<String, Future<List<User>>> _clubMembersInFlight = {};
+  final Map<String, int> _clubMembersCacheVersions = {};
 
   Future<List<User>> fetchClubMembers(String clubId) async {
     if (_client == null || clubId.isEmpty) return const [];
@@ -309,20 +310,55 @@ class PeopleService {
     final inFlight = _clubMembersInFlight[clubId];
     if (inFlight != null) return inFlight;
 
+    final cacheVersion = _clubMembersCacheVersions[clubId] ?? 0;
     final future = _fetchClubMembers(clubId);
     _clubMembersInFlight[clubId] = future;
     try {
       final result = await future;
-      if (result.isNotEmpty) _clubMembersCache[clubId] = result;
+      if (result.isNotEmpty &&
+          (_clubMembersCacheVersions[clubId] ?? 0) == cacheVersion) {
+        _clubMembersCache[clubId] = result;
+      }
       return result;
     } finally {
-      _clubMembersInFlight.remove(clubId);
+      if (identical(_clubMembersInFlight[clubId], future)) {
+        _clubMembersInFlight.remove(clubId);
+      }
     }
   }
 
   /// Call after a membership/board-role change so the next [fetchClubMembers]
   /// re-fetches instead of serving a now-stale cached list.
-  void invalidateClubMembers(String clubId) => _clubMembersCache.remove(clubId);
+  void invalidateClubMembers(String clubId) {
+    _clubMembersCache.remove(clubId);
+    _clubMembersCacheVersions[clubId] =
+        (_clubMembersCacheVersions[clubId] ?? 0) + 1;
+  }
+
+  /// Reconciles a remote member snapshot with the signed-in student's
+  /// optimistic follow state. This prevents a response captured just before a
+  /// follow/unfollow commit from hiding or re-adding that student in the sheet.
+  List<User> reconcileCurrentClubMember({
+    required Iterable<User> fetchedMembers,
+    required Iterable<User> fallbackMembers,
+    required User? currentUser,
+    required bool currentUserIsFollowing,
+  }) {
+    final fetched = fetchedMembers.toList();
+    final fallback = fallbackMembers.toList();
+    final source = fetched.isNotEmpty || fallback.isEmpty ? fetched : fallback;
+    final byId = <String, User>{for (final member in source) member.id: member};
+
+    if (currentUser != null) {
+      if (currentUserIsFollowing) {
+        byId[currentUser.id] = currentUser;
+      } else {
+        byId.remove(currentUser.id);
+      }
+    }
+
+    return byId.values.toList();
+  }
 
   Future<List<User>> _fetchClubMembers(String clubId) async {
     final client = _client;

@@ -21,6 +21,7 @@ import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/student_profile_service.dart' as remote_profile;
+import '../services/student_club_role_service.dart';
 import '../services/supabase_club_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -30,6 +31,7 @@ import '../widgets/profile_photo_viewer.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
+import 'explore_screen.dart';
 import 'my_calendar_screen.dart';
 import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
@@ -941,9 +943,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
-          final followedClubs = clubs
-              .where((club) => userState.isFollowing(club.id))
-              .toList();
+          final followedClubs = studentClubRoleService.orderedProfileClubs(
+            userId: user.id,
+            followedClubIds: userState.followedClubIds,
+            allClubs: clubs,
+          );
           final followers = _followersForUser(user.id);
           final following = _followingUsers();
           final name = userState.displayNameFor(user.id, user.name);
@@ -954,10 +958,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final memberCount = subscriptions
                 .where((s) => s.clubId == club.id)
                 .length;
-            final title = club.boardMemberTitles[user.id]?.trim() ?? '';
-            final role = title.isNotEmpty
-                ? title
-                : (club.boardMemberIds.contains(user.id) ? S.board : 'Member');
+            final role =
+                studentClubRoleService.roleTitleFor(club, user.id) ?? 'Member';
             return StudentClubDetail(
               club: club,
               memberCount: memberCount,
@@ -970,6 +972,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               userId: user.id,
               initials: _initialsFor(name),
               name: name,
+              email: user.email,
               graduation: _graduationLabel(year),
               major: userState.majors[user.id] ?? 'Major not added',
               year: year ?? 'Year not added',
@@ -991,6 +994,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onShare: () => _shareProfile(user.id, name),
+            onFindClubs: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ExploreScreen()),
+            ),
             onSeeAllEvents: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const MyCalendarScreen()),

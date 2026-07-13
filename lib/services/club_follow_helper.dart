@@ -3,6 +3,7 @@ import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'club_follow_service.dart';
 import 'mock_data.dart';
+import 'people_service.dart';
 import 'user_prefs_service.dart';
 import 'user_state.dart';
 
@@ -31,6 +32,9 @@ Future<void> handleFollowTap(
   userState.toggleFollow(clubId);
   supabaseClubMemberCounts[clubId] =
       (effectiveMemberCount + (wasFollowing ? -1 : 1)).clamp(0, 1 << 31);
+  // The header count and follow state update optimistically. Drop any older
+  // member snapshot at the same time so opening the sheet cannot serve it.
+  peopleService.invalidateClubMembers(clubId);
   onChanged();
 
   try {
@@ -49,6 +53,9 @@ Future<void> handleFollowTap(
       }
     }
     await userPrefsService.save(uid);
+    // A request that was already in flight when the user tapped may have
+    // completed with the pre-change rows. Invalidate once more after commit.
+    peopleService.invalidateClubMembers(clubId);
   } catch (_) {
     userState.toggleFollow(clubId);
     if (previousMemberCount != null) {
@@ -56,6 +63,7 @@ Future<void> handleFollowTap(
     } else {
       supabaseClubMemberCounts.remove(clubId);
     }
+    peopleService.invalidateClubMembers(clubId);
     onChanged();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

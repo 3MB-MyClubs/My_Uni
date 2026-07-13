@@ -192,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: AppColors.text,
                         ),
                         children: [
-                          const TextSpan(text: 'Welcome back to\n'),
+                          const TextSpan(text: 'Welcome back to\nyour '),
                           TextSpan(
                             text: 'campus',
                             style: TextStyle(color: AppColors.primaryRed),

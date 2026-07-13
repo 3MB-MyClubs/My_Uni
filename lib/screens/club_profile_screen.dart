@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../models/club.dart';
 import '../models/event.dart';
@@ -15,7 +13,7 @@ import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
-import '../services/supabase_club_service.dart';
+import '../services/student_club_role_service.dart';
 import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
 import '../services/tutorial_anchors.dart';
@@ -47,6 +45,18 @@ Color _clubPageStrongBorder(BuildContext context) => _isDarkClubTheme(context)
 Color _clubPageBodyText(BuildContext context) => _isDarkClubTheme(context)
     ? const Color(0xD1FFFFFF)
     : AppColors.text.withValues(alpha: 0.82);
+
+void _showClubRoleError(BuildContext context) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      const SnackBar(
+        content: Text('Could not update board member role.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+}
 
 class ClubProfileScreen extends StatefulWidget {
   final Club club;
@@ -2112,21 +2122,17 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
 
   Future<void> _addMember(String userId) async {
     try {
-      await supabaseClubService.setBoardMemberRole(
+      await studentClubRoleService.setBoardMembership(
         club: widget.club,
         userId: userId,
+        isBoardMember: true,
       );
     } catch (_) {
       _showRoleError();
       return;
     }
-    if (!widget.club.boardMemberIds.contains(userId)) {
-      widget.club.boardMemberIds.add(userId);
-    }
     _searchController.clear();
     _query = '';
-    await contentStore.saveBoardMemberIds();
-    userState.bumpClubInfo();
     if (!mounted) return;
     setState(() => _followers = _sortUsers(_followers));
   }
@@ -2139,26 +2145,19 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
           _BoardTitleDialog(memberName: u.name, initialTitle: current),
     );
     if (result == null || !mounted) return;
-    if (result.isEmpty) {
-      widget.club.boardMemberTitles.remove(u.id);
-    } else {
-      widget.club.boardMemberTitles[u.id] = result;
-    }
     try {
-      await supabaseClubService.setBoardMemberRole(
+      await studentClubRoleService.setBoardMembership(
         club: widget.club,
         userId: u.id,
+        isBoardMember: result.trim().isNotEmpty,
         title: result,
       );
     } catch (_) {
       _showRoleError();
       return;
     }
-    await contentStore.saveBoardMemberTitles();
-    // Refresh any open student profile showing this club role.
-    userState.bumpClubInfo();
     if (!mounted) return;
-    setState(() {});
+    setState(() => _followers = _sortUsers(_followers));
   }
 
   Future<void> _removeMember(dynamic u) async {
@@ -2230,33 +2229,21 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
     if (second != true || !mounted) return;
 
     try {
-      await supabaseClubService.removeBoardMemberRole(
+      await studentClubRoleService.setBoardMembership(
         club: widget.club,
         userId: u.id,
+        isBoardMember: false,
       );
     } catch (_) {
       _showRoleError();
       return;
     }
-    widget.club.boardMemberIds.remove(u.id);
-    widget.club.boardMemberTitles.remove(u.id);
-    await contentStore.saveBoardMemberIds();
-    await contentStore.saveBoardMemberTitles();
-    userState.bumpClubInfo();
     if (!mounted) return;
     setState(() => _followers = _sortUsers(_followers));
   }
 
   void _showRoleError() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Could not update board member role.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    _showClubRoleError(context);
   }
 
   @override
@@ -2592,19 +2579,20 @@ class _BoardTabState extends State<_BoardTab> {
           _BoardTitleDialog(memberName: u.name, initialTitle: current),
     );
     if (result == null || !mounted) return;
-    setState(() {
-      if (result.isEmpty) {
-        // Deleting the role removes the student from the board entirely.
-        widget.club.boardMemberIds.remove(u.id);
-        widget.club.boardMemberTitles.remove(u.id);
-      } else {
-        widget.club.boardMemberTitles[u.id] = result;
-      }
-    });
-    await contentStore.saveBoardMemberIds();
-    await contentStore.saveBoardMemberTitles();
-    userState.bumpClubInfo();
+    try {
+      await studentClubRoleService.setBoardMembership(
+        club: widget.club,
+        userId: u.id,
+        isBoardMember: result.trim().isNotEmpty,
+        title: result,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showClubRoleError(context);
+      return;
+    }
     if (!mounted) return;
+    setState(() {});
     widget.onBoardChanged();
   }
 
@@ -2678,13 +2666,19 @@ class _BoardTabState extends State<_BoardTab> {
     );
     if (second != true || !mounted) return;
 
-    setState(() {
-      widget.club.boardMemberIds.remove(u.id);
-      widget.club.boardMemberTitles.remove(u.id);
-    });
-    await contentStore.saveBoardMemberIds();
-    await contentStore.saveBoardMemberTitles();
+    try {
+      await studentClubRoleService.setBoardMembership(
+        club: widget.club,
+        userId: u.id,
+        isBoardMember: false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showClubRoleError(context);
+      return;
+    }
     if (!mounted) return;
+    setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -3044,15 +3038,27 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
       final members = await peopleService.fetchClubMembers(widget.club.id);
       if (!mounted) return;
       setState(() {
-        if (members.isNotEmpty || widget.members.isEmpty) {
-          _members = _sortMembers(members);
-        }
+        _members = _sortMembers(
+          peopleService.reconcileCurrentClubMember(
+            fetchedMembers: members,
+            fallbackMembers: widget.members,
+            currentUser: authService.currentUser,
+            currentUserIsFollowing: userState.isFollowing(widget.club.id),
+          ),
+        );
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _members = _sortMembers(widget.members);
+        _members = _sortMembers(
+          peopleService.reconcileCurrentClubMember(
+            fetchedMembers: const [],
+            fallbackMembers: widget.members,
+            currentUser: authService.currentUser,
+            currentUserIsFollowing: userState.isFollowing(widget.club.id),
+          ),
+        );
         _loading = false;
         _error = widget.members.isEmpty
             ? 'Member profiles could not be loaded.'
@@ -3078,9 +3084,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
 
   /// The role label for [member], or null if they hold no board role.
   String? _roleFor(User member) {
-    if (!widget.club.boardMemberIds.contains(member.id)) return null;
-    final raw = widget.club.boardMemberTitles[member.id]?.trim() ?? '';
-    return raw.isEmpty ? 'Board Member' : raw;
+    return studentClubRoleService.roleTitleFor(widget.club, member.id);
   }
 
   void _viewProfile(User member) {
@@ -3091,27 +3095,17 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
     );
   }
 
-  /// Removes [member] from the club: deletes their club_followers row (and
-  /// any board role) with an optimistic local update.
+  /// Removes [member] from the club and clears any board role first so a
+  /// failed server role update never leaves local profile state out of sync.
   Future<void> _removeMember(User member) async {
     final hadRole = widget.club.boardMemberIds.contains(member.id);
-    setState(() {
-      _members = _members.where((m) => m.id != member.id).toList();
-      widget.club.boardMemberIds.remove(member.id);
-      widget.club.boardMemberTitles.remove(member.id);
-    });
-    final cached = supabaseClubMemberCounts[widget.club.id];
-    if (cached != null && cached > 0) {
-      supabaseClubMemberCounts[widget.club.id] = cached - 1;
-    }
-    unawaited(contentStore.saveBoardMemberIds());
-    unawaited(contentStore.saveBoardMemberTitles());
 
     try {
       if (hadRole) {
-        await supabaseClubService.removeBoardMemberRole(
+        await studentClubRoleService.setBoardMembership(
           club: widget.club,
           userId: member.id,
+          isBoardMember: false,
         );
       }
       await clubFollowService.unfollowClub(
@@ -3121,11 +3115,23 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
       peopleService.invalidateClubMembers(widget.club.id);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _members = _sortMembers([..._members, member]));
-      final rolled = supabaseClubMemberCounts[widget.club.id];
-      if (rolled != null) {
-        supabaseClubMemberCounts[widget.club.id] = rolled + 1;
-      }
+      setState(() => _members = _sortMembers(_members));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not remove this club member.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _members = _members.where((m) => m.id != member.id).toList();
+    });
+    final cached = supabaseClubMemberCounts[widget.club.id];
+    if (cached != null && cached > 0) {
+      supabaseClubMemberCounts[widget.club.id] = cached - 1;
     }
   }
 
@@ -3235,30 +3241,34 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
     );
     if (result == null || !mounted) return;
 
-    if (result.isEmpty) {
-      // Clearing the title deletes the role entirely — the student leaves the
-      // board and disappears from the board area and their profile.
-      widget.club.boardMemberIds.remove(member.id);
-      widget.club.boardMemberTitles.remove(member.id);
-    } else {
-      if (!widget.club.boardMemberIds.contains(member.id)) {
-        widget.club.boardMemberIds.add(member.id);
-      }
-      widget.club.boardMemberTitles[member.id] = result;
+    try {
+      await studentClubRoleService.setBoardMembership(
+        club: widget.club,
+        userId: member.id,
+        isBoardMember: result.trim().isNotEmpty,
+        title: result,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showClubRoleError(context);
+      return;
     }
-    await contentStore.saveBoardMemberIds();
-    await contentStore.saveBoardMemberTitles();
-    userState.bumpClubInfo();
     if (!mounted) return;
     setState(() => _members = _sortMembers(_members));
   }
 
   Future<void> _removeRole(User member) async {
-    widget.club.boardMemberIds.remove(member.id);
-    widget.club.boardMemberTitles.remove(member.id);
-    await contentStore.saveBoardMemberIds();
-    await contentStore.saveBoardMemberTitles();
-    userState.bumpClubInfo();
+    try {
+      await studentClubRoleService.setBoardMembership(
+        club: widget.club,
+        userId: member.id,
+        isBoardMember: false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showClubRoleError(context);
+      return;
+    }
     if (!mounted) return;
     setState(() => _members = _sortMembers(_members));
   }

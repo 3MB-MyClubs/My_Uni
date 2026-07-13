@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
@@ -6,18 +5,17 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/student_club_role_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/student_campus_profile.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'saved_posts_screen.dart';
 
 // ── Design palette ─────────────────────────────────────────────────────────────
 const _burgundy = Color(0xFF8C1D40);
-const _burgundyDeep = Color(0xFF6E1422);
-const _burgundySoft = Color(0xFFF2DDE0);
-const _forest = Color(0xFF3F6B4E);
 
 class UserProfileScreen extends StatefulWidget {
   final User user;
@@ -141,28 +139,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ? liveIds
         : widget.user.subscribedClubIds.toSet();
 
-    final followed = [
-      for (final id in ids)
-        for (final club in clubs)
-          if (club.id == id) club,
-    ];
-
-    // Include clubs where this student holds a board role even if they don't
-    // follow them, and pin all role-clubs to the very top.
-    for (final club in clubs) {
-      if (_roleTitleFor(club) != null && !followed.contains(club)) {
-        followed.add(club);
-      }
-    }
-    final withRole = [
-      for (final c in followed)
-        if (_roleTitleFor(c) != null) c,
-    ];
-    final rest = [
-      for (final c in followed)
-        if (_roleTitleFor(c) == null) c,
-    ];
-    return [...withRole, ...rest];
+    return studentClubRoleService.orderedProfileClubs(
+      userId: widget.user.id,
+      followedClubIds: ids,
+      allClubs: clubs,
+    );
   }
 
   void _openClub(Club club) {
@@ -189,442 +170,85 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = widget.user;
-    final subClubs = _subscribedClubs;
-    final followingList = _following;
-    final followersList = _followers;
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          // ── Slim pinned app bar ──────────────────────────────────────────────
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: AppColors.background,
-            surfaceTintColor: Colors.transparent,
-            foregroundColor: AppColors.text,
-            elevation: 0,
-            title: ListenableBuilder(
-              listenable: userState,
-              builder: (_, _) => Text(
-                userState.displayNameFor(user.id, user.name),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
-                ),
-              ),
-            ),
-          ),
-
-          // ── Main content ─────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1 ── Hero banner + avatar ─────────────────────────────────────
-                _HeroBanner(user: user),
-
-                // 2 ── Name block ───────────────────────────────────────────────
-                _buildNameBlock(user),
-
-                // 3 ── Bio strip ────────────────────────────────────────────────
-                _buildBioStrip(user),
-
-                // 4 ── Stats card ───────────────────────────────────────────────
-                _buildStatsCard(subClubs, followersList, followingList),
-
-                // 5 ── Clubs card ───────────────────────────────────────────────
-                if (subClubs.isNotEmpty) _buildClubsCard(subClubs),
-
-                // 6 ── Footer ──────────────────────────────────────────────────
-                _buildFooter(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Name block ───────────────────────────────────────────────────────────────
-
-  Widget _buildNameBlock(User user) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 46, 24, 0),
-      child: ListenableBuilder(
-        listenable: userState,
-        builder: (_, _) {
-          final isFollowingUser = userState.isFollowingUser(user.id);
-          final isPending = userState.hasPendingRequest(user.id);
-          final major = userState.majors[user.id];
-          final year = userState.years[user.id];
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left: name + sub-line
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      userState.displayNameFor(user.id, user.name),
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.text,
-                        letterSpacing: -0.6,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (major != null || year != null)
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.school_outlined,
-                            size: 14,
-                            color: _burgundy,
-                          ),
-                          const SizedBox(width: 4),
-                          if (major != null) ...[
-                            Flexible(
-                              child: Text(
-                                major,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: _burgundy,
-                                ),
-                              ),
-                            ),
-                            if (year != null) ...[
-                              Text(
-                                '  ·  ',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                              Text(
-                                year,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                            ],
-                          ] else if (year != null) ...[
-                            Flexible(
-                              child: Text(
-                                year,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Right: action buttons
-              if (_isOwnProfile)
-                Column(
-                  children: [
-                    SizedBox(
-                      height: 34,
-                      width: 34,
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SavedPostsScreen(),
-                          ),
-                        ),
-                        icon: Icon(
-                          Icons.bookmark_outline,
-                          color: AppColors.text,
-                          size: 20,
-                        ),
-                        style: IconButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(999),
-                            ),
-                            side: BorderSide(
-                              color: AppColors.divider,
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else if (authService.isStudentSession)
-                Column(
-                  children: [
-                    // Follow button
-                    _FollowButton(
-                      isFollowing: isFollowingUser,
-                      isPending: isPending,
-                      onTap: _handleFollowTap,
-                    ),
-                  ],
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Bio strip ────────────────────────────────────────────────────────────────
-
-  Widget _buildBioStrip(User user) {
     return ListenableBuilder(
       listenable: userState,
-      builder: (_, _) {
-        final bioRaw = userState.bios[user.id];
-        final bioText = (bioRaw == null || bioRaw.trim().isEmpty)
-            ? ''
-            : bioRaw.trim();
-        final isEmpty = bioText.isEmpty;
-        if (isEmpty && !_isOwnProfile) return const SizedBox.shrink();
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text(
-                  isEmpty ? 'Add a bio…' : bioText,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    height: 1.5,
-                    color: isEmpty ? AppColors.secondaryText : AppColors.text,
-                  ),
-                ),
-              ),
-              if (_isOwnProfile) ...[
-                const SizedBox(width: 6),
-                const Icon(Icons.edit_outlined, size: 12, color: _burgundy),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Stats card ───────────────────────────────────────────────────────────────
-
-  Widget _buildStatsCard(
-    List<Club> subClubs,
-    List<User> followers,
-    List<User> following,
-  ) {
-    return ListenableBuilder(
-      listenable: userState,
-      builder: (_, _) {
-        // Recompute live from userState
-        final liveFollowers = _followers;
-        final liveFollowing = _following;
-
-        return Container(
-          margin: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            border: Border.all(color: AppColors.divider, width: 1),
-            borderRadius: BorderRadius.all(Radius.circular(18)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _openConnections(_ConnTab.clubs),
-                  child: _StatBlock(
-                    value: '${subClubs.length}',
-                    label: 'Clubs',
-                  ),
-                ),
-              ),
-              _VertDivider(),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _openConnections(_ConnTab.followers),
-                  child: _StatBlock(
-                    value: '${liveFollowers.length}',
-                    label: 'Followers',
-                  ),
-                ),
-              ),
-              _VertDivider(),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _openConnections(_ConnTab.following),
-                  child: _StatBlock(
-                    value: '${liveFollowing.length}',
-                    label: 'Following',
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Clubs card ───────────────────────────────────────────────────────────────
-
-  Widget _buildClubsCard(List<Club> subClubs) {
-    final showSeeAll = subClubs.length > 4;
-    final displayCount = showSeeAll ? 4 : subClubs.length;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.divider, width: 1),
-        borderRadius: BorderRadius.all(Radius.circular(18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'CLUBS · ${subClubs.length}',
-                style: TextStyle(
-                  color: AppColors.secondaryText,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.9,
-                ),
-              ),
-              if (showSeeAll) ...[
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => _openConnections(_ConnTab.clubs),
-                  child: const Text(
-                    'See all',
-                    style: TextStyle(
-                      color: _burgundy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 4),
-          for (int i = 0; i < displayCount; i++)
-            _buildClubRow(subClubs[i], isLast: i == displayCount - 1),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildClubRow(Club club, {required bool isLast}) {
-    final memberCount = subscriptions.where((s) => s.clubId == club.id).length;
-    final roleTitle = _roleTitleFor(club);
-    final isLeader = roleTitle != null;
-
-    return GestureDetector(
-      onTap: () => _openClub(club),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
-        ),
-        child: Row(
-          children: [
-            ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
+      builder: (context, _) {
+        final subClubs = _subscribedClubs;
+        final followingList = _following;
+        final followersList = _followers;
+        final isFollowingUser = userState.isFollowingUser(user.id);
+        final isPending = userState.hasPendingRequest(user.id);
+        final memberships = [
+          for (final club in subClubs.take(4))
+            StudentCampusMembership(
+              club: club,
               color: _clubColor(club),
-              imageUrl: club.logoUrl,
-              size: 42,
-              fontSize: 18,
-              borderRadius: 13,
+              role: _roleTitleFor(club) ?? 'Member',
+              detail:
+                  '${subscriptions.where((s) => s.clubId == club.id).length} members',
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    club.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
+        ];
+
+        return StudentCampusProfileView(
+          profile: StudentCampusProfile(
+            userId: user.id,
+            name: userState.displayNameFor(user.id, user.name),
+            email: user.email,
+            major: userState.majors[user.id] ?? '',
+            year: userState.years[user.id] ?? '',
+            bio: userState.bios[user.id] ?? '',
+            clubs: subClubs.length,
+            following: followingList.length,
+            followers: followersList.length,
+            doubleMajors: userState.doubleMajors[user.id] ?? const [],
+            minors: userState.minors[user.id] ?? const [],
+          ),
+          title: _isOwnProfile ? 'My Profile' : 'Student Profile',
+          leading: StudentProfileIconButton(
+            icon: Icons.chevron_left_rounded,
+            tooltip: 'Back',
+            onTap: () => Navigator.maybePop(context),
+          ),
+          trailing: _isOwnProfile
+              ? StudentProfileIconButton(
+                  icon: Icons.bookmark_outline_rounded,
+                  tooltip: 'Saved posts',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$memberCount members',
-                    style: TextStyle(
-                      color: AppColors.secondaryText,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: isLeader ? _burgundy : AppColors.background,
-                borderRadius: BorderRadius.all(Radius.circular(100)),
-                border: isLeader ? null : Border.all(color: AppColors.divider),
-              ),
-              child: Text(
-                roleTitle ?? 'Member',
-                style: TextStyle(
-                  color: isLeader ? Colors.white : AppColors.text,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+                )
+              : const SizedBox(width: 36, height: 36),
+          primaryAction: !_isOwnProfile && authService.isStudentSession
+              ? StudentProfilePrimaryButton(
+                  label: isPending
+                      ? 'Requested'
+                      : isFollowingUser
+                      ? 'Following'
+                      : _userFollowsMe(user)
+                      ? 'Follow back'
+                      : 'Follow',
+                  filled: !isFollowingUser && !isPending,
+                  onTap: _handleFollowTap,
+                )
+              : null,
+          memberships: memberships,
+          clubsTitle: 'CLUBS · ${subClubs.length}',
+          clubsActionLabel: subClubs.length > 4 ? 'See all' : null,
+          onClubsAction: () => _openConnections(_ConnTab.clubs),
+          onClubTap: _openClub,
+          onClubsTap: () => _openConnections(_ConnTab.clubs),
+          onFollowingTap: () => _openConnections(_ConnTab.following),
+          onFollowersTap: () => _openConnections(_ConnTab.followers),
+        );
+      },
     );
   }
 
   /// The board role title this student holds at [club], or null if none.
   /// Empty stored titles fall back to a generic "Board Member" label.
   String? _roleTitleFor(Club club) {
-    if (!club.boardMemberIds.contains(widget.user.id)) return null;
-    final raw = club.boardMemberTitles[widget.user.id]?.trim() ?? '';
-    return raw.isEmpty ? 'Board Member' : raw;
+    return studentClubRoleService.roleTitleFor(club, widget.user.id);
   }
 
   void _openConnections(_ConnTab tab) {
@@ -646,12 +270,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       ),
     );
-  }
-
-  // ── Footer ────────────────────────────────────────────────────────────────────
-
-  Widget _buildFooter() {
-    return const SizedBox(height: 28);
   }
 }
 
@@ -1040,170 +658,6 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
   }
 }
 
-// ── Hero banner widget ─────────────────────────────────────────────────────────
-
-class _HeroBanner extends StatelessWidget {
-  final User user;
-  const _HeroBanner({required this.user});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: userState,
-      builder: (_, _) {
-        final year = userState.years[user.id];
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: SizedBox(
-            height: 96,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Banner gradient container
-                Positioned.fill(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.all(Radius.circular(20)),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [_burgundy, _burgundyDeep],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          // Decorative blob 1
-                          Positioned(
-                            top: -30,
-                            right: -20,
-                            child: Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.06),
-                              ),
-                            ),
-                          ),
-                          // Decorative blob 2
-                          Positioned(
-                            bottom: -40,
-                            right: 60,
-                            child: Container(
-                              width: 90,
-                              height: 90,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.05),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Year badge top-right
-                if (year != null && year.isNotEmpty)
-                  Positioned(
-                    top: 10,
-                    right: 12,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.all(Radius.circular(999)),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(999),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.school_outlined,
-                                size: 14,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                year.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Avatar (overlapping banner bottom)
-                Positioned(
-                  left: 20,
-                  bottom: -36,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: 90,
-                        height: 90,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _burgundySoft,
-                          border: Border.all(
-                            color: AppColors.background,
-                            width: 4,
-                          ),
-                        ),
-                        child: ClipOval(
-                          child: UserAvatar(
-                            userId: user.id,
-                            name: user.name,
-                            size: 90,
-                            fontSize: 34,
-                          ),
-                        ),
-                      ),
-                      // Online dot
-                      Positioned(
-                        right: -4,
-                        bottom: 4,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _forest,
-                            border: Border.all(color: Colors.white, width: 3),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 // ── Follow button ──────────────────────────────────────────────────────────────
 
 class _FollowButton extends StatelessWidget {
@@ -1255,58 +709,6 @@ class _FollowButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// ── Stat block ─────────────────────────────────────────────────────────────────
-
-class _StatBlock extends StatelessWidget {
-  final String value;
-  final String label;
-  const _StatBlock({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: _burgundy,
-              letterSpacing: 0.6,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Vertical divider helper ────────────────────────────────────────────────────
-
-class _VertDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 40,
-      margin: const EdgeInsets.symmetric(vertical: 14),
-      color: AppColors.divider,
     );
   }
 }
