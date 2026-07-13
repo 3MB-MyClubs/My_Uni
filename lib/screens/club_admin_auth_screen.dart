@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
+import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
 import '../services/club_passcode_auth_service.dart';
 import 'forgot_password_screen.dart';
@@ -43,6 +44,9 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
       _error = null;
     });
 
+    // Post-login screens read Hive boxes that open in the background after
+    // first paint; by the time credentials are typed this is a no-op.
+    await appBootstrap.ready;
     final result = await clubPasscodeAuthService.login(
       email: '${localPart.toLowerCase()}@ku.edu.tr',
       passcode: passcode,
@@ -111,7 +115,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
                 ),
                 child: Center(
                   child: Icon(
@@ -184,15 +188,15 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                   filled: true,
                   fillColor: Colors.transparent,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide.none,
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide(color: AppColors.divider),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     borderSide: BorderSide(color: AppColors.divider, width: 1),
                   ),
                 ),
@@ -233,7 +237,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.all(Radius.circular(14)),
                     ),
                     elevation: 2,
                     shadowColor: AppColors.primaryRed.withValues(alpha: 0.4),
@@ -286,23 +290,23 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         filled: true,
         fillColor: Colors.transparent,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.primaryRed),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
       ),

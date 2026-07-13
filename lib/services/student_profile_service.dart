@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'people_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
 
@@ -85,6 +86,15 @@ class StudentProfileService {
   }
 
   Future<StudentProfileData?> fetchProfile(String userId) async {
+    final row = await fetchProfileCore(userId);
+    if (row == null) return null;
+    return _fetchDetails(row);
+  }
+
+  /// The single `profiles` row — the only query login has to block on.
+  /// Everything else (interests, double majors, minors, lookup names) is
+  /// resolved by [hydrateDetails] off the critical path.
+  Future<Map<String, dynamic>?> fetchProfileCore(String userId) async {
     final client = _client;
     if (client == null) return null;
 
@@ -97,32 +107,83 @@ class StudentProfileService {
         .maybeSingle();
 
     if (profile == null) return null;
+    return Map<String, dynamic>.from(profile);
+  }
 
+  /// Applies the fields the core `profiles` row already carries (bio +
+  /// avatar), so the first frame after login shows them without waiting for
+  /// the detail queries.
+  void applyCoreToUserState(Map<String, dynamic> row) {
+    final userId = row['id'].toString();
+    userState.setBio(userId, _nullableString(row['bio']) ?? '');
+    final avatarUrl = _nullableString(row['avatar_url']);
+    if (avatarUrl != null) {
+      userState.setProfilePhotoUrl(userId, avatarUrl);
+    }
+  }
+
+  /// Resolves the detail fields for an already-fetched core row and pushes
+  /// them into [userState]. Never throws: every branch degrades to empty.
+  Future<StudentProfileData?> hydrateDetails(
+    Map<String, dynamic> coreRow,
+  ) async {
+    try {
+      final profile = await _fetchDetails(coreRow);
+      if (profile != null) applyToUserState(profile);
+      return profile;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<StudentProfileData?> _fetchDetails(
+    Map<String, dynamic> profile,
+  ) async {
+    final client = _client;
+    if (client == null) return null;
+
+    final userId = profile['id'].toString();
     final majorId = _nullableString(profile['major_id']);
     final academicYearId = _nullableString(profile['academic_year_id']);
 
-    final results = await Future.wait([
-      _fetchLookupName('majors', majorId),
-      _fetchLookupName('academic_years', academicYearId),
-      _fetchStudentInterestItems(userId),
-      _fetchProfileMajorItems('profile_double_majors', userId),
-      _fetchProfileMajorItems('profile_minors', userId),
+    // One flat parallel batch: three session-cached full-table lookups
+    // (shared with PeopleService) plus the three join tables. Replaces the
+    // old join-table → lookup-by-ids sequential chains.
+    final results = await Future.wait<dynamic>([
+      peopleService.lookupNameMap('majors'),
+      peopleService.lookupNameMap('academic_years'),
+      peopleService.lookupNameMap('interests'),
+      _fetchJoinIds('student_interests', 'user_id', userId, 'interest_id'),
+      _fetchJoinIds('profile_double_majors', 'profile_id', userId, 'major_id'),
+      _fetchJoinIds('profile_minors', 'profile_id', userId, 'major_id'),
     ]);
-    final interests = results[2] as List<ProfileLookupItem>;
-    final doubleMajors = results[3] as List<ProfileLookupItem>;
-    final minors = results[4] as List<ProfileLookupItem>;
+
+    final majorNames = results[0] as Map<String, String>;
+    final yearNames = results[1] as Map<String, String>;
+    final interestNames = results[2] as Map<String, String>;
+    final interests = _resolveOrdered(
+      interestNames,
+      results[3] as List<String>,
+    );
+    final doubleMajors = _resolveOrdered(
+      majorNames,
+      results[4] as List<String>,
+    );
+    final minors = _resolveOrdered(majorNames, results[5] as List<String>);
 
     return StudentProfileData(
-      id: profile['id'].toString(),
+      id: userId,
       email: _nullableString(profile['email']) ?? '',
       fullName: _nullableString(profile['full_name']) ?? '',
       role: _nullableString(profile['role']) ?? 'student',
       avatarUrl: _nullableString(profile['avatar_url']),
       bio: _nullableString(profile['bio']),
       majorId: majorId,
-      majorName: results[0] as String?,
+      majorName: majorId == null ? null : _nullableString(majorNames[majorId]),
       academicYearId: academicYearId,
-      academicYearName: results[1] as String?,
+      academicYearName: academicYearId == null
+          ? null
+          : _nullableString(yearNames[academicYearId]),
       interestIds: interests.map((item) => item.id).toList(),
       interestNames: interests.map((item) => item.name).toList(),
       doubleMajorIds: doubleMajors.map((item) => item.id).toList(),
@@ -130,6 +191,45 @@ class StudentProfileService {
       minorIds: minors.map((item) => item.id).toList(),
       minorNames: minors.map((item) => item.name).toList(),
     );
+  }
+
+  /// The lookup maps are fetched ordered by `sort_order`, so iterating their
+  /// entries in insertion order reproduces the ordering the old
+  /// `_fetchLookupItemsByIds` (`.order('sort_order')`) produced.
+  List<ProfileLookupItem> _resolveOrdered(
+    Map<String, String> namesById,
+    List<String> ids,
+  ) {
+    if (ids.isEmpty) return const [];
+    final wanted = ids.toSet();
+    return [
+      for (final entry in namesById.entries)
+        if (wanted.contains(entry.key) && entry.value.isNotEmpty)
+          ProfileLookupItem(id: entry.key, name: entry.value),
+    ];
+  }
+
+  Future<List<String>> _fetchJoinIds(
+    String tableName,
+    String userColumn,
+    String userId,
+    String targetColumn,
+  ) async {
+    final client = _client;
+    if (client == null) return const [];
+
+    try {
+      final rows = await client
+          .from(tableName)
+          .select(targetColumn)
+          .eq(userColumn, userId);
+      return rows
+          .map((row) => _nullableString(row[targetColumn]))
+          .whereType<String>()
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<ProfileLookupItem>> fetchMajors() {
@@ -311,95 +411,6 @@ class StudentProfileService {
     } catch (_) {
       return const [];
     }
-  }
-
-  Future<String?> _fetchLookupName(String tableName, String? id) async {
-    final client = _client;
-    if (client == null || id == null) return null;
-
-    try {
-      final row = await client
-          .from(tableName)
-          .select('name')
-          .eq('id', id)
-          .maybeSingle();
-
-      if (row == null) return null;
-      return _nullableString(row['name']);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<List<ProfileLookupItem>> _fetchStudentInterestItems(
-    String userId,
-  ) async {
-    final client = _client;
-    if (client == null) return const [];
-
-    try {
-      final rows = await client
-          .from('student_interests')
-          .select('interest_id')
-          .eq('user_id', userId);
-
-      final interestIds = rows
-          .map((row) => _nullableString(row['interest_id']))
-          .whereType<String>()
-          .toList();
-
-      return _fetchLookupItemsByIds('interests', interestIds);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<List<ProfileLookupItem>> _fetchProfileMajorItems(
-    String tableName,
-    String userId,
-  ) async {
-    final client = _client;
-    if (client == null) return const [];
-
-    try {
-      final rows = await client
-          .from(tableName)
-          .select('major_id')
-          .eq('profile_id', userId);
-
-      final majorIds = rows
-          .map((row) => _nullableString(row['major_id']))
-          .whereType<String>()
-          .toList();
-
-      return _fetchLookupItemsByIds('majors', majorIds);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<List<ProfileLookupItem>> _fetchLookupItemsByIds(
-    String tableName,
-    List<String> ids,
-  ) async {
-    final client = _client;
-    if (client == null || ids.isEmpty) return const [];
-
-    final rows = await client
-        .from(tableName)
-        .select('id, name')
-        .inFilter('id', ids)
-        .order('sort_order', ascending: true);
-
-    return rows
-        .map(
-          (row) => ProfileLookupItem(
-            id: row['id'].toString(),
-            name: row['name'].toString(),
-          ),
-        )
-        .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
-        .toList();
   }
 
   Future<void> _replaceJoinRows({

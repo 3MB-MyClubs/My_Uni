@@ -220,7 +220,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -269,7 +269,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         height: 42,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
         child: Icon(icon, color: color),
       ),
@@ -543,7 +543,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 backgroundColor: AppColors.primaryRed,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                 ),
               ),
               child: Text(
@@ -594,15 +594,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           borderSide: BorderSide(color: AppColors.primaryRed, width: 1.5),
         ),
       ),
@@ -617,7 +617,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         decoration: BoxDecoration(
           color: on ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.all(Radius.circular(999)),
           border: Border.all(
             color: on ? AppColors.primaryRed : AppColors.divider,
           ),

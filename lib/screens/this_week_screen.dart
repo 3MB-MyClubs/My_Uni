@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
@@ -11,7 +13,7 @@ import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../services/tutorial_anchors.dart';
-import '../widgets/club_avatar.dart';
+import '../widgets/event_cover_image.dart';
 import 'event_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +50,7 @@ Color _clubColor(String clubId) {
     Color(0xFF4527A0),
     Color(0xFFC62828),
   ];
-  final idx = clubs.indexWhere((c) => c.id == clubId);
+  final idx = clubOrdinal(clubId);
   return colors[(idx < 0 ? 0 : idx) % colors.length];
 }
 
@@ -90,12 +92,6 @@ String _shortDay(DateTime d) {
   return '${_kWeekdays[d.weekday].substring(0, 3)} ${d.day}';
 }
 
-String _relativeDay(DateTime d) {
-  if (_isDateToday(d)) return S.today;
-  if (_isDateTomorrow(d)) return S.tomorrow;
-  return _kWeekdays[d.weekday].substring(0, 3);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Date result — differentiates explicit Done from sheet dismiss
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +130,8 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     super.initState();
     _loadEventContent();
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
+    contentStore.addListener(_onContentChanged);
     final now = DateTime.now();
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -146,10 +144,16 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   void dispose() {
     _searchController.dispose();
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
+    contentStore.removeListener(_onContentChanged);
     super.dispose();
   }
 
   void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onContentChanged() {
     if (mounted) setState(() {});
   }
 
@@ -316,7 +320,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
+    final topPad = MediaQuery.paddingOf(context).top;
     final results = _results();
     final newEventCount = _newUnopenedEvents().length;
     final searching = _query.trim().isNotEmpty;
@@ -347,7 +351,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           margin: const EdgeInsets.only(right: 10, top: 2),
                           decoration: BoxDecoration(
                             color: AppColors.lightGray,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
                           ),
                           child: Icon(
                             Icons.arrow_back_ios_new_rounded,
@@ -460,7 +464,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                           height: 34,
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(100),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(100),
+                            ),
                             border: Border.all(
                               color: AppColors.primaryRed.withValues(
                                 alpha: 0.25,
@@ -552,7 +558,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
             SliverToBoxAdapter(
               child: SizedBox(
-                height: MediaQuery.of(context).padding.bottom + 90,
+                height: MediaQuery.paddingOf(context).bottom + 90,
               ),
             ),
           ],
@@ -621,7 +627,7 @@ class _SearchBarState extends State<_SearchBar> {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         border: Border.all(color: AppColors.divider, width: 1.5),
       ),
       child: Row(
@@ -715,7 +721,7 @@ class _FilterPillBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: active ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(
             color: active ? AppColors.primaryRed : AppColors.divider,
             width: 1.5,
@@ -780,7 +786,7 @@ class _LiveToggleBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: active ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(
             color: active ? AppColors.primaryRed : AppColors.divider,
             width: 1.5,
@@ -819,7 +825,7 @@ class _AudienceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(20, 10, 20, bottom + 20),
       decoration: BoxDecoration(
@@ -841,7 +847,7 @@ class _AudienceSheet extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
           ),
           const SizedBox(height: 18),
@@ -902,7 +908,7 @@ class _AudienceOption extends StatelessWidget {
           color: selected
               ? AppColors.primaryRed.withValues(alpha: 0.08)
               : AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(
             color: selected
                 ? AppColors.primaryRed.withValues(alpha: 0.4)
@@ -919,7 +925,7 @@ class _AudienceOption extends StatelessWidget {
                 color: selected
                     ? AppColors.primaryRed.withValues(alpha: 0.15)
                     : AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.all(Radius.circular(11)),
               ),
               child: Icon(
                 icon,
@@ -1106,7 +1112,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     final today = _todayDate;
     final weeks = _weeks;
 
@@ -1132,7 +1138,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
           ),
           const SizedBox(height: 18),
@@ -1295,7 +1301,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primaryRed.withValues(alpha: 0.30),
@@ -1343,225 +1349,199 @@ class _WeekEventRow extends StatelessWidget {
     this.rsvpAnchorKey,
   });
 
+  String _dateTimeChipLabel() {
+    if (_isLive(event)) return 'LIVE · ${_timeStr(event.dateTime)}';
+    if (_isDateToday(event.dateTime)) {
+      return '${S.today} · ${_timeStr(event.dateTime)}';
+    }
+    if (_isDateTomorrow(event.dateTime)) {
+      return '${S.tomorrow} · ${_timeStr(event.dateTime)}';
+    }
+    return '${_kWeekdays[event.dateTime.weekday].substring(0, 3)}. ${_timeStr(event.dateTime)}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
     final live = _isLive(event);
     final canSeeAttendance = canViewEventAttendance(event);
+    final rsvpPill = rsvpAnchorKey == null
+        ? _WeekRsvpPill(event: event)
+        : KeyedSubtree(
+            key: rsvpAnchorKey,
+            child: _WeekRsvpPill(event: event),
+          );
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.all(Radius.circular(22)),
           border: Border.all(
             color: live
                 ? AppColors.primaryRed.withValues(alpha: 0.5)
-                : AppColors.divider,
+                : AppColors.primaryRed.withValues(
+                    alpha: themeService.isDark ? 0.34 : 0.18,
+                  ),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: themeService.isDark ? 0.22 : 0.06,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClubAvatar(
-                  clubId: club.id,
-                  clubName: club.name,
-                  color: color,
-                  imageUrl: club.logoUrl,
-                  size: 46,
-                  fontSize: 19,
-                  shape: 'rounded',
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              club.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.secondaryText,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (live)
-                            const _LiveBadge()
-                          else
-                            Text(
-                              _relativeDay(event.dateTime),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.secondaryText,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
+            SizedBox(
+              height: 150,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  EventCoverImage(
+                    event: event,
+                    color: color,
+                    width: double.infinity,
+                    height: 150,
+                    cacheWidth: 700,
+                    cacheHeight: 300,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.46),
                         ],
                       ),
-                      const SizedBox(height: 3),
-                      SizedBox(
-                        height: 38.4,
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Text(
-                            event.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.text,
-                              letterSpacing: -0.4,
-                              height: 1.2,
-                            ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 12,
+                    top: 11,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.68),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Text(
+                        _dateTimeChipLabel(),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.text,
+                      letterSpacing: -0.42,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                            letterSpacing: -0.1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _Pill(
-                            label: _shortDay(event.dateTime),
-                            fg: color,
-                            bg: color.withValues(alpha: 0.12),
+                      if (authService.isStudentSession) ...[
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 92,
+                          height: 34,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: rsvpPill,
                           ),
-                          if (canSeeAttendance) ...[
-                            const SizedBox(width: 7),
-                            _Pill(
-                              label:
-                                  '${event.attendeeUserIds.length} attending',
-                              icon: Icons.people_outline,
-                              fg: AppColors.secondaryText,
-                              bg: Colors.transparent,
-                              border: true,
-                            ),
-                          ],
-                        ],
-                      ),
+                        ),
+                      ],
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 13,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    event.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 13,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  live
-                      ? 'Now · ${_timeStr(event.dateTime)}'
-                      : _timeStr(event.dateTime),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 92,
-                  height: 34,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: rsvpAnchorKey == null
-                        ? _WeekRsvpPill(event: event)
-                        : KeyedSubtree(
-                            key: rsvpAnchorKey,
-                            child: _WeekRsvpPill(event: event),
+                  if (canSeeAttendance) ...[
+                    const SizedBox(height: 9),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(color: color.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 13,
+                            color: color.withValues(alpha: 0.9),
                           ),
-                  ),
-                ),
-              ],
+                          const SizedBox(width: 5),
+                          Text(
+                            '${event.attendeeUserIds.length} attending',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: color.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  final String label;
-  final Color fg;
-  final Color bg;
-  final IconData? icon;
-  final bool border;
-
-  const _Pill({
-    required this.label,
-    required this.fg,
-    required this.bg,
-    this.icon,
-    this.border = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(100),
-        border: border ? Border.all(color: AppColors.divider) : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 11, color: fg),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: fg,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1587,7 +1567,7 @@ class _WeekRsvpPill extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Text(
@@ -1621,7 +1601,7 @@ class _WeekRsvpPill extends StatelessWidget {
               color: attending
                   ? AppColors.primaryRed.withValues(alpha: 0.10)
                   : AppColors.primaryRed,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.all(Radius.circular(100)),
               border: Border.all(
                 color: attending
                     ? AppColors.primaryRed.withValues(alpha: 0.3)
@@ -1660,41 +1640,6 @@ class _WeekRsvpPill extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Live badge (pulsing dot + LIVE)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LiveBadge extends StatelessWidget {
-  const _LiveBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(7, 3, 8, 3),
-      decoration: BoxDecoration(
-        color: AppColors.primaryRed.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const _PulseDot(color: AppColors.primaryRed),
-          const SizedBox(width: 4),
-          Text(
-            'LIVE',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primaryRed,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1739,7 +1684,7 @@ class _EmptyState extends StatelessWidget {
               height: 56,
               decoration: BoxDecoration(
                 color: AppColors.primaryRed.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.all(Radius.circular(16)),
               ),
               child: Icon(
                 trulyEmpty
@@ -1781,7 +1726,7 @@ class _EmptyState extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(100),
+                    borderRadius: BorderRadius.all(Radius.circular(100)),
                   ),
                   child: Text(
                     S.resetFilters,
@@ -1827,7 +1772,7 @@ class _HeaderIconBtn extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   border: Border.all(color: AppColors.divider),
                 ),
                 child: Icon(icon, size: 18, color: AppColors.secondaryText),
@@ -1844,7 +1789,7 @@ class _HeaderIconBtn extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
                     border: Border.all(color: AppColors.background, width: 2),
                   ),
                   child: Text(
@@ -1882,10 +1827,10 @@ class _NewEventsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.74,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.74,
       ),
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -1907,7 +1852,7 @@ class _NewEventsSheet extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
           ),
           Padding(
@@ -1919,7 +1864,7 @@ class _NewEventsSheet extends StatelessWidget {
                   height: 38,
                   decoration: BoxDecoration(
                     color: AppColors.primaryRed.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.all(Radius.circular(13)),
                   ),
                   child: Icon(
                     Icons.notifications_active_outlined,
@@ -1984,7 +1929,7 @@ class _NoNewEventsState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(28, 26, 28, bottom + 30),
       child: Column(
@@ -1995,7 +1940,7 @@ class _NoNewEventsState extends StatelessWidget {
             height: 66,
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.all(Radius.circular(22)),
               border: Border.all(color: AppColors.divider),
             ),
             child: Icon(
@@ -2053,7 +1998,7 @@ class _NewEventNotificationCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
@@ -2070,7 +2015,7 @@ class _NewEventNotificationCard extends StatelessWidget {
               height: 58,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.all(Radius.circular(15)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -2208,15 +2153,14 @@ class _PulseDotState extends State<_PulseDot>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (ctx, child) => Container(
+    // Opacity-only repaint of a cached child (visually identical for a solid
+    // dot) instead of rebuilding the Container every animation tick.
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
         width: 6,
         height: 6,
-        decoration: BoxDecoration(
-          color: widget.color.withValues(alpha: _anim.value),
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

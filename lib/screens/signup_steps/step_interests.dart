@@ -159,7 +159,9 @@ class _StepInterestsState extends State<StepInterests> {
                           ),
                           decoration: BoxDecoration(
                             color: sel ? SC.burgundy : SC.card,
-                            borderRadius: BorderRadius.circular(100),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(100),
+                            ),
                             border: Border.all(
                               color: sel ? SC.burgundy : SC.hair,
                               width: 1,

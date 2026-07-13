@@ -18,7 +18,8 @@ class LocaleService extends ChangeNotifier {
     }
   }
 
-  bool hasChosenLanguage(String userId) => _chosenLanguageUsers.contains(userId);
+  bool hasChosenLanguage(String userId) =>
+      _chosenLanguageUsers.contains(userId);
 
   Future<void> setLanguage(String code) async {
     if (_languageCode == code) return;

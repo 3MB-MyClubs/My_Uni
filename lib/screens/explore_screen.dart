@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
@@ -14,6 +15,7 @@ import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
@@ -81,12 +83,12 @@ class _ExploreScreenState extends State<ExploreScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 2,
+      length: 3,
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
-    _tabController.addListener(() => setState(() {}));
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
     _loadClubContent();
     _loadPeople();
   }
@@ -98,6 +100,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     _contentSearchController.dispose();
     _peopleSearchController.dispose();
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -347,9 +350,17 @@ class _ExploreScreenState extends State<ExploreScreen>
       ),
       body: ListenableBuilder(
         listenable: userState,
+        // Builder defers each tab's filter/sort work from children-list
+        // construction to the page actually building — TabBarView only builds
+        // the visible page (plus its neighbor mid-swipe), so only that tab
+        // recomputes on a userState notify instead of all three.
         builder: (context, _) => TabBarView(
           controller: _tabController,
-          children: [_buildClubsTab(), _buildContentTab(), _buildPeopleTab()],
+          children: [
+            Builder(builder: (_) => _buildClubsTab()),
+            Builder(builder: (_) => _buildContentTab()),
+            Builder(builder: (_) => _buildPeopleTab()),
+          ],
         ),
       ),
     );
@@ -370,7 +381,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.all(Radius.circular(13)),
         border: Border.all(color: AppColors.divider, width: 1.5),
       ),
       child: Row(
@@ -454,7 +465,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? AppColors.lightRed : AppColors.primaryRed,
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: BorderRadius.all(Radius.circular(100)),
           border: Border.all(
             color: active ? AppColors.primaryRed : Colors.transparent,
             width: 1.5,
@@ -477,7 +488,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.all(Radius.circular(100)),
       ),
       child: Text(
         text,
@@ -547,7 +558,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                     16,
                     0,
                     16,
-                    MediaQuery.of(context).padding.bottom + 112,
+                    MediaQuery.paddingOf(context).bottom + 112,
                   ),
                   itemCount: filtered.length + 1,
                   itemBuilder: (context, i) {
@@ -557,7 +568,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                       club: club,
                       category: categoryFor(club),
                       members: clubMemberCount(club.id),
-                      color: _hueFor(clubs.indexOf(club)),
+                      color: _hueFor(clubOrdinal(club.id)),
                       joined: userState.isFollowing(club.id),
                       onJoin: () => handleFollowTap(context, club.id, () {
                         _persist();
@@ -568,7 +579,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                         MaterialPageRoute(
                           builder: (_) => ClubProfileScreen(
                             club: club,
-                            color: _hueFor(clubs.indexOf(club)),
+                            color: _hueFor(clubOrdinal(club.id)),
                           ),
                         ),
                       ),
@@ -584,10 +595,7 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   // ─── Events tab ──────────────────────────────────────────────────────────
 
-  Club? _clubById(String id) {
-    final i = clubs.indexWhere((c) => c.id == id);
-    return i < 0 ? null : clubs[i];
-  }
+  Club? _clubById(String id) => clubForId(id);
 
   List<Event> get _filteredEvents {
     final q = _contentQuery.trim().toLowerCase();
@@ -622,40 +630,49 @@ class _ExploreScreenState extends State<ExploreScreen>
         Expanded(
           child: matchedEvents.isEmpty
               ? _emptyState(S.noContentMatch, S.tryDifferentSearch)
-              : ListView(
+              : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
                     0,
                     16,
-                    MediaQuery.of(context).padding.bottom + 112,
+                    MediaQuery.paddingOf(context).bottom + 112,
                   ),
-                  children: [
-                    _sectionLabel(
-                      searching
-                          ? '${S.filterEvents} · ${matchedEvents.length}'
-                          : S.upcomingEvents,
-                    ),
-                    ...matchedEvents.map(_eventResultRow),
-                  ],
+                  itemCount: matchedEvents.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return _sectionLabel(
+                        searching
+                            ? '${S.filterEvents} · ${matchedEvents.length}'
+                            : S.upcomingEvents,
+                      );
+                    }
+                    return _eventResultRow(matchedEvents[i - 1]);
+                  },
                 ),
         ),
       ],
     );
   }
 
-  static const List<String> _monthLabels = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+  static const List<String> _weekdayLabels = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
   ];
 
   Widget _eventResultRow(Event event) {
     final club = _clubById(event.clubId);
-    final color = _hueFor(clubs.indexWhere((c) => c.id == event.clubId));
+    final color = _hueFor(clubOrdinal(event.clubId));
     final date = event.dateTime;
     final time =
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
     return GestureDetector(
+      key: ValueKey(event.id),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -663,68 +680,120 @@ class _ExploreScreenState extends State<ExploreScreen>
         ),
       ),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+          border: Border.all(color: color.withValues(alpha: 0.24)),
         ),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withValues(alpha: 0.25)),
-              ),
-              child: Column(
+            SizedBox(
+              width: 112,
+              height: 82,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Text(
-                    _monthLabels[date.month - 1],
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                      color: color,
+                  EventCoverImage(
+                    event: event,
+                    color: color,
+                    width: 112,
+                    height: 82,
+                    cacheWidth: 230,
+                    cacheHeight: 170,
+                    borderRadius: BorderRadius.all(Radius.circular(15)),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(15)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.02),
+                          Colors.black.withValues(alpha: 0.34),
+                        ],
+                      ),
                     ),
                   ),
-                  Text(
-                    '${date.day}',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.text,
+                  Positioned(
+                    left: 7,
+                    top: 7,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.66),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.12),
+                        ),
+                      ),
+                      child: Text(
+                        '${_weekdayLabels[date.weekday - 1]}. $time',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white.withValues(alpha: 0.94),
+                          letterSpacing: -0.1,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 13),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     event.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${club?.name ?? 'Campus event'} · $time · ${event.location}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.35,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text,
+                      height: 1.16,
+                      letterSpacing: -0.25,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    club?.name ?? 'Campus event',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.2,
                       color: AppColors.secondaryText,
                     ),
                   ),
@@ -806,7 +875,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                             color: _peopleFeedbackIsFollowing
                                 ? AppColors.lightRed
                                 : AppColors.card,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
                             border: Border.all(
                               color: _peopleFeedbackIsFollowing
                                   ? AppColors.primaryRed.withValues(alpha: 0.25)
@@ -850,7 +919,7 @@ class _ExploreScreenState extends State<ExploreScreen>
               16,
               0,
               16,
-              MediaQuery.of(context).padding.bottom + 112,
+              MediaQuery.paddingOf(context).bottom + 112,
             ),
             physics: const AlwaysScrollableScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -970,7 +1039,7 @@ class _ClubRow extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(
@@ -1039,7 +1108,7 @@ class _PersonRowSkeleton extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -1054,19 +1123,19 @@ class _PersonRowSkeleton extends StatelessWidget {
                 SkeletonBox(
                   width: 130,
                   height: 14,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
                 ),
                 const SizedBox(height: 8),
                 SkeletonBox(
                   width: double.infinity,
                   height: 12,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
                 const SizedBox(height: 9),
                 SkeletonBox(
                   width: 86,
                   height: 18,
-                  borderRadius: BorderRadius.circular(100),
+                  borderRadius: BorderRadius.all(Radius.circular(100)),
                 ),
               ],
             ),
@@ -1075,7 +1144,7 @@ class _PersonRowSkeleton extends StatelessWidget {
           SkeletonBox(
             width: 76,
             height: 34,
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.all(Radius.circular(100)),
           ),
         ],
       ),
@@ -1153,7 +1222,7 @@ class _PersonRowState extends State<_PersonRow> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(
             color: _changing && _displayFollowing
                 ? AppColors.primaryRed.withValues(alpha: 0.35)
@@ -1238,7 +1307,7 @@ class _PersonRowState extends State<_PersonRow> {
                       color: _displayFollowing
                           ? AppColors.lightRed
                           : AppColors.primaryRed,
-                      borderRadius: BorderRadius.circular(100),
+                      borderRadius: BorderRadius.all(Radius.circular(100)),
                       border: Border.all(
                         color: _displayFollowing
                             ? AppColors.primaryRed

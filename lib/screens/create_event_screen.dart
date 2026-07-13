@@ -19,6 +19,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/supabase_event_service.dart';
 import '../services/user_state.dart';
+import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/mention_text_field.dart';
@@ -520,6 +521,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
       if (!mounted) return;
       if (ok) {
+        contentStore.notifyContentChanged();
         widget.onCreated?.call();
         Navigator.pop(context);
       } else {
@@ -558,6 +560,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       if (!mounted) return;
       events.add(newEvent);
       unawaited(contentStore.saveEvents());
+      contentStore.notifyContentChanged();
       unawaited(clubNotificationService.notifyFollowersAboutEvent(newEvent));
       widget.onCreated?.call();
       Navigator.pop(context);
@@ -803,15 +806,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                               fontSize: 13,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                               borderSide: BorderSide(color: AppColors.divider),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                               borderSide: BorderSide(color: AppColors.divider),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
                               borderSide: BorderSide(
                                 color: AppColors.primaryRed,
                               ),
@@ -852,7 +861,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.primaryRed,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
                           child: const Text(
                             'Add',
@@ -950,7 +959,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: AppColors.divider),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -1044,7 +1053,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                         border: Border.all(
                           color: AppColors.divider,
                           style: BorderStyle.solid,
@@ -1117,7 +1126,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   side: BorderSide(color: AppColors.divider),
                   foregroundColor: AppColors.text,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.all(Radius.circular(20)),
                   ),
                 ),
               ),
@@ -1139,7 +1148,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   side: BorderSide(color: AppColors.divider),
                   foregroundColor: AppColors.text,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.all(Radius.circular(20)),
                   ),
                 ),
               ),
@@ -1161,7 +1170,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   side: BorderSide(color: AppColors.divider),
                   foregroundColor: AppColors.text,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.all(Radius.circular(20)),
                   ),
                 ),
               ),
@@ -1184,7 +1193,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
               child: Row(
                 children: [
@@ -1250,7 +1259,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             color: filled
                                 ? AppColors.primaryRed
                                 : AppColors.divider,
-                            borderRadius: BorderRadius.circular(2),
+                            borderRadius: BorderRadius.all(Radius.circular(2)),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1312,7 +1321,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   vertical: 14,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                 ),
               ),
               child: Text(_step == 0 ? 'Cancel' : 'Back'),
@@ -1337,7 +1346,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         foregroundColor: enabled ? Colors.white : AppColors.secondaryText,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+        ),
       ),
       child: const Text(
         'Next',
@@ -1357,7 +1368,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         disabledForegroundColor: AppColors.secondaryText,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+        ),
       ),
       child: _isPosting
           ? const SizedBox(
@@ -1448,7 +1461,7 @@ class _EventPreviewCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.all(Radius.circular(18)),
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
@@ -1538,7 +1551,7 @@ class _EventPreviewCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.lightRed,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
                       ),
                       child: Text(
                         dateChip,
@@ -1627,7 +1640,9 @@ class _EventPreviewCard extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.surfaceAlt,
-                              borderRadius: BorderRadius.circular(100),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(100),
+                              ),
                               border: Border.all(color: AppColors.divider),
                             ),
                             child: Text(
@@ -1693,7 +1708,7 @@ class _HeroEditor extends StatelessWidget {
     final hasImage = imagePath != null;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.all(Radius.circular(16)),
       child: SizedBox(
         height: 200,
         child: Stack(
@@ -1805,12 +1820,12 @@ class _EventPreviewImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (_isRemoteEventImagePath(path)) {
-      return Image.network(
-        path,
+      return AppNetworkImage(
+        url: path,
         fit: BoxFit.cover,
-        loadingBuilder: (_, child, progress) =>
-            progress == null ? child : const SkeletonBox(),
-        errorBuilder: (_, _, _) => Container(
+        cacheWidth: 500,
+        placeholderBuilder: (_) => const SkeletonBox(),
+        errorBuilder: (_) => Container(
           color: AppColors.surfaceAlt,
           alignment: Alignment.center,
           child: Icon(
@@ -1879,7 +1894,7 @@ class _PhotoEditButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.50),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1949,7 +1964,7 @@ class _ScheduleSlotEditor extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
                   child: Text(
                     _fmtTime(entry.time),
@@ -1978,7 +1993,7 @@ class _ScheduleSlotEditor extends StatelessWidget {
                     color: entry.isHighlighted
                         ? AppColors.primaryRed.withValues(alpha: 0.12)
                         : AppColors.surfaceAlt,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                     border: Border.all(
                       color: entry.isHighlighted
                           ? AppColors.primaryRed.withValues(alpha: 0.4)
@@ -2021,15 +2036,15 @@ class _ScheduleSlotEditor extends StatelessWidget {
                 fontSize: 13,
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(color: AppColors.divider),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(color: AppColors.divider),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(color: AppColors.primaryRed),
               ),
               isDense: true,
@@ -2051,15 +2066,15 @@ class _ScheduleSlotEditor extends StatelessWidget {
                 fontSize: 12,
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(color: AppColors.divider),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(color: AppColors.divider),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
                 borderSide: BorderSide(color: AppColors.primaryRed),
               ),
               isDense: true,
@@ -2134,7 +2149,7 @@ class _OptionalBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.all(Radius.circular(4)),
         border: Border.all(color: AppColors.divider),
       ),
       child: Text(
@@ -2158,7 +2173,7 @@ class _SectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         border: Border.all(color: AppColors.divider),
       ),
       child: child,
@@ -2279,7 +2294,7 @@ class _DateTimeRow extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
                   child: Text(
                     _fmtDate(dateTime),
@@ -2301,7 +2316,7 @@ class _DateTimeRow extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.lightRed,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
                   child: Text(
                     _fmtTime(dateTime),

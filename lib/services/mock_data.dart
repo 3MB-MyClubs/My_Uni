@@ -5733,3 +5733,45 @@ int postLikeCount(String postId) =>
 
 int postShareCount(String targetId) =>
     shares.where((s) => s.targetId == targetId).length;
+
+// ─── Club lookup index ────────────────────────────────────────────────────────
+// O(1) replacements for the clubs.firstWhere / indexWhere / indexOf scans that
+// screens run per list row. `clubs` is cleared and refilled in place on bulk
+// hydration (with new Club instances), so the index self-invalidates off a
+// cheap structural signature instead of requiring explicit invalidation calls.
+
+int _clubIndexSig = 0;
+Map<String, Club> _clubByIdMap = const {};
+Map<String, int> _clubOrdinalMap = const {};
+
+void _ensureClubIndex() {
+  final sig = Object.hash(
+    clubs.length,
+    clubs.isEmpty ? 0 : identityHashCode(clubs.first),
+  );
+  if (sig == _clubIndexSig && _clubByIdMap.isNotEmpty == clubs.isNotEmpty) {
+    return;
+  }
+  _clubIndexSig = sig;
+  final byId = <String, Club>{};
+  final ordinal = <String, int>{};
+  for (var i = 0; i < clubs.length; i++) {
+    // putIfAbsent (first wins) matches firstWhere/indexWhere/indexOf exactly,
+    // so ordinal-derived hues/colors cannot shift if an id is ever duplicated.
+    byId.putIfAbsent(clubs[i].id, () => clubs[i]);
+    ordinal.putIfAbsent(clubs[i].id, () => i);
+  }
+  _clubByIdMap = byId;
+  _clubOrdinalMap = ordinal;
+}
+
+Club? clubForId(String id) {
+  _ensureClubIndex();
+  return _clubByIdMap[id];
+}
+
+/// Position of the club in [clubs], or -1 like `indexWhere` when absent.
+int clubOrdinal(String id) {
+  _ensureClubIndex();
+  return _clubOrdinalMap[id] ?? -1;
+}

@@ -335,7 +335,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
               height: 36,
               decoration: BoxDecoration(
                 color: AppColors.card,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Icon(
@@ -377,7 +377,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
                 color: AppColors.card,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.all(Radius.circular(999)),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Text(
@@ -399,7 +399,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
               height: 34,
               decoration: BoxDecoration(
                 color: AppColors.primaryRed,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.all(Radius.circular(11)),
               ),
               child: const Icon(
                 Icons.add_rounded,
@@ -509,7 +509,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                 color: active
                     ? f.color.withValues(alpha: 0.15)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.all(Radius.circular(999)),
                 border: Border.all(color: active ? f.color : AppColors.divider),
               ),
               child: Row(
@@ -586,16 +586,13 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
         itemBuilder: (ctx, i) {
           final cell = cells[i];
           if (cell.out) {
-            return Opacity(
-              opacity: 0.25,
-              child: Center(
-                child: Text(
-                  '${cell.d}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.text,
-                  ),
+            return Center(
+              child: Text(
+                '${cell.d}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.text.withValues(alpha: 0.25),
                 ),
               ),
             );
@@ -614,7 +611,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                     : isSelected
                     ? AppColors.card
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
                 border: Border.all(
                   color: isSelected && !isToday
                       ? AppColors.primaryRed
@@ -728,7 +725,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                   height: 46,
                   decoration: BoxDecoration(
                     color: AppColors.card,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                     border: Border.all(color: AppColors.divider),
                   ),
                   child: Icon(
@@ -755,7 +752,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryRed,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
                     ),
                     child: const Text(
                       '+ Add an event',
@@ -863,64 +860,90 @@ class _AgendaItemState extends State<_AgendaItem> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 60, height: 60,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: AppColors.primaryRed.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.calendar_month_rounded,
-                  size: 30, color: AppColors.primaryRed),
+              child: Icon(
+                Icons.calendar_month_rounded,
+                size: 30,
+                color: AppColors.primaryRed,
+              ),
             ),
             const SizedBox(height: 16),
-            Text('Allow Calendar Access',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.text),
-                textAlign: TextAlign.center),
+            Text(
+              'Allow Calendar Access',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 10),
             Text(
               'To save this event to your phone\'s Calendar app, we need permission to access your calendar.\n\nYour calendar data is only used to add events you choose.',
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText, height: 1.5),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.secondaryText,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 18),
           ],
         ),
         actions: [
-          Row(children: [
-            Expanded(
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.secondaryText,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: AppColors.divider),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.secondaryText,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      side: BorderSide(color: AppColors.divider),
+                    ),
+                  ),
+                  child: const Text(
+                    'Not Now',
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                child: const Text('Not Now', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  backgroundColor: AppColors.primaryRed,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                    ),
+                  ),
+                  child: const Text(
+                    'Allow Access',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
-                child: const Text('Allow Access', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
-            ),
-          ]),
+            ],
+          ),
         ],
       ),
     );
@@ -931,28 +954,45 @@ class _AgendaItemState extends State<_AgendaItem> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 60, height: 60,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.lock_outline_rounded, size: 30, color: Colors.orange),
+              child: const Icon(
+                Icons.lock_outline_rounded,
+                size: 30,
+                color: Colors.orange,
+              ),
             ),
             const SizedBox(height: 16),
-            Text('Calendar Access Denied',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.text),
-                textAlign: TextAlign.center),
+            Text(
+              'Calendar Access Denied',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 10),
             Text(
               'To sync events to your phone, please allow calendar access in:\n\nSettings → Privacy & Security → Calendars',
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText, height: 1.5),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.secondaryText,
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 18),
@@ -967,9 +1007,14 @@ class _AgendaItemState extends State<_AgendaItem> {
                 backgroundColor: AppColors.primaryRed,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
               ),
-              child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Got it',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -988,7 +1033,8 @@ class _AgendaItemState extends State<_AgendaItem> {
     final meta = widget.event.type;
     final color = meta.color;
     final isAppEvent =
-        widget.event.type == CalEventType.event && widget.event.sourceEventId != null;
+        widget.event.type == CalEventType.event &&
+        widget.event.sourceEventId != null;
 
     return GestureDetector(
       onTap: widget.onTap,
@@ -996,7 +1042,7 @@ class _AgendaItemState extends State<_AgendaItem> {
         padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(
@@ -1037,7 +1083,7 @@ class _AgendaItemState extends State<_AgendaItem> {
               height: 44,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.all(Radius.circular(2)),
               ),
             ),
             const SizedBox(width: 12),
@@ -1055,7 +1101,7 @@ class _AgendaItemState extends State<_AgendaItem> {
                         ),
                         decoration: BoxDecoration(
                           color: color.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.all(Radius.circular(6)),
                         ),
                         child: Text(
                           meta.label.toUpperCase(),
@@ -1078,7 +1124,7 @@ class _AgendaItemState extends State<_AgendaItem> {
                             color: const Color(
                               0xFF1B5E20,
                             ).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.all(Radius.circular(6)),
                           ),
                           child: const Text(
                             'RSVP\'D',
@@ -1100,7 +1146,7 @@ class _AgendaItemState extends State<_AgendaItem> {
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.background,
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.all(Radius.circular(6)),
                             border: Border.all(color: AppColors.divider),
                           ),
                           child: Text(
@@ -1144,12 +1190,15 @@ class _AgendaItemState extends State<_AgendaItem> {
                       onTap: (_isSynced || _syncing) ? null : _handleAddToPhone,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: _isSynced
                               ? const Color(0xFF1B5E20).withValues(alpha: 0.12)
                               : AppColors.primaryRed.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
                           border: Border.all(
                             color: _isSynced
                                 ? const Color(0xFF4CAF50).withValues(alpha: 0.4)
@@ -1183,8 +1232,8 @@ class _AgendaItemState extends State<_AgendaItem> {
                               _syncing
                                   ? 'Adding…'
                                   : _isSynced
-                                      ? 'Added to phone'
-                                      : 'Add to phone',
+                                  ? 'Added to phone'
+                                  : 'Add to phone',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1228,7 +1277,7 @@ class _ArrowBtn extends StatelessWidget {
         height: 34,
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.all(Radius.circular(11)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Icon(icon, size: 18, color: AppColors.secondaryText),
@@ -1408,7 +1457,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
                     color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
                   ),
                 ),
               ),
@@ -1472,7 +1521,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                             color: _type == t
                                 ? t.color.withValues(alpha: 0.15)
                                 : AppColors.background,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
                             border: Border.all(
                               color: _type == t ? t.color : AppColors.divider,
                               width: _type == t ? 1.5 : 1,
@@ -1534,7 +1583,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     border: Border.all(color: AppColors.divider),
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.all(Radius.circular(11)),
                   ),
                   child: Text(
                     '${_months[_month]} $_day, $_year',
@@ -1596,7 +1645,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   border: Border.all(
                     color: _type.color.withValues(alpha: 0.30),
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
                 child: Row(
                   children: [
@@ -1605,7 +1654,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                       height: 36,
                       decoration: BoxDecoration(
                         color: _type.color,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1659,7 +1708,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                       border: Border.all(color: AppColors.divider),
                     ),
                     alignment: Alignment.center,
@@ -1731,15 +1780,15 @@ class _Field extends StatelessWidget {
         filled: true,
         fillColor: AppColors.background,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.all(Radius.circular(11)),
           borderSide: BorderSide(color: AppColors.divider),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.all(Radius.circular(11)),
           borderSide: BorderSide(color: AppColors.divider),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.all(Radius.circular(11)),
           borderSide: BorderSide(color: AppColors.primaryRed),
         ),
       ),
@@ -1758,7 +1807,7 @@ class _TimeBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.background,
         border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.all(Radius.circular(11)),
       ),
       child: Text(
         time,

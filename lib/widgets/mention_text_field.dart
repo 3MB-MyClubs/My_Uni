@@ -163,7 +163,7 @@ class _MentionTextFieldState extends State<MentionTextField> {
             constraints: const BoxConstraints(maxHeight: 220),
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.all(Radius.circular(16)),
               border: Border.all(color: AppColors.divider),
               boxShadow: [
                 BoxShadow(
@@ -175,6 +175,9 @@ class _MentionTextFieldState extends State<MentionTextField> {
             ),
             child: ListView.separated(
               shrinkWrap: true,
+              // Matches are capped at 6, but at ~44-52px/row that can still
+              // slightly exceed the 220px cap above, so keep it scrollable.
+              physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.symmetric(vertical: 6),
               itemCount: _matches.length,
               separatorBuilder: (_, index) => Divider(

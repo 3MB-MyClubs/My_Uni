@@ -11,17 +11,20 @@ class CalendarEventNotifier extends StateNotifier<CalendarAddState> {
   final String eventId;
   final CalendarService _service;
 
-  CalendarEventNotifier({required this.eventId, required CalendarService service})
-      : _service = service,
-        super(const CalendarAddIdle()) {
+  CalendarEventNotifier({
+    required this.eventId,
+    required CalendarService service,
+  }) : _service = service,
+       super(const CalendarAddIdle()) {
     _loadInitialState();
   }
 
   Future<void> _loadInitialState() async {
     final added = await _service.isAdded(eventId);
     if (mounted) {
-      state =
-          added ? const CalendarAddSuccess('Added to calendar') : const CalendarAddIdle();
+      state = added
+          ? const CalendarAddSuccess('Added to calendar')
+          : const CalendarAddIdle();
     }
   }
 
@@ -71,10 +74,14 @@ class CalendarEventNotifier extends StateNotifier<CalendarAddState> {
   }
 }
 
-final calendarEventProvider = StateNotifierProvider.family<
-    CalendarEventNotifier, CalendarAddState, String>(
-  (ref, eventId) => CalendarEventNotifier(
-    eventId: eventId,
-    service: ref.watch(calendarServiceProvider),
-  ),
-);
+final calendarEventProvider =
+    StateNotifierProvider.family<
+      CalendarEventNotifier,
+      CalendarAddState,
+      String
+    >(
+      (ref, eventId) => CalendarEventNotifier(
+        eventId: eventId,
+        service: ref.watch(calendarServiceProvider),
+      ),
+    );

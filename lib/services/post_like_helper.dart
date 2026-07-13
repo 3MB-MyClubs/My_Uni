@@ -33,7 +33,7 @@ Future<void> togglePostLike(String postId) async {
       ),
     );
   }
-  unawaited(contentStore.saveLikes());
+  contentStore.scheduleSave('likes');
 
   try {
     final studentUserId = authService.currentUser?.id;
@@ -77,7 +77,7 @@ Future<void> togglePostLike(String postId) async {
         (like) => like.postId == postId && like.userId == userId,
       );
     }
-    unawaited(contentStore.saveLikes());
+    contentStore.scheduleSave('likes');
   }
 }
 

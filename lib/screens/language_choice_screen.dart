@@ -37,10 +37,13 @@ class _LanguageChoiceScreenState extends State<LanguageChoiceScreen> {
                 height: 54,
                 decoration: BoxDecoration(
                   color: AppColors.lightRed,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.all(Radius.circular(18)),
                 ),
-                child: Icon(Icons.translate_rounded,
-                    color: AppColors.primaryRed, size: 28),
+                child: Icon(
+                  Icons.translate_rounded,
+                  color: AppColors.primaryRed,
+                  size: 28,
+                ),
               ),
               const SizedBox(height: 20),
               Text(
@@ -93,7 +96,8 @@ class _LanguageChoiceScreenState extends State<LanguageChoiceScreen> {
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -101,7 +105,9 @@ class _LanguageChoiceScreenState extends State<LanguageChoiceScreen> {
                       Text(
                         _code == 'tr' ? 'Devam Et' : 'Continue',
                         style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       const Icon(Icons.arrow_forward_rounded, size: 20),
@@ -138,7 +144,7 @@ class _LanguagePreviewCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(5),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
+          borderRadius: BorderRadius.all(Radius.circular(26)),
           border: Border.all(
             color: selected ? AppColors.primaryRed : AppColors.divider,
             width: selected ? 2.5 : 1.5,
@@ -159,7 +165,7 @@ class _LanguagePreviewCard extends StatelessWidget {
               height: 168,
               decoration: BoxDecoration(
                 color: AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.all(Radius.circular(20)),
               ),
               child: Center(
                 child: Column(

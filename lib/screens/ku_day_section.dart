@@ -32,7 +32,7 @@ const _kColors = [
 ];
 
 Color _colorFor(String id) {
-  final idx = clubs.indexWhere((c) => c.id == id);
+  final idx = clubOrdinal(id);
   return _kColors[(idx < 0 ? math.Random(id.hashCode).nextInt(6) : idx) %
       _kColors.length];
 }
@@ -103,7 +103,7 @@ class _KuDaySectionState extends State<KuDaySection> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.all(Radius.circular(10)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -204,7 +204,7 @@ class _DigestStrip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.all(Radius.circular(12)),
       ),
       child: Row(
         children: [
@@ -246,7 +246,7 @@ class _EmptyState extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
         ),
         child: Row(
           children: [
@@ -272,7 +272,7 @@ class _EmptyState extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.all(Radius.circular(10)),
                 ),
                 child: Text(
                   'Set up',
@@ -333,7 +333,7 @@ class _RecCardState extends State<_RecCard> {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: color.withValues(alpha: 0.22)),
         ),
         child: Column(
@@ -672,10 +672,7 @@ class _PersonBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final sharedClubs = user.subscribedClubIds
         .where(userState.followedClubIds.contains)
-        .map(
-          (id) =>
-              clubs.firstWhere((c) => c.id == id, orElse: () => clubs.first),
-        )
+        .map((id) => clubForId(id) ?? clubs.first)
         .take(2)
         .map((c) => _shortClubName(c.name))
         .join(', ');
@@ -987,7 +984,7 @@ class _ActionChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: filled ? color : color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
           border: Border.all(
             color: filled ? color : color.withValues(alpha: 0.35),
           ),

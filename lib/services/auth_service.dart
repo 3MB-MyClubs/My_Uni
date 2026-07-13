@@ -125,28 +125,39 @@ class AuthService {
         final authUser = response.user;
         if (authUser == null) return false;
 
-        StudentProfileData? profile;
+        // Login blocks only on the single `profiles` row (name/email/role/
+        // avatar/bio); interests, majors and minors hydrate in the background
+        // right after — the profile tab self-heals via its userState listener.
+        Map<String, dynamic>? profileRow;
         try {
-          profile = await studentProfileService.fetchProfile(authUser.id);
-          if (profile != null) {
-            studentProfileService.applyToUserState(profile);
-          }
+          profileRow = await studentProfileService.fetchProfileCore(
+            authUser.id,
+          );
         } catch (_) {
-          profile = null;
+          profileRow = null;
+        }
+
+        String? rowString(String key) {
+          final text = profileRow?[key]?.toString().trim() ?? '';
+          return text.isEmpty ? null : text;
         }
 
         _currentUser = User(
           id: authUser.id,
           name:
-              profile?.fullName ??
+              rowString('full_name') ??
               (authUser.userMetadata?['full_name'] as String?) ??
               normalizedEmail,
-          email: profile?.email ?? normalizedEmail,
+          email: rowString('email') ?? normalizedEmail,
           password: '',
-          role: profile?.role ?? 'student',
+          role: rowString('role') ?? 'student',
           subscribedClubIds: const [],
         );
         _currentAdmin = null;
+        if (profileRow != null) {
+          studentProfileService.applyCoreToUserState(profileRow);
+          unawaited(studentProfileService.hydrateDetails(profileRow));
+        }
         unawaited(_hydrateStudentState(authUser.id));
         return true;
       } on AuthException {

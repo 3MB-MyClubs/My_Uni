@@ -152,7 +152,7 @@ class _RsvpButtonState extends State<RsvpButton> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
                   boxShadow: [
                     BoxShadow(
                       color: widget.color.withValues(alpha: 0.30),
@@ -199,7 +199,7 @@ class _RsvpButtonState extends State<RsvpButton> {
                 width: 96,
                 decoration: BoxDecoration(
                   color: AppColors.card,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
                   border: Border.all(color: AppColors.divider, width: 1.5),
                 ),
                 child: Center(
@@ -250,7 +250,7 @@ class _RsvpButtonState extends State<RsvpButton> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.all(Radius.circular(16)),
               boxShadow: [
                 BoxShadow(
                   color: widget.color.withValues(alpha: 0.35),
@@ -320,7 +320,7 @@ class _CompactChip extends StatelessWidget {
                 )
               : null,
           color: active ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
           border: Border.all(color: effectiveColor, width: 1.5),
           boxShadow: active
               ? [

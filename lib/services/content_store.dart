@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/comment.dart';
 import '../models/event.dart';
@@ -17,7 +20,7 @@ import 'mock_data.dart';
 /// [_seedVersion] must be incremented whenever mock_data.dart changes event or
 /// post seed data. A version mismatch causes stored events/posts to be
 /// discarded so the fresh mock data is used instead.
-class ContentStore {
+class ContentStore extends ChangeNotifier {
   static const _boxName = 'content_v1';
 
   /// Bump this integer any time you change mock event / post seed data.
@@ -35,6 +38,11 @@ class ContentStore {
     _box = await Hive.openBox<dynamic>(_boxName);
     _initialized = true;
   }
+
+  /// Call after a post/event is created or edited so screens showing that
+  /// content (Feed, This Week) can refresh themselves directly instead of
+  /// relying on their host screen to force a rebuild.
+  void notifyContentChanged() => notifyListeners();
 
   /// Call once after [initialize] to replace in-memory lists with stored data.
   /// If nothing is stored yet, or the seed version has changed, the lists keep
@@ -89,6 +97,41 @@ class ContentStore {
     target
       ..clear()
       ..addAll((raw as List).map(fromRaw));
+  }
+
+  // ── Debounced persistence ────────────────────────────────────────────────────
+  // Each like/RSVP/comment/share tap used to re-serialize its ENTIRE list to
+  // Hive on the main isolate (a rollback re-serialized it twice). Interaction
+  // handlers call [scheduleSave] instead: dirty kinds coalesce and flush 1s
+  // after the last mutation. The Supabase write still happens per-tap — only
+  // this local mirror is coalesced — and app pause/detach and logout flush
+  // through saveAll, so a hard crash inside the window loses at most 1s of
+  // local mirror that the next launch re-derives from Supabase anyway.
+
+  Timer? _saveDebounce;
+  final Set<String> _dirtyKinds = {};
+
+  void scheduleSave(String kind) {
+    _dirtyKinds.add(kind);
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 1), () {
+      unawaited(flushPendingSaves());
+    });
+  }
+
+  Future<void> flushPendingSaves() async {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    if (!_initialized || _dirtyKinds.isEmpty) return;
+    final kinds = Set.of(_dirtyKinds);
+    _dirtyKinds.clear();
+    await Future.wait([
+      if (kinds.contains('posts')) saveNewsPosts(),
+      if (kinds.contains('events')) saveEvents(),
+      if (kinds.contains('comments')) saveComments(),
+      if (kinds.contains('likes')) saveLikes(),
+      if (kinds.contains('shares')) saveShares(),
+    ]);
   }
 
   // ── Save helpers ─────────────────────────────────────────────────────────────
@@ -233,12 +276,20 @@ class ContentStore {
     if (!canDeletePost(postId, requestingUserId)) return false;
     newsPosts.removeAt(idx);
     saveNewsPosts();
+    notifyContentChanged();
     return true;
   }
 
   // ── Save everything at once ───────────────────────────────────────────────────
 
   Future<void> saveAll(List<AppNotification> dynamicNotifs) async {
+    // Everything below rewrites the debounced kinds anyway.
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    _dirtyKinds.clear();
+    // Boxes open in the background after first paint; a lifecycle pause on
+    // the login screen can land here before they're ready.
+    if (!_initialized) return;
     await Future.wait([
       saveNewsPosts(),
       saveEvents(),

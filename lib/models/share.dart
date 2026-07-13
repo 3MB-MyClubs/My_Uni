@@ -12,16 +12,16 @@ class Share {
   });
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'targetId': targetId,
-        'userId': userId,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'targetId': targetId,
+    'userId': userId,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   factory Share.fromMap(Map<String, dynamic> m) => Share(
-        id: m['id'] as String,
-        targetId: m['targetId'] as String,
-        userId: m['userId'] as String,
-        createdAt: DateTime.parse(m['createdAt'] as String),
-      );
+    id: m['id'] as String,
+    targetId: m['targetId'] as String,
+    userId: m['userId'] as String,
+    createdAt: DateTime.parse(m['createdAt'] as String),
+  );
 }

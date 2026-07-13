@@ -81,7 +81,7 @@ class _SkeletonBoxState extends State<SkeletonBox>
             shape: widget.shape,
             borderRadius: widget.shape == BoxShape.circle
                 ? null
-                : widget.borderRadius ?? BorderRadius.circular(12),
+                : widget.borderRadius ?? BorderRadius.all(Radius.circular(12)),
             gradient: LinearGradient(
               begin: Alignment(x, -0.35),
               end: Alignment(x + 1.0, 0.35),

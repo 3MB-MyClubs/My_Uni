@@ -20,6 +20,7 @@ import '../services/supabase_interaction_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
+import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/rsvp_button.dart';
@@ -39,12 +40,14 @@ bool _isRemoteEventImagePath(String path) =>
 
 Widget _eventHeroImage({required String path, required Color accent}) {
   if (_isRemoteEventImagePath(path)) {
-    return Image.network(
-      path,
+    return AppNetworkImage(
+      url: path,
       fit: BoxFit.cover,
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : const SkeletonBox(),
-      errorBuilder: (_, _, _) => _GradientHero(color: accent),
+      // Full-bleed hero — wider than a feed banner but still bounded well
+      // under typical upload resolutions (up to 1920px).
+      cacheWidth: 800,
+      placeholderBuilder: (_) => const SkeletonBox(),
+      errorBuilder: (_) => _GradientHero(color: accent),
     );
   }
 
@@ -122,7 +125,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: _saved ? _accent : null,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
         ),
       );
@@ -141,7 +144,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           content: const Text('Event link copied to clipboard'),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
         ),
       );
@@ -152,7 +155,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           'Delete event?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -174,7 +179,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -484,7 +489,9 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           'Delete this event?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -507,7 +514,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -579,7 +586,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: AppColors.card,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.all(Radius.circular(16)),
                         border: Border.all(color: AppColors.divider),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -740,7 +747,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                           fontWeight: FontWeight.w800,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.all(Radius.circular(14)),
                         ),
                       ),
                     ),
@@ -763,7 +770,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(13),
+                          borderRadius: BorderRadius.all(Radius.circular(13)),
                         ),
                       ),
                     ),
@@ -801,7 +808,7 @@ class _AdminHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = AppColors.background;
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
-    final topInset = MediaQuery.of(context).padding.top;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return SizedBox(
       height: 340,
@@ -851,7 +858,7 @@ class _AdminHero extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(9, 5, 12, 5),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
                     border: Border.all(color: accent.withValues(alpha: 0.45)),
                   ),
                   child: Row(
@@ -909,7 +916,7 @@ class _AdminHero extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: isLive ? accent : accent.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
                     ),
                     child: Text(
                       isLive ? 'HAPPENING NOW' : 'UPCOMING',
@@ -996,7 +1003,7 @@ class _AdminAttendees extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: AppColors.card,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
             border: Border.all(color: AppColors.divider),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1033,7 +1040,9 @@ class _AdminAttendees extends StatelessWidget {
                                 height: 38,
                                 decoration: BoxDecoration(
                                   color: accent.withValues(alpha: 0.16),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(12),
+                                  ),
                                   border: Border.all(
                                     color: accent.withValues(alpha: 0.33),
                                   ),
@@ -1102,8 +1111,8 @@ class _AdminAttendees extends StatelessWidget {
                                         color: checked
                                             ? accent
                                             : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(
-                                          100,
+                                        borderRadius: BorderRadius.all(
+                                          Radius.circular(100),
                                         ),
                                         border: Border.all(
                                           color: checked
@@ -1241,7 +1250,7 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = AppColors.background;
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
-    final topInset = MediaQuery.of(context).padding.top;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return SizedBox(
       height: 360,
@@ -1372,7 +1381,7 @@ class _StatusPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
         decoration: BoxDecoration(
           color: const Color(0xFFD43A3A),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.all(Radius.circular(999)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1398,7 +1407,7 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.all(Radius.circular(999)),
       ),
       child: Text(
         label,
@@ -1548,7 +1557,7 @@ class _TicketCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.all(Radius.circular(18)),
         border: Border.all(color: AppColors.divider),
         boxShadow: isDark
             ? null
@@ -1806,7 +1815,7 @@ class _CapacityBar extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(99),
+            borderRadius: BorderRadius.all(Radius.circular(99)),
             child: LinearProgressIndicator(
               value: pct / 100,
               minHeight: 6,
@@ -1844,7 +1853,7 @@ class _HostCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
         border: Border.all(color: AppColors.divider),
       ),
       child: Row(
@@ -1903,7 +1912,7 @@ class _HostCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.all(Radius.circular(9)),
                 border: Border.all(
                   color: AppColors.divider.withValues(alpha: 0.9),
                   width: 1.5,
@@ -1960,7 +1969,7 @@ class _RegistrationCard extends StatelessWidget {
             behavior: SnackBarBehavior.floating,
             backgroundColor: accent,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
           ),
         );
@@ -1975,7 +1984,7 @@ class _RegistrationCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
           color: accent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: accent.withValues(alpha: 0.3), width: 1.5),
         ),
         child: Row(
@@ -1985,7 +1994,7 @@ class _RegistrationCard extends StatelessWidget {
               height: 42,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
               child: Icon(Icons.link_rounded, color: accent, size: 19),
             ),
@@ -2067,7 +2076,7 @@ class _Tag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.all(Radius.circular(999)),
       ),
       child: Text(
         label,
@@ -2251,7 +2260,7 @@ class _SpeakersRow extends StatelessWidget {
             content: Text("Couldn't open ${s.name}'s LinkedIn"),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
           ),
         );
@@ -2280,7 +2289,7 @@ class _SpeakersRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.card,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.all(Radius.circular(15)),
                 border: Border.all(color: AppColors.divider),
               ),
               child: Column(
@@ -2369,7 +2378,7 @@ class _StickyCtaState extends State<_StickyCta> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: _remind ? widget.accent : null,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
         ),
       );
@@ -2406,7 +2415,7 @@ class _StickyCtaState extends State<_StickyCta> {
                         color: _remind
                             ? accent.withValues(alpha: 0.14)
                             : AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.all(Radius.circular(16)),
                         border: Border.all(
                           color: _remind
                               ? accent

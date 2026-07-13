@@ -15,9 +15,14 @@ class NotificationService {
     return _instance;
   }
 
-  Future<void> initialize() async {
-    if (_initialized) return;
+  Future<void>? _initializing;
 
+  Future<void> initialize() {
+    if (_initialized) return Future.value();
+    return _initializing ??= _doInitialize();
+  }
+
+  Future<void> _doInitialize() async {
     _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
     // Initialize timezone
@@ -56,7 +61,6 @@ class NotificationService {
 
     _initialized = true;
   }
-
 
   Future<void> scheduleEventReminders(Event event) async {
     if (!_initialized) await initialize();

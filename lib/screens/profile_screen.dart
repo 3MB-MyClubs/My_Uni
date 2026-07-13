@@ -1,11 +1,13 @@
 import 'dart:io';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../models/club.dart';
 import '../models/event.dart';
@@ -59,11 +61,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
   }
 
   @override
   void dispose() {
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -166,7 +170,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceAlt,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           S.useThisPhoto,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -196,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: AppColors.primaryRed,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -280,7 +286,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: AppColors.surfaceAlt,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           title: Text(
             S.majorYearLabel,
@@ -363,7 +369,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceAlt,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           S.bioLabel,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -482,7 +490,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Color _colorForClubId(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final idx = clubOrdinal(clubId);
     return _clubColor(idx < 0 ? 0 : idx);
   }
 
@@ -521,7 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
                   ),
                 ),
               ),
@@ -648,7 +656,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
                   ),
                 ),
               ),
@@ -770,7 +778,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
             ),
@@ -790,7 +798,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 height: 42,
                 decoration: BoxDecoration(
                   color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
                 child: Icon(
                   Icons.camera_alt_outlined,
@@ -820,7 +828,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 height: 42,
                 decoration: BoxDecoration(
                   color: AppColors.primaryRed.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
                 child: Icon(
                   Icons.photo_library_outlined,
@@ -851,7 +859,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 42,
                   decoration: BoxDecoration(
                     color: Colors.red.shade400.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                   child: Icon(
                     Icons.delete_outline_rounded,
@@ -1006,7 +1014,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               MaterialPageRoute(
                 builder: (_) => ClubProfileScreen(
                   club: club,
-                  color: _clubColor(clubs.indexOf(club)),
+                  color: _clubColor(clubOrdinal(club.id)),
                 ),
               ),
             ),
@@ -1024,7 +1032,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final managed = managedClubForAdmin(adminId) ?? clubs.first;
       return ClubProfileScreen(
         club: managed,
-        color: _clubColor(clubs.indexOf(managed)),
+        color: _clubColor(clubOrdinal(managed.id)),
         onSettings: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -1292,7 +1300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.all(Radius.circular(20)),
                 boxShadow: [
                   BoxShadow(
                     color:
@@ -1380,7 +1388,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 height: 96,
                 clipBehavior: Clip.hardEdge,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.all(Radius.circular(20)),
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -1424,7 +1432,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(999),
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1603,7 +1613,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             decoration: BoxDecoration(
               color: AppColors.card,
               border: Border.all(color: AppColors.divider),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.all(Radius.circular(18)),
             ),
             child: IntrinsicHeight(
               child: Row(
@@ -1685,7 +1695,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
                       child: Text(
                         '${myClubs.length}',
@@ -1709,7 +1719,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.background,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.all(Radius.circular(14)),
                         border: Border.all(color: AppColors.divider, width: 1),
                       ),
                       child: Column(
@@ -1764,7 +1774,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               width: 90,
                               decoration: BoxDecoration(
                                 color: color.withValues(alpha: 0.07),
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(16),
+                                ),
                                 border: Border.all(
                                   color: color.withValues(alpha: 0.2),
                                   width: 1,
@@ -1856,7 +1868,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: const Color(0x1A1565C0),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
                         ),
                         child: Text(
                           '${managedClub.boardMemberIds.length}',
@@ -1888,7 +1900,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
                       color: const Color(0x1A1565C0).withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                       border: Border.all(
                         color: const Color(0x281565C0),
                         width: 1,
@@ -1943,7 +1955,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               builder: (_) => UserProfileScreen(user: u),
                             ),
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               vertical: 10,
@@ -1998,7 +2010,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: const Color(0x1A1565C0),
-                                    borderRadius: BorderRadius.circular(20),
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(20),
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -2083,7 +2097,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: clubColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
                       child: Text(
                         managedClub.name,
@@ -2141,7 +2155,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceAlt,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
         title: Text(
           title,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
@@ -2163,7 +2179,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -2218,16 +2234,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 52,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: p.imagePath != null && p.imagePath!.startsWith('http')
-                      ? Image.network(
-                          p.imagePath!,
+                      ? AppNetworkImage(
+                          url: p.imagePath!,
                           fit: BoxFit.cover,
-                          loadingBuilder: (_, child, progress) =>
-                              progress == null ? child : const SkeletonBox(),
-                          errorBuilder: (ctx2, err, stack) => Center(
+                          cacheWidth: 52,
+                          cacheHeight: 52,
+                          placeholderBuilder: (_) => const SkeletonBox(),
+                          errorBuilder: (ctx2) => Center(
                             child: Text(
                               clubs
                                   .firstWhere(
@@ -2363,7 +2380,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 52,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -2416,7 +2433,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
                       ),
                       child: Text(
                         statusLabel,
@@ -2545,7 +2562,7 @@ class _ContentTabChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? color : AppColors.card,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
           border: Border.all(color: selected ? color : AppColors.divider),
         ),
         child: Row(
@@ -2566,7 +2583,7 @@ class _ContentTabChip extends StatelessWidget {
                 color: selected
                     ? Colors.white.withValues(alpha: 0.25)
                     : AppColors.lightRed,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
               child: Text(
                 '$count',

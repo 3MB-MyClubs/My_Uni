@@ -702,7 +702,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         border: Border.all(color: AppColors.primaryRed.withValues(alpha: 0.25)),
       ),
       child: Icon(_step.icon, color: AppColors.primaryRed, size: 24),
@@ -756,7 +756,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.lightRed,
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.all(Radius.circular(100)),
       ),
       child: Text(
         '${_index + 1}/${widget.steps.length}',
@@ -772,7 +772,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
   Widget _progressBar() {
     final value = (_index + 1) / widget.steps.length;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(100),
+      borderRadius: BorderRadius.all(Radius.circular(100)),
       child: Stack(
         children: [
           Container(height: 5, color: AppColors.divider),
@@ -816,7 +816,9 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
         foregroundColor: AppColors.text,
         side: BorderSide(color: AppColors.divider),
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+        ),
       ),
       child: const Text('Back', style: TextStyle(fontWeight: FontWeight.w700)),
     );
@@ -832,7 +834,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         boxShadow: [
           BoxShadow(
             color: AppColors.primaryRed.withValues(alpha: 0.45),
@@ -844,7 +846,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -878,7 +880,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
       color: AppColors.card,
-      borderRadius: BorderRadius.circular(26),
+      borderRadius: BorderRadius.all(Radius.circular(26)),
       border: Border.all(color: AppColors.glassEdge),
       boxShadow: [
         BoxShadow(

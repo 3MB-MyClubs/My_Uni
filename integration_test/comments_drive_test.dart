@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'package:flutter_application_1/models/news_post.dart';
 import 'package:flutter_application_1/screens/post_detail_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/comment_store.dart';
@@ -13,15 +14,14 @@ import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/tutorial_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
-import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 
-/// Phase 1: a student writes a comment on a post, sees it render, the count
-/// updates, the club gets notified, and the author can delete it again.
+/// Comments are disabled for posts: students can still view the post detail,
+/// but no comment list, composer, or send action is available.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Student can comment on a post and delete their comment', (
+  testWidgets('Post detail hides comments and disables comment creation', (
     tester,
   ) async {
     authService.logout();
@@ -36,7 +36,14 @@ void main() {
     await themeService.setDark(false);
     authService.login('alice@ku.edu.tr', '111111');
 
-    final post = newsPosts.first;
+    final club = clubs.first;
+    final post = NewsPost(
+      id: 'comments_disabled_test_post',
+      clubId: club.id,
+      authorId: 'comments_disabled_test_author',
+      content: 'Comments are disabled on this post.',
+      createdAt: DateTime.now(),
+    );
     final before = commentStore.countFor(post.id);
 
     await tester.pumpWidget(
@@ -51,37 +58,20 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    // Empty state or existing list header renders.
-    expect(find.textContaining('Comments · '), findsOneWidget);
+    expect(find.textContaining('Comments · '), findsNothing);
+    expect(find.byIcon(Icons.mode_comment_outlined), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byIcon(Icons.send_rounded), findsNothing);
 
-    // Write and send a comment.
-    await tester.enterText(
-      find.byType(TextField).last,
-      'Harika etkinlikti, tebrikler!',
-    );
-    await tester.tap(find.byIcon(Icons.send_rounded));
+    await commentStore.add(post: post, content: 'This should not appear');
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.text('Harika etkinlikti, tebrikler!'), findsOneWidget);
-    expect(commentStore.countFor(post.id), before + 1);
-
-    // The club account was notified.
-    expect(
-      userState.dynamicNotifications.any(
-        (n) => n.id.startsWith('post_comment_${post.id}_u1'),
-      ),
-      isTrue,
-    );
+    expect(find.text('This should not appear'), findsNothing);
+    expect(commentStore.countFor(post.id), before);
 
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();
-    await binding.takeScreenshot('phase1-comments');
-
-    // Author deletes their own comment.
-    await tester.tap(find.byIcon(Icons.delete_outline_rounded).last);
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Harika etkinlikti, tebrikler!'), findsNothing);
-    expect(commentStore.countFor(post.id), before);
+    await binding.takeScreenshot('comments-disabled');
 
     expect(tester.takeException(), isNull);
   });

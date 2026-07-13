@@ -21,8 +21,9 @@ class AuthChoiceScreen extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final double heroGap =
-                (constraints.maxHeight * 0.42).clamp(170.0, 320.0).toDouble();
+            final double heroGap = (constraints.maxHeight * 0.42)
+                .clamp(170.0, 320.0)
+                .toDouble();
             return SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: ConstrainedBox(
@@ -97,7 +98,7 @@ class AuthChoiceScreen extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             color: AppColors.primaryRed,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.all(Radius.circular(9)),
           ),
           alignment: Alignment.center,
           child: const Text(
@@ -191,15 +192,12 @@ class AuthChoiceScreen extends StatelessWidget {
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.all(Radius.circular(15)),
               ),
             ),
             child: const Text(
               'Create account',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -213,7 +211,7 @@ class AuthChoiceScreen extends StatelessWidget {
               side: BorderSide(color: AppColors.divider),
               backgroundColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.all(Radius.circular(15)),
               ),
             ),
             child: Text(
@@ -231,19 +229,17 @@ class AuthChoiceScreen extends StatelessWidget {
   }
 
   Route _fadeSlideRoute(Widget page) => PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => page,
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final slide = Tween<Offset>(
-            begin: const Offset(0, 0.06),
-            end: Offset.zero,
-          ).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-          );
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(position: slide, child: child),
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 320),
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final slide = Tween<Offset>(
+        begin: const Offset(0, 0.06),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+      return FadeTransition(
+        opacity: animation,
+        child: SlideTransition(position: slide, child: child),
       );
+    },
+    transitionDuration: const Duration(milliseconds: 320),
+  );
 }

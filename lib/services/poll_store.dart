@@ -58,14 +58,41 @@ class PollStore extends ChangeNotifier {
   int votesForOption(String postId, int optionIndex) =>
       _votes[postId]?.values.where((v) => v == optionIndex).length ?? 0;
 
+  /// Seeds remote votes for many posts at once (from the batched poll_votes
+  /// query at content load) and marks them hydrated, so [hydrate] becomes a
+  /// no-op for feed polls.
+  void seedRemoteVotes(Map<String, Map<String, int>> votesByPostId) {
+    if (votesByPostId.isEmpty) return;
+    var changed = false;
+    for (final entry in votesByPostId.entries) {
+      _hydratedPostIds.add(entry.key);
+      if (entry.value.isEmpty) continue;
+      final local = _votes.putIfAbsent(entry.key, () => {});
+      local.addAll(entry.value);
+      changed = true;
+    }
+    if (changed) {
+      _save();
+      notifyListeners();
+    }
+  }
+
   /// Merges remote votes for [postId] (once per session; [force] refreshes).
-  Future<void> hydrate(String postId, {bool force = false}) async {
+  /// [pollId], when known, skips the poll-id lookup query.
+  Future<void> hydrate(
+    String postId, {
+    String? pollId,
+    bool force = false,
+  }) async {
     if (!force && _hydratedPostIds.contains(postId)) return;
     _hydratedPostIds.add(postId);
     if (!_looksLikeUuid(postId)) return;
 
     try {
-      final remote = await supabaseInteractionService.fetchPollVotes(postId);
+      final remote = await supabaseInteractionService.fetchPollVotes(
+        postId,
+        pollId: pollId,
+      );
       if (remote.isEmpty) return;
       final local = _votes.putIfAbsent(postId, () => {});
       local.addAll(remote);
@@ -101,6 +128,7 @@ class PollStore extends ChangeNotifier {
         postId: post.id,
         profileId: userId,
         optionIndex: optionIndex,
+        pollId: post.poll?.pollId,
       );
     } catch (error) {
       debugPrint('Poll vote supabase write failed: $error');

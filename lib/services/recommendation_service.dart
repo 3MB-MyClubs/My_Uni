@@ -7,11 +7,34 @@ import 'personalization_service.dart';
 import 'user_state.dart';
 
 class RecommendationService {
+  List<Recommendation>? _cached;
+  DateTime? _cachedAt;
+
+  // "Happening Now" is already only accurate to within minutes, so a short
+  // TTL avoids rescanning events/clubs/users on every call (e.g. every
+  // AdminDashboard/feed rebuild) without risking noticeably stale picks.
+  static const _cacheTtl = Duration(seconds: 30);
+
   /// Returns up to three recommendations — one per slot:
   ///   1. Happening Now (live event)
   ///   2. Best for You This Week (scored upcoming event or club)
   ///   3. You Might Like (person or club to follow)
   List<Recommendation> getRecommendations() {
+    final now = DateTime.now();
+    final cached = _cached;
+    final cachedAt = _cachedAt;
+    if (cached != null &&
+        cachedAt != null &&
+        now.difference(cachedAt) < _cacheTtl) {
+      return cached;
+    }
+    final result = _computeRecommendations();
+    _cached = result;
+    _cachedAt = now;
+    return result;
+  }
+
+  List<Recommendation> _computeRecommendations() {
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final hidden = personalizationService.hiddenIds;

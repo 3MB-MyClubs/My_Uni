@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
@@ -19,6 +20,7 @@ import '../services/view_tracker.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/user_follow_button.dart';
 import '../models/share.dart';
@@ -28,7 +30,6 @@ import '../models/user.dart';
 import '../models/club.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
-import 'explore_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
 import '../widgets/user_avatar.dart';
@@ -37,9 +38,7 @@ import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../services/supabase_interaction_service.dart';
-import '../services/comment_store.dart';
 import 'notifications_screen.dart';
-import 'post_detail_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
 
@@ -72,11 +71,17 @@ class _ClubSuggestion {
   const _ClubSuggestion(this.club);
 }
 
-Club? _clubById(String id) {
-  for (final club in clubs) {
-    if (club.id == id) return club;
-  }
-  return null;
+Club? _clubById(String id) => clubForId(id);
+
+/// Memoized output of the feed pipeline. The pipeline (filter + sort of all
+/// posts, three suggestion rankers, the events-rail window) used to rerun on
+/// every rebuild — theme/locale ticks, contentStore notifies, any card
+/// callback. Now it reruns only when [_FeedScreenState._feedSignature]
+/// changes; everything else costs one hash comparison.
+class _FeedCache {
+  int? sig;
+  List<dynamic>? mixed;
+  List<Event>? railShown;
 }
 
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
@@ -91,6 +96,76 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   // 0 = Following (followed clubs only), 1 = All
   int _feedTab = 1;
+
+  // At rest nothing but the scaffold background sits under the pinned glass
+  // bar, so its sigma-14 backdrop blur is visually a no-op at full GPU price.
+  // Only render the blur once content has actually scrolled under the bar —
+  // pixel-identical in both states (the translucent fill is the same).
+  bool _scrolledUnder = false;
+
+  _FeedCache? _feedCache;
+
+  /// Structural hash of every input the feed pipeline reads. Bulk hydration
+  /// clears+refills the global lists with new instances, so first/last
+  /// identity flips even at equal length; a like/unlike changes likes.length;
+  /// follows change the unordered set hashes; people-directory loads reassign
+  /// the cached lists. Theme/locale are deliberately NOT inputs. The 1-minute
+  /// bucket bounds staleness of DateTime.now()-derived output (rail window,
+  /// trending recency) — the same class of staleness it had when it only
+  /// refreshed on incidental rebuilds.
+  int _feedSignature() {
+    return Object.hash(
+      newsPosts.length,
+      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.first),
+      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.last),
+      events.length,
+      events.isEmpty ? 0 : identityHashCode(events.first),
+      clubs.length,
+      clubs.isEmpty ? 0 : identityHashCode(clubs.first),
+      likes.length,
+      shares.length,
+      _feedTab,
+      Object.hashAllUnordered(userState.followedClubIds),
+      Object.hashAllUnordered(userState.followedUserIds),
+      identityHashCode(peopleService.cachedPeople),
+      identityHashCode(peopleService.cachedFollowerIds),
+      Object.hashAllUnordered(personalizationService.interests),
+      supabaseClubMemberCounts.length,
+      supabasePostLikeCounts.length,
+      DateTime.now().millisecondsSinceEpoch ~/ 60000,
+    );
+  }
+
+  List<dynamic> _mixedFeed() {
+    final sig = _feedSignature();
+    final cache = _feedCache ??= _FeedCache();
+    if (cache.sig != sig || cache.mixed == null) {
+      cache.sig = sig;
+      cache.mixed = _buildMixedFeed(_buildFeed());
+      cache.railShown = _computeRailShown();
+      // Seeding the RSVP store belongs with the (re)computation, not with
+      // every rebuild: seedAll is idempotent and doesn't notify.
+      final userId =
+          authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+      rsvpStore.seedAll(cache.railShown!, userId);
+    }
+    return cache.mixed!;
+  }
+
+  List<Event> _computeRailShown() {
+    final now = DateTime.now();
+    final weekEnd = now.add(const Duration(days: 7));
+    final weekEvents =
+        events
+            .where(
+              (e) =>
+                  e.dateTime.isAfter(now.subtract(const Duration(hours: 2))) &&
+                  e.dateTime.isBefore(weekEnd),
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    return weekEvents.take(10).toList();
+  }
 
   bool get _followedOnly => authService.isStudentSession && _feedTab == 0;
 
@@ -224,38 +299,34 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    viewTracker.addListener(_onViewCountsChanged);
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
+    contentStore.addListener(_onContentChanged);
     _loadFeedContent();
     _loadPeopleDirectory();
   }
 
   @override
   void dispose() {
-    viewTracker.removeListener(_onViewCountsChanged);
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
+    contentStore.removeListener(_onContentChanged);
     super.dispose();
-  }
-
-  void _onViewCountsChanged() {
-    if (!mounted) return;
-    // recordView fires from _PostCard.initState while the list is laying out
-    // new children — defer the rebuild until after the current frame.
-    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
-      setState(() {});
-    } else {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() {});
-      });
-    }
   }
 
   void _onLocaleChanged() {
     if (mounted) setState(() {});
   }
 
-  void _hydrateVisiblePostViews() {
-    viewTracker.hydratePostViewCounts(newsPosts.map((post) => post.id));
+  void _onContentChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _hydrateVisiblePostViews({bool force = false}) {
+    viewTracker.hydratePostViewCounts(
+      newsPosts.map((post) => post.id),
+      force: force,
+    );
   }
 
   Future<void> _onRefresh() async {
@@ -264,8 +335,8 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (_) {
       // Keep currently loaded content if the network request fails.
     }
-    await _loadPeopleDirectory();
-    _hydrateVisiblePostViews();
+    await _loadPeopleDirectory(force: true);
+    _hydrateVisiblePostViews(force: true);
     setState(() {});
   }
 
@@ -281,13 +352,13 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  Future<void> _loadPeopleDirectory() async {
+  Future<void> _loadPeopleDirectory({bool force = false}) async {
     if (_loadingPeopleDirectory) return;
     _loadingPeopleDirectory = true;
     final myId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     try {
-      await peopleService.refreshPeopleDirectory(excludeId: myId);
+      await peopleService.refreshPeopleDirectory(excludeId: myId, force: force);
       if (mounted) setState(() {});
     } catch (_) {
       // Keep the feed usable; the card simply won't render until profiles load.
@@ -298,136 +369,162 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mixed = _buildMixedFeed(_buildFeed());
+    final mixed = _mixedFeed();
     final showFeedSkeleton = _loadingFeedContent && mixed.isEmpty;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         color: AppColors.primaryRed,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            _buildTopBar(),
-            _buildGreeting(),
-            _buildEventsRail(),
-            _buildFeedTabs(),
-            _buildComposer(),
-            if (showFeedSkeleton) ...[
-              ..._buildFeedSkeletonSlivers(),
-            ] else if (mixed.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.explore_outlined,
-                          size: 64,
-                          color: AppColors.secondaryText.withValues(
-                            alpha: 0.35,
+        child: NotificationListener<ScrollUpdateNotification>(
+          onNotification: (n) {
+            // Vertical feed scroll only (depth 0) — not the horizontal events
+            // rail. setState fires only on threshold crossings (≤2 per
+            // gesture), and post-_FeedCache such a rebuild is just a hash
+            // compare. Top overscroll is negative, so pull-to-refresh stays
+            // unblurred.
+            if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+            final under = n.metrics.pixels > 1.0;
+            if (under != _scrolledUnder) {
+              setState(() => _scrolledUnder = under);
+            }
+            return false;
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              _buildTopBar(),
+              _buildGreeting(),
+              _buildEventsRail(),
+              _buildFeedTabs(),
+              _buildComposer(),
+              if (showFeedSkeleton) ...[
+                ..._buildFeedSkeletonSlivers(),
+              ] else if (mixed.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const _EmptyFeedArt(),
+                          const SizedBox(height: 18),
+                          Text(
+                            S.nothingHere,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.text,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 18),
+                          const SizedBox(height: 8),
+                          Text(
+                            S.followClubs,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.secondaryText,
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () => setState(() => _feedTab = 1),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryRed,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                              ),
+                              elevation: 0,
+                            ),
+                            icon: Icon(Icons.explore_rounded, size: 18),
+                            label: Text(
+                              S.exploreClubs,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                    child: Row(
+                      children: [
                         Text(
-                          S.nothingHere,
+                          S.latest,
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: AppColors.text,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          S.followClubs,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.secondaryText,
-                            height: 1.4,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () => setState(() => _feedTab = 1),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryRed,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          icon: Icon(Icons.explore_rounded, size: 18),
-                          label: Text(
-                            S.exploreClubs,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              )
-            else ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-                  child: Row(
-                    children: [
-                      Text(
-                        S.latest,
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final item = mixed[i];
+                    if (item is List<User>) {
+                      return _PeopleSuggestionCard(
+                        suggestions: item,
+                        onFollowed: () => setState(() {}),
+                      );
+                    }
+                    if (item is _EventSuggestion) {
+                      return _TrendingEventCard(
+                        event: item.event,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    if (item is _ClubSuggestion) {
+                      return _ClubSuggestionCard(
+                        club: item.club,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    return _buildFeedCard(item as _FeedItem, i);
+                  }, childCount: mixed.length),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 28),
+                    child: Center(
+                      child: Text(
+                        S.endOfFeed,
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.secondaryText,
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate((context, i) {
-                  final item = mixed[i];
-                  if (item is List<User>) {
-                    return _PeopleSuggestionCard(
-                      suggestions: item,
-                      onFollowed: () => setState(() {}),
-                    );
-                  }
-                  if (item is _EventSuggestion) {
-                    return _TrendingEventCard(
-                      event: item.event,
-                      onUpdate: () => setState(() {}),
-                    );
-                  }
-                  if (item is _ClubSuggestion) {
-                    return _ClubSuggestionCard(
-                      club: item.club,
-                      onUpdate: () => setState(() {}),
-                    );
-                  }
-                  return _buildFeedCard(item as _FeedItem, i);
-                }, childCount: mixed.length),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: MediaQuery.of(context).padding.bottom + 112,
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: MediaQuery.paddingOf(context).bottom + 112,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -441,7 +538,7 @@ class _FeedScreenState extends State<FeedScreen> {
           child: SkeletonBox(
             width: 70,
             height: 18,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
           ),
         ),
       ),
@@ -452,7 +549,7 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
       SliverToBoxAdapter(
-        child: SizedBox(height: MediaQuery.of(context).padding.bottom + 112),
+        child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 112),
       ),
     ];
   }
@@ -460,15 +557,21 @@ class _FeedScreenState extends State<FeedScreen> {
   String get _greetingName {
     final student = authService.currentUser;
     if (authService.isStudentSession && student != null) {
-      return student.name;
+      return _firstName(student.name);
     }
 
     final admin = authService.currentAdmin;
     if (admin != null) {
-      return managedClubForAdmin(admin.id)?.name ?? admin.name;
+      final club = managedClubForAdmin(admin.id);
+      return club?.name ?? _firstName(admin.name);
     }
 
     return '';
+  }
+
+  String _firstName(String fullName) {
+    final parts = fullName.trim().split(' ');
+    return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : fullName;
   }
 
   // ── UniHub top bar ───────────────────────────────────────────────────────
@@ -476,18 +579,31 @@ class _FeedScreenState extends State<FeedScreen> {
     return SliverAppBar(
       pinned: true,
       floating: false,
-      backgroundColor: AppColors.card,
+      backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       toolbarHeight: 56,
       leading: const SizedBox.shrink(),
       leadingWidth: 0,
       titleSpacing: 0,
+      // Blurred glass bar: the translucent fill lives inside the blur layer so
+      // scrolled content stays readable through it. The blur only renders once
+      // content is under the bar (identical fill either way — same pixels at
+      // rest, no per-frame backdrop readback while idle), and .grouped shares
+      // one backdrop snapshot with the bottom nav's blur while scrolling.
+      flexibleSpace: ClipRect(
+        child: _scrolledUnder
+            ? BackdropFilter.grouped(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(color: AppColors.card.withValues(alpha: 0.72)),
+              )
+            : Container(color: AppColors.card.withValues(alpha: 0.72)),
+      ),
       title: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           children: [
-            // UniHub logotype
+            // UniHub logotype — "Uni" in maroon, "Hub" in foreground, gold dot.
             RichText(
               text: TextSpan(
                 children: [
@@ -496,7 +612,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.text,
+                      color: AppColors.primaryRed,
                       letterSpacing: -0.8,
                     ),
                   ),
@@ -504,62 +620,40 @@ class _FeedScreenState extends State<FeedScreen> {
                     text: 'Hub',
                     style: TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text,
                       letterSpacing: -0.8,
                     ),
                   ),
                 ],
               ),
             ),
-            const Spacer(),
-            // Bell button with unread badge
-            ListenableBuilder(
-              listenable: userState,
-              builder: (_, x) => GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => NotificationsScreen()),
-                ),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Center(
-                        child: Icon(
-                          Icons.notifications_none_rounded,
-                          size: 18,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      if (userState.unreadNotifications > 0)
-                        Positioned(
-                          top: 7,
-                          right: 8,
-                          child: Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryRed,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.card,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+            Padding(
+              padding: const EdgeInsets.only(left: 3, bottom: 12),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: AppColors.accentGold,
+                  shape: BoxShape.circle,
                 ),
               ),
+            ),
+            const Spacer(),
+            // Bell button with unread-count badge
+            ListenableBuilder(
+              listenable: userState,
+              builder: (_, x) {
+                final unread = userState.unreadNotifications;
+                return _TopBarIconButton(
+                  icon: Icons.notifications_none_rounded,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => NotificationsScreen()),
+                  ),
+                  badgeCount: unread,
+                );
+              },
             ),
           ],
         ),
@@ -590,39 +684,22 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '$greet,',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.secondaryText,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.1,
-              ),
-            ),
-            const SizedBox(height: 2),
             RichText(
               text: TextSpan(
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                  letterSpacing: -1.0,
+                  height: 1.15,
+                ),
                 children: [
+                  TextSpan(text: '$greet, '),
                   TextSpan(
                     text: _greetingName,
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                      letterSpacing: -1.2,
-                      height: 1.02,
-                    ),
+                    style: const TextStyle(color: AppColors.primaryRed),
                   ),
-                  TextSpan(
-                    text: '.',
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryRed,
-                      letterSpacing: -1.2,
-                      height: 1.02,
-                    ),
-                  ),
+                  const TextSpan(text: ' 👋'),
                 ],
               ),
             ),
@@ -634,26 +711,13 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── This Week events rail ─────────────────────────────────────────────────
   SliverToBoxAdapter _buildEventsRail() {
-    final now = DateTime.now();
-    final weekEnd = now.add(const Duration(days: 7));
-    final weekEvents =
-        events
-            .where(
-              (e) =>
-                  e.dateTime.isAfter(now.subtract(const Duration(hours: 2))) &&
-                  e.dateTime.isBefore(weekEnd),
-            )
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    // Computed (and the RSVP store seeded) in _mixedFeed, once per data
+    // change; build() runs _mixedFeed first so the cache is always warm here.
+    final shown = _feedCache?.railShown ?? const <Event>[];
 
-    if (weekEvents.isEmpty) {
+    if (shown.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
-
-    final shown = weekEvents.take(10).toList();
-    final userId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    rsvpStore.seedAll(shown, userId);
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -664,29 +728,60 @@ class _FeedScreenState extends State<FeedScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    S.thisWeek,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: AppColors.secondaryText,
-                      letterSpacing: 0.9,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          S.thisWeek,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppColors.secondaryText,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          S.eventsOnCampus,
+                          style: TextStyle(
+                            fontSize: 19,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
                   GestureDetector(
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
                     ),
-                    child: Text(
-                      S.seeAll,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.1,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            S.seeAll,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.primaryRed,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 13,
+                            color: AppColors.primaryRed,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -695,7 +790,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 200,
+              height: 178,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -729,52 +824,74 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // tab 0 = Following, tab 1 = All
-    final tabs = [('following', S.following), ('all', S.all)];
+    // tab 0 = Following, tab 1 = All — pill segmented control with a sliding
+    // maroon thumb (300ms ease-out) behind the active label.
+    final labels = [S.following, S.all];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-        child: Row(
-          children: [
-            Row(
-              key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
-              children: tabs.asMap().entries.map((entry) {
-                final i = entry.key;
-                final label = entry.value.$2;
-                final active = _feedTab == i;
-                return GestureDetector(
-                  onTap: () => setState(() => _feedTab = i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 13,
-                      vertical: 5,
-                    ),
+        child: Container(
+          key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
+          height: 42,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.all(Radius.circular(100)),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Stack(
+            children: [
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                alignment: _feedTab == 0
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
+                child: FractionallySizedBox(
+                  widthFactor: 0.5,
+                  heightFactor: 1,
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: active ? AppColors.primaryRed : Colors.transparent,
-                      borderRadius: BorderRadius.circular(100),
-                      border: Border.all(
-                        color: active
-                            ? AppColors.primaryRed
-                            : AppColors.divider.withValues(alpha: 1.4),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: active ? Colors.white : AppColors.secondaryText,
-                        letterSpacing: -0.1,
-                      ),
+                      color: AppColors.primaryRed,
+                      borderRadius: BorderRadius.all(Radius.circular(100)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryRed.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-          ],
+                ),
+              ),
+              Row(
+                children: [
+                  for (var i = 0; i < labels.length; i++)
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _feedTab = i),
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 250),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _feedTab == i
+                                  ? Colors.white
+                                  : AppColors.secondaryText,
+                              letterSpacing: -0.1,
+                            ),
+                            child: Text(labels[i]),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -795,6 +912,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
     return SliverToBoxAdapter(
       child: Padding(
+        key: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
         child: _QuickPostComposer(
           club: club,
@@ -819,7 +937,141 @@ class _FeedScreenState extends State<FeedScreen> {
       post: item.data as NewsPost,
       score: item.score,
       rank: rank,
-      onUpdate: () => setState(() {}),
+    );
+  }
+}
+
+/// Empty-feed illustration: a tilted cluster of three icon tiles with a gold
+/// sparkle badge, matching the design's Following-tab empty state.
+class _EmptyFeedArt extends StatelessWidget {
+  const _EmptyFeedArt();
+
+  Widget _tile(IconData icon, {double angle = 0, bool raised = false}) {
+    return Transform.rotate(
+      angle: angle,
+      child: Transform.translate(
+        offset: Offset(0, raised ? -8 : 0),
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: raised ? AppColors.lightRed : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+            border: Border.all(
+              color: raised
+                  ? AppColors.primaryRed.withValues(alpha: 0.25)
+                  : AppColors.divider,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: raised ? AppColors.primaryRed : AppColors.secondaryText,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _tile(Icons.calendar_today_rounded, angle: -0.14),
+            const SizedBox(width: 2),
+            _tile(Icons.people_alt_rounded, raised: true),
+            const SizedBox(width: 2),
+            _tile(Icons.image_rounded, angle: 0.14),
+          ],
+        ),
+        Positioned(
+          top: -16,
+          right: -8,
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: AppColors.accentGold.withValues(alpha: 0.18),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.accentGold.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 13,
+              color: AppColors.accentGold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Squared glass icon button used in the UniHub top bar (theme toggle, bell).
+/// [badgeCount] > 0 shows a maroon unread-count pill on the top-right corner.
+class _TopBarIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final int badgeCount;
+
+  const _TopBarIconButton({
+    required this.icon,
+    required this.onTap,
+    this.badgeCount = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.background.withValues(alpha: 0.65),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(child: Icon(icon, size: 18, color: AppColors.text)),
+            if (badgeCount > 0)
+              Positioned(
+                top: -5,
+                right: -5,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: BorderRadius.all(Radius.circular(100)),
+                    border: Border.all(color: AppColors.card, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    badgeCount > 9 ? '9+' : '$badgeCount',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -852,25 +1104,25 @@ class _FeedPostSkeleton extends StatelessWidget {
                 SkeletonBox(
                   width: 128,
                   height: 14,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
                 ),
                 const SizedBox(height: 8),
                 SkeletonBox(
                   width: double.infinity,
                   height: 12,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
                 const SizedBox(height: 6),
                 SkeletonBox(
                   width: MediaQuery.sizeOf(context).width * 0.46,
                   height: 12,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
                 const SizedBox(height: 12),
                 SkeletonBox(
                   width: double.infinity,
                   height: 176,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
                 ),
               ],
             ),
@@ -996,14 +1248,17 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
   ];
 
   final Set<String> _dismissedIds = {};
+  final Set<String> _followingTransitionIds = {};
 
   @override
   Widget build(BuildContext context) {
-    // Re-check live follow state so a newly followed person disappears at once.
+    // Re-check live follow state so newly followed people disappear, but keep
+    // them around briefly while their card animates out.
     final shown = widget.suggestions
         .where(
           (user) =>
-              !userState.isFollowingUser(user.id) &&
+              (!userState.isFollowingUser(user.id) ||
+                  _followingTransitionIds.contains(user.id)) &&
               !_dismissedIds.contains(user.id),
         )
         .take(8)
@@ -1018,51 +1273,33 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
             child: Row(
               children: [
                 Icon(
                   Icons.people_outline,
-                  size: 18,
+                  size: 17,
                   color: AppColors.primaryRed,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   S.suggestedForYou,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: AppColors.text,
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ExploreScreen(initialTabIndex: 1),
-                    ),
-                  ),
-                  child: Text(
-                    S.seeAll,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.primaryRed,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.1,
-                    ),
                   ),
                 ),
               ],
             ),
           ),
           SizedBox(
-            height: 328,
+            height: 225,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: shown.length,
-              separatorBuilder: (_, i) => const SizedBox(width: 10),
+              separatorBuilder: (_, i) => const SizedBox(width: 8),
               itemBuilder: (ctx, i) {
                 final u = shown[i];
                 final color = _avatarColors[i % _avatarColors.length];
@@ -1070,146 +1307,295 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 final followsMe = peopleService.cachedFollowerIds.contains(
                   u.id,
                 );
+                final isFollowingTransition = _followingTransitionIds.contains(
+                  u.id,
+                );
 
                 final mutualIds = userState.followedUserIds.intersection(
                   Set<String>.from(u.followingUserIds),
                 );
                 final mutualCount = mutualIds.length;
-                final mutualLabel = mutualCount > 30
-                    ? '30+'
-                    : '$mutualCount';
+                final mutualLabel = mutualCount > 30 ? '30+' : '$mutualCount';
                 final mutualUser = mutualCount > 0
                     ? peopleService.peopleByIds(mutualIds.take(1)).firstOrNull
                     : null;
+                final mutualName = mutualUser == null
+                    ? null
+                    : userState.displayNameFor(mutualUser.id, mutualUser.name);
+                final mutualText = mutualName == null
+                    ? (mutualCount == 1
+                          ? '1 mutual friend'
+                          : '$mutualLabel mutual friends')
+                    : (mutualCount == 1
+                          ? 'Mutual friend: $mutualName'
+                          : 'Mutual friend: $mutualName + ${mutualCount - 1} more');
 
-                return Container(
-                  width: 184,
-                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Stack(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: u),
-                              ),
-                            ),
-                            child: Center(
-                              child: UserAvatar(
-                                userId: u.id,
-                                name: u.name,
-                                size: 148,
-                                fontSize: 56,
-                                backgroundColor: color.withValues(alpha: 0.15),
-                                textColor: color,
-                              ),
-                            ),
+                return SizedBox(
+                  width: 148,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final scale = Tween<double>(begin: 0.96, end: 1).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      );
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: scale, child: child),
+                      );
+                    },
+                    child: AnimatedSlide(
+                      key: ValueKey('person-suggestion-${u.id}'),
+                      offset: isFollowingTransition
+                          ? const Offset(0.14, 0)
+                          : Offset.zero,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
+                      child: AnimatedOpacity(
+                        opacity: isFollowingTransition ? 0 : 1,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(9, 10, 9, 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                            border: Border.all(color: AppColors.divider),
                           ),
-                          const SizedBox(height: 10),
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => UserProfileScreen(user: u),
-                              ),
-                            ),
-                            child: Text(
-                              displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                              ),
-                            ),
-                          ),
-                          if (mutualCount > 0) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (mutualUser != null) ...[
-                                  UserAvatar(
-                                    userId: mutualUser.id,
-                                    name: mutualUser.name,
-                                    size: 16,
-                                    fontSize: 8,
+                          child: Stack(
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            UserProfileScreen(user: u),
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        alignment: Alignment.bottomCenter,
+                                        children: [
+                                          UserAvatar(
+                                            userId: u.id,
+                                            name: u.name,
+                                            size: 72,
+                                            fontSize: 27,
+                                            backgroundColor: color.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                            textColor: color,
+                                          ),
+                                          if (mutualCount > 0)
+                                            Positioned(
+                                              bottom: -10,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 7,
+                                                      vertical: 3,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.background,
+                                                  borderRadius:
+                                                      BorderRadius.all(
+                                                        Radius.circular(20),
+                                                      ),
+                                                  border: Border.all(
+                                                    color: AppColors.divider,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (mutualUser != null) ...[
+                                                      UserAvatar(
+                                                        userId: mutualUser.id,
+                                                        name: mutualUser.name,
+                                                        size: 12,
+                                                        fontSize: 6,
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                    ],
+                                                    Text(
+                                                      mutualCount == 1
+                                                          ? '1 mutual'
+                                                          : '$mutualLabel mutuals',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  const SizedBox(width: 5),
+                                  SizedBox(height: mutualCount > 0 ? 14 : 6),
+                                  GestureDetector(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            UserProfileScreen(user: u),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                  ),
+                                  if (mutualCount > 0) ...[
+                                    const SizedBox(height: 5),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (mutualUser != null) ...[
+                                            UserAvatar(
+                                              userId: mutualUser.id,
+                                              name: mutualUser.name,
+                                              size: 16,
+                                              fontSize: 8,
+                                            ),
+                                            const SizedBox(width: 4),
+                                          ],
+                                          Flexible(
+                                            child: Text(
+                                              mutualText,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                height: 1.2,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  const Spacer(),
+                                  const SizedBox(height: 8),
+                                  UserFollowButton(
+                                    userId: u.id,
+                                    size: 'small',
+                                    followLabel: followsMe
+                                        ? S.followBack
+                                        : null,
+                                    onTap: () async {
+                                      final myId = authService.isStudentSession
+                                          ? authService.currentUser?.id ?? ''
+                                          : '';
+                                      if (myId.isEmpty ||
+                                          isFollowingTransition) {
+                                        return;
+                                      }
+                                      final follow = !userState.isFollowingUser(
+                                        u.id,
+                                      );
+                                      if (follow) {
+                                        setState(
+                                          () =>
+                                              _followingTransitionIds.add(u.id),
+                                        );
+                                      }
+                                      userState.setFollowingUser(u.id, follow);
+                                      userPrefsService.save(myId);
+                                      try {
+                                        if (follow) {
+                                          await Future<void>.delayed(
+                                            const Duration(milliseconds: 260),
+                                          );
+                                          if (mounted) {
+                                            setState(
+                                              () => _followingTransitionIds
+                                                  .remove(u.id),
+                                            );
+                                            widget.onFollowed();
+                                          }
+                                        } else {
+                                          widget.onFollowed();
+                                        }
+                                        await peopleService.setFollowing(
+                                          followerId: myId,
+                                          followingId: u.id,
+                                          follow: follow,
+                                        );
+                                        userPrefsService.save(myId);
+                                      } catch (_) {
+                                        userState.setFollowingUser(
+                                          u.id,
+                                          !follow,
+                                        );
+                                        userPrefsService.save(myId);
+                                        if (mounted) {
+                                          setState(
+                                            () => _followingTransitionIds
+                                                .remove(u.id),
+                                          );
+                                          widget.onFollowed();
+                                        }
+                                      }
+                                    },
+                                  ),
                                 ],
-                                Text(
-                                  mutualCount == 1
-                                      ? '1 mutual'
-                                      : '$mutualLabel mutuals',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.secondaryText,
+                              ),
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _dismissedIds.add(u.id)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.card.withValues(
+                                        alpha: 0.85,
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: AppColors.secondaryText,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
-                          const Spacer(),
-                          const SizedBox(height: 10),
-                          UserFollowButton(
-                            userId: u.id,
-                            size: 'large',
-                            followLabel: followsMe ? S.followBack : null,
-                            onTap: () async {
-                              final myId = authService.isStudentSession
-                                  ? authService.currentUser?.id ?? ''
-                                  : '';
-                              if (myId.isEmpty) return;
-                              final follow = !userState.isFollowingUser(u.id);
-                              userState.setFollowingUser(u.id, follow);
-                              userPrefsService.save(myId);
-                              widget.onFollowed();
-                              try {
-                                await peopleService.setFollowing(
-                                  followerId: myId,
-                                  followingId: u.id,
-                                  follow: follow,
-                                );
-                                userPrefsService.save(myId);
-                              } catch (_) {
-                                userState.setFollowingUser(u.id, !follow);
-                                userPrefsService.save(myId);
-                                widget.onFollowed();
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                      Positioned(
-                        top: -2,
-                        right: -2,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _dismissedIds.add(u.id)),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppColors.card.withValues(alpha: 0.85),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.close,
-                              size: 14,
-                              color: AppColors.secondaryText,
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -1253,7 +1639,7 @@ class _TrendingEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final club = _clubById(event.clubId);
     if (club == null) return const SizedBox.shrink();
-    final idx = clubs.indexOf(club);
+    final idx = clubOrdinal(club.id);
     final color = _colors[idx % _colors.length];
     final dt = event.dateTime;
     const mo = [
@@ -1290,7 +1676,7 @@ class _TrendingEventCard extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.background,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
                 border: Border.all(color: color.withValues(alpha: 0.25)),
               ),
               child: Column(
@@ -1304,7 +1690,7 @@ class _TrendingEventCard extends StatelessWidget {
                         height: 40,
                         decoration: BoxDecoration(
                           color: color,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1418,7 +1804,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
   @override
   Widget build(BuildContext context) {
     final c = widget.club;
-    final idx = clubs.indexOf(c);
+    final idx = clubOrdinal(c.id as String);
     final color = _colors[idx < 0 ? 0 : idx % _colors.length];
     final memberCount = clubMemberCount(c.id as String);
     final matches = personalizationService.interestMatchCount(c.id as String);
@@ -1465,7 +1851,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: AppColors.background,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(color: color.withValues(alpha: 0.25)),
                 ),
                 child: Row(
@@ -1576,7 +1962,7 @@ class _PeopleEngagementSheet extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.all(Radius.circular(2)),
             ),
           ),
         ),
@@ -1694,7 +2080,7 @@ class _PeopleEngagementSkeleton extends StatelessWidget {
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.all(Radius.circular(2)),
             ),
           ),
         ),
@@ -1707,7 +2093,7 @@ class _PeopleEngagementSkeleton extends StatelessWidget {
               SkeletonBox(
                 width: 118,
                 height: 16,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
               ),
             ],
           ),
@@ -1746,13 +2132,13 @@ class _PeopleEngagementSkeletonRow extends StatelessWidget {
                 SkeletonBox(
                   width: 140,
                   height: 13,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
                 ),
                 const SizedBox(height: 8),
                 SkeletonBox(
                   width: 190,
                   height: 11,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
               ],
             ),
@@ -1913,7 +2299,7 @@ const List<Color> _clubColors = [
 ];
 
 Color _colorForClub(String clubId) {
-  final idx = clubs.indexWhere((c) => c.id == clubId);
+  final idx = clubOrdinal(clubId);
   return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
 }
 
@@ -1951,7 +2337,7 @@ void _openShareSheet(
         createdAt: DateTime.now(),
       ),
     );
-    contentStore.saveShares();
+    contentStore.scheduleSave('shares');
     onShared();
   }
 
@@ -1965,7 +2351,9 @@ void _openShareSheet(
               : 'Post link copied to clipboard',
         ),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
       ),
     );
 }
@@ -1975,10 +2363,7 @@ void _openShareSheet(
 bool _isOwnerOfClub(String clubId) {
   final admin = authService.currentAdmin;
   if (admin == null) return false;
-  final club = clubs.firstWhere(
-    (c) => c.id == clubId,
-    orElse: () => clubs.first,
-  );
+  final club = clubForId(clubId) ?? clubs.first;
   return clubIsManagedByAdmin(club, admin.id);
 }
 
@@ -1988,14 +2373,12 @@ class _PostCard extends StatefulWidget {
   final NewsPost post;
   final double score;
   final int rank;
-  final VoidCallback onUpdate;
 
   const _PostCard({
     super.key,
     required this.post,
     required this.score,
     required this.rank,
-    required this.onUpdate,
   });
 
   @override
@@ -2037,17 +2420,20 @@ class _PostCardState extends State<_PostCard>
     ensurePostLiked(widget.post.id);
     setState(() => _showHeart = true);
     _heartController.forward();
-    widget.onUpdate();
   }
 
   void _toggleLike() {
     if (!authService.isStudentSession) return;
     togglePostLike(widget.post.id);
     setState(() {});
-    widget.onUpdate();
   }
 
   void _showPostOptions() {
+    final canDelete = contentStore.canDeletePost(
+      widget.post.id,
+      authService.currentAdmin?.id ?? '',
+    );
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.card,
@@ -2087,10 +2473,17 @@ class _PostCardState extends State<_PostCard>
                 height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
                 ),
               ),
               const SizedBox(height: 8),
+              if (canDelete)
+                tile(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete post',
+                  color: Colors.red,
+                  onTap: _confirmDeletePost,
+                ),
               tile(
                 icon: Icons.flag_outlined,
                 label: 'Report post',
@@ -2102,6 +2495,62 @@ class _PostCardState extends State<_PostCard>
           ),
         );
       },
+    );
+  }
+
+  void _confirmDeletePost() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          'Delete post?',
+          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This post will be removed from the home feed.',
+          style: TextStyle(color: AppColors.secondaryText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              final deleted = contentStore.deletePost(
+                widget.post.id,
+                authService.currentAdmin?.id ?? '',
+              );
+              if (!mounted) return;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      deleted
+                          ? 'Post deleted'
+                          : 'Only the club that owns this post can delete it.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2268,7 +2717,7 @@ class _PostCardState extends State<_PostCard>
                     ),
                     decoration: BoxDecoration(
                       color: clubColor.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
                       border: Border.all(
                         color: clubColor.withValues(alpha: 0.3),
                       ),
@@ -2322,7 +2771,7 @@ class _PostCardState extends State<_PostCard>
                   GestureDetector(
                     onDoubleTap: isStudent ? _doubleTapLike : null,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.all(Radius.circular(16)),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -2354,67 +2803,47 @@ class _PostCardState extends State<_PostCard>
                 // ── Engagement stats (own-club admin only) ──
                 if (ownContent) ...[
                   const SizedBox(height: 10),
-                  _EngagementBar(
-                    likes: likeCount,
-                    shares: shareCount,
-                    score: widget.score,
-                    views: viewTracker.viewCount(widget.post.id),
-                    onViewTap: () => showModalBottomSheet<void>(
-                      context: context,
-                      backgroundColor: Colors.transparent,
-                      isScrollControlled: true,
-                      builder: (_) => _ViewersSheet(
-                        contentId: widget.post.id,
-                        title: 'Post Viewers',
+                  ListenableBuilder(
+                    listenable: viewTracker,
+                    builder: (context, _) => _EngagementBar(
+                      likes: likeCount,
+                      shares: shareCount,
+                      score: widget.score,
+                      views: viewTracker.viewCount(widget.post.id),
+                      onViewTap: () => showModalBottomSheet<void>(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (_) => _ViewersSheet(
+                          contentId: widget.post.id,
+                          title: 'Post Viewers',
+                        ),
                       ),
-                    ),
-                    onLikeTap: () => showModalBottomSheet<void>(
-                      context: context,
-                      backgroundColor: Colors.transparent,
-                      isScrollControlled: true,
-                      builder: (_) => _LikersSheet(postId: widget.post.id),
+                      onLikeTap: () => showModalBottomSheet<void>(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (_) => _LikersSheet(postId: widget.post.id),
+                      ),
                     ),
                   ),
                 ],
                 const SizedBox(height: 4),
-                // ── Action row (counts inline, X-style) ──
+                // ── Action row (X-style) ──
                 if (isStudent)
-                  ListenableBuilder(
-                    listenable: commentStore,
-                    builder: (_, _) {
-                      final commentCount = commentStore.countFor(
-                        widget.post.id,
-                      );
-                      return Row(
-                        children: [
-                          _twAction(
-                            icon: isLiked
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            count: null,
-                            color: isLiked
-                                ? AppColors.primaryRed
-                                : AppColors.secondaryText,
-                            onTap: _toggleLike,
-                          ),
-                          const SizedBox(width: 4),
-                          _twAction(
-                            icon: Icons.mode_comment_outlined,
-                            count: commentCount > 0 ? '$commentCount' : null,
-                            color: AppColors.secondaryText,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PostDetailScreen(
-                                  post: widget.post,
-                                  clubColor: clubColor,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                  Row(
+                    children: [
+                      _twAction(
+                        icon: isLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        count: null,
+                        color: isLiked
+                            ? AppColors.primaryRed
+                            : AppColors.secondaryText,
+                        onTap: _toggleLike,
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -2433,7 +2862,7 @@ class _PostCardState extends State<_PostCard>
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.all(Radius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         child: Row(
@@ -2617,21 +3046,32 @@ class _EventCardState extends State<_EventCard> {
             ),
 
             // ── Event banner ──
-            Container(
+            SizedBox(
               width: double.infinity,
               height: 160,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    clubColor.withValues(alpha: 0.8),
-                    clubColor.withValues(alpha: 0.3),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
               child: Stack(
+                fit: StackFit.expand,
                 children: [
+                  EventCoverImage(
+                    event: widget.event,
+                    color: clubColor,
+                    width: double.infinity,
+                    height: 160,
+                    cacheWidth: 700,
+                    cacheHeight: 320,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.64),
+                        ],
+                      ),
+                    ),
+                  ),
                   // Big date in background
                   Positioned(
                     right: 16,
@@ -2659,7 +3099,7 @@ class _EventCardState extends State<_EventCard> {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.all(Radius.circular(20)),
                           ),
                           child: Text(
                             '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
@@ -2738,18 +3178,21 @@ class _EventCardState extends State<_EventCard> {
             if (_isOwnerOfClub(widget.event.clubId)) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: _EngagementBar(
-                  likes: 0,
-                  shares: shareCount,
-                  score: widget.score,
-                  views: viewTracker.viewCount(widget.event.id),
-                  onViewTap: () => showModalBottomSheet<void>(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    builder: (_) => _ViewersSheet(
-                      contentId: widget.event.id,
-                      title: 'Event Viewers',
+                child: ListenableBuilder(
+                  listenable: viewTracker,
+                  builder: (context, _) => _EngagementBar(
+                    likes: 0,
+                    shares: shareCount,
+                    score: widget.score,
+                    views: viewTracker.viewCount(widget.event.id),
+                    onViewTap: () => showModalBottomSheet<void>(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (_) => _ViewersSheet(
+                        contentId: widget.event.id,
+                        title: 'Event Viewers',
+                      ),
                     ),
                   ),
                 ),
@@ -2918,7 +3361,6 @@ class _ActionBtn extends StatelessWidget {
   }
 }
 
-
 // ─── Event Rail Card ──────────────────────────────────────────────────────────
 
 class _EventRailCard extends StatefulWidget {
@@ -2944,26 +3386,14 @@ class _EventRailCardState extends State<_EventRailCard> {
   @override
   Widget build(BuildContext context) {
     final ev = widget.event;
-    final club = clubs.firstWhere(
-      (c) => c.id == ev.clubId,
-      orElse: () => clubs.first,
-    );
-    final idx = clubs.indexOf(club);
+    final club = clubForId(ev.clubId) ?? clubs.first;
+    final idx = clubOrdinal(club.id);
     final color = _colors[idx < 0 ? 0 : idx % _colors.length];
     final now = DateTime.now();
     final isLive = ev.dateTime.isBefore(now) && ev.endTime.isAfter(now);
-    final daysAway = ev.dateTime.difference(now).inDays;
-    final String dayLabel;
-    if (isLive) {
-      dayLabel = 'LIVE';
-    } else if (daysAway == 0) {
-      dayLabel = S.today;
-    } else if (daysAway == 1) {
-      dayLabel = S.tomorrow;
-    } else {
-      const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      dayLabel = wd[ev.dateTime.weekday - 1];
-    }
+    final dateTimeLabel = isLive
+        ? 'LIVE · ${_time24(ev.dateTime)}'
+        : '${_weekdayShort(ev.dateTime)}. ${_time24(ev.dateTime)}';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -2974,151 +3404,126 @@ class _EventRailCardState extends State<_EventRailCard> {
         ),
       ),
       child: Container(
-        width: 188,
+        width: 218,
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.all(Radius.circular(19)),
+          border: Border.all(
+            color: AppColors.primaryRed.withValues(
+              alpha: themeService.isDark ? 0.46 : 0.22,
+            ),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(
+                alpha: themeService.isDark ? 0.24 : 0.06,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
-        padding: const EdgeInsets.all(14),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Club monogram + live/day badge
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+            SizedBox(
+              height: 108,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  EventCoverImage(
+                    event: ev,
+                    color: color,
+                    width: double.infinity,
+                    height: 108,
+                    cacheWidth: 440,
+                    cacheHeight: 220,
                   ),
-                  child: Center(
-                    child: Text(
-                      club.name.replaceFirst(RegExp(r'^KU\s+'), '').isNotEmpty
-                          ? club.name.replaceFirst(RegExp(r'^KU\s+'), '')[0]
-                          : club.name[0],
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.04),
+                          Colors.black.withValues(alpha: 0.32),
+                        ],
                       ),
                     ),
                   ),
-                ),
-                const Spacer(),
-                if (isLive)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _PulsingDot(color: AppColors.primaryRed),
-                      const SizedBox(width: 4),
-                      Text(
-                        'LIVE',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryRed,
-                          letterSpacing: 0.6,
+                  Positioned(
+                    left: 9,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.68),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
                         ),
                       ),
-                    ],
-                  )
-                else
-                  Text(
-                    dayLabel,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: AppColors.secondaryText,
-                      letterSpacing: 0.3,
+                      child: Text(
+                        dateTimeLabel,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            // Event title
             Expanded(
-              child: Text(
-                ev.title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.text,
-                  letterSpacing: -0.3,
-                  height: 1.2,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            // Location
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 12,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    ev.location,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.secondaryText,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ev.title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                        letterSpacing: -0.35,
+                        height: 1.15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            // Time
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 12,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isLive
-                      ? 'Now · ${_fmt(ev.dateTime)}'
-                      : '$dayLabel · ${_fmt(ev.dateTime)}',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              height: 34,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'View details',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 13,
+                          color: AppColors.secondaryText,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            ev.location,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.secondaryText,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -3128,11 +3533,11 @@ class _EventRailCardState extends State<_EventRailCard> {
     );
   }
 
-  String _fmt(DateTime dt) {
-    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m ${dt.hour < 12 ? 'AM' : 'PM'}';
-  }
+  String _time24(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  String _weekdayShort(DateTime dt) =>
+      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dt.weekday - 1];
 }
 
 // ─── Pulsing dot (live indicator) ─────────────────────────────────────────────

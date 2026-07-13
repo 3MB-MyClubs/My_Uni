@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
+import '../services/theme_service.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -14,12 +15,9 @@ import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
 
-/// Notification center — "Filtered & grouped" (Style B from the UniHub Alerts
-/// design): a header with an unread count + mark-all-read, scrollable filter
-/// chips (All / You / Events / Clubs) with live unread counts, and a
-/// New / Earlier grouped feed of type-colored icon-tile rows. Tapping a row
-/// marks it read and opens its target. Follow requests keep their working
-/// Accept / Decline actions. No non-functional buttons.
+/// Notification center: a single chronological feed with unread emphasis and
+/// mark-all-read. Tapping a row marks it read and opens its target. Follow
+/// requests keep their working Accept / Decline actions.
 class NotificationsScreen extends StatefulWidget {
   /// True only for the instance hosted in the main nav bar's IndexedStack, so
   /// the app tour's "mark all read" anchor attaches to a single widget — this
@@ -33,8 +31,6 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  String _filter = 'all'; // 'all' | 'you' | 'events' | 'clubs'
-
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
@@ -49,11 +45,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     localeService.addListener(_onLocaleChanged);
+    themeService.addListener(_onLocaleChanged);
   }
 
   @override
   void dispose() {
     localeService.removeListener(_onLocaleChanged);
+    themeService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -62,28 +60,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
-
-  /// Which filter chip a notification belongs to. Personal alerts (likes,
-  /// RSVPs and mentions aimed at you, follows, DMs) come first because their
-  /// targetType overlaps with the Events/Clubs buckets.
-  String _categoryOf(AppNotification n) {
-    if (n.id.startsWith('post_like_') ||
-        n.id.startsWith('post_comment_') ||
-        n.id.startsWith('event_rsvp_') ||
-        n.id.startsWith('mention_')) {
-      return 'you';
-    }
-    switch (n.targetType) {
-      case 'user':
-      case 'follow_request':
-      case 'follow_accepted':
-        return 'you';
-      case 'event':
-        return 'events';
-      default:
-        return 'clubs';
-    }
-  }
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
@@ -115,7 +91,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   ];
 
   Color _colorForClub(String clubId) {
-    final idx = clubs.indexWhere((c) => c.id == clubId);
+    final idx = clubOrdinal(clubId);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
   }
 
@@ -136,8 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         if (idx >= 0) clubId = events[idx].clubId;
     }
     if (clubId == null) return null;
-    final ci = clubs.indexWhere((c) => c.id == clubId);
-    return ci >= 0 ? clubs[ci] : null;
+    return clubForId(clubId);
   }
 
   void _openTarget(AppNotification n) {
@@ -266,31 +241,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         listenable: userState,
         builder: (context, _) {
           final all = _allNotifs;
-          final list = _filter == 'all'
-              ? all
-              : all.where((n) => _categoryOf(n) == _filter).toList();
-          final news = list.where(_isUnread).toList();
-          final earlier = list.where((n) => !_isUnread(n)).toList();
           final totalUnread = all.where(_isUnread).length;
 
           return Column(
             children: [
               _buildHeader(totalUnread),
               Expanded(
-                child: (news.isEmpty && earlier.isEmpty)
+                child: all.isEmpty
                     ? const _BEmpty()
-                    : ListView(
-                        padding: EdgeInsets.zero,
-                        children: [
-                          if (news.isNotEmpty) ...[
-                            _Sec(label: S.newSection),
-                            ...news.map(_row),
-                          ],
-                          if (earlier.isNotEmpty) ...[
-                            _Sec(label: S.earlier),
-                            ...earlier.map(_row),
-                          ],
-                          const SizedBox(height: 16),
+                    : CustomScrollView(
+                        slivers: [
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, i) => _row(all[i]),
+                              childCount: all.length,
+                            ),
+                          ),
+                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
                         ],
                       ),
               ),
@@ -301,7 +268,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  // ── Header (title + unread pill + mark-all + filter chips) ──────────────────
+  // ── Header (title + unread pill + mark-all) ─────────────────────────────────
   Widget _buildHeader(int totalUnread) {
     final canPop = Navigator.of(context).canPop();
     return Container(
@@ -312,7 +279,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
           child: Column(
             children: [
               Row(
@@ -348,7 +315,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
                       child: Text(
                         '$totalUnread',
@@ -373,7 +340,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       height: 38,
                       decoration: BoxDecoration(
                         color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         border: Border.all(color: AppColors.divider),
                       ),
                       child: Icon(
@@ -385,97 +352,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _buildFilterChips(),
-              const SizedBox(height: 12),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ── Filter chips (All / You / Events / Clubs) with live unread counts ────────
-  Widget _buildFilterChips() {
-    final all = _allNotifs;
-    int unreadIn(String key) => all
-        .where((n) => key == 'all' || _categoryOf(n) == key)
-        .where(_isUnread)
-        .length;
-
-    final chips = [
-      ('all', S.all),
-      ('you', S.filterYou),
-      ('events', S.filterEvents),
-      ('clubs', S.filterClubs),
-    ];
-
-    return SizedBox(
-      height: 34,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: chips.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final (key, label) = chips[i];
-          final selected = _filter == key;
-          final unread = unreadIn(key);
-          return GestureDetector(
-            onTap: () => setState(() => _filter = key),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.primaryRed : AppColors.surfaceAlt,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: selected ? AppColors.primaryRed : AppColors.divider,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? Colors.white : AppColors.text,
-                    ),
-                  ),
-                  if (unread > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      constraints: const BoxConstraints(minWidth: 18),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.white.withValues(alpha: 0.25)
-                            : AppColors.primaryRed.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                      child: Text(
-                        '$unread',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: selected
-                              ? Colors.white
-                              : AppColors.primaryRed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -546,7 +425,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 height: 46,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
                   border: Border.all(color: accent.withValues(alpha: 0.20)),
                 ),
                 child: Icon(icon, size: 22, color: accent),
@@ -645,7 +524,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
             decoration: BoxDecoration(
               color: AppColors.primaryRed,
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.all(Radius.circular(100)),
             ),
             child: Text(
               S.accept,
@@ -668,7 +547,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.all(Radius.circular(100)),
               border: Border.all(color: AppColors.divider),
             ),
             child: Text(
@@ -682,30 +561,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ── Section header ────────────────────────────────────────────────────────────
-class _Sec extends StatelessWidget {
-  final String label;
-  const _Sec({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: AppColors.background,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.5,
-          color: AppColors.secondaryText,
-        ),
-      ),
     );
   }
 }
@@ -727,7 +582,7 @@ class _BEmpty extends StatelessWidget {
               height: 80,
               decoration: BoxDecoration(
                 color: AppColors.lightRed,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.all(Radius.circular(24)),
               ),
               child: Icon(
                 Icons.done_all_rounded,

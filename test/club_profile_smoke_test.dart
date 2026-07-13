@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/club_profile_screen.dart';
 import 'package:flutter_application_1/screens/explore_screen.dart';
@@ -25,8 +26,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: ClubProfileScreen(club: clubs.first, color: Colors.red),
+      ProviderScope(
+        child: MaterialApp(
+          home: ClubProfileScreen(club: clubs.first, color: Colors.red),
+        ),
       ),
     );
 
@@ -40,8 +43,10 @@ void main() {
     await themeService.setDark(false);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: ClubProfileScreen(club: clubs.first, color: Colors.red),
+      ProviderScope(
+        child: MaterialApp(
+          home: ClubProfileScreen(club: clubs.first, color: Colors.red),
+        ),
       ),
     );
 
@@ -54,7 +59,7 @@ void main() {
   testWidgets('ExploreScreen opens a club profile without a render exception', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ExploreScreen())));
 
     await tester.pumpAndSettle();
 
@@ -68,7 +73,7 @@ void main() {
   testWidgets('Find People previews up to 10 random profiles and searches', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ExploreScreen()));
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ExploreScreen())));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Find People'));
@@ -94,7 +99,7 @@ void main() {
     await themeService.setDark(false);
     authService.login(users.first.email, users.first.password);
 
-    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ProfileScreen())));
 
     await tester.pumpAndSettle();
 
@@ -107,7 +112,7 @@ void main() {
   ) async {
     authService.login(users.first.email, users.first.password);
 
-    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: ProfileScreen())));
 
     await tester.pumpAndSettle();
 

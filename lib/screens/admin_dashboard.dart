@@ -4,8 +4,10 @@ import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/club_insights_service.dart';
 import '../services/lazy_content_loader.dart';
+import '../services/locale_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/theme_service.dart';
 import 'club_insights_screen.dart';
 
 /// Super-admin dashboard: campus-wide totals and a club engagement
@@ -33,6 +35,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
   void initState() {
     super.initState();
     _refresh();
+    themeService.addListener(_onThemeOrLocaleChanged);
+    localeService.addListener(_onThemeOrLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    themeService.removeListener(_onThemeOrLocaleChanged);
+    localeService.removeListener(_onThemeOrLocaleChanged);
+    super.dispose();
+  }
+
+  void _onThemeOrLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _refresh() async {
@@ -56,7 +71,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     // Leaderboard: clubs ranked by followers, then total RSVPs.
     final ranked = [...clubs];
-    final stats = {for (final c in ranked) c.id: clubInsightsService.compute(c)};
+    final stats = clubInsightsService.computeAll(ranked);
     ranked.sort((a, b) {
       final byFollowers = stats[b.id]!.followers.compareTo(
         stats[a.id]!.followers,
@@ -127,7 +142,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Column(
@@ -171,7 +186,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
           border: Border.all(color: AppColors.divider),
         ),
         child: Row(

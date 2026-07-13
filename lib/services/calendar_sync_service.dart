@@ -25,7 +25,9 @@ class CalendarSyncService extends ChangeNotifier {
   Future<String> checkPermission() async {
     if (!Platform.isIOS) return 'authorized';
     try {
-      final status = await _iosCalendarChannel.invokeMethod<String>('checkPermission');
+      final status = await _iosCalendarChannel.invokeMethod<String>(
+        'checkPermission',
+      );
       return status ?? 'notDetermined';
     } on PlatformException {
       return 'notDetermined';
@@ -36,7 +38,9 @@ class CalendarSyncService extends ChangeNotifier {
   Future<bool> requestPermission() async {
     if (!Platform.isIOS) return true;
     try {
-      final status = await _iosCalendarChannel.invokeMethod<String>('requestPermission');
+      final status = await _iosCalendarChannel.invokeMethod<String>(
+        'requestPermission',
+      );
       return status == 'authorized';
     } on PlatformException {
       return false;

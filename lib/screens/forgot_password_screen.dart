@@ -156,8 +156,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_isSubmitting) return;
     final password = _passwordController.text.trim();
     final confirm = _confirmPasswordController.text.trim();
-    final noun = widget.passwordNoun[0].toUpperCase() +
-        widget.passwordNoun.substring(1);
+    final noun =
+        widget.passwordNoun[0].toUpperCase() + widget.passwordNoun.substring(1);
     if (!_isExactLength) {
       setState(() {
         _message = null;
@@ -256,7 +256,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.all(Radius.circular(14)),
                     ),
                   ),
                   child: _isSubmitting
@@ -451,7 +451,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.lightRed,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.all(Radius.circular(14)),
           ),
           child: Text(
             _email,
@@ -480,23 +480,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       filled: true,
       fillColor: AppColors.card,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide(color: AppColors.divider),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide(color: AppColors.primaryRed),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         borderSide: BorderSide(color: AppColors.primaryRed, width: 2),
       ),
     );
@@ -522,7 +522,7 @@ class _KuBadge extends StatelessWidget {
       height: 56,
       decoration: BoxDecoration(
         color: AppColors.lightRed,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.all(Radius.circular(16)),
       ),
       child: Center(
         child: Text(
