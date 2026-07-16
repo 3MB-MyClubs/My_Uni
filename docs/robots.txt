@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://3mb-myclubs.github.io/My_Uni/sitemap.xml

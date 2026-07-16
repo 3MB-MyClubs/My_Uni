@@ -260,6 +260,21 @@ class S {
   static String get switchToLight =>
       _t('Switch to light theme', 'Aydınlık temaya geç');
   static String get help => _t('Help', 'Yardım');
+  static String get supportAndLegal => _t('Support & Legal', 'Destek ve Yasal');
+  static String get supportCenter => _t('Support Center', 'Destek Merkezi');
+  static String get supportCenterSubtitle =>
+      _t('Help, FAQs & contact', 'Yardım, sık sorulanlar ve iletişim');
+  static String get privacyPolicy =>
+      _t('Privacy Policy', 'Gizlilik Politikası');
+  static String get privacyPolicySubtitle =>
+      _t('How ClubUp handles your data', 'ClubUp verilerinizi nasıl işler');
+  static String get deleteAccount => _t('Delete Account', 'Hesabı Sil');
+  static String get deleteAccountSubtitle => _t(
+    'Request permanent account & data deletion',
+    'Hesap ve verilerin kalıcı olarak silinmesini iste',
+  );
+  static String get couldNotOpenPage =>
+      _t('Could not open this page.', 'Bu sayfa açılamadı.');
   static String get account => _t('Account', 'Hesap');
   static String get logOut => _t('Log Out', 'Çıkış Yap');
   static String get editProfile => _t('Edit Profile', 'Profili Düzenle');

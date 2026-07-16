@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+import '../services/app_links.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/rsvp_store.dart';
@@ -614,6 +616,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
     tutorialService.requestReplay();
+  }
+
+  Future<void> _openExternalPage(String url) async {
+    final opened = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(S.couldNotOpenPage)));
+    }
+  }
+
+  Widget _externalPageTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String url,
+    Color? color,
+  }) {
+    final accent = color ?? AppColors.primaryRed;
+    return ListTile(
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        child: Icon(icon, color: accent, size: 20),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+      ),
+      trailing: Icon(Icons.open_in_new_rounded, color: AppColors.secondaryText),
+      onTap: () => _openExternalPage(url),
+    );
   }
 
   void _openChangeNameSheet() {
@@ -1232,6 +1277,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
+
+            const SizedBox(height: 24),
+
+            // ── Public support and legal pages ──────────────────────────────
+            _SectionHeader(title: S.supportAndLegal),
+            Container(
+              color: AppColors.card,
+              child: Column(
+                children: [
+                  _externalPageTile(
+                    icon: Icons.help_outline_rounded,
+                    title: S.supportCenter,
+                    subtitle: S.supportCenterSubtitle,
+                    url: AppLinks.support,
+                  ),
+                  Divider(height: 1, indent: 56, color: AppColors.divider),
+                  _externalPageTile(
+                    icon: Icons.privacy_tip_outlined,
+                    title: S.privacyPolicy,
+                    subtitle: S.privacyPolicySubtitle,
+                    url: AppLinks.privacyPolicy,
+                  ),
+                  Divider(height: 1, indent: 56, color: AppColors.divider),
+                  _externalPageTile(
+                    icon: Icons.delete_outline_rounded,
+                    title: S.deleteAccount,
+                    subtitle: S.deleteAccountSubtitle,
+                    url: AppLinks.accountDeletion,
+                    color: Colors.red,
+                  ),
+                ],
+              ),
+            ),
 
             const SizedBox(height: 24),
 

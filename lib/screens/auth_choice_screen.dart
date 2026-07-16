@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/app_colors.dart';
+import '../services/app_links.dart';
 import 'club_admin_auth_screen.dart';
 
 class AuthChoiceScreen extends StatelessWidget {
@@ -40,14 +42,38 @@ class AuthChoiceScreen extends StatelessWidget {
                       _buildActions(context),
                       const SizedBox(height: 18),
                       Center(
-                        child: Text(
-                          'By continuing you agree to our Terms\nand acknowledge the Privacy Policy.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.55,
-                            color: AppColors.secondaryText,
-                          ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'By continuing you acknowledge our',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                height: 1.3,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _openPrivacyPolicy(context),
+                              style: TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                foregroundColor: AppColors.primaryRed,
+                              ),
+                              child: const Text(
+                                'Privacy Policy',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -88,6 +114,18 @@ class AuthChoiceScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final opened = await launchUrl(
+      Uri.parse(AppLinks.privacyPolicy),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the Privacy Policy.')),
+      );
+    }
   }
 
   Widget _buildWordmark() {
