@@ -370,7 +370,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'University Social App',
+          title: 'ClubUp',
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           theme: _lightTheme ??= _buildTheme(false),
           darkTheme: _darkTheme ??= _buildTheme(true),

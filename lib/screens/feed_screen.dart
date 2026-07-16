@@ -574,7 +574,7 @@ class _FeedScreenState extends State<FeedScreen> {
     return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : fullName;
   }
 
-  // ── UniHub top bar ───────────────────────────────────────────────────────
+  // ── ClubUp top bar ────────────────────────────────────────────────────────
   SliverAppBar _buildTopBar() {
     return SliverAppBar(
       pinned: true,
@@ -603,12 +603,12 @@ class _FeedScreenState extends State<FeedScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           children: [
-            // UniHub logotype — "Uni" in maroon, "Hub" in foreground, gold dot.
+            // ClubUp logotype — "Club" in maroon, "Up" in foreground, gold dot.
             RichText(
               text: TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Uni',
+                    text: 'Club',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -617,7 +617,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                   ),
                   TextSpan(
-                    text: 'Hub',
+                    text: 'Up',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -1013,7 +1013,7 @@ class _EmptyFeedArt extends StatelessWidget {
   }
 }
 
-/// Squared glass icon button used in the UniHub top bar (theme toggle, bell).
+/// Squared glass icon button used in the ClubUp top bar (theme toggle, bell).
 /// [badgeCount] > 0 shows a maroon unread-count pill on the top-right corner.
 class _TopBarIconButton extends StatelessWidget {
   final IconData icon;

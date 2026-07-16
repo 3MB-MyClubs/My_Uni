@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1024"
+     height="1024"
+     viewBox="0 0 1024 1024">
+  <title>ClubUp app icon</title>
+  <desc>A white location pin containing a three-person community mark on a maroon background.</desc>
+  <defs>
+    <mask id="clubup-mark" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="black"/>
+
+      <!-- Location pin. -->
+      <path fill="white" d="
+        M 512 124
+        C 319 124 190 258 190 424
+        C 190 619 336 763 484 917
+        C 499 933 525 933 540 917
+        C 688 763 834 619 834 424
+        C 834 258 705 124 512 124
+        Z"/>
+
+      <!-- Community field, cut through the white pin to reveal maroon. -->
+      <circle cx="512" cy="426" r="210" fill="black"/>
+
+      <!-- Three people and the three open links between them. -->
+      <circle cx="512" cy="304" r="61" fill="white"/>
+      <circle cx="379" cy="515" r="61" fill="white"/>
+      <circle cx="645" cy="515" r="61" fill="white"/>
+
+      <path d="M 358 420 A 166 166 0 0 1 435 333"
+            fill="none"
+            stroke="white"
+            stroke-width="24"
+            stroke-linecap="butt"/>
+      <path d="M 589 333 A 166 166 0 0 1 666 420"
+            fill="none"
+            stroke="white"
+            stroke-width="24"
+            stroke-linecap="butt"/>
+      <path d="M 423 572 Q 512 638 601 572"
+            fill="none"
+            stroke="white"
+            stroke-width="24"
+            stroke-linecap="butt"/>
+    </mask>
+  </defs>
+
+  <!-- Full bleed: platform launchers apply their own corner mask. -->
+  <rect width="1024" height="1024" fill="#9E2045"/>
+  <rect width="1024" height="1024" fill="white" mask="url(#clubup-mark)"/>
+</svg>

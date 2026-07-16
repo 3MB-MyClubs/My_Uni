@@ -14,6 +14,7 @@ import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/tutorial_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 
 /// Verifies another student's profile lists their clubs inline (like the
 /// own-profile Clubs card) instead of hiding them behind the Clubs stat.
@@ -42,7 +43,9 @@ void main() {
 
     // Give Can a board role so the burgundy role badge renders.
     final roleClub = clubs.firstWhere((c) => c.id == can.subscribedClubIds[1]);
-    roleClub.boardMemberIds.add(can.id);
+    if (!roleClub.boardMemberIds.contains(can.id)) {
+      roleClub.boardMemberIds.add(can.id);
+    }
     roleClub.boardMemberTitles[can.id] = 'Vice President';
 
     await tester.pumpWidget(
@@ -57,8 +60,13 @@ void main() {
 
     // The inline clubs card is on screen without tapping anything.
     expect(find.text('CLUBS · 5'), findsOneWidget);
-    expect(find.text('Vice President'), findsOneWidget);
+    expect(find.textContaining('Vice President'), findsOneWidget);
     expect(find.text('See all'), findsOneWidget);
+    final profileView = tester.widget<StudentCampusProfileView>(
+      find.byType(StudentCampusProfileView),
+    );
+    expect(profileView.memberships.first.club.id, roleClub.id);
+    expect(profileView.memberships.first.role, 'Vice President');
 
     await tester.scrollUntilVisible(find.text('See all'), 120);
     await tester.pump(const Duration(milliseconds: 400));
