@@ -45,8 +45,9 @@ The signed bundle is written to
 
 ## ClubUp support website
 
-The static website in `docs/` contains the public ClubUp support, privacy,
-and account-deletion pages. The GitHub Actions workflow in
+The localized static website in `docs/` contains the public ClubUp support,
+privacy, and account-deletion pages in English and Turkish. English pages use
+the root URLs and Turkish pages use the `/tr/` path. The GitHub Actions workflow in
 `.github/workflows/deploy-pages.yml` validates and deploys it to GitHub Pages
 whenever related files change on `main`.
 
@@ -60,3 +61,7 @@ Expected public URLs:
 - `https://3mb-myclubs.github.io/My_Uni/support/`
 - `https://3mb-myclubs.github.io/My_Uni/privacy/`
 - `https://3mb-myclubs.github.io/My_Uni/delete-account/`
+- `https://3mb-myclubs.github.io/My_Uni/tr/`
+- `https://3mb-myclubs.github.io/My_Uni/tr/support/`
+- `https://3mb-myclubs.github.io/My_Uni/tr/privacy/`
+- `https://3mb-myclubs.github.io/My_Uni/tr/delete-account/`
