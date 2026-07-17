@@ -539,7 +539,7 @@ class _SubmitButton extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(16)),
           gradient: active
-              ? const LinearGradient(
+              ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [AppColors.darkRed, AppColors.primaryRed],

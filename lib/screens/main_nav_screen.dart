@@ -1,12 +1,14 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
+import '../services/app_bootstrap.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/chat_store.dart';
 import '../services/mock_data.dart';
-import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
@@ -18,7 +20,7 @@ import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
 import 'explore_screen.dart';
-import 'notifications_screen.dart';
+import 'chats_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
@@ -147,6 +149,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   int _selectedIndex = 0;
   bool _showTutorial = false;
   double? _navDragDx;
+  final ChatsController _chatsController = ChatsController();
 
   // Built once and never replaced by nav taps or content-creation callbacks,
   // so IndexedStack sees the same widget instances and Flutter's element-
@@ -160,7 +163,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     FeedScreen(), // 0
     ThisWeekScreen(isTutorialHost: true), // 1
     ExploreScreen(), // 2
-    NotificationsScreen(isTutorialHost: true), // 3
+    ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
     ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
     if (widget.isAdmin) AdminDashboard(), // 5
   ];
@@ -174,9 +177,24 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     tutorialService.replayRequests.addListener(_onTutorialReplayRequested);
     themeService.addListener(_onThemeOrLocaleChanged);
     localeService.addListener(_onThemeOrLocaleChanged);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _startInitialExperience(),
-    );
+    // Keeps the Chats badge live when a message arrives on another screen.
+    chatStore.addListener(_onThemeOrLocaleChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startInitialExperience();
+      // One MainNavScreen State per login session, and userPrefsService.load
+      // has already restored followedClubIds by the time boxes are ready — so
+      // this seeds the demo DM threads for whoever just logged in, before the
+      // lazily-built Chats tab first opens.
+      unawaited(
+        appBootstrap.ready.then((_) {
+          if (!mounted) return;
+          chatStore.ensureSeededFor(_currentUserId);
+          if (authService.isStudentSession) {
+            unawaited(chatStore.startDirectMessageSync(_currentUserId));
+          }
+        }),
+      );
+    });
   }
 
   void _onThemeOrLocaleChanged() {
@@ -222,6 +240,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   void _onTutorialStepChanged(AppTutorialStep step) {
     if (_selectedIndex == step.tabIndex) return;
     setState(() => _selectedIndex = step.tabIndex);
+    if (step.tabIndex == 3) _chatsController.showStudents();
   }
 
   // Whichever tour applies to the current session. Kept as a single getter so
@@ -249,7 +268,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       eyebrow: 'Getting around',
       title: 'Your five sections',
       description:
-          'This bar stays with you everywhere: Home, Events, Search, Alerts, and Profile. The active one turns red.',
+          'This bar stays with you everywhere: Home, Events, Search, Chats, and Profile. The active one turns red.',
       icon: Icons.touch_app_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
       tabIndex: 0,
@@ -295,16 +314,16 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Alerts',
-      title: 'Stay in the loop',
+      eyebrow: 'Chats',
+      title: 'Message your people',
       description:
-          'Follows, club posts, and event changes collect here. Tap an alert to open it, filter with the chips, or clear them all with this button.',
-      icon: Icons.notifications_active_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
+          'Direct messages and your clubs’ group chats live here. Every club you join gets a members-only room — and this button starts a new DM.',
+      icon: Icons.chat_bubble_rounded,
+      targetKey: tutorialAnchors.keyFor(TutorialAnchors.chatsCompose),
       tabIndex: 3,
       tips: [
-        'A badge on the bar means something’s new.',
-        'Opening this tab clears the badge.',
+        'A badge on the bar means new messages.',
+        'Notifications moved to the bell on Home.',
       ],
     ),
     AppTutorialStep(
@@ -361,7 +380,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       eyebrow: 'Getting around',
       title: 'Your four sections',
       description:
-          'Home, Events, Alerts, and Profile stay with you everywhere. The center button replaces Search — it’s reserved for posting.',
+          'Home, Events, Chats, and Profile stay with you everywhere. The center button replaces Search — it’s reserved for posting.',
       icon: Icons.touch_app_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
       tabIndex: 0,
@@ -419,13 +438,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       tabIndex: 4,
       tips: ['Board management lives under your club’s section in Settings.'],
     ),
-    AppTutorialStep(
-      eyebrow: 'Alerts',
-      title: 'Stay in the loop',
+    const AppTutorialStep(
+      eyebrow: 'Chats',
+      title: 'Talk with your members',
       description:
-          'New followers and event activity collect here. Tap an alert to open it, or clear them all with this button.',
-      icon: Icons.notifications_active_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
+          'Chats opens your club’s single shared community room. Talk with members there, answer questions, and share plans; club-admin accounts do not use direct messages.',
+      icon: Icons.chat_bubble_rounded,
       tabIndex: 3,
     ),
     const AppTutorialStep(
@@ -455,25 +473,18 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     tutorialService.replayRequests.removeListener(_onTutorialReplayRequested);
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
+    chatStore.removeListener(_onThemeOrLocaleChanged);
+    _chatsController.dispose();
     super.dispose();
   }
 
-  void _onNotificationsOpened() {
-    final currentId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final visible = [
-      ...notifications,
-      ...userState.dynamicNotifications,
-    ].where((n) => n.userId == currentId && n.targetType != 'story');
-    userState.markNotificationsRead(visible);
-  }
-
+  // Chat unreads clear per-thread when a conversation is opened (see
+  // ChatThreadScreen), so unlike the old Alerts tab there's nothing to
+  // mark read when the Chats tab itself is selected.
   void _selectNavIndex(int index) {
+    if (index == 3) _chatsController.showStudents();
     if (_selectedIndex != index) {
       setState(() => _selectedIndex = index);
-    }
-    if (index == 3) {
-      _onNotificationsOpened();
     }
   }
 
@@ -491,7 +502,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       slots.length - 1,
     );
     final navIndex = slots[slotIndex].index;
-    final shouldOpenNotifications = navIndex == 3 && _selectedIndex != 3;
+    final enteringChats = navIndex == 3 && _selectedIndex != 3;
 
     setState(() {
       _navDragDx = clampedDx;
@@ -499,10 +510,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         _selectedIndex = navIndex;
       }
     });
-
-    if (shouldOpenNotifications) {
-      _onNotificationsOpened();
-    }
+    if (enteringChats) _chatsController.showStudents();
   }
 
   void _endNavDrag() {
@@ -561,12 +569,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   Widget _buildBottomNav(BuildContext context) {
     final currentId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final unreadAlerts = userState.unreadNotificationCountFor(
-      [
-        ...notifications,
-        ...userState.dynamicNotifications,
-      ].where((n) => n.userId == currentId && n.targetType != 'story'),
-    );
+    final unreadChats = chatStore.totalUnreadFor(currentId);
     final isDark = themeService.isDark;
 
     // Ordered slots so the sliding highlight can be positioned purely from
@@ -594,10 +597,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       if (_isClubAdmin) const _NavSlot.center(),
       _NavSlot(
         index: 3,
-        icon: Icons.notifications_none_rounded,
-        activeIcon: Icons.notifications_rounded,
-        label: S.alerts,
-        badge: unreadAlerts,
+        icon: Icons.chat_bubble_outline_rounded,
+        activeIcon: Icons.chat_bubble_rounded,
+        label: S.chats,
+        badge: unreadChats,
       ),
       _NavSlot(
         index: 4,

@@ -38,6 +38,8 @@ import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../services/supabase_interaction_service.dart';
+import '../services/chat_store.dart';
+import 'chats_screen.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
@@ -640,18 +642,46 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            // Bell button with unread-count badge
+            // Chats + bell buttons with unread-count badges. Since the Alerts
+            // nav tab became Chats, this bell is the only notifications entry,
+            // so it uses the accurate per-user count the nav badge used to
+            // show (not the deprecated global counter).
             ListenableBuilder(
-              listenable: userState,
+              listenable: Listenable.merge([userState, chatStore]),
               builder: (_, x) {
-                final unread = userState.unreadNotifications;
-                return _TopBarIconButton(
-                  icon: Icons.notifications_none_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => NotificationsScreen()),
-                  ),
-                  badgeCount: unread,
+                final myId =
+                    authService.currentUser?.id ??
+                    authService.currentAdmin?.id ??
+                    '';
+                final unreadNotifs = userState.unreadNotificationCountFor(
+                  [
+                    ...notifications,
+                    ...userState.dynamicNotifications,
+                  ].where((n) => n.userId == myId && n.targetType != 'story'),
+                );
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _TopBarIconButton(
+                      icon: Icons.send_rounded,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ChatsScreen()),
+                      ),
+                      badgeCount: chatStore.totalUnreadFor(myId),
+                    ),
+                    const SizedBox(width: 8),
+                    _TopBarIconButton(
+                      icon: Icons.notifications_none_rounded,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NotificationsScreen(),
+                        ),
+                      ),
+                      badgeCount: unreadNotifs,
+                    ),
+                  ],
                 );
               },
             ),
@@ -697,7 +727,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   TextSpan(text: '$greet, '),
                   TextSpan(
                     text: _greetingName,
-                    style: const TextStyle(color: AppColors.primaryRed),
+                    style: TextStyle(color: AppColors.primaryRed),
                   ),
                   const TextSpan(text: ' 👋'),
                 ],

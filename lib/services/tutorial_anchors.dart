@@ -24,6 +24,7 @@ class TutorialAnchors {
   static const String eventsRsvp = 'events.rsvp';
   static const String searchField = 'search.field';
   static const String alertsMarkAllRead = 'alerts.markAllRead';
+  static const String chatsCompose = 'chats.compose';
   static const String profileHeader = 'profile.header';
   static const String profileSettings = 'profile.settings';
 

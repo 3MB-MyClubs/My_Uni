@@ -78,8 +78,8 @@ void main() {
     await boot(tester, true);
     await shot(tester, 'nav-05-dark-home');
 
-    await tester.tap(find.text('Alerts'));
+    await tester.tap(find.text('Chats'));
     await tester.pump(const Duration(milliseconds: 400));
-    await shot(tester, 'nav-06-dark-alerts');
+    await shot(tester, 'nav-06-dark-chats');
   });
 }

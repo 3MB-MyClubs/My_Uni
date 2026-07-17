@@ -279,7 +279,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, temp),
-                    child: const Text(
+                    child: Text(
                       'Done',
                       style: TextStyle(
                         color: AppColors.primaryRed,
@@ -369,7 +369,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   TextButton(
                     onPressed: () =>
                         Navigator.pop(ctx, TimeOfDay.fromDateTime(temp)),
-                    child: const Text(
+                    child: Text(
                       'Done',
                       style: TextStyle(
                         color: AppColors.primaryRed,

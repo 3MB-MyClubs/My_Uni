@@ -1112,7 +1112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.primaryRed, AppColors.darkRed],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1199,7 +1199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.primaryRed, AppColors.darkRed],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,

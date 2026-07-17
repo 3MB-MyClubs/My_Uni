@@ -52,7 +52,7 @@ class S {
   static String get discoverClubs => _t('Discover Clubs', 'Kulüpleri Keşfet');
   static String get findPeople => _t('Find People', 'Kişileri Bul');
   static String get searchClubs => _t('Search…', 'Ara…');
-  static String get searchPeople => _t('Search…', 'Ara…');
+  static String get searchPeople => _t('Search people…', 'Kişi ara…');
   static String get allClubs => _t('All clubs', 'Tüm kulüpler');
   static String get exploreContentTab => _t('Events', 'Etkinlikler');
   static String get searchEventsPosts => _t('Search events…', 'Etkinlik ara…');
@@ -372,4 +372,61 @@ class S {
 
   // ── Profile
   static String get graduate => _t('Graduate', 'Lisansüstü');
+
+  // ── Chats
+  static String get chats => _t('Chats', 'Sohbetler');
+  static String get newChat => _t('New chat', 'Yeni sohbet');
+  static String get noChatsYet =>
+      _t('No conversations yet', 'Henüz sohbet yok');
+  static String get noChatsHint => _t(
+    'Message a friend or join a club\nto start chatting.',
+    'Sohbete başlamak için bir arkadaşına yaz\nveya bir kulübe katıl.',
+  );
+  static String get typeMessage => _t('Message…', 'Mesaj…');
+  static String get joinToChat =>
+      _t('Join the club to chat', 'Sohbet için kulübe katıl');
+  static String get joinToChatHint => _t(
+    'This chat is only for club members.\nFollow the club to join the conversation.',
+    'Bu sohbet sadece kulüp üyeleri içindir.\nSohbete katılmak için kulübü takip et.',
+  );
+  static String get clubChat => _t('Club chat', 'Kulüp sohbeti');
+  static String chatMembers(int n) => _t('$n members', '$n üye');
+  static String communityMembers(int n) =>
+      n >= 100 ? _t('100+ Members', '100+ Üye') : _t('$n Members', '$n Üye');
+  static String communityOnline(int n) => _t('$n Online', '$n Çevrimiçi');
+  static String get message => _t('Message', 'Mesaj');
+  static String get sayHello => _t(
+    'No messages yet — say hello to your club!',
+    'Henüz mesaj yok — kulübüne merhaba de!',
+  );
+  static String get adminLabel => _t('Admin', 'Yönetici');
+  static String get you => _t('You', 'Sen');
+  static String get onlineNow => _t('Online now', 'Şimdi çevrimiçi');
+  static String onlineMembers(int n) => _t('$n online', '$n çevrimiçi');
+  static String get lastSeenRecently =>
+      _t('Last seen recently', 'Son görülme az önce');
+  static String get typing => _t('typing…', 'yazıyor…');
+  static String get delivered => _t('Delivered', 'Teslim edildi');
+  static String get seen => _t('Seen', 'Görüldü');
+  static String nNew(int n) => _t('$n new', '$n yeni');
+  static String get searchStudents => _t('Search students…', 'Öğrenci ara…');
+  static String get studentChats => _t('Students', 'Öğrenciler');
+  static String get clubChats => _t('Clubs', 'Kulüpler');
+  static String get searchClubChats =>
+      _t('Search club chats…', 'Kulüp sohbeti ara…');
+  static String get noStudentChats =>
+      _t('No student conversations yet', 'Henüz öğrenci sohbeti yok');
+  static String get noStudentChatsHint => _t(
+    'Start a new chat to message another student.',
+    'Başka bir öğrenciye yazmak için yeni bir sohbet başlat.',
+  );
+  static String get noClubChats =>
+      _t('No club conversations yet', 'Henüz kulüp sohbeti yok');
+  static String get noClubChatsHint => _t(
+    'Join a club to access its community chat.',
+    'Topluluk sohbetine erişmek için bir kulübe katıl.',
+  );
+  static String get messagesLabel => _t('Messages', 'Mesajlar');
+  static String get viewProfile => _t('View profile', 'Profili gör');
+  static String get clubsLabel => _t('Clubs', 'Kulüpler');
 }

@@ -9,7 +9,9 @@ import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/tutorial_anchors.dart';
+import '../services/chat_store.dart';
 import '../widgets/club_avatar.dart';
+import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -35,11 +37,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   List<AppNotification> get _allNotifs =>
-      [
-          ...notifications,
-          ...userState.dynamicNotifications,
-        ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      [...notifications, ...userState.dynamicNotifications].where((n) {
+        if (n.userId != _myId || n.targetType == 'story') return false;
+        return !(ChatStore.isAdminAccountId(_myId) &&
+            n.targetType == 'message');
+      }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   @override
   void initState() {
@@ -171,6 +173,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           context,
           MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
         );
+      case 'message':
+        // Admin accounts never enter direct-message routes, including from
+        // stale notifications created by older app versions.
+        if (ChatStore.isAdminAccountId(_myId)) return;
+        // targetId (and fromId when set) is the other participant's id.
+        final peerId = n.fromId ?? id;
+        if (_myId.isEmpty) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ChatThreadScreen(threadId: ChatStore.dmThreadId(_myId, peerId)),
+          ),
+        );
     }
   }
 
@@ -185,6 +201,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   (IconData, Color) _tileStyle(AppNotification n) {
     final msg = n.message.toLowerCase();
     switch (n.targetType) {
+      case 'message':
+        return (Icons.chat_bubble_rounded, const Color(0xFF1565C0));
       case 'event':
         return (Icons.event_rounded, const Color(0xFF2E9E5B));
       case 'follow_request':

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
+import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -156,7 +157,9 @@ void main() {
     expect(find.text('STUDENT ID'), findsOneWidget);
     expect(find.text('CLUBS · 6'), findsOneWidget);
     expect(find.text('See all'), findsOneWidget);
-    expect(find.byType(StudentProfilePrimaryButton), findsOneWidget);
+    // Visited profiles show Follow + Message side by side.
+    expect(find.byType(StudentProfilePrimaryButton), findsNWidgets(2));
+    expect(find.text('Message'), findsOneWidget);
     final profileView = tester.widget<StudentCampusProfileView>(
       find.byType(StudentCampusProfileView),
     );
@@ -169,6 +172,15 @@ void main() {
       profileView.memberships.where((item) => item.club.id == roleOnlyClub.id),
       hasLength(1),
     );
+
+    await tester.tap(find.text('Message'));
+    await tester.pumpAndSettle();
+
+    final chat = tester.widget<ChatThreadScreen>(find.byType(ChatThreadScreen));
+    expect(chat.recipient?.id, student.id);
+    expect(chat.threadId, 'dm:u1|u2');
+    expect(find.text('Can Serbester'), findsOneWidget);
+    expect(find.text('Student profile'), findsNothing);
 
     expect(tester.takeException(), isNull);
   });

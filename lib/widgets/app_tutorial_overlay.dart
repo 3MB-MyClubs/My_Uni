@@ -560,7 +560,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
           height: 92,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               colors: [AppColors.primaryRed, AppColors.darkRed],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -784,7 +784,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
               widthFactor: v.clamp(0.0, 1.0),
               child: Container(
                 height: 5,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [AppColors.darkRed, AppColors.primaryRed],
                   ),
@@ -829,7 +829,7 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     final onTap = _isLast ? _complete : () => _moveTo(_index + 1);
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           colors: [AppColors.primaryRed, AppColors.darkRed],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

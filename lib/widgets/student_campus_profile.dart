@@ -9,17 +9,17 @@ import 'user_avatar.dart';
 /// burgundy/white branding in both themes; the surrounding page chrome
 /// (background, buttons, cards, text) follows the app's light/dark setting.
 abstract final class _StudentDark {
-  static const background = Color(0xFF080000);
-  static const deep = Color(0xFF100005);
-  static const solid = Color(0xFF160008);
-  static const card = Color(0x0EFFFFFF);
+  static const background = Color(0xFF000000);
+  static const deep = Color(0xFF121212);
+  static const solid = Color(0xFF262626);
+  static const card = Color(0xFF121212);
   static const text = Colors.white;
   static const textSoft = Color(0xD1FFFFFF);
-  static const textMuted = Color(0x8CFFFFFF);
-  static const secondary = Color(0xFF8A8A8E);
-  static const border = Color(0x14FFFFFF);
-  static const borderStrong = Color(0x2EFFFFFF);
-  static const accent = Color(0xFFD96A8B);
+  static const textMuted = Color(0xFFA8A8A8);
+  static const secondary = Color(0xFFA8A8A8);
+  static const border = Color(0xFF363636);
+  static const borderStrong = Color(0xFF363636);
+  static const accent = Color(0xFF9E2045);
 }
 
 abstract final class _StudentLight {
@@ -778,7 +778,9 @@ class StudentClubRoleBadge extends StatelessWidget {
     final background = _isFounder
         ? const Color(0x26FFC857)
         : _isMember
-        ? (themeService.isDark ? const Color(0x0FFFFFFF) : const Color(0x0A000000))
+        ? (themeService.isDark
+              ? const Color(0x0FFFFFFF)
+              : const Color(0x0A000000))
         : const Color(0x478C1D40);
     final border = _isFounder
         ? const Color(0x66FFC857)
