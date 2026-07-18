@@ -63,10 +63,14 @@ void main() {
       ProviderScope(child: MaterialApp(home: ExploreScreen())),
     );
 
-    await tester.pumpAndSettle();
+    // Network-image placeholders can animate indefinitely in widget tests, so
+    // use bounded pumps instead of waiting for every animation to settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
-    await tester.tap(find.text(clubs.first.name).first);
-    await tester.pumpAndSettle();
+    await tester.tap(find.text(clubs.first.name).hitTestable().first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(ClubProfileScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -76,22 +80,22 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(home: ExploreScreen())),
+      ProviderScope(
+        child: MaterialApp(home: ExploreScreen(initialTabIndex: 2)),
+      ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Find People'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     final previewAvatars = find.byType(UserAvatar).evaluate().length;
     expect(previewAvatars, greaterThan(0));
     expect(previewAvatars, lessThanOrEqualTo(10));
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search by name or surname…'),
+      find.widgetWithText(TextField, 'Search…'),
       users.first.name.split(' ').first,
     );
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(UserAvatar), findsWidgets);
     expect(tester.takeException(), isNull);

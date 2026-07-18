@@ -10,6 +10,7 @@ import 'screens/signup_flow_screen.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
 import 'screens/language_choice_screen.dart';
+import 'screens/terms_acceptance_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
@@ -30,6 +31,8 @@ import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'services/tutorial_service.dart';
 import 'services/event_cleanup_service.dart';
+import 'services/moderation_service.dart';
+import 'services/terms_acceptance_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +52,11 @@ void main() async {
   // background; readers await appBootstrap.ready (the post-frame hydration
   // below and the login/club-admin submit handlers — a login's network
   // round-trip dwarfs that wait).
-  await Future.wait([themeService.initialize(), localeService.initialize()]);
+  await Future.wait([
+    themeService.initialize(),
+    localeService.initialize(),
+    termsAcceptanceService.initialize(),
+  ]);
   appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
     contentStore.initialize(),
@@ -167,6 +174,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showSignUp = false;
     });
     if (currentUserId != null) {
+      unawaited(moderationService.activateForUser(currentUserId));
       _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
@@ -303,7 +311,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
-        if (_loggedIn ||
+        if (!termsAcceptanceService.hasAcceptedCurrentTerms) {
+          homeWidget = TermsAcceptanceScreen(
+            onAccepted: () async {
+              await termsAcceptanceService.accept();
+              if (mounted) setState(() {});
+            },
+          );
+        } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
           final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
@@ -332,6 +347,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               isAdmin: isAdmin,
               onLogout: () {
                 _savePrefs();
+                moderationService.clearActiveUser();
                 _prefsLoadedForUserId = null;
                 setState(() {
                   _loggedIn = false;
