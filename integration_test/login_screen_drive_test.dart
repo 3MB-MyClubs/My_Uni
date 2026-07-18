@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -10,6 +11,7 @@ import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/services/terms_acceptance_service.dart';
 
 /// Drives the new entry experience:
 ///  A) App opens directly on the Login Screen (design handoff recreation).
@@ -26,6 +28,7 @@ void main() {
     await personalizationService.initialize();
     await themeService.initialize();
     await tutorialService.initialize();
+    await termsAcceptanceService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(false);
   }
@@ -37,6 +40,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();
+    if (find.text('Agree and continue').evaluate().isNotEmpty) {
+      await binding.takeScreenshot('login-00-community-terms');
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
+      await tester.tap(find.text('Agree and continue'));
+      await tester.pump(const Duration(milliseconds: 700));
+    }
     await binding.takeScreenshot('login-01-root');
 
     // Brand + login affordances are the root UI.

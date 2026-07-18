@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/news_post.dart';
 import 'supabase_config.dart';
+import 'content_safety_service.dart';
 
 class SupabasePostService {
   static const _imageBucket = 'post-images';
@@ -33,6 +34,13 @@ class SupabasePostService {
     PollData? poll,
     bool isAnnouncement = false,
   }) async {
+    final safetyMessage = contentSafetyService.rejectionMessage([
+      content,
+      if (poll != null) poll.question,
+      if (poll != null) ...poll.options,
+    ]);
+    if (safetyMessage != null) throw ContentSafetyException(safetyMessage);
+
     final client = _client;
     if (client == null) {
       return _localPost(
