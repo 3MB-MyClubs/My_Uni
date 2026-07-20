@@ -29,7 +29,8 @@ import 'services/theme_service.dart';
 import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
-import 'services/tutorial_service.dart';
+import 'onboarding/onboarding_service.dart';
+import 'onboarding/starter_checklist_service.dart';
 import 'services/event_cleanup_service.dart';
 import 'services/app_presence_service.dart';
 
@@ -61,7 +62,8 @@ void main() async {
     viewTracker.initialize(),
     personalizationService.initialize(),
     calendarSyncService.initialize(),
-    tutorialService.initialize(),
+    onboardingService.initialize(),
+    starterChecklistService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
   runApp(const ProviderScope(child: MyApp()));

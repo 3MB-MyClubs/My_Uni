@@ -13,7 +13,7 @@ import '../services/people_service.dart';
 import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
@@ -544,7 +544,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                 hint: S.searchClubs,
                 value: _clubQuery,
                 onChanged: (v) => setState(() => _clubQuery = v),
-                anchorKey: tutorialAnchors.keyFor(TutorialAnchors.searchField),
+                anchorKey: onboardingAnchors.keyFor(
+                  OnboardingAnchors.searchField,
+                ),
               ),
             ],
           ),

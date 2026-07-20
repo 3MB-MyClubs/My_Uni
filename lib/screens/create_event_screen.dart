@@ -17,6 +17,7 @@ import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/photo_upload_quality.dart';
 import '../services/supabase_event_service.dart';
 import '../services/user_state.dart';
 import '../widgets/app_network_image.dart';
@@ -1852,20 +1853,15 @@ class _PhotoEditButton extends StatelessWidget {
   });
 
   Future<void> _pickFromGallery(BuildContext context) async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 1920,
-      maxHeight: 1920,
-    );
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null || !context.mounted) return;
 
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      maxWidth: 1920,
-      maxHeight: 1920,
+      maxWidth: PhotoUploadQuality.contentMaxDimension,
+      maxHeight: PhotoUploadQuality.contentMaxDimension,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 85,
+      compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
           title: 'Crop Photo',

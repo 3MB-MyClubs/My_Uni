@@ -12,6 +12,38 @@ import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 
 void main() {
+  testWidgets('blank bios are omitted from student profiles', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: StudentCampusProfileView(
+            profile: const StudentCampusProfile(
+              userId: 'blank-bio-test',
+              name: 'Student',
+              email: 'student@ku.edu.tr',
+              major: '',
+              year: '',
+              bio: '   ',
+              clubs: 0,
+              following: 0,
+              followers: 0,
+            ),
+            title: 'Student Profile',
+            leading: const SizedBox.shrink(),
+            trailing: const SizedBox.shrink(),
+            memberships: const [],
+            clubsTitle: 'Clubs',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('BIO'), findsNothing);
+    expect(find.text('No bio yet.'), findsNothing);
+    expect(find.text('Add a bio…'), findsNothing);
+  });
+
   testWidgets('student profile renders the Campus ID design at phone width', (
     tester,
   ) async {

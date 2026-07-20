@@ -16,7 +16,7 @@ import '../services/event_access.dart';
 import '../services/student_club_role_service.dart';
 import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../services/app_strings.dart';
 import '../services/chat_store.dart';
 import '../widgets/club_avatar.dart';
@@ -322,12 +322,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               // Board management now lives inside Settings.
               if (isCurrentAdminForClub(widget.club))
                 IconButton(
-                  // Only the logged-in club's own Profile tab root is a
-                  // singleton — other visits to this screen (e.g. via search)
-                  // must not share the same GlobalKey.
-                  key: widget.onSettings != null
-                      ? tutorialAnchors.keyFor(TutorialAnchors.clubInsights)
-                      : null,
                   icon: Icon(
                     Icons.insights_rounded,
                     color: panelText,
@@ -345,8 +339,11 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 ),
               if (widget.onSettings != null)
                 IconButton(
-                  key: tutorialAnchors.keyFor(
-                    TutorialAnchors.clubProfileSettings,
+                  // Only the logged-in club's own Profile tab root is a
+                  // singleton — other visits to this screen (e.g. via search)
+                  // must not share the same GlobalKey.
+                  key: onboardingAnchors.keyFor(
+                    OnboardingAnchors.clubProfileSettings,
                   ),
                   icon: Icon(
                     Icons.settings_outlined,
@@ -622,7 +619,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               TabBar(
                 // Same singleton guard as the insights/settings icons above.
                 key: widget.onSettings != null
-                    ? tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs)
+                    ? onboardingAnchors.keyFor(OnboardingAnchors.clubProfileTabs)
                     : null,
                 controller: _tabController,
                 labelColor: AppColors.primaryRed,

@@ -9,7 +9,7 @@ import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
@@ -29,7 +29,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     contentStore.applyToLists();
     // The real feed has a pre-existing setState-during-build bug
     // (ViewTracker.recordView -> notifyListeners while PostCard is still
@@ -38,7 +38,7 @@ void main() {
     // emptying the feed rather than touching feed_screen.dart.
     newsPosts.clear();
     authService.login('alice@ku.edu.tr');
-    await tutorialService.complete(authService.currentUser!.id);
+    await onboardingService.complete(authService.currentUser!.id);
     await themeService.setDark(dark);
 
     await tester.pumpWidget(

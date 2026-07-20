@@ -17,7 +17,7 @@ import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/view_tracker.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/event_cover_image.dart';
@@ -38,8 +38,6 @@ import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../services/supabase_interaction_service.dart';
-import '../services/chat_store.dart';
-import 'chats_screen.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
@@ -642,12 +640,10 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            // Chats + bell buttons with unread-count badges. Since the Alerts
-            // nav tab became Chats, this bell is the only notifications entry,
-            // so it uses the accurate per-user count the nav badge used to
-            // show (not the deprecated global counter).
+            // Chats live in the bottom navigation. The bell is intentionally
+            // the only shortcut in the Home top bar.
             ListenableBuilder(
-              listenable: Listenable.merge([userState, chatStore]),
+              listenable: userState,
               builder: (_, x) {
                 final myId =
                     authService.currentUser?.id ??
@@ -659,29 +655,13 @@ class _FeedScreenState extends State<FeedScreen> {
                     ...userState.dynamicNotifications,
                   ].where((n) => n.userId == myId && n.targetType != 'story'),
                 );
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _TopBarIconButton(
-                      icon: Icons.send_rounded,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ChatsScreen()),
-                      ),
-                      badgeCount: chatStore.totalUnreadFor(myId),
-                    ),
-                    const SizedBox(width: 8),
-                    _TopBarIconButton(
-                      icon: Icons.notifications_none_rounded,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => NotificationsScreen(),
-                        ),
-                      ),
-                      badgeCount: unreadNotifs,
-                    ),
-                  ],
+                return _TopBarIconButton(
+                  icon: Icons.notifications_none_rounded,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => NotificationsScreen()),
+                  ),
+                  badgeCount: unreadNotifs,
                 );
               },
             ),
@@ -854,14 +834,14 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // tab 0 = Following, tab 1 = All — pill segmented control with a sliding
+    // tab 0 = Following, tab 1 = For You — pill segmented control with a sliding
     // maroon thumb (300ms ease-out) behind the active label.
-    final labels = [S.following, S.all];
+    final labels = [S.following, S.forYou];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
         child: Container(
-          key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
+          key: onboardingAnchors.keyFor(OnboardingAnchors.homeFeedToggle),
           height: 42,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -942,7 +922,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
     return SliverToBoxAdapter(
       child: Padding(
-        key: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
+        key: onboardingAnchors.keyFor(OnboardingAnchors.clubQuickComposer),
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
         child: _QuickPostComposer(
           club: club,

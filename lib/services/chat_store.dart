@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
@@ -6,19 +7,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import '../models/chat_group.dart';
 import '../models/notification.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'mock_data.dart';
+import 'people_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
 
-/// Local-first messaging: 1:1 direct messages between students plus one
-/// members-only group chat per club (membership == following the club).
+/// Local-first messaging: 1:1 direct messages, student-created groups, plus
+/// one members-only community chat per club.
 ///
-/// Messages and per-user read state persist to a Hive box. Thread *metadata*
-/// (title, avatar, participants) is never stored — it derives from the thread
-/// id at render time: `dm:u2|u5` → the two users, `club:c4` → the club.
+/// Messages and per-user read state persist to Hive. Group membership and an
+/// optional custom name are persisted too; an unnamed group's displayed name
+/// is always derived from its current members at render time.
 ///
 /// Like the other stores, every method no-ops / returns empty before
 /// [initialize] so screens render safely in widget tests without Hive.
@@ -45,6 +48,7 @@ class ChatStore extends ChangeNotifier {
   final Set<String> _pendingSeenThreadIds = {};
 
   RealtimeChannel? _directMessageChannel;
+  RealtimeChannel? _groupMessageChannel;
   String? _syncedUserId;
   Timer? _syncRetry;
   bool _flushingRemote = false;
@@ -52,6 +56,10 @@ class ChatStore extends ChangeNotifier {
   /// Direct-message threads that have been opened, including conversations
   /// that do not have a first message yet.
   final Set<String> _directThreadIds = {};
+
+  final Map<String, ChatGroup> _groups = {};
+  final Set<String> _pendingRemoteGroupIds = {};
+  final Set<String> _pendingRemoteGroupMessageIds = {};
 
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
@@ -68,11 +76,20 @@ class ChatStore extends ChangeNotifier {
 
   static String clubThreadId(String clubId) => 'club:$clubId';
 
+  static String groupThreadId(String groupId) => 'group:$groupId';
+
   static bool isClubThread(String threadId) => threadId.startsWith('club:');
+
+  static bool isDirectThread(String threadId) => threadId.startsWith('dm:');
+
+  static bool isGroupThread(String threadId) => threadId.startsWith('group:');
 
   /// The club id of a `club:` thread, or null for DM threads.
   static String? clubIdOf(String threadId) =>
       isClubThread(threadId) ? threadId.substring(5) : null;
+
+  static String? groupIdOf(String threadId) =>
+      isGroupThread(threadId) ? threadId.substring(6) : null;
 
   static List<String> dmParticipants(String threadId) {
     if (!threadId.startsWith('dm:')) return const [];
@@ -87,6 +104,33 @@ class ChatStore extends ChangeNotifier {
     final parts = dmParticipants(threadId);
     if (!parts.contains(myId)) return null;
     return parts.firstWhere((id) => id != myId, orElse: () => myId);
+  }
+
+  ChatGroup? groupForThread(String threadId) {
+    final groupId = groupIdOf(threadId);
+    return groupId == null ? null : _groups[groupId];
+  }
+
+  List<String> groupParticipants(String threadId) =>
+      groupForThread(threadId)?.memberIds ?? const [];
+
+  String _nameForUser(String userId) {
+    final cachedIndex = peopleService.cachedPeople.indexWhere(
+      (user) => user.id == userId,
+    );
+    final mockIndex = users.indexWhere((user) => user.id == userId);
+    final fallback = cachedIndex != -1
+        ? peopleService.cachedPeople[cachedIndex].name
+        : mockIndex != -1
+        ? users[mockIndex].name
+        : userId;
+    return userState.displayNameFor(userId, fallback);
+  }
+
+  String groupDisplayName(String threadId, String viewerId) {
+    final group = groupForThread(threadId);
+    if (group == null) return 'Group';
+    return group.displayName(viewerId: viewerId, nameForUser: _nameForUser);
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -135,12 +179,29 @@ class ChatStore extends ChangeNotifier {
             .where((id) => id.startsWith('dm:')),
       );
     }
+    final rawGroups = box.get('groups');
+    if (rawGroups is List) {
+      for (final raw in rawGroups) {
+        final group = ChatGroup.fromMap(Map<String, dynamic>.from(raw as Map));
+        if (group.id.isNotEmpty) _groups[group.id] = group;
+      }
+    }
+    final rawPendingGroups = box.get('pendingRemoteGroupIds');
+    if (rawPendingGroups is List) {
+      _pendingRemoteGroupIds.addAll(
+        rawPendingGroups.map((id) => id.toString()),
+      );
+    }
+    final rawPendingGroupMessages = box.get('pendingRemoteGroupMessageIds');
+    if (rawPendingGroupMessages is List) {
+      _pendingRemoteGroupMessageIds.addAll(
+        rawPendingGroupMessages.map((id) => id.toString()),
+      );
+    }
     // Existing installs predate the explicit empty-thread registry. Preserve
     // every conversation that can already be inferred from its messages.
     _directThreadIds.addAll(
-      _messages
-          .map((message) => message.threadId)
-          .where((threadId) => !isClubThread(threadId)),
+      _messages.map((message) => message.threadId).where(isDirectThread),
     );
 
     final storedAdminMigrationVersion =
@@ -171,7 +232,7 @@ class ChatStore extends ChangeNotifier {
   void _migrateLegacyDmReadState() {
     for (var i = 0; i < _messages.length; i++) {
       final message = _messages[i];
-      if (isClubThread(message.threadId) || message.seenAt != null) continue;
+      if (!isDirectThread(message.threadId) || message.seenAt != null) continue;
       final recipientId = dmPeerOf(message.threadId, message.senderId);
       if (recipientId == null) continue;
       final lastRead = _lastRead[recipientId]?[message.threadId];
@@ -191,19 +252,24 @@ class ChatStore extends ChangeNotifier {
     }
   }
 
-  /// Starts one authenticated realtime stream for every DM where [userId] is
-  /// either participant, then reconciles the local Hive mirror and outbox.
+  /// Starts authenticated realtime streams for direct and group messages,
+  /// then reconciles the local Hive mirror and outboxes.
   Future<void> startDirectMessageSync(String userId) async {
     if (userId.isEmpty || isAdminAccountId(userId)) return;
     final client = _client;
     if (client == null || client.auth.currentUser?.id != userId) return;
-    if (_syncedUserId == userId && _directMessageChannel != null) {
+    if (_syncedUserId == userId &&
+        _directMessageChannel != null &&
+        _groupMessageChannel != null) {
       await _reconcileRemoteMessages(client, userId);
+      await _reconcileRemoteGroups(client, userId);
       return;
     }
 
     final oldChannel = _directMessageChannel;
     if (oldChannel != null) await client.removeChannel(oldChannel);
+    final oldGroupChannel = _groupMessageChannel;
+    if (oldGroupChannel != null) await client.removeChannel(oldGroupChannel);
     _syncRetry?.cancel();
     _syncedUserId = userId;
 
@@ -246,6 +312,203 @@ class ChatStore extends ChangeNotifier {
     });
 
     await _reconcileRemoteMessages(client, userId);
+    await _startGroupMessageSync(client, userId);
+  }
+
+  Future<void> _startGroupMessageSync(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    final channel = client
+        .channel('group-messages:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'group_chats',
+          callback: (_) => unawaited(_reconcileRemoteGroups(client, userId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'group_chat_members',
+          callback: (_) => unawaited(_reconcileRemoteGroups(client, userId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'group_messages',
+          callback: (payload) {
+            final record = payload.newRecord;
+            if (record.isNotEmpty) _mergeRemoteGroupMessage(record, userId);
+          },
+        );
+    _groupMessageChannel = channel;
+    channel.subscribe((status, error) {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        unawaited(_flushRemoteChanges());
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut ||
+          status == RealtimeSubscribeStatus.closed) {
+        if (identical(_groupMessageChannel, channel)) {
+          _groupMessageChannel = null;
+        }
+        _scheduleSyncRetry();
+      }
+    });
+    await _reconcileRemoteGroups(client, userId);
+  }
+
+  Future<void> _reconcileRemoteGroups(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    try {
+      final ownMembershipRows = await client
+          .from('group_chat_members')
+          .select('group_id')
+          .eq('user_id', userId);
+      final groupIds = ownMembershipRows
+          .map((row) => row['group_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final removedGroupIds = _groups.values
+          .where(
+            (group) =>
+                group.memberIds.contains(userId) &&
+                !groupIds.contains(group.id) &&
+                !_pendingRemoteGroupIds.contains(group.id),
+          )
+          .map((group) => group.id)
+          .toList();
+      for (final groupId in removedGroupIds) {
+        _groups.remove(groupId);
+        final threadId = groupThreadId(groupId);
+        _messages.removeWhere((message) => message.threadId == threadId);
+        _lastRead[userId]?.remove(threadId);
+      }
+      if (groupIds.isEmpty) {
+        if (removedGroupIds.isNotEmpty) {
+          scheduleSave();
+          notifyListeners();
+        }
+        await _flushRemoteChanges();
+        return;
+      }
+
+      final results = await Future.wait([
+        client
+            .from('group_chats')
+            .select('id, creator_id, custom_name, photo_url, created_at')
+            .inFilter('id', groupIds),
+        client
+            .from('group_chat_members')
+            .select('group_id, user_id, position, joined_at')
+            .inFilter('group_id', groupIds)
+            .order('position')
+            .order('joined_at'),
+        client
+            .from('group_messages')
+            .select('id, group_id, sender_id, content, created_at')
+            .inFilter('group_id', groupIds)
+            .order('created_at'),
+      ]);
+      final membersByGroup = <String, List<String>>{};
+      for (final raw in results[1]) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final groupId = row['group_id']?.toString() ?? '';
+        final memberId = row['user_id']?.toString() ?? '';
+        if (groupId.isNotEmpty && memberId.isNotEmpty) {
+          (membersByGroup[groupId] ??= []).add(memberId);
+        }
+      }
+      for (final raw in results[0]) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final id = row['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        // Do not let a realtime echo replace an optimistic local edit while
+        // its custom name, membership, or device-local photo is still syncing.
+        if (_pendingRemoteGroupIds.contains(id) && _groups[id] != null) {
+          continue;
+        }
+        final custom = row['custom_name']?.toString().trim() ?? '';
+        _groups[id] = ChatGroup(
+          id: id,
+          creatorId: row['creator_id']?.toString() ?? '',
+          memberIds: membersByGroup[id] ?? const [],
+          customName: custom.isEmpty ? null : custom,
+          photoUrl: row['photo_url']?.toString(),
+          createdAt:
+              DateTime.tryParse(
+                row['created_at']?.toString() ?? '',
+              )?.toLocal() ??
+              DateTime.now(),
+        );
+      }
+      for (final raw in results[2]) {
+        _mergeRemoteGroupMessage(
+          Map<String, dynamic>.from(raw as Map),
+          userId,
+          notifyRecipient: false,
+        );
+      }
+      scheduleSave();
+      notifyListeners();
+      await _flushRemoteChanges();
+    } catch (_) {
+      _scheduleSyncRetry();
+    }
+  }
+
+  void _mergeRemoteGroupMessage(
+    Map<String, dynamic> row,
+    String viewerId, {
+    bool notifyRecipient = true,
+  }) {
+    final id = row['id']?.toString() ?? '';
+    final groupId = row['group_id']?.toString() ?? '';
+    final senderId = row['sender_id']?.toString() ?? '';
+    final content = row['content']?.toString() ?? '';
+    final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
+    if (id.isEmpty ||
+        groupId.isEmpty ||
+        senderId.isEmpty ||
+        content.isEmpty ||
+        createdAt == null ||
+        _groups[groupId] == null) {
+      return;
+    }
+    if (_messages.any((message) => message.id == id)) {
+      _pendingRemoteGroupMessageIds.remove(id);
+      return;
+    }
+    final message = ChatMessage(
+      id: id,
+      threadId: groupThreadId(groupId),
+      senderId: senderId,
+      content: content,
+      createdAt: createdAt.toLocal(),
+      deliveredAt: createdAt.toLocal(),
+    );
+    _messages.add(message);
+    _pendingRemoteGroupMessageIds.remove(id);
+    if (notifyRecipient && senderId != viewerId) {
+      final groupName = groupDisplayName(message.threadId, viewerId);
+      final senderName = _nameForUser(senderId);
+      userState.addNotification(
+        AppNotification(
+          id: 'remote_group_msg_${message.id}_$viewerId',
+          userId: viewerId,
+          message: '$groupName: $senderName sent a message.',
+          createdAt: message.createdAt,
+          targetType: 'message',
+          targetId: message.threadId,
+          fromId: senderId,
+        ),
+      );
+    }
+    scheduleSave();
+    notifyListeners();
   }
 
   Future<void> _reconcileRemoteMessages(
@@ -356,10 +619,108 @@ class ChatStore extends ChangeNotifier {
     _flushingRemote = true;
     var failed = false;
     try {
+      for (final groupId in _pendingRemoteGroupIds.toList()) {
+        final group = _groups[groupId];
+        if (group == null || group.creatorId != userId) continue;
+        try {
+          final localPhoto = group.photoUrl?.trim() ?? '';
+          final hasRemotePhoto =
+              localPhoto.startsWith('http://') ||
+              localPhoto.startsWith('https://');
+          await client.from('group_chats').upsert({
+            'id': group.id,
+            'creator_id': group.creatorId,
+            'custom_name': group.customName,
+            'photo_url': hasRemotePhoto ? localPhoto : null,
+            'created_at': group.createdAt.toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          });
+          if (localPhoto.isNotEmpty && !hasRemotePhoto) {
+            final file = File(localPhoto);
+            if (await file.exists()) {
+              final objectPath = '${group.id}/avatar.jpg';
+              await client.storage
+                  .from('group-chat-photos')
+                  .uploadBinary(
+                    objectPath,
+                    await file.readAsBytes(),
+                    fileOptions: const FileOptions(
+                      upsert: true,
+                      contentType: 'image/jpeg',
+                    ),
+                  );
+              final publicUrl = client.storage
+                  .from('group-chat-photos')
+                  .getPublicUrl(objectPath);
+              await client
+                  .from('group_chats')
+                  .update({'photo_url': publicUrl})
+                  .eq('id', group.id);
+              _groups[group.id] = group.withPhoto(publicUrl);
+            }
+          }
+          final existingRows = await client
+              .from('group_chat_members')
+              .select('user_id')
+              .eq('group_id', group.id);
+          final existingIds = existingRows
+              .map((row) => row['user_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+          final staleIds = existingIds.difference(group.memberIds.toSet());
+          if (staleIds.isNotEmpty) {
+            await client
+                .from('group_chat_members')
+                .delete()
+                .eq('group_id', group.id)
+                .inFilter('user_id', staleIds.toList());
+          }
+          await client.from('group_chat_members').upsert([
+            for (var index = 0; index < group.memberIds.length; index++)
+              {
+                'group_id': group.id,
+                'user_id': group.memberIds[index],
+                'position': index,
+              },
+          ]);
+          _pendingRemoteGroupIds.remove(groupId);
+        } catch (_) {
+          failed = true;
+        }
+      }
+
+      final pendingGroupMessages = _messages.where((message) {
+        return _pendingRemoteGroupMessageIds.contains(message.id) &&
+            message.senderId == userId &&
+            isGroupThread(message.threadId);
+      }).toList();
+      for (final message in pendingGroupMessages) {
+        final groupId = groupIdOf(message.threadId);
+        if (groupId == null) continue;
+        try {
+          await client.from('group_messages').insert({
+            'id': message.id,
+            'group_id': groupId,
+            'sender_id': userId,
+            'content': message.content,
+            'created_at': message.createdAt.toUtc().toIso8601String(),
+          });
+          _pendingRemoteGroupMessageIds.remove(message.id);
+        } on PostgrestException catch (error) {
+          if (error.code == '23505') {
+            _pendingRemoteGroupMessageIds.remove(message.id);
+          } else {
+            failed = true;
+          }
+        } catch (_) {
+          failed = true;
+        }
+      }
+
       final pendingMessages = _messages.where((message) {
         return _pendingRemoteMessageIds.contains(message.id) &&
             message.senderId == userId &&
-            !isClubThread(message.threadId);
+            isDirectThread(message.threadId);
       }).toList();
       for (final message in pendingMessages) {
         final receiverId = dmPeerOf(message.threadId, userId);
@@ -507,7 +868,13 @@ class ChatStore extends ChangeNotifier {
     if (isAdminAccountId(userId)) {
       return managedCommunityThreadId(userId) == threadId;
     }
-    if (!isClubThread(threadId)) {
+    if (isGroupThread(threadId)) {
+      final group = groupForThread(threadId);
+      return group != null &&
+          group.memberIds.contains(userId) &&
+          !group.memberIds.any(isAdminAccountId);
+    }
+    if (isDirectThread(threadId)) {
       final participants = dmParticipants(threadId);
       return participants.contains(userId) &&
           !participants.any(isAdminAccountId);
@@ -554,12 +921,17 @@ class ChatStore extends ChangeNotifier {
     }
     final directThreadIds = {
       ..._directThreadIds,
-      ...byThread.keys.where((threadId) => !isClubThread(threadId)),
+      ...byThread.keys.where(isDirectThread),
     };
     for (final threadId in directThreadIds) {
       if (!canAccessThread(threadId, userId)) continue;
       final peerId = dmPeerOf(threadId, userId);
       if (peerId == null) continue;
+      result.add(_summarize(threadId, userId, byThread[threadId] ?? const []));
+    }
+    for (final group in _groups.values) {
+      final threadId = group.threadId;
+      if (!canAccessThread(threadId, userId)) continue;
       result.add(_summarize(threadId, userId, byThread[threadId] ?? const []));
     }
     for (final club in clubs) {
@@ -576,13 +948,15 @@ class ChatStore extends ChangeNotifier {
       }
       if (aLast != null) return -1;
       if (bLast != null) return 1;
-      return _threadSortName(a).compareTo(_threadSortName(b));
+      return _threadSortName(a, userId).compareTo(_threadSortName(b, userId));
     });
     return result;
   }
 
-  String _threadSortName(ChatThreadSummary t) =>
-      t.clubId == null ? t.threadId : (clubForId(t.clubId!)?.name ?? '');
+  String _threadSortName(ChatThreadSummary t, String viewerId) {
+    if (t.groupId != null) return groupDisplayName(t.threadId, viewerId);
+    return t.clubId == null ? t.threadId : (clubForId(t.clubId!)?.name ?? '');
+  }
 
   ChatThreadSummary _summarize(
     String threadId,
@@ -596,6 +970,7 @@ class ChatStore extends ChangeNotifier {
     return ChatThreadSummary(
       threadId: threadId,
       clubId: clubIdOf(threadId),
+      groupId: groupIdOf(threadId),
       peerId: dmPeerOf(threadId, userId),
       lastMessage: last,
       unread: unreadCountFor(threadId, userId),
@@ -616,7 +991,7 @@ class ChatStore extends ChangeNotifier {
   int unreadCountFor(String threadId, String userId) {
     if (_box == null || userId.isEmpty) return 0;
     if (!canAccessThread(threadId, userId)) return 0;
-    if (!isClubThread(threadId)) {
+    if (isDirectThread(threadId)) {
       return _messages.where((message) {
         return message.threadId == threadId &&
             message.senderId != userId &&
@@ -660,6 +1035,95 @@ class ChatStore extends ChangeNotifier {
     return threadId;
   }
 
+  /// Creates a student group. [recipientIds] intentionally excludes the
+  /// creator; at least two recipients are required so DMs remain canonical.
+  String? createGroupThread({
+    required String creatorId,
+    required Iterable<String> recipientIds,
+    String? customName,
+    String? photoPath,
+  }) {
+    if (creatorId.isEmpty || isAdminAccountId(creatorId)) return null;
+    final recipients = recipientIds
+        .where(
+          (id) => id.isNotEmpty && id != creatorId && !isAdminAccountId(id),
+        )
+        .toSet()
+        .toList(growable: false);
+    if (recipients.length < 2) return null;
+
+    final id = const Uuid().v4();
+    final trimmedName = customName?.trim() ?? '';
+    final trimmedPhoto = photoPath?.trim() ?? '';
+    final group = ChatGroup(
+      id: id,
+      creatorId: creatorId,
+      memberIds: [creatorId, ...recipients],
+      customName: trimmedName.isEmpty ? null : trimmedName,
+      photoUrl: trimmedPhoto.isEmpty ? null : trimmedPhoto,
+      createdAt: DateTime.now(),
+    );
+    _groups[id] = group;
+    _pendingRemoteGroupIds.add(id);
+    if (_box != null) scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return group.threadId;
+  }
+
+  bool setGroupCustomName(String threadId, String? customName) {
+    final group = groupForThread(threadId);
+    if (group == null) return false;
+    _groups[group.id] = group.withCustomName(customName);
+    _pendingRemoteGroupIds.add(group.id);
+    scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return true;
+  }
+
+  bool setGroupPhoto(String threadId, String? photoPath) {
+    final group = groupForThread(threadId);
+    if (group == null) return false;
+    _groups[group.id] = group.withPhoto(photoPath);
+    _pendingRemoteGroupIds.add(group.id);
+    scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return true;
+  }
+
+  bool updateGroupMembers(String threadId, Iterable<String> memberIds) {
+    final group = groupForThread(threadId);
+    if (group == null) return false;
+    final members = {
+      group.creatorId,
+      ...memberIds.where((id) => id.isNotEmpty && !isAdminAccountId(id)),
+    };
+    if (members.length < 2) return false;
+    _groups[group.id] = group.withMembers(members);
+    _pendingRemoteGroupIds.add(group.id);
+    scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return true;
+  }
+
+  bool addGroupMembers(String threadId, Iterable<String> memberIds) {
+    final group = groupForThread(threadId);
+    if (group == null) return false;
+    return updateGroupMembers(threadId, {...group.memberIds, ...memberIds});
+  }
+
+  bool removeGroupMember(String threadId, String memberId) {
+    final group = groupForThread(threadId);
+    if (group == null || memberId == group.creatorId) return false;
+    return updateGroupMembers(
+      threadId,
+      group.memberIds.where((id) => id != memberId),
+    );
+  }
+
   /// Appends a message and returns it, or returns null (no mutation) when the
   /// content is empty or [senderId] has no access to the thread.
   ChatMessage? sendMessage({
@@ -672,7 +1136,7 @@ class ChatStore extends ChangeNotifier {
     if (text.isEmpty) return null;
     if (!canAccessThread(threadId, senderId)) return null;
 
-    if (!isClubThread(threadId)) _directThreadIds.add(threadId);
+    if (isDirectThread(threadId)) _directThreadIds.add(threadId);
 
     final now = DateTime.now();
     final message = ChatMessage(
@@ -684,13 +1148,18 @@ class ChatStore extends ChangeNotifier {
       deliveredAt: now,
     );
     _messages.add(message);
-    if (!isClubThread(threadId)) {
+    if (isDirectThread(threadId)) {
       _pendingRemoteMessageIds.add(message.id);
+    } else if (isGroupThread(threadId)) {
+      _pendingRemoteGroupMessageIds.add(message.id);
     }
     scheduleSave();
     notifyListeners();
-    if (!isClubThread(threadId)) unawaited(_flushRemoteChanges());
+    if (isDirectThread(threadId) || isGroupThread(threadId)) {
+      unawaited(_flushRemoteChanges());
+    }
     _maybeScheduleAutoReply(message);
+    if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;
   }
 
@@ -703,7 +1172,7 @@ class ChatStore extends ChangeNotifier {
     final unread = unreadCountFor(threadId, userId);
     final now = DateTime.now();
     var markedSeen = false;
-    if (!isClubThread(threadId)) {
+    if (isDirectThread(threadId)) {
       for (var i = 0; i < _messages.length; i++) {
         final message = _messages[i];
         if (message.threadId != threadId ||
@@ -736,6 +1205,30 @@ class ChatStore extends ChangeNotifier {
     return sum.isEven;
   }
 
+  void _createGroupMessageNotifications(ChatMessage message) {
+    final group = groupForThread(message.threadId);
+    if (group == null) return;
+    final senderName = _nameForUser(message.senderId);
+    for (final recipientId in group.memberIds) {
+      if (recipientId == message.senderId) continue;
+      final groupName = group.displayName(
+        viewerId: recipientId,
+        nameForUser: _nameForUser,
+      );
+      userState.addNotification(
+        AppNotification(
+          id: 'group_msg_${message.id}_$recipientId',
+          userId: recipientId,
+          message: '$groupName: $senderName sent a message.',
+          createdAt: message.createdAt,
+          targetType: 'message',
+          targetId: message.threadId,
+          fromId: message.senderId,
+        ),
+      );
+    }
+  }
+
   // ── Demo auto-reply ──────────────────────────────────────────────────────────
   // Purely a demo nicety: a DM to a mock student gets one canned reply a few
   // seconds later so the conversation feels alive. Never fires in club rooms,
@@ -762,7 +1255,7 @@ class ChatStore extends ChangeNotifier {
   ];
 
   void _maybeScheduleAutoReply(ChatMessage sent) {
-    if (!autoRepliesEnabled || isClubThread(sent.threadId)) return;
+    if (!autoRepliesEnabled || !isDirectThread(sent.threadId)) return;
     final peerId = dmPeerOf(sent.threadId, sent.senderId);
     if (peerId == null || peerId == sent.senderId) return;
     final peerIdx = users.indexWhere((u) => u.id == peerId);
@@ -844,8 +1337,14 @@ class ChatStore extends ChangeNotifier {
       }),
       box.put('dmSeededUserIds', _dmSeededUserIds.toList()),
       box.put('directThreadIds', _directThreadIds.toList()),
+      box.put('groups', _groups.values.map((group) => group.toMap()).toList()),
       box.put('pendingRemoteMessageIds', _pendingRemoteMessageIds.toList()),
       box.put('pendingSeenThreadIds', _pendingSeenThreadIds.toList()),
+      box.put('pendingRemoteGroupIds', _pendingRemoteGroupIds.toList()),
+      box.put(
+        'pendingRemoteGroupMessageIds',
+        _pendingRemoteGroupMessageIds.toList(),
+      ),
     ]);
   }
 
@@ -973,6 +1472,7 @@ final chatStore = ChatStore();
 class ChatThreadSummary {
   final String threadId;
   final String? clubId; // set for club rooms
+  final String? groupId; // set for student-created groups
   final String? peerId; // set for DM threads
   final ChatMessage? lastMessage;
   final int unread;
@@ -980,10 +1480,12 @@ class ChatThreadSummary {
   ChatThreadSummary({
     required this.threadId,
     required this.clubId,
+    required this.groupId,
     required this.peerId,
     required this.lastMessage,
     required this.unread,
   });
 
   bool get isClub => clubId != null;
+  bool get isGroup => groupId != null;
 }

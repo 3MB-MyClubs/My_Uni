@@ -2,21 +2,24 @@ import 'package:flutter/material.dart';
 import 'theme_service.dart';
 
 // ─── Raw dark-theme constants (used in ThemeData builder, not widget code) ────
+// Warm near-black palette from the "Login Screen v2" design handoff: the base
+// is a red-tinted black (#0C0608) and every surface is white layered over it,
+// replacing the old neutral #121212 grays.
 class DarkColors {
-  static const Color background = Color(0xFF000000);
-  static const Color card = Color(0xFF121212);
-  static const Color surfaceAlt = Color(0xFF262626);
+  static const Color background = Color(0xFF0C0608);
+  static const Color card = Color(0xFF191416);
+  static const Color surfaceAlt = Color(0xFF241F21);
   static const Color primaryRed = Color(0xFF9E2045);
   static const Color darkRed = Color(0xFF6A1530);
   static const Color lightRed = Color(0x1A9E2045);
   static const Color text = Color(0xFFFFFFFF);
-  static const Color secondaryText = Color(0xFFA8A8A8);
-  static const Color lightGray = Color(0xFF262626);
-  static const Color darkGray = Color(0xFF121212);
-  static const Color divider = Color(0xFF363636);
+  static const Color secondaryText = Color(0xFFAFA3A9);
+  static const Color lightGray = Color(0xFF241F21);
+  static const Color darkGray = Color(0xFF191416);
+  static const Color divider = Color(0xFF332E30);
   static const Color accentGold = Color(0xFF9E2045);
   static const Color cardGlow = Color(0x189E2045);
-  static const Color glassEdge = Color(0xFF363636);
+  static const Color glassEdge = Color(0xFF332E30);
 }
 
 // ─── Theme-aware dynamic color accessors (use in all widget code) ─────────────

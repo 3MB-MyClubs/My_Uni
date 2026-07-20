@@ -13,7 +13,7 @@ import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
@@ -32,7 +32,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(true);
 
@@ -40,7 +40,7 @@ void main() {
     userPrefsService.load('u2');
     userState.followedClubIds.add('c4');
     chatStore.ensureSeededFor('u2');
-    await tutorialService.complete('u2');
+    await onboardingService.complete('u2');
 
     await binding.convertFlutterSurfaceToImage();
 
@@ -56,7 +56,7 @@ void main() {
     // ── Chats tab: seeded inbox with unread badge ──
     await tester.tap(find.text('Chats'));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text('Search students…'), findsOneWidget);
+    expect(find.text(S.searchPeople), findsOneWidget);
     await binding.takeScreenshot('chats-02-inbox');
 
     // ── Club room: open KUACM, send a message ──
@@ -129,12 +129,12 @@ void main() {
     await contentStore.initialize();
     await chatStore.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     await themeService.setDark(true);
 
     authService.login('kuacm@ku.edu.tr', '11111111');
     userPrefsService.load('cadmin5');
-    await tutorialService.complete('cadmin5');
+    await onboardingService.complete('cadmin5');
 
     await tester.pumpWidget(
       const ProviderScope(

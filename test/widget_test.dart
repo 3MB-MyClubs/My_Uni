@@ -10,7 +10,7 @@ void main() {
     await tester.pump();
 
     // Brand header + the design's login affordances are the root UI.
-    expect(find.text('Koç University'), findsOneWidget);
+    expect(find.text('KOÇ UNIVERSITY'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Sign up'), findsOneWidget);
   });

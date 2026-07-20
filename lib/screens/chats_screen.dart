@@ -12,12 +12,14 @@ import '../services/locale_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/theme_service.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
+import 'create_group_screen.dart';
 
 /// Lets the main navigation reset Chats to its default student view whenever
 /// the tab is selected again, while pushed standalone inboxes remain simple.
@@ -62,14 +64,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Color _colorForClub(String clubId) {
     final idx = clubOrdinal(clubId);
     return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-  }
-
-  Color _accentForUser(String userId) {
-    var sum = 0;
-    for (final unit in userId.codeUnits) {
-      sum += unit;
-    }
-    return _clubColors[sum % _clubColors.length];
   }
 
   @override
@@ -118,12 +112,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Future<void> _hydrateDmProfiles() async {
-    final peerIds = chatStore
-        .threadsFor(_myId)
-        .where((thread) => !thread.isClub)
-        .map((thread) => thread.peerId)
-        .whereType<String>();
-    await peopleService.hydrateProfilesByIds(peerIds);
+    final memberIds = <String>{};
+    for (final thread in chatStore.threadsFor(_myId)) {
+      if (thread.peerId case final peerId?) memberIds.add(peerId);
+      if (thread.isGroup) {
+        memberIds.addAll(
+          chatStore
+              .groupParticipants(thread.threadId)
+              .where((id) => id != _myId),
+        );
+      }
+    }
+    await peopleService.hydrateProfilesByIds(memberIds);
     if (mounted) setState(() {});
   }
 
@@ -156,11 +156,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   String _preview(ChatThreadSummary t) {
     final last = t.lastMessage;
-    if (last == null) return S.sayHello;
+    if (last == null) return '';
     if (last.senderId == _myId) return '${S.you}: ${last.content}';
-    if (t.isClub) {
-      final first = _nameForUser(last.senderId).split(' ').first;
-      return '$first: ${last.content}';
+    if (t.isClub || t.isGroup) {
+      return '${_nameForUser(last.senderId)}: ${last.content}';
     }
     return last.content;
   }
@@ -180,22 +179,33 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (threadId != null) _openThread(threadId, recipient: user);
   }
 
-  void _openCompose() {
-    showModalBottomSheet<void>(
+  Future<void> _openCompose() async {
+    final recipients = await showModalBottomSheet<List<User>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _NewChatSheet(
+      builder: (sheetContext) => _NewChatSheet(
         myId: _myId,
-        onPick: (user) {
-          Navigator.pop(context);
-          _openDmWith(user);
-        },
+        onContinue: (users) => Navigator.pop(sheetContext, users),
       ),
     );
+    if (!mounted || recipients == null || recipients.isEmpty) return;
+    if (recipients.length == 1) {
+      _openDmWith(recipients.single);
+      return;
+    }
+    final threadId = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            CreateGroupScreen(myId: _myId, initialMembers: recipients),
+      ),
+    );
+    if (mounted && threadId != null) _openThread(threadId);
   }
 
   String _titleFor(ChatThreadSummary t) {
+    if (t.isGroup) return chatStore.groupDisplayName(t.threadId, _myId);
     if (t.clubId != null) return clubForId(t.clubId!)?.name ?? '';
     return _nameForUser(t.peerId ?? '');
   }
@@ -627,7 +637,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           if (showCompose)
             GestureDetector(
               key: widget.isTutorialHost
-                  ? tutorialAnchors.keyFor(TutorialAnchors.chatsCompose)
+                  ? onboardingAnchors.keyFor(OnboardingAnchors.chatsCompose)
                   : null,
               onTap: _openCompose,
               child: Container(
@@ -712,7 +722,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
             child: _sectionLabel(S.onlineNow),
           ),
           SizedBox(
-            height: 74,
+            height: 84,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -737,10 +747,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ),
                       const SizedBox(height: 5),
                       SizedBox(
-                        width: 56,
+                        width: 88,
                         child: Text(
-                          displayName.split(' ').first,
-                          maxLines: 1,
+                          displayName,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -878,14 +888,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Widget _row(ChatThreadSummary t) {
     final unread = t.unread;
     final club = t.clubId == null ? null : clubForId(t.clubId!);
-    final title = club != null ? club.name : _nameForUser(t.peerId ?? '');
-    final typing = !t.isClub && chatStore.isPeerTyping(t.threadId);
-    final subtitle = club != null
-        ? S.chatMembers(clubMemberCount(club.id))
-        : userState.academicSummaryFor(t.peerId ?? '');
-    final subtitleColor = club != null
-        ? _colorForClub(club.id)
-        : _accentForUser(t.peerId ?? '');
+    final groupMembers = t.isGroup
+        ? chatStore.groupParticipants(t.threadId)
+        : const <String>[];
+    final visibleGroupMembers = groupMembers
+        .where((id) => id != _myId)
+        .toList();
+    final title = _titleFor(t);
+    final typing =
+        !t.isClub && !t.isGroup && chatStore.isPeerTyping(t.threadId);
 
     return InkWell(
       onTap: () => _openThread(
@@ -909,6 +920,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 size: 48,
                 fontSize: 18,
                 borderRadius: 15,
+              )
+            else if (t.isGroup)
+              GroupAvatarStack(
+                memberIds: visibleGroupMembers,
+                nameForUser: _nameForUser,
+                photoPath: chatStore.groupForThread(t.threadId)?.photoUrl,
+                size: 48,
               )
             else
               PresenceAvatar(
@@ -959,21 +977,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ),
                     ],
                   ),
-                  if (subtitle.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: subtitleColor,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Expanded(
@@ -1074,9 +1078,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
 class _NewChatSheet extends StatefulWidget {
   final String myId;
-  final ValueChanged<User> onPick;
+  final ValueChanged<List<User>> onContinue;
 
-  const _NewChatSheet({required this.myId, required this.onPick});
+  const _NewChatSheet({required this.myId, required this.onContinue});
 
   @override
   State<_NewChatSheet> createState() => _NewChatSheetState();
@@ -1084,6 +1088,7 @@ class _NewChatSheet extends StatefulWidget {
 
 class _NewChatSheetState extends State<_NewChatSheet> {
   String _query = '';
+  final Map<String, User> _selected = {};
 
   @override
   void initState() {
@@ -1107,6 +1112,7 @@ class _NewChatSheetState extends State<_NewChatSheet> {
     final knownUsers = <String, User>{
       for (final user in users) user.id: user,
       for (final user in peopleService.cachedPeople) user.id: user,
+      ..._selected,
     }.values;
     final candidates = knownUsers.where((u) {
       if (u.id == widget.myId) return false;
@@ -1117,7 +1123,7 @@ class _NewChatSheetState extends State<_NewChatSheet> {
     }).toList();
 
     return Container(
-      height: MediaQuery.sizeOf(context).height * 0.7,
+      height: MediaQuery.sizeOf(context).height * 0.82,
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
@@ -1143,6 +1149,84 @@ class _NewChatSheetState extends State<_NewChatSheet> {
             ),
           ),
           const SizedBox(height: 12),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            child: _selected.isEmpty
+                ? const SizedBox.shrink()
+                : SizedBox(
+                    height: 78,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _selected.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final user = _selected.values.elementAt(index);
+                        return SizedBox(
+                          width: 54,
+                          child: Column(
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  UserAvatar(
+                                    userId: user.id,
+                                    name: user.name,
+                                    size: 44,
+                                    fontSize: 16,
+                                  ),
+                                  Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: InkWell(
+                                      key: ValueKey(
+                                        'remove-recipient-${user.id}',
+                                      ),
+                                      onTap: () => setState(
+                                        () => _selected.remove(user.id),
+                                      ),
+                                      child: Container(
+                                        width: 19,
+                                        height: 19,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.text,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: AppColors.card,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.close_rounded,
+                                          size: 12,
+                                          color: AppColors.card,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                userState
+                                    .displayNameFor(user.id, user.name)
+                                    .split(' ')
+                                    .first,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: TextField(
@@ -1204,8 +1288,16 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                       final academicSummary = userState.academicSummaryFor(
                         user.id,
                       );
+                      final selected = _selected.containsKey(user.id);
                       return InkWell(
-                        onTap: () => widget.onPick(user),
+                        key: ValueKey('recipient-${user.id}'),
+                        onTap: () => setState(() {
+                          if (selected) {
+                            _selected.remove(user.id);
+                          } else {
+                            _selected[user.id] = user;
+                          }
+                        }),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
@@ -1251,10 +1343,29 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                                   ],
                                 ),
                               ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                size: 20,
-                                color: AppColors.secondaryText,
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 140),
+                                width: 23,
+                                height: 23,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? AppColors.primaryRed
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: selected
+                                        ? AppColors.primaryRed
+                                        : AppColors.secondaryText,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: selected
+                                    ? const Icon(
+                                        Icons.check_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      )
+                                    : null,
                               ),
                             ],
                           ),
@@ -1262,6 +1373,36 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                       );
                     },
                   ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  key: const ValueKey('new-chat-continue'),
+                  onPressed: _selected.isEmpty
+                      ? null
+                      : () => widget.onContinue(_selected.values.toList()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    disabledBackgroundColor: AppColors.divider,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    _selected.length <= 1 ? 'Start Chat' : 'Next',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

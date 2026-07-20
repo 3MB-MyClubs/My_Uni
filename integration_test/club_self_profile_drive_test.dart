@@ -11,7 +11,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 
 /// Signs in as the KUACM club admin and opens the Profile tab, which now IS
 /// the club's own v2 profile. Confirms there is NO Follow / Message button
@@ -32,7 +32,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     contentStore.applyToLists();
     contentStore.loadBoardMemberIds();
     contentStore.loadBoardMemberTitles();

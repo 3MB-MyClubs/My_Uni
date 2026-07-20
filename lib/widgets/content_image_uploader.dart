@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/app_colors.dart';
+import '../services/photo_upload_quality.dart';
 
 /// A reusable photo-upload card used in post and event creation screens.
 ///
@@ -37,19 +38,14 @@ class ContentImageUploader extends StatefulWidget {
 
 class _ContentImageUploaderState extends State<ContentImageUploader> {
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 1920,
-      maxHeight: 1920,
-    );
+    final picked = await ImagePicker().pickImage(source: source);
     if (picked == null || !mounted) return;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      maxWidth: 1920,
-      maxHeight: 1920,
+      maxWidth: PhotoUploadQuality.contentMaxDimension,
+      maxHeight: PhotoUploadQuality.contentMaxDimension,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 85,
+      compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
           title: 'Crop Photo',

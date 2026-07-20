@@ -20,6 +20,7 @@ import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart' as remote_profile;
 import '../services/student_club_role_service.dart';
 import '../services/supabase_club_service.dart';
@@ -120,21 +121,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 72,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
+      final picked = await picker.pickImage(source: source);
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
+        maxWidth: PhotoUploadQuality.avatarMaxDimension,
+        maxHeight: PhotoUploadQuality.avatarMaxDimension,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 72,
+        compressQuality: PhotoUploadQuality.jpegQuality,
         uiSettings: [
           IOSUiSettings(
             title: 'Crop Photo',
@@ -976,8 +972,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               graduation: _graduationLabel(year),
               major: userState.majors[user.id] ?? 'Major not added',
               year: year ?? 'Year not added',
-              bio:
-                  userState.bios[user.id] ?? 'Add a bio to introduce yourself.',
+              bio: userState.bios[user.id] ?? '',
               clubs: followedClubs.length,
               followers: followers.length,
               following: following.length,
@@ -1569,49 +1564,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
 
         // ── Bio ───────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-          child: GestureDetector(
-            onTap: () => _editBio(context, userId),
-            child: bio.isEmpty
-                ? Text(
-                    'Add a bio…',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      color: AppColors.secondaryText,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  )
-                : Text.rich(
+        if (bio.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: GestureDetector(
+              onTap: () => _editBio(context, userId),
+              child: Text.rich(
+                TextSpan(
+                  children: [
                     TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '“',
-                          style: TextStyle(
-                            color: AppColors.secondaryText,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                        TextSpan(
-                          text: bio,
-                          style: TextStyle(
-                            color: AppColors.text,
-                            fontSize: 13.5,
-                            height: 1.5,
-                          ),
-                        ),
-                        TextSpan(
-                          text: '”',
-                          style: TextStyle(
-                            color: AppColors.secondaryText,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                      ],
+                      text: '“',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 13.5,
+                      ),
                     ),
-                  ),
+                    TextSpan(
+                      text: bio,
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 13.5,
+                        height: 1.5,
+                      ),
+                    ),
+                    TextSpan(
+                      text: '”',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
 
         // ── Stats card ────────────────────────────────────────────────
         Padding(

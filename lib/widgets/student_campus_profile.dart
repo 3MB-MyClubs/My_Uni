@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/club.dart';
+import '../services/app_colors.dart';
 import '../services/theme_service.dart';
 import 'club_avatar.dart';
 import 'user_avatar.dart';
@@ -9,16 +10,16 @@ import 'user_avatar.dart';
 /// burgundy/white branding in both themes; the surrounding page chrome
 /// (background, buttons, cards, text) follows the app's light/dark setting.
 abstract final class _StudentDark {
-  static const background = Color(0xFF000000);
-  static const deep = Color(0xFF121212);
-  static const solid = Color(0xFF262626);
-  static const card = Color(0xFF121212);
+  static const background = DarkColors.background;
+  static const deep = DarkColors.card;
+  static const solid = DarkColors.surfaceAlt;
+  static const card = DarkColors.card;
   static const text = Colors.white;
   static const textSoft = Color(0xD1FFFFFF);
-  static const textMuted = Color(0xFFA8A8A8);
-  static const secondary = Color(0xFFA8A8A8);
-  static const border = Color(0xFF363636);
-  static const borderStrong = Color(0xFF363636);
+  static const textMuted = DarkColors.secondaryText;
+  static const secondary = DarkColors.secondaryText;
+  static const border = DarkColors.divider;
+  static const borderStrong = DarkColors.divider;
   static const accent = Color(0xFF9E2045);
 }
 
@@ -114,6 +115,7 @@ class StudentCampusProfileView extends StatelessWidget {
   final Widget leading;
   final Widget trailing;
   final Widget? primaryAction;
+  final Widget? supplementalContent;
   final List<StudentCampusMembership> memberships;
   final String clubsTitle;
   final String? clubsActionLabel;
@@ -132,6 +134,7 @@ class StudentCampusProfileView extends StatelessWidget {
     required this.memberships,
     required this.clubsTitle,
     this.primaryAction,
+    this.supplementalContent,
     this.clubsActionLabel,
     this.onClubsAction,
     this.onClubTap,
@@ -195,12 +198,15 @@ class StudentCampusProfileView extends StatelessWidget {
                       child: primaryAction,
                     ),
                   ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: _StudentBioCard(bio: profile.bio),
+                if (supplementalContent != null)
+                  SliverToBoxAdapter(child: supplementalContent),
+                if (profile.bio.trim().isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _StudentBioCard(bio: profile.bio),
+                    ),
                   ),
-                ),
                 if (memberships.isNotEmpty) ...[
                   SliverToBoxAdapter(
                     child: Padding(
@@ -645,7 +651,7 @@ class _StudentBioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = bio.trim().isEmpty ? 'No bio yet.' : bio.trim();
+    final text = bio.trim();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),

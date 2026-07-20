@@ -19,14 +19,14 @@ import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_community_header.dart';
 import '../widgets/club_follow_button.dart';
+import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
+import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
 
-/// A single conversation — either a 1:1 direct message (`dm:` thread) or a
-/// club's members-only room (`club:` thread). Club rooms show a join prompt
-/// instead of the chat when the current user isn't a member.
+/// A single direct message, student-created group, or club community thread.
 class ChatThreadScreen extends StatefulWidget {
   final String threadId;
   final User? recipient;
@@ -54,6 +54,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   bool get _isClub => ChatStore.isClubThread(widget.threadId);
+  bool get _isGroup => ChatStore.isGroupThread(widget.threadId);
+  bool get _isDirect => ChatStore.isDirectThread(widget.threadId);
 
   Club? get _club {
     final clubId = ChatStore.clubIdOf(widget.threadId);
@@ -117,14 +119,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_communityInfo?.start());
       }
       if (!canAccess) return;
-      if (!_isClub) {
+      if (_isDirect || _isGroup) {
         unawaited(chatStore.startDirectMessageSync(_myId));
+      }
+      if (_isDirect) {
         final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
         if (peerId != null) {
           chatStore.ensureDirectThread(_myId, peerId);
           unawaited(_hydratePeerProfile(peerId));
         }
-      } else {
+      } else if (_isClub || _isGroup) {
         _hydrateVisibleParticipants();
       }
       // Only a visible, foreground conversation may create Seen receipts.
@@ -174,13 +178,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _hydrateVisibleParticipants() {
-    if (!_isClub || !chatStore.canAccessThread(widget.threadId, _myId)) return;
+    if ((!_isClub && !_isGroup) ||
+        !chatStore.canAccessThread(widget.threadId, _myId)) {
+      return;
+    }
     final participantIds =
-        chatStore
-            .messagesFor(widget.threadId, viewerId: _myId)
-            .map((message) => message.senderId)
-            .where((id) => id != _myId)
-            .toSet()
+        <String>{
+            if (_isGroup) ...chatStore.groupParticipants(widget.threadId),
+            ...chatStore
+                .messagesFor(widget.threadId, viewerId: _myId)
+                .map((message) => message.senderId),
+          }
+          ..remove(_myId)
           ..removeAll(_requestedParticipantProfileIds);
     if (participantIds.isEmpty) return;
     _requestedParticipantProfileIds.addAll(participantIds);
@@ -242,6 +251,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         MaterialPageRoute(
           builder: (_) =>
               ClubProfileScreen(club: club, color: _colorForClub(club.id)),
+        ),
+      ).then((_) => _markVisibleMessagesSeen());
+      return;
+    }
+    if (_isGroup) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              GroupInfoScreen(threadId: widget.threadId, myId: _myId),
         ),
       ).then((_) => _markVisibleMessagesSeen());
       return;
@@ -310,6 +329,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         onBack: widget.embedded ? null : () => Navigator.maybePop(context),
       );
     }
+    if (_isGroup) return _buildGroupHeader();
     final peer = _peer;
     final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
     final name = peer != null
@@ -394,6 +414,82 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                       ],
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupHeader() {
+    final memberIds = chatStore.groupParticipants(widget.threadId);
+    final visibleIds = memberIds.where((id) => id != _myId).toList();
+    final title = chatStore.groupDisplayName(widget.threadId, _myId);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: Row(
+        children: [
+          if (!widget.embedded) ...[
+            GestureDetector(
+              onTap: () => Navigator.maybePop(context),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 16,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: InkWell(
+              key: const ValueKey('group-chat-header'),
+              onTap: _openHeaderProfile,
+              child: Row(
+                children: [
+                  GroupAvatarStack(
+                    memberIds: visibleIds,
+                    nameForUser: (id) => _senderInfo(id).$1,
+                    photoPath: chatStore
+                        .groupForThread(widget.threadId)
+                        ?.photoUrl,
+                    size: 40,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.text,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.secondaryText,
                   ),
                 ],
               ),
@@ -519,9 +615,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Widget _buildMessageList() {
     final messages = chatStore.messagesFor(widget.threadId, viewerId: _myId);
-    final peerTyping = !_isClub && chatStore.isPeerTyping(widget.threadId);
+    final peerTyping = _isDirect && chatStore.isPeerTyping(widget.threadId);
     if (messages.isEmpty && !peerTyping) {
-      if (!_isClub) return const SizedBox.shrink();
+      if (_isDirect) return const SizedBox.shrink();
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -576,8 +672,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? ''
         : userState.academicSummaryFor(m.senderId);
     final club = _club;
-    final showHeader = _isClub && !mine && firstOfRun;
-    final showAvatar = _isClub && !mine;
+    final isMultiParticipant = _isClub || _isGroup;
+    final showHeader = isMultiParticipant && !mine && firstOfRun;
+    final showAvatar = isMultiParticipant && !mine;
 
     final bubble = Container(
       constraints: BoxConstraints(
@@ -713,7 +810,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           color: AppColors.secondaryText,
                         ),
                       ),
-                      if (mine && !_isClub) ...[
+                      if (mine && _isDirect) ...[
                         const SizedBox(width: 4),
                         Text(
                           '·',

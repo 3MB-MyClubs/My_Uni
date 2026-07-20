@@ -28,12 +28,12 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ChatsScreen), findsOneWidget);
-    expect(AppColors.background, const Color(0xFF000000));
-    expect(AppColors.card, const Color(0xFF121212));
-    expect(AppColors.surfaceAlt, const Color(0xFF262626));
-    expect(AppColors.divider, const Color(0xFF363636));
+    expect(AppColors.background, const Color(0xFF0C0608));
+    expect(AppColors.card, const Color(0xFF191416));
+    expect(AppColors.surfaceAlt, const Color(0xFF241F21));
+    expect(AppColors.divider, const Color(0xFF332E30));
     expect(AppColors.text, const Color(0xFFFFFFFF));
-    expect(AppColors.secondaryText, const Color(0xFFA8A8A8));
+    expect(AppColors.secondaryText, const Color(0xFFAFA3A9));
     expect(AppColors.primaryRed, const Color(0xFF9E2045));
     expect(tester.takeException(), isNull);
   });
@@ -101,6 +101,8 @@ void main() {
     );
     expect(inboxSearch.decoration?.hintText, S.searchPeople);
     expect(inboxSearch.decoration?.focusedBorder, InputBorder.none);
+    expect(find.text('Computer Engineering · 3rd Year'), findsNothing);
+    expect(find.text(S.sayHello), findsNothing);
 
     await tester.tap(find.byIcon(Icons.edit_square));
     await tester.pumpAndSettle();
@@ -121,6 +123,53 @@ void main() {
     await tester.pump();
 
     expect(pickerHint, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('two recipients continue into the optional group setup flow', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ChatsScreen())),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.edit_square));
+    await tester.pumpAndSettle();
+
+    final continueButton = find.byKey(const ValueKey('new-chat-continue'));
+    expect(tester.widget<FilledButton>(continueButton).onPressed, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('recipient-u2')));
+    await tester.pump();
+    expect(find.text('Start Chat'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('recipient-u3')));
+    await tester.pump();
+    expect(find.text('Next'), findsOneWidget);
+    await tester.tap(continueButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Group'), findsWidgets);
+    expect(find.text('Can, Emir'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('group-photo-picker')));
+    await tester.pumpAndSettle();
+    expect(find.text('Take a photo'), findsOneWidget);
+    expect(find.text('Choose from library'), findsOneWidget);
+    await tester.tap(find.byType(ModalBarrier).last);
+    await tester.pumpAndSettle();
+    final nameField = tester.widget<TextField>(
+      find.byKey(const ValueKey('group-name-field')),
+    );
+    expect(nameField.decoration?.hintText, 'Enter group name');
+
+    final createButton = find.byKey(const ValueKey('create-group-button'));
+    expect(tester.widget<FilledButton>(createButton).onPressed, isNotNull);
+    await tester.tap(find.byKey(const ValueKey('create-group-member-u3')));
+    await tester.pump();
+    expect(tester.widget<FilledButton>(createButton).onPressed, isNull);
+    expect(find.text('Select at least 2'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

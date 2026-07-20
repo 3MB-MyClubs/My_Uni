@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
+import 'package:flutter_application_1/screens/group_info_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/widgets/club_avatar.dart';
+import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
 import 'package:flutter_application_1/widgets/presence_avatar.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
 
@@ -96,6 +98,40 @@ void main() {
 
     expect(find.byType(UserProfileScreen), findsOneWidget);
     expect(find.text('Can Serbester'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('group header shows its dynamic name and opens group info', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+    final threadId = chatStore.createGroupThread(
+      creatorId: 'u1',
+      recipientIds: ['u2', 'u3', 'u4', 'u5', 'u6'],
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('group-chat-header')), findsOneWidget);
+    expect(find.text('Can, Emir +3'), findsOneWidget);
+    expect(find.byType(GroupAvatarStack), findsOneWidget);
+    expect(find.text(S.chatMembers(6)), findsNothing);
+
+    chatStore.setGroupCustomName(threadId, '  Project Team  ');
+    await tester.pump();
+    expect(find.text('Project Team'), findsOneWidget);
+    expect(find.text('Can, Emir +3'), findsNothing);
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.tap(find.byKey(const ValueKey('group-chat-header')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GroupInfoScreen), findsOneWidget);
+    expect(find.byKey(const ValueKey('edit-group-name-field')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
