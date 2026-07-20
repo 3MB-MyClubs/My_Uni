@@ -12,14 +12,14 @@ import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
+import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 
-/// Throwaway visual verification for the messaging feature: inbox, club room
-/// posting, DM auto-reply, and the members-only join gate.
+/// Throwaway visual verification for local messaging and membership gates.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -27,6 +27,7 @@ void main() {
     authService.logout();
     await hiveBootstrap.initialize();
     await userPrefsService.initialize();
+    await peopleService.initialize();
     await contentStore.initialize();
     await chatStore.initialize();
     await viewTracker.initialize();
@@ -36,11 +37,31 @@ void main() {
     contentStore.applyToLists();
     await themeService.setDark(true);
 
-    authService.login('can@ku.edu.tr', '111111'); // u2 — follows c4/c7/...
-    userPrefsService.load('u2');
+    expect(
+      authService.signUp(
+        'Alice Local',
+        'alice.local.drive@ku.edu.tr',
+        '135790',
+      ),
+      isTrue,
+    );
+    final aliceId = authService.currentUser!.id;
+    authService.logout();
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    expect(
+      authService.signUp('Can Local', 'can.local.drive@ku.edu.tr', '135790'),
+      isTrue,
+    );
+    final canId = authService.currentUser!.id;
+    userPrefsService.load(canId);
     userState.followedClubIds.add('c4');
-    chatStore.ensureSeededFor('u2');
-    await onboardingService.complete('u2');
+    final localThreadId = chatStore.ensureDirectThread(canId, aliceId)!;
+    chatStore.sendMessage(
+      threadId: localThreadId,
+      senderId: aliceId,
+      content: 'A real on-device message',
+    );
+    await onboardingService.complete(canId);
 
     await binding.convertFlutterSurfaceToImage();
 
@@ -53,7 +74,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
     await binding.takeScreenshot('chats-01-home-topbar');
 
-    // ── Chats tab: seeded inbox with unread badge ──
+    // ── Chats tab: only the locally registered contact is present ──
     await tester.tap(find.text('Chats'));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text(S.searchPeople), findsOneWidget);
@@ -62,9 +83,8 @@ void main() {
     // ── Club room: open KUACM, send a message ──
     await tester.tap(find.byKey(const ValueKey('chat-filter-clubs')));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text(S.onlineNow.toUpperCase()), findsOneWidget);
-    expect(find.byKey(const ValueKey('club-online-c4')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('club-online-c4')));
+    expect(find.text(S.onlineNow.toUpperCase()), findsNothing);
+    await tester.tap(find.text('Bilgisayar Kulübü (KUACM)').first);
     await tester.pump(const Duration(milliseconds: 700));
     await binding.takeScreenshot('chats-03-club-room');
 
@@ -81,15 +101,15 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded).first);
     await tester.pump(const Duration(milliseconds: 500));
 
-    // ── DM: open the Alice thread, send, wait for the demo auto-reply ──
+    // ── DM: open the real local contact and send a persisted message ──
     await tester.tap(find.byKey(const ValueKey('chat-filter-students')));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('Alice Yılmaz').first);
+    await tester.tap(find.text('Alice Local').first);
     await tester.pump(const Duration(milliseconds: 700));
     await binding.takeScreenshot('chats-05-dm-thread');
 
     // Tapping the DM header identity opens that person's profile directly.
-    await tester.tap(find.text('Alice Yılmaz').first);
+    await tester.tap(find.text('Alice Local').first);
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(UserProfileScreen), findsOneWidget);
     await binding.takeScreenshot('chats-05b-recipient-profile');
@@ -100,9 +120,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pump(const Duration(milliseconds: 500));
-    // Note: the demo auto-reply timer doesn't fire inside the integration
-    // test zone, so it can't be captured here — chat_store_test.dart covers
-    // it with real async instead.
     await binding.takeScreenshot('chats-06-dm-sent');
 
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded).first);

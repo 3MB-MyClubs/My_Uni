@@ -11,12 +11,35 @@ import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
+import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
 import 'package:flutter_application_1/widgets/presence_avatar.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
 
 void main() {
+  setUpAll(() {
+    const names = {
+      'u2': 'Can Serbester',
+      'u3': 'Emir Karaarslan',
+      'u4': 'Deniz Kaya',
+      'u5': 'Hakan Tuncay',
+      'u6': 'Elif Şahin',
+    };
+    for (final entry in names.entries) {
+      peopleService.cacheRegisteredUser(
+        User(
+          id: entry.key,
+          name: entry.value,
+          email: '${entry.key}.real@ku.edu.tr',
+          password: '',
+          role: 'student',
+          subscribedClubIds: const [],
+        ),
+      );
+    }
+  });
+
   setUp(() async {
     authService.logout();
     userState.followedClubIds.clear();
@@ -56,10 +79,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
-    expect(
-      find.text('Computer Engineering · 3rd Year · ${S.lastSeenRecently}'),
-      findsOneWidget,
-    );
+    expect(find.text('Computer Engineering · 3rd Year'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

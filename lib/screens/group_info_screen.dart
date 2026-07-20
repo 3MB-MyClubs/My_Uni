@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/chat_store.dart';
-import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../widgets/group_avatar_stack.dart';
@@ -59,8 +58,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   User? _userFor(String id) {
     final cached = peopleService.cachedPeople.where((user) => user.id == id);
     if (cached.isNotEmpty) return cached.first;
-    final local = users.where((user) => user.id == id);
-    return local.isEmpty ? null : local.first;
+    return null;
   }
 
   String _nameFor(String id) {
@@ -90,7 +88,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           final existing = chatStore.groupParticipants(widget.threadId).toSet();
           final known =
               <String, User>{
-                for (final user in users) user.id: user,
                 for (final user in peopleService.cachedPeople) user.id: user,
               }.values.where((user) {
                 if (existing.contains(user.id) || user.id == widget.myId) {

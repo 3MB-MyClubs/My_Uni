@@ -194,14 +194,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     chatStore.addListener(_onThemeOrLocaleChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startInitialExperience();
-      // One MainNavScreen State per login session, and userPrefsService.load
-      // has already restored followedClubIds by the time boxes are ready — so
-      // this seeds the demo DM threads for whoever just logged in, before the
-      // lazily-built Chats tab first opens.
       unawaited(
         appBootstrap.ready.then((_) {
           if (!mounted) return;
-          chatStore.ensureSeededFor(_currentUserId);
           if (authService.isStudentSession) {
             unawaited(chatStore.startDirectMessageSync(_currentUserId));
           }

@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import 'user_avatar.dart';
 
-/// [UserAvatar] with the chats design's green presence dot pinned to the
-/// bottom-right corner. Presence is mock-only (see ChatStore.isUserOnline).
+/// [UserAvatar] with a real-presence green dot pinned to the bottom-right.
 class PresenceAvatar extends StatelessWidget {
   final String userId;
   final String name;

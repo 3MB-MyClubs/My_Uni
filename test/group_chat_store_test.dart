@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/content_store.dart';
+import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
@@ -14,7 +16,25 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp('group_chat_store_test_');
     Hive.init(tempDir.path);
     await contentStore.initialize();
-    store = ChatStore()..autoRepliesEnabled = false;
+    const names = {
+      'u2': 'Can Serbester',
+      'u3': 'Emir Karaarslan',
+      'u4': 'Deniz Kaya',
+      'u5': 'Hakan Tuncay',
+    };
+    for (final entry in names.entries) {
+      peopleService.cacheRegisteredUser(
+        User(
+          id: entry.key,
+          name: entry.value,
+          email: '${entry.key}.real@ku.edu.tr',
+          password: '',
+          role: 'student',
+          subscribedClubIds: const [],
+        ),
+      );
+    }
+    store = ChatStore();
     await store.initialize();
   });
 

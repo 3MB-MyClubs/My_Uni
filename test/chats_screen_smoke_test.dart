@@ -2,13 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/chats_screen.dart';
+import 'package:flutter_application_1/screens/chat_thread_screen.dart';
+import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
+import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
+import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 
 void main() {
+  setUpAll(() {
+    for (final user in [
+      User(
+        id: 'u2',
+        name: 'Can Serbester',
+        email: 'can.real@ku.edu.tr',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+      User(
+        id: 'u3',
+        name: 'Emir Karaarslan',
+        email: 'emir.real@ku.edu.tr',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+      User(
+        id: 'search-only-local-user',
+        name: 'Derya Local',
+        email: 'derya.local@ku.edu.tr',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+    ]) {
+      peopleService.cacheRegisteredUser(user);
+    }
+  });
+
   setUp(() async {
     authService.logout();
     await themeService.setDark(true);
@@ -123,6 +158,45 @@ void main() {
     await tester.pump();
 
     expect(pickerHint, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('main Chats search opens a person without a prior thread', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+    final threadId = ChatStore.dmThreadId('u1', 'search-only-local-user');
+    expect(
+      chatStore.threadsFor('u1').where((thread) => thread.threadId == threadId),
+      isEmpty,
+    );
+
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ChatsScreen())),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-search-students')),
+      'Derya',
+    );
+    await tester.pump();
+
+    final result = find.byKey(
+      const ValueKey('chat-person-result-search-only-local-user'),
+    );
+    expect(result, findsOneWidget);
+    expect(find.text('Derya Local'), findsOneWidget);
+
+    await tester.tap(result);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
+    expect(find.text('Derya Local'), findsOneWidget);
+    expect(
+      tester.widget<ChatThreadScreen>(find.byType(ChatThreadScreen)).threadId,
+      threadId,
+    );
     expect(tester.takeException(), isNull);
   });
 
