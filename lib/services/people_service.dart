@@ -1,3 +1,4 @@
+import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../models/user.dart';
@@ -5,13 +6,87 @@ import 'supabase_config.dart';
 import 'user_state.dart';
 
 class PeopleService {
+  static const _localDirectoryBoxName = 'local_people_directory_v1';
+
+  Box<dynamic>? _localDirectoryBox;
+  final Map<String, User> _localPeople = {};
   List<User> _cachedPeople = const [];
   Set<String> _cachedFollowerIds = const {};
   final Map<String, Set<String>> _followersByUserId = {};
   final Map<String, Set<String>> _followingByUserId = {};
   final Map<String, Set<String>> _clubIdsByUserId = {};
 
-  List<User> get cachedPeople => _cachedPeople;
+  /// Profiles that are allowed to appear in people pickers and chats.
+  ///
+  /// This intentionally contains only profiles fetched from the real profiles
+  /// table and accounts explicitly registered on this device. The static demo
+  /// users from mock_data.dart are never added here.
+  List<User> get cachedPeople {
+    final byId = <String, User>{
+      for (final user in _localPeople.values) user.id: user,
+      for (final user in _cachedPeople) user.id: user,
+    };
+    final result = byId.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return List.unmodifiable(result);
+  }
+
+  Future<void> initialize() async {
+    if (_localDirectoryBox != null) return;
+    final box = await Hive.openBox<dynamic>(_localDirectoryBoxName);
+    final rawPeople = box.get('people');
+    if (rawPeople is List) {
+      for (final raw in rawPeople.whereType<Map>()) {
+        final map = Map<String, dynamic>.from(raw);
+        final id = map['id']?.toString().trim() ?? '';
+        final email = map['email']?.toString().trim() ?? '';
+        if (id.isEmpty || email.isEmpty) continue;
+        _localPeople[id] = User(
+          id: id,
+          name: map['name']?.toString().trim().isNotEmpty == true
+              ? map['name'].toString().trim()
+              : email,
+          email: email,
+          password: '',
+          role: 'student',
+          subscribedClubIds: const [],
+        );
+      }
+    }
+    _localDirectoryBox = box;
+  }
+
+  /// Adds a genuinely created student profile to the on-device directory.
+  /// Passwords are deliberately never persisted here.
+  Future<void> registerLocalUser(User user) async {
+    if (user.id.isEmpty || user.email.isEmpty || user.role != 'student') return;
+    cacheRegisteredUser(user);
+    if (_localDirectoryBox == null) await initialize();
+    await _localDirectoryBox?.put('people', [
+      for (final person in _localPeople.values)
+        {'id': person.id, 'name': person.name, 'email': person.email},
+    ]);
+  }
+
+  /// Makes a verified local account immediately available to UI pickers.
+  /// [registerLocalUser] additionally persists it across launches.
+  void cacheRegisteredUser(User user) {
+    if (user.id.isEmpty || user.email.isEmpty || user.role != 'student') return;
+    final normalizedEmail = user.email.trim().toLowerCase();
+    _localPeople.removeWhere(
+      (id, person) =>
+          id != user.id && person.email.trim().toLowerCase() == normalizedEmail,
+    );
+    _localPeople[user.id] = User(
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      password: '',
+      role: 'student',
+      subscribedClubIds: const [],
+    );
+  }
+
   Set<String> get cachedFollowerIds => _cachedFollowerIds;
   Set<String> clubIdsFor(String userId) => _clubIdsByUserId[userId] ?? const {};
 
@@ -605,7 +680,7 @@ class PeopleService {
     final client = _client;
     if (client == null || ids.isEmpty) return;
 
-    final cachedIds = _cachedPeople.map((user) => user.id).toSet();
+    final cachedIds = cachedPeople.map((user) => user.id).toSet();
     final missingIds = ids.where((id) => !cachedIds.contains(id)).toList();
     if (missingIds.isEmpty) return;
 

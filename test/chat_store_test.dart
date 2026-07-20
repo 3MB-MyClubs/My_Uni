@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter_application_1/models/chat_message.dart';
-import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
-import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 
 void main() {
@@ -14,7 +12,6 @@ void main() {
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('chat_store_test_');
     Hive.init(tempDir.path);
-    chatStore.autoRepliesEnabled = false; // no stray timers across tests
     await chatStore.initialize();
   });
 
@@ -75,31 +72,11 @@ void main() {
     );
   });
 
-  group('seeding', () {
-    test('club history was seeded on first initialize', () {
-      expect(chatStore.messagesFor('club:c4'), isNotEmpty);
-      expect(chatStore.messagesFor('club:c1'), isNotEmpty);
-    });
-
-    test('ensureSeededFor is idempotent and excludes self as partner', () {
-      chatStore.ensureSeededFor('u1');
-      final threads = chatStore
-          .threadsFor('u1')
-          .where((t) => !t.isClub)
-          .toList();
-      expect(threads, isNotEmpty);
-      expect(threads.any((t) => t.peerId == 'u1'), isFalse);
-
-      final countBefore = threads
-          .map((t) => chatStore.messagesFor(t.threadId).length)
-          .reduce((a, b) => a + b);
-      chatStore.ensureSeededFor('u1');
-      final countAfter = chatStore
-          .threadsFor('u1')
-          .where((t) => !t.isClub)
-          .map((t) => chatStore.messagesFor(t.threadId).length)
-          .reduce((a, b) => a + b);
-      expect(countAfter, countBefore);
+  group('real-data-only initialization', () {
+    test('does not create scripted direct or club messages', () {
+      expect(chatStore.messagesFor('club:c4'), isEmpty);
+      expect(chatStore.messagesFor('club:c1'), isEmpty);
+      expect(chatStore.threadsFor('brand-new-user'), isEmpty);
     });
   });
 
@@ -307,40 +284,19 @@ void main() {
     });
   });
 
-  test('a DM to a mock student gets a demo auto-reply', () async {
-    await contentStore.initialize(); // addNotification persists via it
-    authService.login('can@ku.edu.tr', '111111'); // u2
-    chatStore.autoRepliesEnabled = true;
-    addTearDown(() {
-      chatStore.autoRepliesEnabled = false;
-      authService.logout();
-    });
-
-    final thread = ChatStore.dmThreadId('u2', 'u11');
-    chatStore.sendMessage(
+  test('a local DM never fabricates a reply from its recipient', () async {
+    final thread = ChatStore.dmThreadId('local-sender', 'local-recipient');
+    final before = chatStore.messagesFor(thread).length;
+    final sent = chatStore.sendMessage(
       threadId: thread,
-      senderId: 'u2',
-      content: 'ping — expecting a canned reply',
+      senderId: 'local-sender',
+      content: 'A genuine local message',
     );
-    expect(chatStore.messagesFor(thread).last.senderId, 'u2');
-
-    // The peer "starts typing" ~700ms in, while the reply is still pending.
-    expect(chatStore.isPeerTyping(thread), isFalse);
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    expect(chatStore.isPeerTyping(thread), isTrue);
-
-    // The reply lands on a real 2.2-4s timer and clears the typing state.
-    await Future<void>.delayed(const Duration(milliseconds: 3300));
-    expect(chatStore.isPeerTyping(thread), isFalse);
-    final last = chatStore.messagesFor(thread).last;
-    expect(last.senderId, 'u11');
-    // The recipient also gets an alert that deep-links back to the DM.
-    expect(
-      userState.dynamicNotifications.any(
-        (n) => n.targetType == 'message' && n.userId == 'u2',
-      ),
-      isTrue,
-    );
+    expect(sent, isNotNull);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final messages = chatStore.messagesFor(thread);
+    expect(messages, hasLength(before + 1));
+    expect(messages.last.senderId, 'local-sender');
   });
 
   test('messages survive a Hive round-trip', () async {

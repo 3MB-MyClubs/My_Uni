@@ -6,7 +6,6 @@ import '../models/chat_group.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/chat_store.dart';
-import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../widgets/group_photo_picker.dart';
@@ -68,7 +67,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   List<User> get _candidates {
     final known = <String, User>{
-      for (final user in users) user.id: user,
       for (final user in peopleService.cachedPeople) user.id: user,
       ..._selected,
     }.values.where((user) => user.id != widget.myId);
@@ -93,13 +91,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   String _nameFor(String userId, {String? fallback}) {
     final known = _selected[userId];
-    final mockIndex = users.indexWhere((user) => user.id == userId);
-    return userState.displayNameFor(
-      userId,
-      fallback ??
-          known?.name ??
-          (mockIndex == -1 ? userId : users[mockIndex].name),
-    );
+    return userState.displayNameFor(userId, fallback ?? known?.name ?? userId);
   }
 
   String get _automaticName => ChatGroup.automaticName(

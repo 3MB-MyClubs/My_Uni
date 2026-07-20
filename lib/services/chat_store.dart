@@ -9,7 +9,6 @@ import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
 import '../models/chat_group.dart';
 import '../models/notification.dart';
-import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
@@ -28,10 +27,9 @@ import 'user_state.dart';
 class ChatStore extends ChangeNotifier {
   static const _boxName = 'chat_v1';
 
-  /// Bump this integer any time the club-chat seed conversations change.
-  /// A mismatch drops the old seed messages and writes the fresh ones
-  /// (user-sent messages are untouched).
-  static const int _seedVersion = 1;
+  /// Removes the old scripted DMs, club messages, and empty demo threads from
+  /// installs that opened the chat store before chats became real-data-only.
+  static const int _mockChatRemovalVersion = 1;
 
   /// Removes direct-message data created before admin messaging was limited
   /// to the managed club community.
@@ -63,9 +61,6 @@ class ChatStore extends ChangeNotifier {
 
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
-
-  /// Students whose demo DM threads have already been seeded.
-  final Set<String> _dmSeededUserIds = {};
 
   // ── Thread identity ──────────────────────────────────────────────────────────
 
@@ -115,15 +110,10 @@ class ChatStore extends ChangeNotifier {
       groupForThread(threadId)?.memberIds ?? const [];
 
   String _nameForUser(String userId) {
-    final cachedIndex = peopleService.cachedPeople.indexWhere(
+    final cached = peopleService.cachedPeople.where(
       (user) => user.id == userId,
     );
-    final mockIndex = users.indexWhere((user) => user.id == userId);
-    final fallback = cachedIndex != -1
-        ? peopleService.cachedPeople[cachedIndex].name
-        : mockIndex != -1
-        ? users[mockIndex].name
-        : userId;
+    final fallback = cached.isEmpty ? userId : cached.first.name;
     return userState.displayNameFor(userId, fallback);
   }
 
@@ -166,10 +156,6 @@ class ChatStore extends ChangeNotifier {
     final rawPendingSeen = box.get('pendingSeenThreadIds');
     if (rawPendingSeen is List) {
       _pendingSeenThreadIds.addAll(rawPendingSeen.map((id) => id.toString()));
-    }
-    final rawSeeded = box.get('dmSeededUserIds');
-    if (rawSeeded is List) {
-      _dmSeededUserIds.addAll(rawSeeded.map((id) => id.toString()));
     }
     final rawDirectThreads = box.get('directThreadIds');
     if (rawDirectThreads is List) {
@@ -216,16 +202,52 @@ class ChatStore extends ChangeNotifier {
       );
     }
 
-    final storedVersion = box.get('seedVersion') as int? ?? 0;
-    if (storedVersion != _seedVersion) {
-      _messages.removeWhere((m) => m.id.startsWith('seed_club_'));
-      _seedClubHistory();
-      box.put('seedVersion', _seedVersion);
+    final storedMockRemovalVersion =
+        box.get('mockChatRemovalVersion') as int? ?? 0;
+    final removedMockChats = storedMockRemovalVersion < _mockChatRemovalVersion;
+    if (removedMockChats) {
+      _removeMockChatData();
+      await Future.wait([
+        box.put('mockChatRemovalVersion', _mockChatRemovalVersion),
+        box.delete('dmSeededUserIds'),
+        box.delete('seedVersion'),
+      ]);
     }
 
     _box = box;
-    if (storedVersion != _seedVersion || migratedAdminMessaging) {
+    if (removedMockChats || migratedAdminMessaging) {
       unawaited(saveAll());
+    }
+  }
+
+  void _removeMockChatData() {
+    final demoIdPattern = RegExp(r'^u\d+$');
+    final demoUserIds = users
+        .map((user) => user.id)
+        .where(demoIdPattern.hasMatch)
+        .toSet();
+    final demoDirectThreads = _directThreadIds.where((threadId) {
+      return dmParticipants(threadId).any(demoUserIds.contains);
+    }).toSet();
+    _messages.removeWhere(
+      (message) =>
+          message.id.startsWith('seed_dm_') ||
+          message.id.startsWith('seed_club_') ||
+          demoDirectThreads.contains(message.threadId),
+    );
+
+    final removedDirectThreads = _directThreadIds.where((threadId) {
+      return !_messages.any((message) => message.threadId == threadId);
+    }).toSet();
+    _directThreadIds.removeAll(removedDirectThreads);
+    _pendingSeenThreadIds.removeAll(removedDirectThreads);
+    final retainedMessageIds = _messages.map((message) => message.id).toSet();
+    _pendingRemoteMessageIds.retainAll(retainedMessageIds);
+    _pendingRemoteGroupMessageIds.retainAll(retainedMessageIds);
+    for (final reads in _lastRead.values) {
+      for (final threadId in removedDirectThreads) {
+        reads.remove(threadId);
+      }
     }
   }
 
@@ -805,55 +827,6 @@ class ChatStore extends ChangeNotifier {
     for (final reads in _lastRead.values) {
       reads.removeWhere((threadId, _) => isLegacyAdminDm(threadId));
     }
-    _dmSeededUserIds.removeWhere(isAdminAccountId);
-  }
-
-  /// Seeds this user's demo DM threads once (works for any student, including
-  /// fresh signups) and baselines their club-room read state so the first
-  /// login badge only counts the DM messages. Idempotent; skips admins.
-  void ensureSeededFor(String userId) {
-    if (_box == null || userId.isEmpty) return;
-    if (isAdminAccountId(userId)) return;
-    if (_dmSeededUserIds.contains(userId)) return;
-
-    final partners = [
-      'u1',
-      'u4',
-      'u8',
-      'u13',
-    ].where((id) => id != userId).take(2).toList();
-    final now = DateTime.now();
-    for (var p = 0; p < partners.length; p++) {
-      final partner = partners[p];
-      final threadId = dmThreadId(userId, partner);
-      _directThreadIds.add(threadId);
-      final script = _dmSeedScripts[p % _dmSeedScripts.length];
-      for (var i = 0; i < script.length; i++) {
-        final fromPartner = script[i].$1;
-        _messages.add(
-          ChatMessage(
-            id: 'seed_dm_${userId}_${partner}_$i',
-            threadId: threadId,
-            senderId: fromPartner ? partner : userId,
-            content: script[i].$2,
-            createdAt: now.subtract(
-              Duration(hours: 26 * (p + 1), minutes: -14 * i),
-            ),
-          ),
-        );
-      }
-    }
-
-    // Club seed history predates this login: mark it read so the badge
-    // starts at just the unread DMs.
-    final reads = _lastRead.putIfAbsent(userId, () => {});
-    for (final m in _messages) {
-      if (isClubThread(m.threadId)) reads[m.threadId] = now;
-    }
-
-    _dmSeededUserIds.add(userId);
-    scheduleSave();
-    notifyListeners();
   }
 
   // ── Access rule ──────────────────────────────────────────────────────────────
@@ -1158,7 +1131,6 @@ class ChatStore extends ChangeNotifier {
     if (isDirectThread(threadId) || isGroupThread(threadId)) {
       unawaited(_flushRemoteChanges());
     }
-    _maybeScheduleAutoReply(message);
     if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;
   }
@@ -1194,17 +1166,6 @@ class ChatStore extends ChangeNotifier {
 
   // ── Demo presence ────────────────────────────────────────────────────────────
 
-  /// Deterministic mock presence — there is no backend, so a stable subset of
-  /// users simply reads as "online" (same answer every call, every session).
-  static bool isUserOnline(String userId) {
-    if (userId.isEmpty) return false;
-    var sum = 0;
-    for (final unit in userId.codeUnits) {
-      sum += unit;
-    }
-    return sum.isEven;
-  }
-
   void _createGroupMessageNotifications(ChatMessage message) {
     final group = groupForThread(message.threadId);
     if (group == null) return;
@@ -1230,86 +1191,6 @@ class ChatStore extends ChangeNotifier {
   }
 
   // ── Demo auto-reply ──────────────────────────────────────────────────────────
-  // Purely a demo nicety: a DM to a mock student gets one canned reply a few
-  // seconds later so the conversation feels alive. Never fires in club rooms,
-  // never replies to a reply (replies are inserted directly, not sent), and
-  // at most one reply is pending per thread.
-
-  /// Tests can switch this off to avoid stray timers mutating state.
-  bool autoRepliesEnabled = true;
-
-  final Set<String> _pendingAutoReplies = {};
-
-  /// DM threads whose peer is "typing" right now — set while a demo
-  /// auto-reply is pending so the thread and inbox can show the indicator.
-  final Set<String> _typingThreadIds = {};
-
-  bool isPeerTyping(String threadId) => _typingThreadIds.contains(threadId);
-
-  static const _cannedReplies = [
-    'Haha nice 😄',
-    'Sounds good, see you there!',
-    'Wait really? Tell me more later 👀',
-    'Yesss let\'s do it',
-    'On my way to the library, talk in a bit!',
-  ];
-
-  void _maybeScheduleAutoReply(ChatMessage sent) {
-    if (!autoRepliesEnabled || !isDirectThread(sent.threadId)) return;
-    final peerId = dmPeerOf(sent.threadId, sent.senderId);
-    if (peerId == null || peerId == sent.senderId) return;
-    final peerIdx = users.indexWhere((u) => u.id == peerId);
-    if (peerIdx == -1) return; // only mock students reply
-    final peer = users[peerIdx];
-    if (!_pendingAutoReplies.add(sent.threadId)) return;
-
-    final delay = Duration(
-      milliseconds: 2200 + (sent.id.hashCode.abs() % 1800),
-    );
-    // Peer "starts typing" shortly after the send, until the reply lands.
-    Timer(const Duration(milliseconds: 700), () {
-      if (_box == null) return;
-      if (!_pendingAutoReplies.contains(sent.threadId)) return;
-      if (_typingThreadIds.add(sent.threadId)) notifyListeners();
-    });
-    Timer(delay, () {
-      _pendingAutoReplies.remove(sent.threadId);
-      final wasTyping = _typingThreadIds.remove(sent.threadId);
-      if (_box == null) return;
-      // Only reply if the original sender is still the logged-in user.
-      final currentId =
-          authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-      if (currentId != sent.senderId) {
-        if (wasTyping) notifyListeners();
-        return;
-      }
-      final now = DateTime.now();
-      _messages.add(
-        ChatMessage(
-          id: 'm${now.microsecondsSinceEpoch}_$peerId',
-          threadId: sent.threadId,
-          senderId: peerId,
-          content:
-              _cannedReplies[sent.id.hashCode.abs() % _cannedReplies.length],
-          createdAt: now,
-        ),
-      );
-      scheduleSave();
-      notifyListeners();
-      userState.addNotification(
-        AppNotification(
-          id: 'msg_${peerId}_${now.millisecondsSinceEpoch}',
-          userId: sent.senderId,
-          message: '${peer.name} sent you a message.',
-          createdAt: now,
-          targetType: 'message',
-          targetId: peerId,
-          fromId: peerId,
-        ),
-      );
-    });
-  }
-
   // ── Persistence ──────────────────────────────────────────────────────────────
 
   Timer? _saveDebounce;
@@ -1335,7 +1216,6 @@ class ChatStore extends ChangeNotifier {
               inner.key: inner.value.toIso8601String(),
           },
       }),
-      box.put('dmSeededUserIds', _dmSeededUserIds.toList()),
       box.put('directThreadIds', _directThreadIds.toList()),
       box.put('groups', _groups.values.map((group) => group.toMap()).toList()),
       box.put('pendingRemoteMessageIds', _pendingRemoteMessageIds.toList()),
@@ -1349,121 +1229,6 @@ class ChatStore extends ChangeNotifier {
   }
 
   // ── Seed content ─────────────────────────────────────────────────────────────
-
-  /// Club-room history authored by real mock members of each club, so names
-  /// and avatars resolve. User-agnostic: whoever follows these clubs sees it.
-  void _seedClubHistory() {
-    final now = DateTime.now();
-    void seed(String clubId, List<(String, String, int)> script) {
-      for (var i = 0; i < script.length; i++) {
-        final (senderId, content, minutesAgo) = script[i];
-        _messages.add(
-          ChatMessage(
-            id: 'seed_club_${clubId}_$i',
-            threadId: clubThreadId(clubId),
-            senderId: senderId,
-            content: content,
-            createdAt: now.subtract(Duration(minutes: minutesAgo)),
-          ),
-        );
-      }
-    }
-
-    // c1 — Arkeoloji ve Sanat Tarihi (KUARHA): members u1 Alice, u6 Elif
-    seed('c1', [
-      ('u1', 'The Ephesus trip photos are up! Check the shared album 📸', 2860),
-      (
-        'u6',
-        'They look amazing. Can we plan a museum visit for next month?',
-        2790,
-      ),
-      ('u1', 'Yes! Thinking Pera Museum — who else is in?', 2740),
-      ('u6', 'Count me in. I can ask about a student group discount.', 1500),
-      ('u1', 'Perfect, let\'s finalize the date at Thursday\'s meeting.', 130),
-    ]);
-    // c4 — Bilgisayar Kulübü (KUACM): members u1, u2 Can, u5 Hakan, u15 Serkan
-    seed('c4', [
-      (
-        'u2',
-        'Hackathon team registrations close Friday — get your teams in!',
-        2950,
-      ),
-      ('u5', 'Anyone need a backend person? I\'m free that weekend 🙋', 2900),
-      ('u15', 'We do! DM me, we\'re two people short.', 2840),
-      (
-        'u1',
-        'Workshop room booked for Wednesday 18:00, same as last time.',
-        1420,
-      ),
-      (
-        'u2',
-        'Reminder: bring your laptops charged, sockets are limited 😅',
-        260,
-      ),
-      ('u5', 'Noted. Also the Git basics slides are in the drive now.', 45),
-    ]);
-    // c5 — Dağcılık Kulübü (KUDAK): members u3 Emir, u11 Yunuscan, u15 Serkan
-    seed('c5', [
-      ('u3', 'Weather looks clear for the Uludağ hike this weekend 🏔️', 2810),
-      ('u15', 'What time do we meet at the campus gate?', 2760),
-      ('u3', '06:30 sharp — bus leaves at 06:45.', 2720),
-      (
-        'u11',
-        'Bringing my camera this time, the sunrise spot is unreal.',
-        1350,
-      ),
-    ]);
-    // c7 — Ekonomi Kulübü: members u2 Can, u9 Ahmet, u15 Serkan
-    seed('c7', [
-      (
-        'u9',
-        'Case competition briefs are out — teams of 3, deadline in two weeks.',
-        2880,
-      ),
-      ('u2', 'The guest speaker from the CBRT confirmed for the 24th 🎉', 1980),
-      ('u15', 'Nice! Is it open seating or do we need to sign up?', 1930),
-      (
-        'u9',
-        'Sign-up sheet goes live tomorrow, I\'ll post the link here.',
-        310,
-      ),
-    ]);
-    // c22 — KU Gönüllüleri: members u1, u5 Hakan, u11 Yunuscan, u13 Emre
-    seed('c22', [
-      (
-        'u13',
-        'This Saturday\'s tutoring session needs 2 more volunteers 🙏',
-        2830,
-      ),
-      ('u5', 'I can come. Same school as last time?', 2770),
-      ('u13', 'Yes, shuttle from west gate at 09:00.', 2730),
-      (
-        'u11',
-        'I\'ll join too. Should we bring the art supplies left from the fair?',
-        1210,
-      ),
-      ('u1', 'Good idea — they\'re in the club locker, code is with me.', 180),
-    ]);
-  }
-
-  /// Two short DM scripts; `$1` = message is from the partner (vs. the
-  /// current user), `$2` = text. Written to read naturally for any student.
-  static const _dmSeedScripts = <List<(bool, String)>>[
-    [
-      (true, 'Heyy, are you going to the club fair tomorrow?'),
-      (false, 'Thinking about it — what time does it start?'),
-      (
-        true,
-        '11:00 by the main quad. Come, half the clubs are giving free stuff 😄',
-      ),
-      (true, 'Also I\'ll save you a spot at our stand if you want!'),
-    ],
-    [
-      (true, 'Did you get the notes from today\'s lecture?'),
-      (false, 'Yeah, I\'ll send them tonight.'),
-      (true, 'You\'re a lifesaver 🙏 Coffee\'s on me this week.'),
-    ],
-  ];
 }
 
 final chatStore = ChatStore();

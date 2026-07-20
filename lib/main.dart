@@ -62,6 +62,7 @@ void main() async {
   ]);
   appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
+    peopleService.initialize(),
     contentStore.initialize(),
     chatStore.initialize(),
     checkinStore.initialize(),

@@ -1,5 +1,4 @@
 import 'dart:async' show unawaited;
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -7,6 +6,7 @@ import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
+import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
@@ -73,8 +73,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       (user) => user.id == userId,
     );
     if (cachedIndex != -1) return peopleService.cachedPeople[cachedIndex];
-    final mockIndex = users.indexWhere((user) => user.id == userId);
-    return mockIndex == -1 ? null : users[mockIndex];
+    return null;
   }
 
   User? get _peer {
@@ -281,7 +280,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
-        listenable: Listenable.merge([chatStore, userState, ?_communityInfo]),
+        listenable: Listenable.merge([
+          chatStore,
+          userState,
+          appPresenceService,
+          ?_communityInfo,
+        ]),
         builder: (context, _) {
           final canAccess = chatStore.canAccessThread(widget.threadId, _myId);
           final canOfferStudentJoin =
@@ -335,12 +339,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final name = peer != null
         ? userState.displayNameFor(peer.id, peer.name)
         : peerId ?? '';
-    final online = ChatStore.isUserOnline(peerId ?? '');
-    final presence = online ? S.onlineNow : S.lastSeenRecently;
+    final online = appPresenceService.onlineUserIds.contains(peerId ?? '');
     final academicSummary = userState.academicSummaryFor(peerId ?? '');
     final status = [
       academicSummary,
-      presence,
+      if (online) S.onlineNow,
     ].where((value) => value.isNotEmpty).join(' · ');
 
     return Container(
@@ -615,8 +618,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Widget _buildMessageList() {
     final messages = chatStore.messagesFor(widget.threadId, viewerId: _myId);
-    final peerTyping = _isDirect && chatStore.isPeerTyping(widget.threadId);
-    if (messages.isEmpty && !peerTyping) {
+    if (messages.isEmpty) {
       if (_isDirect) return const SizedBox.shrink();
       return Center(
         child: Padding(
@@ -631,7 +633,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
 
     final items = _buildItems(messages);
-    if (peerTyping) items.add(const _TypingBubble());
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
@@ -962,79 +963,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _timeLabel(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-}
-
-/// The peer-is-typing bubble: three dots pulsing in a staggered wave, in a
-/// received-message-shaped bubble (v5 design).
-class _TypingBubble extends StatefulWidget {
-  const _TypingBubble();
-
-  @override
-  State<_TypingBubble> createState() => _TypingBubbleState();
-}
-
-class _TypingBubbleState extends State<_TypingBubble>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              border: Border.all(color: AppColors.divider),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(16),
-              ),
-            ),
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(3, (i) {
-                    final phase = 2 * math.pi * (_controller.value - i * 0.2);
-                    final opacity = 0.3 + 0.7 * (0.5 + 0.5 * math.sin(phase));
-                    return Padding(
-                      padding: EdgeInsets.only(left: i == 0 ? 0 : 4),
-                      child: Opacity(
-                        opacity: opacity,
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: AppColors.secondaryText,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _DateChip extends StatelessWidget {

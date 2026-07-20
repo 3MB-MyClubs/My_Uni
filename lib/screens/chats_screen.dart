@@ -6,10 +6,12 @@ import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
+import '../services/app_presence_service.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
 import '../services/locale_service.dart';
 import '../services/mock_data.dart';
+import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/theme_service.dart';
 import '../onboarding/onboarding_anchors.dart';
@@ -72,13 +74,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
     localeService.addListener(_onEnvChanged);
     themeService.addListener(_onEnvChanged);
     widget.controller?.addListener(_showStudentChats);
-    // Belt and braces — MainNavScreen seeds after login, but this screen can
-    // also be pushed directly (feed paper-plane, tests).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      chatStore.ensureSeededFor(_myId);
       if (authService.isStudentSession) {
         unawaited(chatStore.startDirectMessageSync(_myId));
         unawaited(_hydrateDmProfiles());
+        unawaited(_hydratePeopleDirectory());
       }
     });
   }
@@ -127,6 +127,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _hydratePeopleDirectory() async {
+    try {
+      await peopleService.fetchPeople(excludeId: _myId);
+    } catch (_) {
+      // Registered on-device profiles remain searchable while offline.
+    }
+    if (mounted) setState(() {});
+  }
+
   // ── Time helper ─────────────────────────────────────────────────────────────
   String _rowTime(DateTime dt) {
     final now = DateTime.now();
@@ -146,8 +155,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       (user) => user.id == userId,
     );
     if (cachedIndex != -1) return peopleService.cachedPeople[cachedIndex];
-    final mockIndex = users.indexWhere((user) => user.id == userId);
-    return mockIndex == -1 ? null : users[mockIndex];
+    return null;
   }
 
   String _nameForUser(String userId) {
@@ -226,11 +234,34 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
-        listenable: Listenable.merge([chatStore, userState]),
+        listenable: Listenable.merge([
+          chatStore,
+          userState,
+          appPresenceService,
+          moderationService,
+        ]),
         builder: (context, _) {
           final query = _query.trim().toLowerCase();
-          final allThreads = chatStore.threadsFor(_myId);
+          final allThreads = chatStore.threadsFor(_myId).where((thread) {
+            final peerId = thread.peerId;
+            return peerId == null || !moderationService.isUserBlocked(peerId);
+          }).toList();
           final showingClubs = _filter == _ChatInboxFilter.clubs;
+          final searchingPeople = !showingClubs && query.isNotEmpty;
+          final peopleResults = searchingPeople
+              ? peopleService.cachedPeople.where((user) {
+                  if (user.id == _myId ||
+                      moderationService.isUserBlocked(user.id)) {
+                    return false;
+                  }
+                  final displayName = userState.displayNameFor(
+                    user.id,
+                    user.name,
+                  );
+                  return displayName.toLowerCase().contains(query) ||
+                      user.email.toLowerCase().contains(query);
+                }).toList()
+              : const <User>[];
           final threads = allThreads
               .where((thread) => thread.isClub == showingClubs)
               .where(
@@ -243,8 +274,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
             (total, thread) => total + thread.unread,
           );
           final onlineStudents = authService.isStudentSession && !showingClubs
-              ? users
-                    .where((u) => u.id != _myId && ChatStore.isUserOnline(u.id))
+              ? peopleService.cachedPeople
+                    .where(
+                      (u) =>
+                          u.id != _myId &&
+                          !moderationService.isUserBlocked(u.id) &&
+                          appPresenceService.onlineUserIds.contains(u.id),
+                    )
                     .toList()
               : const <User>[];
           final clubThreads = allThreads
@@ -261,12 +297,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     _buildHeader(totalUnread),
                     _buildChatFilters(allThreads),
                     _buildSearchBar(),
-                    if (showingClubs && clubThreads.isNotEmpty)
+                    if (query.isEmpty && showingClubs && clubThreads.isNotEmpty)
                       _buildClubOnlineRail(clubThreads)
-                    else if (onlineStudents.isNotEmpty)
+                    else if (query.isEmpty && onlineStudents.isNotEmpty)
                       _buildOnlineRail(onlineStudents),
                     Expanded(
-                      child: threads.isEmpty
+                      child: searchingPeople
+                          ? _buildPeopleSearchResults(peopleResults)
+                          : threads.isEmpty
                           ? _buildEmptyState()
                           : ListView.builder(
                               padding: const EdgeInsets.only(bottom: 120),
@@ -781,19 +819,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   int _onlineCountForClub(String clubId) {
-    final knownOnline = users.where((user) {
+    return peopleService.cachedPeople.where((user) {
       return user.subscribedClubIds.contains(clubId) &&
-          ChatStore.isUserOnline(user.id);
+          appPresenceService.onlineUserIds.contains(user.id);
     }).length;
-    // The current session is itself online. This also gives remote clubs a
-    // useful baseline before their full membership directory is hydrated.
-    return knownOnline > 0 ? knownOnline : 1;
   }
 
   Widget _buildClubOnlineRail(List<ChatThreadSummary> threads) {
     final communities = threads
         .map((thread) => (thread, clubForId(thread.clubId ?? '')))
-        .where((entry) => entry.$2 != null)
+        .where(
+          (entry) => entry.$2 != null && _onlineCountForClub(entry.$2!.id) > 0,
+        )
         .toList();
     if (communities.isEmpty) return const SizedBox.shrink();
 
@@ -895,9 +932,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .where((id) => id != _myId)
         .toList();
     final title = _titleFor(t);
-    final typing =
-        !t.isClub && !t.isGroup && chatStore.isPeerTyping(t.threadId);
-
     return InkWell(
       onTap: () => _openThread(
         t.threadId,
@@ -934,7 +968,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 name: title,
                 size: 48,
                 fontSize: 18,
-                online: ChatStore.isUserOnline(t.peerId ?? ''),
+                online: appPresenceService.onlineUserIds.contains(
+                  t.peerId ?? '',
+                ),
               ),
             const SizedBox(width: 12),
             Expanded(
@@ -982,20 +1018,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          typing ? S.typing : _preview(t),
+                          _preview(t),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
-                            fontStyle: typing
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                            fontWeight: typing || unread > 0
+                            fontWeight: unread > 0
                                 ? FontWeight.w600
                                 : FontWeight.w400,
-                            color: typing
-                                ? AppColors.primaryRed
-                                : unread > 0
+                            color: unread > 0
                                 ? AppColors.text
                                 : AppColors.secondaryText,
                           ),
@@ -1028,6 +1059,92 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPeopleSearchResults(List<User> people) {
+    if (people.isEmpty) {
+      return Center(
+        child: Text(
+          S.noOneMatches,
+          style: TextStyle(fontSize: 14, color: AppColors.secondaryText),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 120),
+      itemCount: people.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: _sectionLabel(S.studentChats),
+          );
+        }
+        return _personSearchResult(people[index - 1]);
+      },
+    );
+  }
+
+  Widget _personSearchResult(User user) {
+    final displayName = userState.displayNameFor(user.id, user.name);
+    final academicSummary = userState.academicSummaryFor(user.id);
+    final subtitle = academicSummary.isEmpty ? user.email : academicSummary;
+    return InkWell(
+      key: ValueKey('chat-person-result-${user.id}'),
+      onTap: () => _openDmWith(user),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.divider)),
+        ),
+        child: Row(
+          children: [
+            PresenceAvatar(
+              userId: user.id,
+              name: displayName,
+              size: 48,
+              fontSize: 18,
+              online: appPresenceService.onlineUserIds.contains(user.id),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: AppColors.secondaryText,
             ),
           ],
         ),
@@ -1110,12 +1227,13 @@ class _NewChatSheetState extends State<_NewChatSheet> {
   Widget build(BuildContext context) {
     final query = _query.trim().toLowerCase();
     final knownUsers = <String, User>{
-      for (final user in users) user.id: user,
       for (final user in peopleService.cachedPeople) user.id: user,
       ..._selected,
     }.values;
     final candidates = knownUsers.where((u) {
-      if (u.id == widget.myId) return false;
+      if (u.id == widget.myId || moderationService.isUserBlocked(u.id)) {
+        return false;
+      }
       if (query.isEmpty) return true;
       return u.name.toLowerCase().contains(query) ||
           u.email.toLowerCase().contains(query) ||

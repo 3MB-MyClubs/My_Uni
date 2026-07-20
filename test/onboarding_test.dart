@@ -356,7 +356,6 @@ void main() {
     setUpAll(() async {
       tempDir = await Directory.systemTemp.createTemp('onboarding_test_');
       Hive.init(tempDir.path);
-      chatStore.autoRepliesEnabled = false;
       await chatStore.initialize();
     });
 
