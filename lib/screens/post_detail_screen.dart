@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/post_like_helper.dart';
 import '../services/user_state.dart';
+import '../services/moderation_service.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/poll_card.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 
@@ -109,6 +112,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     setState(() {});
   }
 
+  Future<void> _reportPost() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: S.whyReportPost,
+    );
+    if (reason == null || !mounted) return;
+
+    var delivered = true;
+    try {
+      await moderationService.reportPost(widget.post, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.maybePop(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? S.postReportedAndRemoved : S.postHiddenOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
@@ -131,6 +162,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          if (isStudent)
+            IconButton(
+              tooltip: S.reportPost,
+              icon: Icon(Icons.flag_outlined, color: AppColors.secondaryText),
+              onPressed: _reportPost,
+            ),
           if (_canDeletePost)
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red),

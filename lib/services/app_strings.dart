@@ -269,6 +269,11 @@ class S {
       _t('Privacy Policy', 'Gizlilik Politikası');
   static String get privacyPolicySubtitle =>
       _t('How ClubUp handles your data', 'ClubUp verilerinizi nasıl işler');
+  static String get termsOfUse => _t('Terms of Use', 'Kullanım Koşulları');
+  static String get termsOfUseSubtitle => _t(
+    'Community rules & safety enforcement',
+    'Topluluk kuralları ve güvenlik uygulaması',
+  );
   static String get deleteAccount => _t('Delete Account', 'Hesabı Sil');
   static String get deleteAccountSubtitle => _t(
     'Request permanent account & data deletion',
@@ -399,7 +404,8 @@ class S {
   );
 
   // ── Onboarding — finish (Act 3)
-  static String get onboardingFinishTitle => _t("That's the tour! 🎉", 'Tur bitti! 🎉');
+  static String get onboardingFinishTitle =>
+      _t("That's the tour! 🎉", 'Tur bitti! 🎉');
   static String get onboardingFinishBody => _t(
     "Here's how to make this place yours — three small things to get "
         'you started.',
@@ -432,6 +438,154 @@ class S {
   static String get checklistAllDone =>
       _t("You're all set! 🎉", 'Hepsi tamam! 🎉');
 
+  // ── Community safety & moderation
+  static String get safetyHero => _t(
+    'A safe campus community starts with everyone',
+    'Güvenli bir kampüs topluluğu hepimizle başlar',
+  );
+  static String get safetyIntro => _t(
+    'Please review and accept the Terms of Use before creating an account or signing in.',
+    'Hesap oluşturmadan veya giriş yapmadan önce lütfen Kullanım Koşullarını inceleyip kabul et.',
+  );
+  static String get communitySafetyTerms =>
+      _t('COMMUNITY SAFETY TERMS', 'TOPLULUK GÜVENLİĞİ KOŞULLARI');
+  static String get zeroTolerance => _t('Zero tolerance', 'Sıfır tolerans');
+  static String get zeroToleranceBody => _t(
+    'Objectionable content, harassment, threats, hate, sexual exploitation, scams, and abusive users are not allowed.',
+    'Sakıncalı içeriklere, tacize, tehditlere, nefrete, cinsel sömürüye, dolandırıcılığa ve kötü niyetli kullanıcılara izin verilmez.',
+  );
+  static String get reportHarmfulContent =>
+      _t('Report harmful content', 'Zararlı içeriği bildir');
+  static String get reportHarmfulContentBody => _t(
+    'Use the report option on posts and profiles. ClubUp reviews reports and acts on violations within 24 hours.',
+    'Gönderi ve profillerdeki bildirme seçeneğini kullan. ClubUp bildirimleri 24 saat içinde inceler ve ihlaller için işlem yapar.',
+  );
+  static String get blockAbusiveUsers =>
+      _t('Block abusive users', 'Kötü niyetli kullanıcıları engelle');
+  static String get blockAbusiveUsersBody => _t(
+    'Blocking reports the account to ClubUp and immediately removes that user and their content from your experience.',
+    'Engelleme, hesabı ClubUp’a bildirir ve kullanıcıyı ve içeriğini deneyiminden hemen kaldırır.',
+  );
+  static String get enforcement => _t('Enforcement', 'Yaptırım');
+  static String get enforcementBody => _t(
+    'ClubUp may remove violating content and suspend or permanently eject the responsible account.',
+    'ClubUp ihlalli içeriği kaldırabilir ve sorumlu hesabı askıya alabilir veya kalıcı olarak hizmetten çıkarabilir.',
+  );
+  static String get readFullTerms =>
+      _t('Read full Terms of Use', 'Kullanım Koşullarının tamamını oku');
+  static String get agreeToSafetyTerms => _t(
+    'I agree to the Terms of Use and Community Safety Terms.',
+    'Kullanım Koşullarını ve Topluluk Güvenliği Koşullarını kabul ediyorum.',
+  );
+  static String get agreeAndContinue =>
+      _t('Agree and continue', 'Kabul et ve devam et');
+  static String get couldNotOpenThisPage =>
+      _t('Could not open this page.', 'Bu sayfa açılamadı.');
+  static String get whyReportPost => _t(
+    'Why are you reporting this post?',
+    'Bu gönderiyi neden bildiriyorsun?',
+  );
+  static String get whyReportUser => _t(
+    'Why are you reporting this user?',
+    'Bu kullanıcıyı neden bildiriyorsun?',
+  );
+  static String get whyBlockUser => _t(
+    'Why are you blocking this user?',
+    'Bu kullanıcıyı neden engelliyorsun?',
+  );
+  static String get chooseReportReason => _t(
+    'Choose the reason that best describes the issue. Reports are reviewed within 24 hours.',
+    'Sorunu en iyi açıklayan nedeni seç. Bildirimler 24 saat içinde incelenir.',
+  );
+  static String moderationReasonLabel(String value) => switch (value) {
+    'harassment' => _t('Harassment or bullying', 'Taciz veya zorbalık'),
+    'hate_or_discrimination' => _t(
+      'Hate or discrimination',
+      'Nefret veya ayrımcılık',
+    ),
+    'sexual_content' => _t(
+      'Sexual or explicit content',
+      'Cinsel veya açık içerik',
+    ),
+    'violence_or_danger' => _t(
+      'Violence or dangerous behavior',
+      'Şiddet veya tehlikeli davranış',
+    ),
+    'spam_or_scam' => _t('Spam or scam', 'Spam veya dolandırıcılık'),
+    _ => _t('Something else', 'Başka bir neden'),
+  };
+  static String moderationReasonDetail(String value) => switch (value) {
+    'harassment' => _t(
+      'Targets, threatens, or abuses a person or group.',
+      'Bir kişiyi veya grubu hedef alır, tehdit eder ya da kötüye kullanır.',
+    ),
+    'hate_or_discrimination' => _t(
+      'Attacks people based on a protected characteristic.',
+      'İnsanlara korunan bir özellikleri nedeniyle saldırır.',
+    ),
+    'sexual_content' => _t(
+      'Contains unwanted nudity or sexual material.',
+      'İstenmeyen çıplaklık veya cinsel materyal içerir.',
+    ),
+    'violence_or_danger' => _t(
+      'Threatens harm or promotes dangerous conduct.',
+      'Zarar tehdidi içerir veya tehlikeli davranışı teşvik eder.',
+    ),
+    'spam_or_scam' => _t(
+      'Misleads people or repeatedly posts unwanted material.',
+      'İnsanları yanıltır veya sürekli istenmeyen içerik paylaşır.',
+    ),
+    _ => _t(
+      'Another violation of the ClubUp Terms of Use.',
+      'ClubUp Kullanım Koşullarının başka bir ihlali.',
+    ),
+  };
+  static String get reportPost => _t('Report post', 'Gönderiyi bildir');
+  static String get reportUser => _t('Report user', 'Kullanıcıyı bildir');
+  static String get reportUserSubtitle => _t(
+    'Send this profile to ClubUp for review.',
+    'Bu profili incelenmesi için ClubUp’a gönder.',
+  );
+  static String get blockAndReportUser =>
+      _t('Block and report user', 'Kullanıcıyı engelle ve bildir');
+  static String get blockAndReportSubtitle => _t(
+    'Immediately hide this user and notify ClubUp.',
+    'Bu kullanıcıyı hemen gizle ve ClubUp’a bildir.',
+  );
+  static String blockUserQuestion(String name) =>
+      _t('Block $name?', '$name engellensin mi?');
+  static String get blockUserExplanation => _t(
+    'Their profile and content will be removed from your experience immediately. ClubUp will also receive a safety report.',
+    'Profili ve içeriği deneyiminden hemen kaldırılacak. ClubUp ayrıca bir güvenlik bildirimi alacak.',
+  );
+  static String get userReported => _t(
+    'User reported. Our team will review it within 24 hours.',
+    'Kullanıcı bildirildi. Ekibimiz 24 saat içinde inceleyecek.',
+  );
+  static String get reportSendFailed => _t(
+    'Could not send the report. Please try again.',
+    'Bildirim gönderilemedi. Lütfen tekrar dene.',
+  );
+  static String get userBlockedAndReported =>
+      _t('User blocked and reported.', 'Kullanıcı engellendi ve bildirildi.');
+  static String get userBlockedOffline => _t(
+    'User blocked on this device. The report could not be sent; please try again when online.',
+    'Kullanıcı bu cihazda engellendi. Bildirim gönderilemedi; çevrimiçi olduğunda tekrar dene.',
+  );
+  static String get postReportedAndRemoved => _t(
+    'Post reported and removed from your feed.',
+    'Gönderi bildirildi ve akışından kaldırıldı.',
+  );
+  static String get postHiddenOffline => _t(
+    'Post hidden. The report could not be sent; please try again when online.',
+    'Gönderi gizlendi. Bildirim gönderilemedi; çevrimiçi olduğunda tekrar dene.',
+  );
+  static String get safetyOptions =>
+      _t('Safety options', 'Güvenlik seçenekleri');
+  static String get contentSafetyRejected => _t(
+    'This content cannot be published because it may violate the ClubUp Community Safety Terms.',
+    'Bu içerik ClubUp Topluluk Güvenliği Koşullarını ihlal edebileceği için yayımlanamaz.',
+  );
   static String get profileSection => _t('Profile', 'Profil');
 
   // ── Settings — Club admin

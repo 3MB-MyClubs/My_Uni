@@ -38,6 +38,8 @@ import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../services/supabase_interaction_service.dart';
+import '../services/moderation_service.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
@@ -127,6 +129,8 @@ class _FeedScreenState extends State<FeedScreen> {
       _feedTab,
       Object.hashAllUnordered(userState.followedClubIds),
       Object.hashAllUnordered(userState.followedUserIds),
+      Object.hashAllUnordered(moderationService.hiddenPostIds),
+      Object.hashAllUnordered(moderationService.blockedUserIds),
       identityHashCode(peopleService.cachedPeople),
       identityHashCode(peopleService.cachedFollowerIds),
       Object.hashAllUnordered(personalizationService.interests),
@@ -178,6 +182,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final items = newsPosts
         .where((post) => _clubById(post.clubId) != null)
         .where((post) => _clubVisible(post.clubId))
+        .where((post) => !moderationService.isPostHidden(post))
         .map(
           (post) => _FeedItem(
             id: post.id,
@@ -205,7 +210,10 @@ class _FeedScreenState extends State<FeedScreen> {
     final myFollowing = userState.followedUserIds;
     final myFollowers = peopleService.cachedFollowerIds;
     final profiles = peopleService.cachedPeople
-        .where((user) => user.id != myId)
+        .where(
+          (user) =>
+              user.id != myId && !moderationService.isUserBlocked(user.id),
+        )
         .toList();
     final suggested = <String, User>{};
 
@@ -302,6 +310,7 @@ class _FeedScreenState extends State<FeedScreen> {
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
     contentStore.addListener(_onContentChanged);
+    moderationService.addListener(_onContentChanged);
     _loadFeedContent();
     _loadPeopleDirectory();
   }
@@ -311,6 +320,7 @@ class _FeedScreenState extends State<FeedScreen> {
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     contentStore.removeListener(_onContentChanged);
+    moderationService.removeListener(_onContentChanged);
     super.dispose();
   }
 
@@ -2496,7 +2506,7 @@ class _PostCardState extends State<_PostCard>
                 ),
               tile(
                 icon: Icons.flag_outlined,
-                label: 'Report post',
+                label: S.reportPost,
                 color: AppColors.primaryRed,
                 onTap: _reportPost,
               ),
@@ -2564,39 +2574,30 @@ class _PostCardState extends State<_PostCard>
     );
   }
 
-  void _reportPost() {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text(
-          'Report this post?',
-          style: TextStyle(color: AppColors.text),
-        ),
-        content: Text(
-          'Our team will review it for violations of community guidelines.',
-          style: TextStyle(color: AppColors.secondaryText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Thanks for the report. We\'ll take a look.'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            child: const Text('Report'),
-          ),
-        ],
-      ),
+  Future<void> _reportPost() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: S.whyReportPost,
     );
+    if (reason == null || !mounted) return;
+
+    var delivered = true;
+    try {
+      await moderationService.reportPost(widget.post, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? S.postReportedAndRemoved : S.postHiddenOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override

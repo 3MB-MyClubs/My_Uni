@@ -1295,21 +1295,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.help_outline_rounded,
                     title: S.supportCenter,
                     subtitle: S.supportCenterSubtitle,
-                    url: AppLinks.support,
+                    url: localeService.languageCode == 'tr'
+                        ? AppLinks.supportTurkish
+                        : AppLinks.support,
                   ),
                   Divider(height: 1, indent: 56, color: AppColors.divider),
                   _externalPageTile(
                     icon: Icons.privacy_tip_outlined,
                     title: S.privacyPolicy,
                     subtitle: S.privacyPolicySubtitle,
-                    url: AppLinks.privacyPolicy,
+                    url: localeService.languageCode == 'tr'
+                        ? AppLinks.privacyPolicyTurkish
+                        : AppLinks.privacyPolicy,
+                  ),
+                  Divider(height: 1, indent: 56, color: AppColors.divider),
+                  _externalPageTile(
+                    icon: Icons.gavel_rounded,
+                    title: S.termsOfUse,
+                    subtitle: S.termsOfUseSubtitle,
+                    url: localeService.languageCode == 'tr'
+                        ? AppLinks.termsOfUseTurkish
+                        : AppLinks.termsOfUse,
                   ),
                   Divider(height: 1, indent: 56, color: AppColors.divider),
                   _externalPageTile(
                     icon: Icons.delete_outline_rounded,
                     title: S.deleteAccount,
                     subtitle: S.deleteAccountSubtitle,
-                    url: AppLinks.accountDeletion,
+                    url: localeService.languageCode == 'tr'
+                        ? AppLinks.accountDeletionTurkish
+                        : AppLinks.accountDeletion,
                     color: Colors.red,
                   ),
                 ],

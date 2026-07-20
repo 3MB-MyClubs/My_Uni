@@ -14,6 +14,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/photo_upload_quality.dart';
 import '../services/supabase_post_service.dart';
+import '../services/content_safety_service.dart';
 import 'club_avatar.dart';
 
 /// Presents the "Option C — Big Picture Cards" post composer as a bottom
@@ -213,8 +214,12 @@ class _BigPicturePostComposerSheetState
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not publish post. Check Supabase settings.'),
+          SnackBar(
+            content: Text(
+              error is ContentSafetyException
+                  ? error.message
+                  : 'Could not publish post. Check Supabase settings.',
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );

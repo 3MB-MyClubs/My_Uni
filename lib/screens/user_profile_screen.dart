@@ -10,10 +10,12 @@ import '../services/people_service.dart';
 import '../services/student_club_role_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../services/moderation_service.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/student_campus_profile.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import 'club_profile_screen.dart';
 import 'saved_posts_screen.dart';
 
@@ -67,16 +69,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return userState.followedUserIds
           .map((id) => knownPeople[id])
           .whereType<User>()
+          .where((user) => !moderationService.isUserBlocked(user.id))
           .toList();
     }
 
     final liveFollowing = peopleService.followingFor(widget.user.id);
-    if (liveFollowing.isNotEmpty) return liveFollowing;
+    if (liveFollowing.isNotEmpty) {
+      return liveFollowing
+          .where((user) => !moderationService.isUserBlocked(user.id))
+          .toList();
+    }
 
     final knownPeople = _knownPeopleById;
     return widget.user.followingUserIds
         .map((id) => knownPeople[id])
         .whereType<User>()
+        .where((user) => !moderationService.isUserBlocked(user.id))
         .toList();
   }
 
@@ -97,7 +105,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       followers[currentUser.id] = currentUser;
     }
 
-    return followers.values.toList();
+    return followers.values
+        .where((user) => !moderationService.isUserBlocked(user.id))
+        .toList();
   }
 
   @override
@@ -161,6 +171,160 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _handleFollowTap() =>
       _toggleUserFollow(widget.user, () => setState(() {}));
 
+  void _showSafetyOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: const BorderRadius.all(Radius.circular(999)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              leading: Icon(Icons.flag_outlined, color: AppColors.primaryRed),
+              title: Text(
+                S.reportUser,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                S.reportUserSubtitle,
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _reportUser();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_rounded, color: Colors.red),
+              title: Text(
+                S.blockAndReportUser,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                S.blockAndReportSubtitle,
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _blockUser();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportUser() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: S.whyReportUser,
+    );
+    if (reason == null || !mounted) return;
+    try {
+      await moderationService.reportUser(widget.user.id, reason: reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.userReported),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.reportSendFailed),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _blockUser() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: S.whyBlockUser,
+    );
+    if (reason == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          S.blockUserQuestion(
+            userState.displayNameFor(widget.user.id, widget.user.name),
+          ),
+          style: TextStyle(color: AppColors.text),
+        ),
+        content: Text(
+          S.blockUserExplanation,
+          style: TextStyle(color: AppColors.secondaryText, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(S.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(S.blockAndReportUser),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final myId = authService.currentUser?.id ?? '';
+    userState.followedUserIds.remove(widget.user.id);
+    userState.pendingFollowRequests.remove(widget.user.id);
+    userPrefsService.save(myId);
+
+    var delivered = true;
+    try {
+      await moderationService.blockUser(widget.user.id, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.maybePop(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? S.userBlockedAndReported : S.userBlockedOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   void _openUserProfile(User u) {
     Navigator.push(
       context,
@@ -220,6 +384,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     context,
                     MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
                   ),
+                )
+              : authService.isStudentSession
+              ? StudentProfileIconButton(
+                  icon: Icons.more_horiz_rounded,
+                  tooltip: S.safetyOptions,
+                  onTap: _showSafetyOptions,
                 )
               : const SizedBox(width: 36, height: 36),
           primaryAction: !_isOwnProfile && authService.isStudentSession

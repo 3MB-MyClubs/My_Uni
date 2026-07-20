@@ -12,6 +12,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
+import '../services/content_safety_service.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/club_avatar.dart';
@@ -362,6 +363,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   String _publishErrorMessage(Object error) {
+    if (error is ContentSafetyException) return error.message;
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||

@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/moderation_service.dart';
 import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
@@ -230,7 +231,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (q.isEmpty) return _randomPeoplePreview;
 
     final matches = _people.where((person) {
-      if (person.id == _myId) return false;
+      if (person.id == _myId || moderationService.isUserBlocked(person.id)) {
+        return false;
+      }
       final name = userState
           .displayNameFor(person.id, person.name)
           .toLowerCase();
@@ -255,7 +258,10 @@ class _ExploreScreenState extends State<ExploreScreen>
     final source = preview.isNotEmpty
         ? preview
         : _people.where((person) => person.id != _myId).toList();
-    return source.take(10).toList();
+    return source
+        .where((person) => !moderationService.isUserBlocked(person.id))
+        .take(10)
+        .toList();
   }
 
   void _persist() => userPrefsService.save(_myId);
@@ -349,7 +355,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         ),
       ),
       body: ListenableBuilder(
-        listenable: userState,
+        listenable: Listenable.merge([userState, moderationService]),
         // Builder defers each tab's filter/sort work from children-list
         // construction to the page actually building — TabBarView only builds
         // the visible page (plus its neighbor mid-swipe), so only that tab

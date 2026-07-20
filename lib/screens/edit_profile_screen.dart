@@ -11,6 +11,7 @@ import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../services/content_safety_service.dart';
 import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 
@@ -118,6 +119,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
+    final safetyMessage = contentSafetyService.rejectionMessage([
+      _bioCtrl.text,
+    ]);
+    if (safetyMessage != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(safetyMessage),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
     setState(() => _isSaving = true);
 
     try {
