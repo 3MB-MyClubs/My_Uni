@@ -460,6 +460,18 @@ class PeopleService {
         .toList();
   }
 
+  /// Ensures persisted messaging participants have their current name and
+  /// avatar cached even when the people directory has not been opened yet.
+  Future<void> hydrateProfilesByIds(Iterable<String> ids) async {
+    final requestedIds = ids.where((id) => id.isNotEmpty).toSet();
+    if (requestedIds.isEmpty) return;
+    try {
+      await _cacheProfilesByIds(requestedIds);
+    } catch (_) {
+      // Messaging remains usable with its initials fallback while offline.
+    }
+  }
+
   List<User> followersFor(String userId) {
     return peopleByIds(_followersByUserId[userId] ?? const {});
   }

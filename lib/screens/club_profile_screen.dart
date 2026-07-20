@@ -16,9 +16,12 @@ import '../services/event_access.dart';
 import '../services/student_club_role_service.dart';
 import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
+import '../services/app_strings.dart';
+import '../services/chat_store.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import 'chat_thread_screen.dart';
 import 'club_insights_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -133,6 +136,19 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final admin = authService.currentAdmin;
     if (admin == null) return false;
     return clubIsManagedByAdmin(widget.club, admin.id);
+  }
+
+  void _openCommunityChat() {
+    final threadId = ChatStore.clubThreadId(widget.club.id);
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        settings: RouteSettings(
+          name: '/clubs/${widget.club.id}/community',
+          arguments: threadId,
+        ),
+        builder: (_) => ChatThreadScreen(threadId: threadId),
+      ),
+    );
   }
 
   List<User> get _membersForThisClub {
@@ -306,12 +322,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               // Board management now lives inside Settings.
               if (isCurrentAdminForClub(widget.club))
                 IconButton(
-                  // Only the logged-in club's own Profile tab root is a
-                  // singleton — other visits to this screen (e.g. via search)
-                  // must not share the same GlobalKey.
-                  key: widget.onSettings != null
-                      ? tutorialAnchors.keyFor(TutorialAnchors.clubInsights)
-                      : null,
                   icon: Icon(
                     Icons.insights_rounded,
                     color: panelText,
@@ -329,8 +339,11 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 ),
               if (widget.onSettings != null)
                 IconButton(
-                  key: tutorialAnchors.keyFor(
-                    TutorialAnchors.clubProfileSettings,
+                  // Only the logged-in club's own Profile tab root is a
+                  // singleton — other visits to this screen (e.g. via search)
+                  // must not share the same GlobalKey.
+                  key: onboardingAnchors.keyFor(
+                    OnboardingAnchors.clubProfileSettings,
                   ),
                   icon: Icon(
                     Icons.settings_outlined,
@@ -537,15 +550,51 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
 
                           const SizedBox(height: 14),
 
-                          // Students can follow clubs, but clubs do not have
-                          // direct messages.
+                          // Every club has a members-only group chat
+                          // (membership == following). Students see Follow +
+                          // a Chat button that always opens the community;
+                          // the thread itself gates history/input until joined.
                           if (showFollowAction) ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: ClubFollowButton(
+                                      clubId: widget.club.id,
+                                      size: 'large',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                _ClubChatButton(
+                                  club: widget.club,
+                                  onPressed: _openCommunityChat,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                          ] else if (_isThisClubAdmin) ...[
                             SizedBox(
                               height: 48,
                               width: double.infinity,
-                              child: ClubFollowButton(
-                                clubId: widget.club.id,
-                                size: 'large',
+                              child: OutlinedButton.icon(
+                                key: ValueKey(
+                                  'club-community-button-${widget.club.id}',
+                                ),
+                                onPressed: _openCommunityChat,
+                                icon: const Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(S.clubChat),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.primaryRed,
+                                  side: BorderSide(color: AppColors.primaryRed),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -570,7 +619,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               TabBar(
                 // Same singleton guard as the insights/settings icons above.
                 key: widget.onSettings != null
-                    ? tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs)
+                    ? onboardingAnchors.keyFor(OnboardingAnchors.clubProfileTabs)
                     : null,
                 controller: _tabController,
                 labelColor: AppColors.primaryRed,
@@ -3448,6 +3497,50 @@ class _IconTab extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Header chat button ────────────────────────────────────────────────────────
+// Every student opens the club's canonical community route. Non-members see
+// the safe join prompt there; members enter the shared group conversation.
+class _ClubChatButton extends StatelessWidget {
+  final Club club;
+  final VoidCallback onPressed;
+
+  const _ClubChatButton({required this.club, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: userState,
+      builder: (context, _) {
+        final isMember = userState.isFollowing(club.id);
+        return GestureDetector(
+          key: ValueKey('club-community-button-${club.id}'),
+          onTap: onPressed,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isMember ? AppColors.lightRed : Colors.transparent,
+              borderRadius: const BorderRadius.all(Radius.circular(10)),
+              border: Border.all(
+                color: isMember
+                    ? AppColors.primaryRed
+                    : AppColors.secondaryText.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Icon(
+              isMember
+                  ? Icons.chat_bubble_rounded
+                  : Icons.chat_bubble_outline_rounded,
+              size: 20,
+              color: isMember ? AppColors.primaryRed : AppColors.secondaryText,
+            ),
+          ),
+        );
+      },
     );
   }
 }

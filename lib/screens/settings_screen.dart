@@ -18,7 +18,8 @@ import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/locale_service.dart';
 import '../services/app_strings.dart';
-import '../services/tutorial_service.dart';
+import '../services/photo_upload_quality.dart';
+import '../onboarding/onboarding_service.dart';
 import '../widgets/club_avatar.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'edit_profile_screen.dart';
@@ -142,12 +143,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _pickClubPhoto(Club club, ImageSource source) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    final picked = await picker.pickImage(source: source);
     if (picked == null || !mounted) return;
 
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      maxWidth: PhotoUploadQuality.avatarMaxDimension,
+      maxHeight: PhotoUploadQuality.avatarMaxDimension,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
           title: 'Crop Photo',
@@ -612,10 +617,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _replayTutorial() async {
-    await tutorialService.reset(_userId);
+    await onboardingService.reset(_userId);
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
-    tutorialService.requestReplay();
+    onboardingService.requestReplay();
   }
 
   Future<void> _openExternalPage(String url) async {
@@ -1112,7 +1117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.primaryRed, AppColors.darkRed],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1199,7 +1204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.primaryRed, AppColors.darkRed],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,

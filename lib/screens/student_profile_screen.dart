@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/club.dart';
-import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/student_campus_profile.dart';
+import '../onboarding/widgets/starter_checklist_card.dart';
 
 class StudentClubDetail {
   final Club club;
@@ -128,14 +128,12 @@ class StudentProfileScreen extends StatelessWidget {
         tooltip: 'Share profile',
         onTap: onShare,
       ),
-      trailing: KeyedSubtree(
-        key: tutorialAnchors.keyFor(TutorialAnchors.profileSettings),
-        child: StudentProfileIconButton(
-          icon: Icons.settings_outlined,
-          tooltip: 'Settings',
-          onTap: onSettings,
-        ),
+      trailing: StudentProfileIconButton(
+        icon: Icons.settings_outlined,
+        tooltip: 'Settings',
+        onTap: onSettings,
       ),
+      supplementalContent: const StarterChecklistCard(),
       memberships: memberships,
       clubsTitle: 'My Clubs',
       clubsActionLabel: onFindClubs == null ? 'See all' : 'Find clubs',

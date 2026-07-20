@@ -11,6 +11,7 @@ import 'student_profile_service.dart';
 import 'supabase_interaction_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
+import 'app_presence_service.dart';
 
 // ...existing code...
 
@@ -310,6 +311,7 @@ class AuthService {
   }
 
   void logout() {
+    unawaited(appPresenceService.stop());
     if (SupabaseConfig.isConfigured) {
       try {
         unawaited(Supabase.instance.client.auth.signOut());

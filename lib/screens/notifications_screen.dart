@@ -8,8 +8,9 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-import '../services/tutorial_anchors.dart';
+import '../services/chat_store.dart';
 import '../widgets/club_avatar.dart';
+import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -19,12 +20,7 @@ import 'user_profile_screen.dart';
 /// mark-all-read. Tapping a row marks it read and opens its target. Follow
 /// requests keep their working Accept / Decline actions.
 class NotificationsScreen extends StatefulWidget {
-  /// True only for the instance hosted in the main nav bar's IndexedStack, so
-  /// the app tour's "mark all read" anchor attaches to a single widget — this
-  /// screen is also pushed as a route from the feed bell.
-  final bool isTutorialHost;
-
-  const NotificationsScreen({super.key, this.isTutorialHost = false});
+  const NotificationsScreen({super.key});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -35,11 +31,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   List<AppNotification> get _allNotifs =>
-      [
-          ...notifications,
-          ...userState.dynamicNotifications,
-        ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      [...notifications, ...userState.dynamicNotifications].where((n) {
+        if (n.userId != _myId || n.targetType == 'story') return false;
+        return !(ChatStore.isAdminAccountId(_myId) &&
+            n.targetType == 'message');
+      }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   @override
   void initState() {
@@ -171,6 +167,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           context,
           MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
         );
+      case 'message':
+        // Admin accounts never enter direct-message routes, including from
+        // stale notifications created by older app versions.
+        if (ChatStore.isAdminAccountId(_myId)) return;
+        if (ChatStore.isGroupThread(id)) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ChatThreadScreen(threadId: id)),
+          );
+          return;
+        }
+        // targetId (and fromId when set) is the other participant's id.
+        final peerId = n.fromId ?? id;
+        if (_myId.isEmpty) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ChatThreadScreen(threadId: ChatStore.dmThreadId(_myId, peerId)),
+          ),
+        );
     }
   }
 
@@ -185,6 +202,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   (IconData, Color) _tileStyle(AppNotification n) {
     final msg = n.message.toLowerCase();
     switch (n.targetType) {
+      case 'message':
+        return (Icons.chat_bubble_rounded, const Color(0xFF1565C0));
       case 'event':
         return (Icons.event_rounded, const Color(0xFF2E9E5B));
       case 'follow_request':
@@ -329,11 +348,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   const Spacer(),
                   GestureDetector(
-                    key: widget.isTutorialHost
-                        ? tutorialAnchors.keyFor(
-                            TutorialAnchors.alertsMarkAllRead,
-                          )
-                        : null,
                     onTap: _markAllRead,
                     child: Container(
                       width: 38,

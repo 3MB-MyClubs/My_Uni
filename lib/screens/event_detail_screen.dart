@@ -44,7 +44,7 @@ Widget _eventHeroImage({required String path, required Color accent}) {
       url: path,
       fit: BoxFit.cover,
       // Full-bleed hero — wider than a feed banner but still bounded well
-      // under typical upload resolutions (up to 1920px).
+      // under typical upload resolutions (up to 3840px).
       cacheWidth: 800,
       placeholderBuilder: (_) => const SkeletonBox(),
       errorBuilder: (_) => _GradientHero(color: accent),

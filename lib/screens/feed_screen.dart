@@ -17,7 +17,7 @@ import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/view_tracker.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/event_cover_image.dart';
@@ -650,18 +650,28 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            // Bell button with unread-count badge
+            // Chats live in the bottom navigation. The bell is intentionally
+            // the only shortcut in the Home top bar.
             ListenableBuilder(
               listenable: userState,
               builder: (_, x) {
-                final unread = userState.unreadNotifications;
+                final myId =
+                    authService.currentUser?.id ??
+                    authService.currentAdmin?.id ??
+                    '';
+                final unreadNotifs = userState.unreadNotificationCountFor(
+                  [
+                    ...notifications,
+                    ...userState.dynamicNotifications,
+                  ].where((n) => n.userId == myId && n.targetType != 'story'),
+                );
                 return _TopBarIconButton(
                   icon: Icons.notifications_none_rounded,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => NotificationsScreen()),
                   ),
-                  badgeCount: unread,
+                  badgeCount: unreadNotifs,
                 );
               },
             ),
@@ -707,7 +717,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   TextSpan(text: '$greet, '),
                   TextSpan(
                     text: _greetingName,
-                    style: const TextStyle(color: AppColors.primaryRed),
+                    style: TextStyle(color: AppColors.primaryRed),
                   ),
                   const TextSpan(text: ' 👋'),
                 ],
@@ -834,14 +844,14 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // tab 0 = Following, tab 1 = All — pill segmented control with a sliding
+    // tab 0 = Following, tab 1 = For You — pill segmented control with a sliding
     // maroon thumb (300ms ease-out) behind the active label.
-    final labels = [S.following, S.all];
+    final labels = [S.following, S.forYou];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
         child: Container(
-          key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
+          key: onboardingAnchors.keyFor(OnboardingAnchors.homeFeedToggle),
           height: 42,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -922,7 +932,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
     return SliverToBoxAdapter(
       child: Padding(
-        key: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
+        key: onboardingAnchors.keyFor(OnboardingAnchors.clubQuickComposer),
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
         child: _QuickPostComposer(
           club: club,

@@ -4,6 +4,7 @@ import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
+import '../services/chat_store.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/student_club_role_service.dart';
@@ -13,6 +14,7 @@ import '../services/moderation_service.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/student_campus_profile.dart';
 import '../widgets/user_avatar.dart';
+import 'chat_thread_screen.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import 'club_profile_screen.dart';
 import 'saved_posts_screen.dart';
@@ -391,16 +393,46 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 )
               : const SizedBox(width: 36, height: 36),
           primaryAction: !_isOwnProfile && authService.isStudentSession
-              ? StudentProfilePrimaryButton(
-                  label: isPending
-                      ? 'Requested'
-                      : isFollowingUser
-                      ? 'Following'
-                      : _userFollowsMe(user)
-                      ? 'Follow back'
-                      : 'Follow',
-                  filled: !isFollowingUser && !isPending,
-                  onTap: _handleFollowTap,
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: StudentProfilePrimaryButton(
+                        label: isPending
+                            ? 'Requested'
+                            : isFollowingUser
+                            ? 'Following'
+                            : _userFollowsMe(user)
+                            ? 'Follow back'
+                            : 'Follow',
+                        filled: !isFollowingUser && !isPending,
+                        onTap: _handleFollowTap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: StudentProfilePrimaryButton(
+                        label: S.message,
+                        filled: false,
+                        onTap: () {
+                          final myId = authService.currentUser?.id ?? '';
+                          final threadId = chatStore.ensureDirectThread(
+                            myId,
+                            user.id,
+                          );
+                          if (threadId == null) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatThreadScreen(
+                                threadId: threadId,
+                                recipient: user,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 )
               : null,
           memberships: memberships,

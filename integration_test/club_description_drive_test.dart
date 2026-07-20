@@ -11,7 +11,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 
 /// Signs in as the KUACM club admin and edits the club description from
@@ -31,7 +31,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(false);
     authService.login('kuacm@ku.edu.tr', '11111111'); // KUACM club admin

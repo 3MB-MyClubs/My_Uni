@@ -5,6 +5,7 @@ import 'package:flutter_application_1/screens/club_profile_screen.dart';
 import 'package:flutter_application_1/screens/explore_screen.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
+import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
@@ -92,7 +93,7 @@ void main() {
     expect(previewAvatars, lessThanOrEqualTo(10));
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search…'),
+      find.widgetWithText(TextField, S.searchPeople),
       users.first.name.split(' ').first,
     );
     await tester.pump(const Duration(milliseconds: 500));

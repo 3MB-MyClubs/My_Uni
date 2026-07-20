@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/app_colors.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
+import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -322,21 +323,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 72,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
+      final picked = await picker.pickImage(source: source);
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
+        maxWidth: PhotoUploadQuality.avatarMaxDimension,
+        maxHeight: PhotoUploadQuality.avatarMaxDimension,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 72,
+        compressQuality: PhotoUploadQuality.jpegQuality,
         uiSettings: [
           IOSUiSettings(
             title: 'Crop Photo',

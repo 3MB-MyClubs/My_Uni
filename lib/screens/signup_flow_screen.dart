@@ -124,8 +124,10 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: SC.lightTheme(),
+      key: const ValueKey('signup-flow-theme'),
+      data: SC.theme(),
       child: Scaffold(
+        key: const ValueKey('signup-flow-scaffold'),
         backgroundColor: SC.bg,
         body: SafeArea(
           child: Column(

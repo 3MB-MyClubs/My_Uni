@@ -99,7 +99,7 @@ Widget buildPostBanner({
         height: height,
         // Banners span device width but rarely need more than this to look
         // sharp, even on high-density screens — avoids decoding the full
-        // up-to-1920px upload for what's usually a ~200-400dp-tall card.
+        // up-to-3840px upload for what's usually a ~200-400dp-tall card.
         cacheWidth: 500,
         placeholderBuilder: (_) => SkeletonBox(
           width: double.infinity,

@@ -25,7 +25,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Authentication is inaccessible until the agreement is accepted.
-    expect(find.text('Koç University'), findsOneWidget);
+    expect(find.text('KOÇ UNIVERSITY'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Sign up'), findsOneWidget);
   });
