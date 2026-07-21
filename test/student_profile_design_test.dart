@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/models/club.dart';
@@ -82,6 +83,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: StudentProfileScreen(
             onShare: () => shared = true,
             onSettings: () => openedSettings = true,
@@ -179,7 +182,9 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(home: UserProfileScreen(user: student)),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: UserProfileScreen(user: student)),
       ),
     );
     await tester.pump(const Duration(milliseconds: 400));
@@ -244,7 +249,9 @@ void main() {
     roleOnlyClub.boardMemberTitles[student.id] = 'President';
 
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(home: ProfileScreen())),
+      ProviderScope(child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: ProfileScreen())),
     );
     await tester.pump(const Duration(milliseconds: 400));
 

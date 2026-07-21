@@ -1,8 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import 'auth_service.dart';
+import 'locale_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
 
@@ -22,6 +25,12 @@ class SignupLookupItem {
 }
 
 class SignupService {
+  // No BuildContext is available this deep in the service layer; these
+  // fallbacks never come from the server, so they're resolved here via the
+  // current locale rather than pushed up to a caller that may not exist yet.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -81,9 +90,7 @@ class SignupService {
     String? imagePath,
   }) async {
     if (!authService.isValidNewStudentPassword(password)) {
-      return const SignupResult.failure(
-        'Use 6 numbers with no repeated or sequential numbers side by side.',
-      );
+      return SignupResult.failure(_l10n.studentPasswordRule);
     }
 
     final result = await _invoke('complete-signup', {
@@ -128,9 +135,7 @@ class SignupService {
   ) async {
     final client = _client;
     if (client == null) {
-      return const SignupResult.failure(
-        'Supabase is not configured. Start the app with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.',
-      );
+      return SignupResult.failure(_l10n.signupServerNotConfigured);
     }
 
     try {
@@ -146,12 +151,10 @@ class SignupService {
         return SignupResult.failure(details['error'].toString());
       }
       return SignupResult.failure(
-        error.reasonPhrase ?? 'Signup request failed.',
+        error.reasonPhrase ?? _l10n.signupRequestFailed,
       );
     } catch (_) {
-      return const SignupResult.failure(
-        'Could not reach the signup server. Please try again.',
-      );
+      return SignupResult.failure(_l10n.couldNotReachSignupServer);
     }
   }
 }

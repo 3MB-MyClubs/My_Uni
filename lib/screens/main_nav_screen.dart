@@ -6,11 +6,12 @@ import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
 import '../services/app_bootstrap.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
 import '../services/mock_data.dart';
 import '../services/theme_service.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -92,7 +93,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Create',
+                    AppLocalizations.of(sheetContext)!.createSheetTitle,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: primaryText,
                       fontWeight: FontWeight.w800,
@@ -100,7 +101,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Update your community',
+                    AppLocalizations.of(sheetContext)!.updateYourCommunity,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: secondaryText,
                       fontWeight: FontWeight.w600,
@@ -108,7 +109,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Create something inspiring',
+                    AppLocalizations.of(sheetContext)!.createSomethingInspiring,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: primaryText,
                       fontWeight: FontWeight.w700,
@@ -117,15 +118,19 @@ Future<void> showClubCreateSheet(
                   const SizedBox(height: 14),
                   _CreateSheetAction(
                     icon: Icons.article_outlined,
-                    title: 'Post',
-                    subtitle: 'Share an update with your followers',
+                    title: AppLocalizations.of(sheetContext)!.post,
+                    subtitle: AppLocalizations.of(
+                      sheetContext,
+                    )!.shareUpdateWithFollowers,
                     onTap: () => choose(onPost),
                   ),
                   const SizedBox(height: 10),
                   _CreateSheetAction(
                     icon: Icons.event_available_outlined,
-                    title: 'Event',
-                    subtitle: 'Add an event to the campus calendar',
+                    title: AppLocalizations.of(sheetContext)!.eventLabel,
+                    subtitle: AppLocalizations.of(
+                      sheetContext,
+                    )!.addEventToCampusCalendar,
                     onTap: () => choose(onEvent),
                   ),
                 ],
@@ -425,20 +430,20 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         index: 0,
         icon: Icons.home_outlined,
         activeIcon: Icons.home_rounded,
-        label: S.home,
+        label: AppLocalizations.of(context)!.home,
       ),
       _NavSlot(
         index: 1,
         icon: Icons.calendar_today_outlined,
         activeIcon: Icons.calendar_today_rounded,
-        label: S.events,
+        label: AppLocalizations.of(context)!.events,
       ),
       if (!_isClubAdmin)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
           activeIcon: Icons.search_rounded,
-          label: S.search,
+          label: AppLocalizations.of(context)!.search,
         ),
       if (_isClubAdmin) const _NavSlot.center(),
       _NavSlot(
@@ -452,14 +457,14 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         index: 4,
         icon: Icons.person_outline_rounded,
         activeIcon: Icons.person_rounded,
-        label: S.profile,
+        label: AppLocalizations.of(context)!.profile,
       ),
       if (widget.isAdmin)
         _NavSlot(
           index: 5,
           icon: Icons.admin_panel_settings_outlined,
           activeIcon: Icons.admin_panel_settings_rounded,
-          label: S.admin,
+          label: AppLocalizations.of(context)!.admin,
         ),
     ];
 

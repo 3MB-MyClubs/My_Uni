@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
+
+import '../l10n/app_localizations.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'club_follow_service.dart';
+import 'locale_service.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
 import 'user_prefs_service.dart';
 import 'user_state.dart';
+
+// No BuildContext is available deep in the follow-tap error path when the
+// SnackBar text is resolved, so this fallback is looked up via the current
+// locale rather than pushed through the call chain.
+AppLocalizations get _l10n =>
+    lookupAppLocalizations(Locale(localeService.languageCode));
 
 /// Handles a follow/unfollow tap on a club.
 /// - Club admins CAN follow other clubs (but not their own).
@@ -67,7 +76,7 @@ Future<void> handleFollowTap(
     onChanged();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update club follow.')),
+        SnackBar(content: Text(_l10n.couldNotUpdateClubFollow)),
       );
     }
   }

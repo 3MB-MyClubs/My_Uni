@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/theme_service.dart';
+import '../l10n/app_localizations.dart';
 
 /// Shown once, the first time an account signs in. Lets the user preview and
 /// pick Light or Dark — tapping a card applies the theme live across the whole
@@ -49,7 +50,7 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Choose your look',
+                AppLocalizations.of(context)!.chooseYourLook,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
@@ -59,8 +60,7 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Pick the appearance that feels right. Tap to preview — you can '
-                'always change it later in Settings.',
+                AppLocalizations.of(context)!.pickAppearanceHint,
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.5,
@@ -72,7 +72,7 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                 children: [
                   Expanded(
                     child: _ThemePreviewCard(
-                      label: 'Light',
+                      label: AppLocalizations.of(context)!.light,
                       dark: false,
                       selected: !_dark,
                       onTap: () => _select(false),
@@ -81,7 +81,7 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                   const SizedBox(width: 14),
                   Expanded(
                     child: _ThemePreviewCard(
-                      label: 'Dark',
+                      label: AppLocalizations.of(context)!.dark,
                       dark: true,
                       selected: _dark,
                       onTap: () => _select(true),
@@ -106,7 +106,11 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Continue with ${_dark ? 'Dark' : 'Light'}',
+                        AppLocalizations.of(context)!.continueWithTheme(
+                          _dark
+                              ? AppLocalizations.of(context)!.dark
+                              : AppLocalizations.of(context)!.light,
+                        ),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
+import '../services/content_safety_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
-import '../services/content_safety_service.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/content_image_uploader.dart';
 import '../widgets/club_avatar.dart';
@@ -355,28 +355,29 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(_publishErrorMessage(error)),
+            content: Text(_publishErrorMessage(context, error)),
             behavior: SnackBarBehavior.floating,
           ),
         );
     }
   }
 
-  String _publishErrorMessage(Object error) {
+  String _publishErrorMessage(BuildContext context, Object error) {
+    final l10n = AppLocalizations.of(context)!;
     if (error is ContentSafetyException) return error.message;
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||
         text.contains('42501')) {
-      return 'Could not publish post. Check club_posts RLS policies for this club account.';
+      return l10n.publishErrorRlsPolicy;
     }
     if (text.contains('image_path') || text.contains('column')) {
-      return 'Could not publish post. Run the latest club_posts SQL migration.';
+      return l10n.publishErrorMigration;
     }
     if (text.contains('post-images') || text.contains('storage')) {
-      return 'Could not upload photo. Check the post-images bucket policies.';
+      return l10n.publishErrorStorage;
     }
-    return 'Could not publish post. Check Supabase settings.';
+    return l10n.publishErrorGeneric;
   }
 
   bool get _canPost =>
@@ -384,7 +385,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final adminName = authService.currentAdmin?.name ?? 'Club';
+    final adminName =
+        authService.currentAdmin?.name ??
+        AppLocalizations.of(context)!.clubFallbackName;
     dynamic selectedClubModel;
     if (_selectedClub != null) {
       for (final c in clubs) {
@@ -404,14 +407,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         leading: TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(
-            'Cancel',
+            AppLocalizations.of(context)!.cancel,
             maxLines: 1,
             softWrap: false,
             style: TextStyle(color: AppColors.secondaryText),
           ),
         ),
         leadingWidth: 84,
-        title: Text('New Post', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          AppLocalizations.of(context)!.newPostTitle,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -443,7 +449,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ),
                       )
                     : Text(
-                        'Post',
+                        AppLocalizations.of(context)!.post,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -489,7 +495,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Posting as $clubName',
+                            AppLocalizations.of(
+                              context,
+                            )!.postingAsClub(clubName),
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
@@ -506,7 +514,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 // Club picker
                 if (_myClubs.length > 1) ...[
                   Text(
-                    'Posting as',
+                    AppLocalizations.of(context)!.postingAsLabel,
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -526,7 +534,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         value: _selectedClub,
                         isExpanded: true,
                         hint: Text(
-                          'Select club',
+                          AppLocalizations.of(context)!.selectClubHint,
                           style: TextStyle(color: AppColors.secondaryText),
                         ),
                         dropdownColor: AppColors.card,
@@ -563,7 +571,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           height: 1.6,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'Write something for your club members…',
+                          hintText: AppLocalizations.of(
+                            context,
+                          )!.writeForClubMembersHint,
                           hintStyle: TextStyle(
                             fontSize: 15,
                             color: AppColors.secondaryText,
@@ -593,7 +603,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Type @ to tag a club or student',
+                            AppLocalizations.of(context)!.typeAtToTagHint,
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText,
@@ -635,7 +645,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Template',
+                      AppLocalizations.of(context)!.templateLabel,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -690,7 +700,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Photo',
+                        AppLocalizations.of(context)!.photoLabel,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -705,8 +715,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     onChanged: (path) => setState(() => _imagePath = path),
                     height: 200,
                     compact: true,
-                    emptyTitle: 'Add a photo',
-                    emptySubtitle: 'Tap to pick from camera or library',
+                    emptyTitle: AppLocalizations.of(context)!.addAPhotoTitle,
+                    emptySubtitle: AppLocalizations.of(
+                      context,
+                    )!.tapToPickFromCameraOrLibrary,
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -717,7 +729,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     Icon(Icons.poll_outlined, size: 16, color: AppColors.text),
                     const SizedBox(width: 6),
                     Text(
-                      S.addPoll,
+                      AppLocalizations.of(context)!.addPoll,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -741,7 +753,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       isDense: true,
                       filled: true,
                       fillColor: AppColors.surfaceAlt,
-                      hintText: S.pollQuestionHint,
+                      hintText: AppLocalizations.of(context)!.pollQuestionHint,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                         borderSide: BorderSide.none,
@@ -763,7 +775,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 isDense: true,
                                 filled: true,
                                 fillColor: AppColors.surfaceAlt,
-                                hintText: S.pollOptionHint(i + 1),
+                                hintText: AppLocalizations.of(
+                                  context,
+                                )!.pollOptionHint(i + 1),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.all(
                                     Radius.circular(12),
@@ -803,7 +817,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         color: AppColors.primaryRed,
                       ),
                       label: Text(
-                        S.pollOptionHint(_pollOptionControllers.length + 1),
+                        AppLocalizations.of(
+                          context,
+                        )!.pollOptionHint(_pollOptionControllers.length + 1),
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.primaryRed,
@@ -823,7 +839,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      S.markAsAnnouncement,
+                      AppLocalizations.of(context)!.markAsAnnouncement,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

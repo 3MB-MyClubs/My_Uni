@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/locale_service.dart';
+import '../l10n/app_localizations.dart';
 
 /// Shown once after ThemeChoiceScreen, the first time an account signs in.
 /// Lets the user pick English or Turkish with a live preview, then commits.
@@ -47,7 +48,7 @@ class _LanguageChoiceScreenState extends State<LanguageChoiceScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Choose your language',
+                AppLocalizations.of(context)!.chooseYourLanguage,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
@@ -57,7 +58,7 @@ class _LanguageChoiceScreenState extends State<LanguageChoiceScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Pick the language for the app. You can always change it later in Settings.',
+                AppLocalizations.of(context)!.pickLanguageHint,
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.5,
@@ -103,7 +104,7 @@ class _LanguageChoiceScreenState extends State<LanguageChoiceScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        _code == 'tr' ? 'Devam Et' : 'Continue',
+                        AppLocalizations.of(context)!.continueButton,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

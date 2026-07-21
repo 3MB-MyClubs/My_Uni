@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/notification.dart';
@@ -66,14 +66,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ── Time helper ───────────────────────────────────────────────────────────
   String _timeAgo(DateTime dt) {
+    final l10n = AppLocalizations.of(context)!;
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays == 1) return S.yesterday;
-    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inMinutes < 1) return l10n.justNowShort;
+    if (diff.inMinutes < 60) return l10n.minutesShort(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.hoursShort(diff.inHours);
+    if (diff.inDays == 1) return l10n.yesterday;
+    if (diff.inDays < 7) return l10n.daysShort(diff.inDays);
     final weeks = (diff.inDays / 7).floor();
-    return '${weeks}w';
+    return l10n.weeksShort(weeks);
   }
 
   // ── Navigation (only types with a real destination) ─────────────────────────
@@ -316,7 +317,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   Text(
-                    S.notifications,
+                    AppLocalizations.of(context)!.notifications,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -541,7 +542,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               borderRadius: BorderRadius.all(Radius.circular(100)),
             ),
             child: Text(
-              S.accept,
+              AppLocalizations.of(context)!.accept,
               style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -565,7 +566,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               border: Border.all(color: AppColors.divider),
             ),
             child: Text(
-              S.decline,
+              AppLocalizations.of(context)!.decline,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -606,7 +607,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              S.nothingHereNotif,
+              AppLocalizations.of(context)!.nothingHereNotif,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
@@ -615,7 +616,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              S.noNotificationsFor(''),
+              AppLocalizations.of(context)!.noNotificationsFor(''),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
