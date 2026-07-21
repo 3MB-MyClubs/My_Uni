@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../l10n/app_localizations.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -69,14 +70,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final localPart = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (localPart.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please enter your email and password');
+      setState(
+        () => _error = AppLocalizations.of(context)!.enterEmailAndPassword,
+      );
       return;
     }
     // Users type only the local part (e.g. "htuncay23"); the "@ku.edu.tr"
     // domain is appended automatically. Lower-cased so any casing logs in.
     final email = '${localPart.toLowerCase()}@ku.edu.tr';
     if (!authService.isValidStudentPassword(password)) {
-      setState(() => _error = 'Student password must be exactly 6 digits.');
+      setState(
+        () => _error =
+            AppLocalizations.of(context)!.studentPasswordMustBe6Digits,
+      );
       return;
     }
     setState(() {
@@ -93,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       setState(() {
         _isSubmitting = false;
-        _error = 'Incorrect email or password';
+        _error = AppLocalizations.of(context)!.incorrectEmailOrPassword;
       });
     }
   }
@@ -192,9 +198,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: AppColors.text,
                         ),
                         children: [
-                          const TextSpan(text: 'Welcome back to\nyour '),
                           TextSpan(
-                            text: 'campus',
+                            text: AppLocalizations.of(
+                              context,
+                            )!.welcomeBackToYourPrefix,
+                          ),
+                          TextSpan(
+                            text: AppLocalizations.of(
+                              context,
+                            )!.welcomeBackCampusHighlight,
                             style: TextStyle(color: AppColors.primaryRed),
                           ),
                         ],
@@ -211,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _AuthField(
-                      label: 'Campus email',
+                      label: AppLocalizations.of(context)!.campusEmailLabel,
                       controller: _emailController,
                       hint: 'yourname',
                       icon: Icons.mail_outline_rounded,
@@ -223,9 +235,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     _AuthField(
-                      label: 'Password',
+                      label: AppLocalizations.of(context)!.passwordLabel,
                       controller: _passwordController,
-                      hint: '6-digit PIN',
+                      hint: AppLocalizations.of(context)!.digitPinHint(6),
                       icon: Icons.lock_outline_rounded,
                       obscureText: _obscurePassword,
                       keyboardType: TextInputType.number,
@@ -263,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text(
-                          'Forgot password?',
+                          AppLocalizations.of(context)!.forgotPassword,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -333,7 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Sign up',
+                              AppLocalizations.of(context)!.signUp,
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -362,7 +374,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       child: Text(
-                        'Club admin sign in',
+                        AppLocalizations.of(context)!.clubAdminSignIn,
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppColors.secondaryText,
@@ -574,7 +586,7 @@ class _SubmitButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Log in',
+                    AppLocalizations.of(context)!.logIn,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,

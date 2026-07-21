@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
+<<<<<<< Updated upstream
+=======
+import '../l10n/app_localizations.dart';
+>>>>>>> Stashed changes
 import '../services/auth_service.dart';
+import '../services/locale_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/post_like_helper.dart';
@@ -39,18 +45,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          'Delete post?',
+          AppLocalizations.of(context)!.deletePost,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Text(
-          'This post will be permanently removed.',
+          AppLocalizations.of(context)!.deletePostMsg,
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(context)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -63,7 +69,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete'),
+            child: Text(AppLocalizations.of(context)!.delete),
           ),
         ],
       ),
@@ -81,26 +87,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[dt.month - 1]} ${dt.day}';
+    if (diff.inSeconds < 60) return AppLocalizations.of(context)!.justNow;
+    if (diff.inMinutes < 60) {
+      return AppLocalizations.of(context)!.minutesAgo(diff.inMinutes);
+    }
+    if (diff.inHours < 24) {
+      return AppLocalizations.of(context)!.hoursAgo(diff.inHours);
+    }
+    if (diff.inDays == 1) return AppLocalizations.of(context)!.yesterday;
+    if (diff.inDays < 7) {
+      return AppLocalizations.of(context)!.daysAgo(diff.inDays);
+    }
+    return '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
   }
 
   void _toggleLike() {
@@ -109,6 +107,37 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     setState(() {});
   }
 
+<<<<<<< Updated upstream
+=======
+  Future<void> _reportPost() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: AppLocalizations.of(context)!.whyReportPost,
+    );
+    if (reason == null || !mounted) return;
+
+    var delivered = true;
+    try {
+      await moderationService.reportPost(widget.post, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.maybePop(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? AppLocalizations.of(context)!.postReportedAndRemoved : AppLocalizations.of(context)!.postHiddenOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+>>>>>>> Stashed changes
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
@@ -131,6 +160,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+<<<<<<< Updated upstream
+=======
+          if (isStudent)
+            IconButton(
+              tooltip: AppLocalizations.of(context)!.reportPost,
+              icon: Icon(Icons.flag_outlined, color: AppColors.secondaryText),
+              onPressed: _reportPost,
+            ),
+>>>>>>> Stashed changes
           if (_canDeletePost)
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red),

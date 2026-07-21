@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'l10n/app_localizations.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
@@ -374,6 +376,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           theme: _lightTheme ??= _buildTheme(false),
           darkTheme: _darkTheme ??= _buildTheme(true),
+          locale: Locale(localeService.languageCode),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
           home: homeWidget,
         );
       },

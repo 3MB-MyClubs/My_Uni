@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/signup_service.dart';
 import '../../widgets/app_network_image.dart';
 import '../../widgets/loading_skeleton.dart';
@@ -95,14 +96,18 @@ class _StepProfileState extends State<StepProfile> {
         _selectedYearName = matchedYear?.name ?? initialYear;
         _isLoadingLookups = false;
         if (majors.isEmpty || years.isEmpty) {
-          _lookupError = 'Could not load profile options. Please try again.';
+          _lookupError = AppLocalizations.of(
+            context,
+          )!.couldNotLoadProfileOptionsRetry;
         }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoadingLookups = false;
-        _lookupError = 'Could not load profile options. Please try again.';
+        _lookupError = AppLocalizations.of(
+          context,
+        )!.couldNotLoadProfileOptionsRetry;
       });
     }
   }
@@ -185,14 +190,18 @@ class _StepProfileState extends State<StepProfile> {
                 ),
               ),
               const SizedBox(height: 16),
-              _photoOption(Icons.camera_alt_outlined, 'Take a photo', () {
-                Navigator.pop(context);
-                _pickPhoto(ImageSource.camera);
-              }),
+              _photoOption(
+                Icons.camera_alt_outlined,
+                AppLocalizations.of(context)!.takePhoto,
+                () {
+                  Navigator.pop(context);
+                  _pickPhoto(ImageSource.camera);
+                },
+              ),
               Divider(height: 1, indent: 16, color: SC.hair),
               _photoOption(
                 Icons.photo_library_outlined,
-                'Choose from library',
+                AppLocalizations.of(context)!.chooseFromLib,
                 () {
                   Navigator.pop(context);
                   _pickPhoto(ImageSource.gallery);
@@ -200,10 +209,15 @@ class _StepProfileState extends State<StepProfile> {
               ),
               if (hasPhoto) ...[
                 Divider(height: 1, indent: 16, color: SC.hair),
-                _photoOption(Icons.delete_outline_rounded, 'Remove photo', () {
-                  Navigator.pop(context);
-                  setState(() => _imagePath = null);
-                }, danger: true),
+                _photoOption(
+                  Icons.delete_outline_rounded,
+                  AppLocalizations.of(context)!.removePhoto,
+                  () {
+                    Navigator.pop(context);
+                    setState(() => _imagePath = null);
+                  },
+                  danger: true,
+                ),
               ],
             ],
           ),
@@ -261,14 +275,14 @@ class _StepProfileState extends State<StepProfile> {
         compressQuality: 72,
         uiSettings: [
           IOSUiSettings(
-            title: 'Crop Photo',
+            title: AppLocalizations.of(context)!.cropPhotoTitle,
             aspectRatioLockEnabled: true,
             resetAspectRatioEnabled: true,
             aspectRatioPickerButtonHidden: true,
             cropStyle: CropStyle.circle,
           ),
           AndroidUiSettings(
-            toolbarTitle: 'Crop Photo',
+            toolbarTitle: AppLocalizations.of(context)!.cropPhotoTitle,
             toolbarColor: SC.burgundy,
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: true,
@@ -282,8 +296,10 @@ class _StepProfileState extends State<StepProfile> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not open photo cropper.'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.couldNotOpenPhotoCropper,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -313,8 +329,9 @@ class _StepProfileState extends State<StepProfile> {
 
     if (_isLoadingLookups || _lookupError != null) {
       setState(
-        () =>
-            _lookupError = 'Could not load profile options. Please try again.',
+        () => _lookupError = AppLocalizations.of(
+          context,
+        )!.couldNotLoadProfileOptionsRetry,
       );
       return;
     }
@@ -324,27 +341,41 @@ class _StepProfileState extends State<StepProfile> {
     }).toList();
 
     if (name.isEmpty) {
-      setState(() => _nameError = 'Please enter your full name.');
+      setState(
+        () => _nameError = AppLocalizations.of(context)!.pleaseEnterFullName,
+      );
       hasError = true;
     } else if (nameParts.length < 2) {
-      setState(() => _nameError = 'Please enter your first and last name.');
+      setState(
+        () => _nameError = AppLocalizations.of(
+          context,
+        )!.pleaseEnterFirstLastName,
+      );
       hasError = true;
     } else {
       setState(() => _nameError = null);
     }
 
     if (major.isEmpty) {
-      setState(() => _majorError = 'Please select your major.');
+      setState(
+        () => _majorError = AppLocalizations.of(context)!.pleaseSelectMajor,
+      );
       hasError = true;
     } else if (_selectedMajorId.isEmpty) {
-      setState(() => _majorError = 'Please pick a major from the list.');
+      setState(
+        () => _majorError = AppLocalizations.of(
+          context,
+        )!.pleasePickMajorFromList,
+      );
       hasError = true;
     } else {
       setState(() => _majorError = null);
     }
 
     if (_selectedYearId.isEmpty) {
-      setState(() => _yearError = 'Please select your year.');
+      setState(
+        () => _yearError = AppLocalizations.of(context)!.pleaseSelectYear,
+      );
       hasError = true;
     } else {
       setState(() => _yearError = null);
@@ -409,7 +440,7 @@ class _StepProfileState extends State<StepProfile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Tell us about you.',
+                  AppLocalizations.of(context)!.tellUsAboutYouTitle,
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -420,7 +451,7 @@ class _StepProfileState extends State<StepProfile> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'This shows up on your campus profile.',
+                  AppLocalizations.of(context)!.showsOnCampusProfile,
                   style: TextStyle(
                     fontSize: 15,
                     color: SC.body,
@@ -493,7 +524,7 @@ class _StepProfileState extends State<StepProfile> {
                     letterSpacing: -0.1,
                   ),
                   decoration: SC.fieldDecoration(
-                    label: 'Full name',
+                    label: AppLocalizations.of(context)!.fullNameLabel,
                     hint: 'e.g. Ali Yılmaz',
                     errorText: _nameError,
                   ),
@@ -551,7 +582,7 @@ class _StepProfileState extends State<StepProfile> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('Continue'),
+                  : Text(AppLocalizations.of(context)!.continueButton),
             ),
           ),
         ),
@@ -644,7 +675,7 @@ class _YearSelector extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Year',
+          AppLocalizations.of(context)!.yearLabel,
           style: TextStyle(
             fontSize: 13,
             color: SC.body,
@@ -800,8 +831,10 @@ class _MajorField extends StatelessWidget {
           onChanged: onChanged,
           onTap: onTap,
           decoration: SC.fieldDecoration(
-            label: 'Major',
-            hint: isLoading ? 'Loading majors...' : 'Search your major...',
+            label: AppLocalizations.of(context)!.majorFieldLabel,
+            hint: isLoading
+                ? AppLocalizations.of(context)!.loadingMajors
+                : AppLocalizations.of(context)!.searchYourMajor,
             radiusTop: showSuggestions,
             suffixIcon: controller.text.isNotEmpty
                 ? GestureDetector(

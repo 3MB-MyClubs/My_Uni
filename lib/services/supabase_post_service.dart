@@ -33,6 +33,16 @@ class SupabasePostService {
     PollData? poll,
     bool isAnnouncement = false,
   }) async {
+<<<<<<< Updated upstream
+=======
+    final rejected = contentSafetyService.isRejected([
+      content,
+      if (poll != null) poll.question,
+      if (poll != null) ...poll.options,
+    ]);
+    if (rejected) throw const ContentSafetyException();
+
+>>>>>>> Stashed changes
     final client = _client;
     if (client == null) {
       return _localPost(

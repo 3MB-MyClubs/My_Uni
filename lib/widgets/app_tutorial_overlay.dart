@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 
 /// One step of the interactive app tour.
@@ -397,9 +398,9 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
     return TextButton.icon(
       onPressed: widget.onSkip,
       icon: const Icon(Icons.close_rounded, size: 15),
-      label: const Text(
-        'Skip tour',
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+      label: Text(
+        AppLocalizations.of(context)!.skipTour,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
       style: TextButton.styleFrom(
         foregroundColor: AppColors.secondaryText,
@@ -820,12 +821,16 @@ class _AppTutorialOverlayState extends State<AppTutorialOverlay>
           borderRadius: BorderRadius.all(Radius.circular(14)),
         ),
       ),
-      child: const Text('Back', style: TextStyle(fontWeight: FontWeight.w700)),
+      child: Text(
+        AppLocalizations.of(context)!.back,
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
     );
   }
 
   Widget _primaryButton() {
-    final label = _isLast ? 'Start exploring' : 'Next';
+    final l10n = AppLocalizations.of(context)!;
+    final label = _isLast ? l10n.startExploring : l10n.next;
     final onTap = _isLast ? _complete : () => _moveTo(_index + 1);
     return DecoratedBox(
       decoration: BoxDecoration(

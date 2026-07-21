@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+<<<<<<< Updated upstream
+=======
+import '../l10n/app_localizations.dart';
+>>>>>>> Stashed changes
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
@@ -126,7 +130,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) return;
       setState(() {
         _connectionsLoading = false;
-        _connectionsError = 'Could not load connections.';
+        _connectionsError = AppLocalizations.of(context)!.couldNotLoadConnections;
       });
     }
   }
@@ -158,6 +162,163 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _handleFollowTap() =>
       _toggleUserFollow(widget.user, () => setState(() {}));
 
+<<<<<<< Updated upstream
+=======
+  void _showSafetyOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: const BorderRadius.all(Radius.circular(999)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              leading: Icon(Icons.flag_outlined, color: AppColors.primaryRed),
+              title: Text(
+                AppLocalizations.of(context)!.reportUser,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                AppLocalizations.of(context)!.reportUserSubtitle,
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _reportUser();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_rounded, color: Colors.red),
+              title: Text(
+                AppLocalizations.of(context)!.blockAndReportUser,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                AppLocalizations.of(context)!.blockAndReportSubtitle,
+                style: TextStyle(color: AppColors.secondaryText),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _blockUser();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportUser() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: AppLocalizations.of(context)!.whyReportUser,
+    );
+    if (reason == null || !mounted) return;
+    try {
+      await moderationService.reportUser(widget.user.id, reason: reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.userReported),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.reportSendFailed),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _blockUser() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: AppLocalizations.of(context)!.whyBlockUser,
+    );
+    if (reason == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          AppLocalizations.of(context)!.blockUserQuestion(
+            userState.displayNameFor(widget.user.id, widget.user.name),
+          ),
+          style: TextStyle(color: AppColors.text),
+        ),
+        content: Text(
+          AppLocalizations.of(context)!.blockUserExplanation,
+          style: TextStyle(color: AppColors.secondaryText, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(AppLocalizations.of(context)!.blockAndReportUser),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final myId = authService.currentUser?.id ?? '';
+    userState.followedUserIds.remove(widget.user.id);
+    userState.pendingFollowRequests.remove(widget.user.id);
+    userPrefsService.save(myId);
+
+    var delivered = true;
+    try {
+      await moderationService.blockUser(widget.user.id, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.maybePop(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? AppLocalizations.of(context)!.userBlockedAndReported : AppLocalizations.of(context)!.userBlockedOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+>>>>>>> Stashed changes
   void _openUserProfile(User u) {
     Navigator.push(
       context,
@@ -183,9 +344,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             StudentCampusMembership(
               club: club,
               color: _clubColor(club),
-              role: _roleTitleFor(club) ?? 'Member',
-              detail:
-                  '${subscriptions.where((s) => s.clubId == club.id).length} members',
+              role: _roleTitleFor(club) ?? AppLocalizations.of(context)!.memberRoleFallback,
+              detail: AppLocalizations.of(context)!.membersCountLabel(
+                subscriptions.where((s) => s.clubId == club.id).length,
+              ),
             ),
         ];
 
@@ -203,38 +365,49 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             doubleMajors: userState.doubleMajors[user.id] ?? const [],
             minors: userState.minors[user.id] ?? const [],
           ),
-          title: _isOwnProfile ? 'My Profile' : 'Student Profile',
+          title: _isOwnProfile
+              ? AppLocalizations.of(context)!.myProfileTitle
+              : AppLocalizations.of(context)!.studentProfileTitle,
           leading: StudentProfileIconButton(
             icon: Icons.chevron_left_rounded,
-            tooltip: 'Back',
+            tooltip: AppLocalizations.of(context)!.backTooltip,
             onTap: () => Navigator.maybePop(context),
           ),
           trailing: _isOwnProfile
               ? StudentProfileIconButton(
                   icon: Icons.bookmark_outline_rounded,
-                  tooltip: 'Saved posts',
+                  tooltip: AppLocalizations.of(context)!.savedPostsTooltip,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
                   ),
                 )
+<<<<<<< Updated upstream
+=======
+              : authService.isStudentSession
+              ? StudentProfileIconButton(
+                  icon: Icons.more_horiz_rounded,
+                  tooltip: AppLocalizations.of(context)!.safetyOptions,
+                  onTap: _showSafetyOptions,
+                )
+>>>>>>> Stashed changes
               : const SizedBox(width: 36, height: 36),
           primaryAction: !_isOwnProfile && authService.isStudentSession
               ? StudentProfilePrimaryButton(
                   label: isPending
-                      ? 'Requested'
+                      ? AppLocalizations.of(context)!.requestedLabel
                       : isFollowingUser
-                      ? 'Following'
+                      ? AppLocalizations.of(context)!.following
                       : _userFollowsMe(user)
-                      ? 'Follow back'
-                      : 'Follow',
+                      ? AppLocalizations.of(context)!.followBack
+                      : AppLocalizations.of(context)!.follow,
                   filled: !isFollowingUser && !isPending,
                   onTap: _handleFollowTap,
                 )
               : null,
           memberships: memberships,
-          clubsTitle: 'CLUBS · ${subClubs.length}',
-          clubsActionLabel: subClubs.length > 4 ? 'See all' : null,
+          clubsTitle: AppLocalizations.of(context)!.clubsCountTitle(subClubs.length),
+          clubsActionLabel: subClubs.length > 4 ? AppLocalizations.of(context)!.seeAll : null,
           onClubsAction: () => _openConnections(_ConnTab.clubs),
           onClubTap: _openClub,
           onClubsTap: () => _openConnections(_ConnTab.clubs),
@@ -435,11 +608,11 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
                   _ConnTab.clubs => _buildClubsList(_matchClubs(clubs)),
                   _ConnTab.followers => _buildPeopleList(
                     _matchPeople(followers),
-                    'No followers yet.',
+                    AppLocalizations.of(context)!.noFollowersYet,
                   ),
                   _ConnTab.following => _buildPeopleList(
                     _matchPeople(following),
-                    'Not following anyone yet.',
+                    AppLocalizations.of(context)!.notFollowingAnyone,
                   ),
                 },
               ),
@@ -485,9 +658,9 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
 
     return Row(
       children: [
-        tabItem('Clubs', clubsCount, _ConnTab.clubs),
-        tabItem('Followers', followersCount, _ConnTab.followers),
-        tabItem('Following', followingCount, _ConnTab.following),
+        tabItem(AppLocalizations.of(context)!.clubs, clubsCount, _ConnTab.clubs),
+        tabItem(AppLocalizations.of(context)!.followers, followersCount, _ConnTab.followers),
+        tabItem(AppLocalizations.of(context)!.following, followingCount, _ConnTab.following),
       ],
     );
   }
@@ -514,7 +687,7 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
                 decoration: InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
-                  hintText: 'Search',
+                  hintText: AppLocalizations.of(context)!.search,
                   hintStyle: TextStyle(color: AppColors.secondaryText),
                 ),
               ),
@@ -527,7 +700,11 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
 
   Widget _buildClubsList(List<Club> clubs) {
     if (clubs.isEmpty) {
-      return _emptyState(_query.isEmpty ? 'No clubs yet.' : 'No clubs found.');
+      return _emptyState(
+        _query.isEmpty
+            ? AppLocalizations.of(context)!.noClubsYetShort
+            : AppLocalizations.of(context)!.noClubsFound,
+      );
     }
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -541,9 +718,9 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
   Widget _buildPeopleList(List<User> people, String emptyFallback) {
     if (people.isEmpty) {
       final message = _query.isNotEmpty
-          ? 'No matches found.'
+          ? AppLocalizations.of(context)!.noMatchesFoundDot
           : widget.peopleLoading
-          ? 'Loading connections...'
+          ? AppLocalizations.of(context)!.loadingConnections
           : widget.peopleError ?? emptyFallback;
       return _emptyState(message);
     }
@@ -601,7 +778,7 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
           border: isLeader ? null : Border.all(color: AppColors.divider),
         ),
         child: Text(
-          role ?? 'Member',
+          role ?? AppLocalizations.of(context)!.memberRoleFallback,
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
@@ -677,12 +854,12 @@ class _FollowButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final filled = !isFollowing && !isPending;
     final label = isPending
-        ? 'Requested'
+        ? AppLocalizations.of(context)!.requestedLabel
         : isFollowing
-        ? 'Following'
+        ? AppLocalizations.of(context)!.following
         : followsMe
-        ? 'Follow back'
-        : 'Follow';
+        ? AppLocalizations.of(context)!.followBack
+        : AppLocalizations.of(context)!.follow;
 
     return GestureDetector(
       onTap: onTap,

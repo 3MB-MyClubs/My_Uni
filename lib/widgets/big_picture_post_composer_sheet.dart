@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../screens/create_post_screen.dart' show buildPostBanner;
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
@@ -115,12 +115,12 @@ class _BigPicturePostComposerSheetState
       compressQuality: 85,
       uiSettings: [
         IOSUiSettings(
-          title: 'Crop Photo',
+          title: AppLocalizations.of(context)!.cropPhoto,
           resetAspectRatioEnabled: true,
           rotateButtonsHidden: false,
         ),
         AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
+          toolbarTitle: AppLocalizations.of(context)!.cropPhoto,
           toolbarColor: AppColors.primaryRed,
           toolbarWidgetColor: Colors.white,
           lockAspectRatio: false,
@@ -159,7 +159,7 @@ class _BigPicturePostComposerSheetState
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                'Take a photo',
+                AppLocalizations.of(context)!.takePhoto,
                 style: TextStyle(color: AppColors.text),
               ),
               onTap: () {
@@ -173,7 +173,7 @@ class _BigPicturePostComposerSheetState
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                'Choose from library',
+                AppLocalizations.of(context)!.chooseFromLib,
                 style: TextStyle(color: AppColors.text),
               ),
               onTap: () {
@@ -217,8 +217,17 @@ class _BigPicturePostComposerSheetState
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
+<<<<<<< Updated upstream
           const SnackBar(
             content: Text('Could not publish post. Check Supabase settings.'),
+=======
+          SnackBar(
+            content: Text(
+              error is ContentSafetyException
+                  ? AppLocalizations.of(context)!.contentSafetyRejected
+                  : AppLocalizations.of(context)!.publishErrorGeneric,
+            ),
+>>>>>>> Stashed changes
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -311,7 +320,9 @@ class _BigPicturePostComposerSheetState
                                 ? _backToEdit
                                 : () => Navigator.of(context).pop()),
                       child: Text(
-                        _confirming ? 'Back' : 'Cancel',
+                        _confirming
+                            ? AppLocalizations.of(context)!.back
+                            : AppLocalizations.of(context)!.cancel,
                         style: TextStyle(
                           color: AppColors.secondaryText,
                           fontWeight: FontWeight.w600,
@@ -347,7 +358,9 @@ class _BigPicturePostComposerSheetState
                               ),
                             )
                           : Text(
-                              _confirming ? 'Confirm' : S.post,
+                              _confirming
+                                  ? AppLocalizations.of(context)!.confirm
+                                  : AppLocalizations.of(context)!.post,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
@@ -447,7 +460,7 @@ class _ComposeStep extends StatelessWidget {
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
               disabledBorder: InputBorder.none,
-              hintText: S.whatsHappeningAtClub,
+              hintText: AppLocalizations.of(context)!.whatsHappeningAtClub,
               hintStyle: TextStyle(
                 fontSize: 17,
                 color: AppColors.secondaryText,
@@ -479,7 +492,7 @@ class _ComposeStep extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Add Photo',
+                    AppLocalizations.of(context)!.addPhoto,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -520,7 +533,7 @@ class _ComposeStep extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Photo added',
+                    AppLocalizations.of(context)!.photoAdded,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -571,7 +584,7 @@ class _ConfirmStep extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Ready to post?',
+          AppLocalizations.of(context)!.readyToPost,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -580,7 +593,7 @@ class _ConfirmStep extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'This is how it will appear in the Home Feed.',
+          AppLocalizations.of(context)!.feedPreviewHint,
           style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
         ),
         const SizedBox(height: 14),
@@ -653,7 +666,7 @@ class _FeedStylePreviewCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Just now',
+                  AppLocalizations.of(context)!.justNow,
                   style: TextStyle(
                     fontSize: 11.5,
                     color: AppColors.secondaryText,

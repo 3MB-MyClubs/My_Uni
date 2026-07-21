@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../services/content_store.dart';
@@ -412,7 +413,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           const _EmptyFeedArt(),
                           const SizedBox(height: 18),
                           Text(
-                            S.nothingHere,
+                            AppLocalizations.of(context)!.nothingHere,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -421,7 +422,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            S.followClubs,
+                            AppLocalizations.of(context)!.followClubs,
                             style: TextStyle(
                               fontSize: 14,
                               color: AppColors.secondaryText,
@@ -448,7 +449,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             ),
                             icon: Icon(Icons.explore_rounded, size: 18),
                             label: Text(
-                              S.exploreClubs,
+                              AppLocalizations.of(context)!.exploreClubs,
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
@@ -467,7 +468,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     child: Row(
                       children: [
                         Text(
-                          S.latest,
+                          AppLocalizations.of(context)!.latest,
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -507,7 +508,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 28),
                     child: Center(
                       child: Text(
-                        S.endOfFeed,
+                        AppLocalizations.of(context)!.endOfFeed,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -672,12 +673,12 @@ class _FeedScreenState extends State<FeedScreen> {
   SliverToBoxAdapter _buildGreeting() {
     final h = DateTime.now().hour;
     final greet = h < 5
-        ? S.stillUp
+        ? AppLocalizations.of(context)!.stillUp
         : h < 12
-        ? S.goodMorning
+        ? AppLocalizations.of(context)!.goodMorning
         : h < 17
-        ? S.goodAfternoon
-        : S.goodEvening;
+        ? AppLocalizations.of(context)!.goodAfternoon
+        : AppLocalizations.of(context)!.goodEvening;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
@@ -735,7 +736,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          S.thisWeek,
+                          AppLocalizations.of(context)!.thisWeek,
                           style: TextStyle(
                             fontSize: 10.5,
                             color: AppColors.secondaryText,
@@ -745,7 +746,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          S.eventsOnCampus,
+                          AppLocalizations.of(context)!.eventsOnCampus,
                           style: TextStyle(
                             fontSize: 19,
                             color: AppColors.text,
@@ -767,7 +768,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            S.seeAll,
+                            AppLocalizations.of(context)!.seeAll,
                             style: TextStyle(
                               fontSize: 12.5,
                               color: AppColors.primaryRed,
@@ -812,7 +813,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
           child: Text(
-            S.clubFeed,
+            AppLocalizations.of(context)!.clubFeed,
             style: TextStyle(
               fontSize: 10,
               color: AppColors.secondaryText,
@@ -826,7 +827,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
     // tab 0 = Following, tab 1 = All — pill segmented control with a sliding
     // maroon thumb (300ms ease-out) behind the active label.
-    final labels = [S.following, S.all];
+    final labels = [AppLocalizations.of(context)!.following, AppLocalizations.of(context)!.all];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -1205,7 +1206,7 @@ class _QuickPostComposer extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      S.whatsHappeningAtClub,
+                      AppLocalizations.of(context)!.whatsHappeningAtClub,
                       style: TextStyle(
                         fontSize: 15,
                         color: secondaryTextColor,
@@ -1283,7 +1284,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  S.suggestedForYou,
+                  AppLocalizations.of(context)!.suggestedForYou,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -1324,11 +1325,11 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                     : userState.displayNameFor(mutualUser.id, mutualUser.name);
                 final mutualText = mutualName == null
                     ? (mutualCount == 1
-                          ? '1 mutual friend'
-                          : '$mutualLabel mutual friends')
+                          ? AppLocalizations.of(context)!.oneMutualFriend
+                          : AppLocalizations.of(context)!.mutualFriendCountLabel(mutualLabel))
                     : (mutualCount == 1
-                          ? 'Mutual friend: $mutualName'
-                          : 'Mutual friend: $mutualName + ${mutualCount - 1} more');
+                          ? AppLocalizations.of(context)!.mutualFriendNamed(mutualName)
+                          : AppLocalizations.of(context)!.mutualFriendNamedPlus(mutualName, mutualCount - 1));
 
                 return SizedBox(
                   width: 148,
@@ -1428,8 +1429,8 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                                     ],
                                                     Text(
                                                       mutualCount == 1
-                                                          ? '1 mutual'
-                                                          : '$mutualLabel mutuals',
+                                                          ? AppLocalizations.of(context)!.oneMutualBadge
+                                                          : AppLocalizations.of(context)!.mutualBadgeCount(mutualLabel),
                                                       style: TextStyle(
                                                         fontSize: 10,
                                                         fontWeight:
@@ -1509,7 +1510,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                     userId: u.id,
                                     size: 'small',
                                     followLabel: followsMe
-                                        ? S.followBack
+                                        ? AppLocalizations.of(context)!.followBack
                                         : null,
                                     onTap: () async {
                                       final myId = authService.isStudentSession
@@ -1642,26 +1643,12 @@ class _TrendingEventCard extends StatelessWidget {
     final idx = clubOrdinal(club.id);
     final color = _colors[idx % _colors.length];
     final dt = event.dateTime;
-    const mo = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
     final daysAway = dt.difference(DateTime.now()).inDays;
     final timeLabel = daysAway == 0
-        ? S.today
+        ? AppLocalizations.of(context)!.today
         : daysAway == 1
-        ? S.tomorrow
-        : '${mo[dt.month - 1]} ${dt.day}';
+        ? AppLocalizations.of(context)!.tomorrow
+        : '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
     return GestureDetector(
       onTap: () => _showDetail(context, color),
       child: Container(
@@ -1757,7 +1744,7 @@ class _TrendingEventCard extends StatelessWidget {
                     children: [
                       const Spacer(),
                       Text(
-                        S.tapForDetails,
+                        AppLocalizations.of(context)!.tapForDetails,
                         style: TextStyle(
                           fontSize: 11,
                           color: color,
@@ -1810,7 +1797,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
     final matches = personalizationService.interestMatchCount(c.id as String);
     final desc = (c.description as String).isNotEmpty
         ? c.description as String
-        : 'Discover what this club is all about.';
+        : AppLocalizations.of(context)!.discoverClubDescriptionFallback;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1834,7 +1821,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                   Icon(Icons.explore_rounded, size: 18, color: color),
                   const SizedBox(width: 6),
                   Text(
-                    S.clubMightLike,
+                    AppLocalizations.of(context)!.clubMightLike,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -1906,8 +1893,8 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                               Expanded(
                                 child: Text(
                                   matches > 0
-                                      ? '$memberCount members · matches your interests'
-                                      : '$memberCount members',
+                                      ? AppLocalizations.of(context)!.membersMatchInterests(memberCount)
+                                      : AppLocalizations.of(context)!.membersCount(memberCount),
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: color,
@@ -1975,7 +1962,7 @@ class _PeopleEngagementSheet extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${people.length} ${people.length == 1 ? 'person' : 'people'}',
+                  AppLocalizations.of(context)!.peopleCount(people.length),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -2206,7 +2193,7 @@ class _ViewersSheetState extends State<_ViewersSheet> {
               )
             : _PeopleEngagementSheet(
                 icon: Icons.remove_red_eye_outlined,
-                emptyText: 'No views yet',
+                emptyText: AppLocalizations.of(context)!.noViewsYet,
                 people: _viewers,
                 scrollController: scrollController,
               ),
@@ -2278,7 +2265,7 @@ class _LikersSheetState extends State<_LikersSheet> {
               )
             : _PeopleEngagementSheet(
                 icon: Icons.favorite_rounded,
-                emptyText: 'No likes yet',
+                emptyText: AppLocalizations.of(context)!.noLikesYet,
                 people: _likers,
                 scrollController: scrollController,
               ),
@@ -2303,11 +2290,12 @@ Color _colorForClub(String clubId) {
   return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
 }
 
-String _timeAgo(DateTime dt) {
+String _timeAgo(BuildContext context, DateTime dt) {
+  final l10n = AppLocalizations.of(context)!;
   final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  return '${diff.inDays}d ago';
+  if (diff.inMinutes < 60) return l10n.minutesAgoSuffix(diff.inMinutes);
+  if (diff.inHours < 24) return l10n.hoursAgoSuffix(diff.inHours);
+  return l10n.daysAgoSuffix(diff.inDays);
 }
 
 /// Copies a deep link for the post/event to the clipboard and records the
@@ -2347,8 +2335,8 @@ void _openShareSheet(
       SnackBar(
         content: Text(
           isEvent
-              ? 'Event link copied to clipboard'
-              : 'Post link copied to clipboard',
+              ? AppLocalizations.of(context)!.eventLinkCopied
+              : AppLocalizations.of(context)!.postLinkCopied,
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -2480,13 +2468,17 @@ class _PostCardState extends State<_PostCard>
               if (canDelete)
                 tile(
                   icon: Icons.delete_outline_rounded,
-                  label: 'Delete post',
+                  label: AppLocalizations.of(sheetContext)!.deletePostAction,
                   color: Colors.red,
                   onTap: _confirmDeletePost,
                 ),
               tile(
                 icon: Icons.flag_outlined,
+<<<<<<< Updated upstream
                 label: 'Report post',
+=======
+                label: AppLocalizations.of(context)!.reportPost,
+>>>>>>> Stashed changes
                 color: AppColors.primaryRed,
                 onTap: _reportPost,
               ),
@@ -2504,18 +2496,18 @@ class _PostCardState extends State<_PostCard>
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text(
-          'Delete post?',
+          AppLocalizations.of(dialogContext)!.deletePost,
           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'This post will be removed from the home feed.',
+          AppLocalizations.of(dialogContext)!.deletePostFeedBody,
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(dialogContext)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -2540,20 +2532,21 @@ class _PostCardState extends State<_PostCard>
                   SnackBar(
                     content: Text(
                       deleted
-                          ? 'Post deleted'
-                          : 'Only the club that owns this post can delete it.',
+                          ? AppLocalizations.of(context)!.postDeletedConfirmation
+                          : AppLocalizations.of(context)!.onlyOwningClubCanDelete,
                     ),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
             },
-            child: const Text('Delete'),
+            child: Text(AppLocalizations.of(dialogContext)!.delete),
           ),
         ],
       ),
     );
   }
 
+<<<<<<< Updated upstream
   void _reportPost() {
     showDialog<void>(
       context: context,
@@ -2562,6 +2555,30 @@ class _PostCardState extends State<_PostCard>
         title: Text(
           'Report this post?',
           style: TextStyle(color: AppColors.text),
+=======
+  Future<void> _reportPost() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: AppLocalizations.of(context)!.whyReportPost,
+    );
+    if (reason == null || !mounted) return;
+
+    var delivered = true;
+    try {
+      await moderationService.reportPost(widget.post, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? AppLocalizations.of(context)!.postReportedAndRemoved : AppLocalizations.of(context)!.postHiddenOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+>>>>>>> Stashed changes
         ),
         content: Text(
           'Our team will review it for violations of community guidelines.',
@@ -2680,7 +2697,7 @@ class _PostCardState extends State<_PostCard>
                           ),
                           const SizedBox(height: 1),
                           Text(
-                            _timeAgo(widget.post.createdAt),
+                            _timeAgo(context, widget.post.createdAt),
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.secondaryText,
@@ -2732,7 +2749,7 @@ class _PostCardState extends State<_PostCard>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          S.announcement.toUpperCase(),
+                          AppLocalizations.of(context)!.announcement.toUpperCase(),
                           style: TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w800,
@@ -2816,7 +2833,7 @@ class _PostCardState extends State<_PostCard>
                         isScrollControlled: true,
                         builder: (_) => _ViewersSheet(
                           contentId: widget.post.id,
-                          title: 'Post Viewers',
+                          title: AppLocalizations.of(context)!.postViewersTitle,
                         ),
                       ),
                       onLikeTap: () => showModalBottomSheet<void>(
@@ -2958,10 +2975,10 @@ class _EventCardState extends State<_EventCard> {
 
     final daysAway = dt.difference(DateTime.now()).inDays;
     final daysLabel = daysAway == 0
-        ? S.today
+        ? AppLocalizations.of(context)!.today
         : daysAway == 1
-        ? S.tomorrow
-        : 'In $daysAway days';
+        ? AppLocalizations.of(context)!.tomorrow
+        : AppLocalizations.of(context)!.inDaysCount(daysAway);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -3191,7 +3208,7 @@ class _EventCardState extends State<_EventCard> {
                       isScrollControlled: true,
                       builder: (_) => _ViewersSheet(
                         contentId: widget.event.id,
-                        title: 'Event Viewers',
+                        title: AppLocalizations.of(context)!.eventViewersTitle,
                       ),
                     ),
                   ),
@@ -3229,20 +3246,9 @@ class _EventCardState extends State<_EventCard> {
     );
   }
 
-  String _monthAbbr(int m) => [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ][m - 1];
+  String _monthAbbr(int m) => DateFormat.MMM(
+    localeService.languageCode,
+  ).format(DateTime(2024, m));
 
   String _fmt12(DateTime dt) {
     final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
@@ -3288,7 +3294,7 @@ class _EngagementBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 3),
                 Text(
-                  '$views view${views == 1 ? '' : 's'}',
+                  AppLocalizations.of(context)!.viewsCount(views),
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.secondaryText,
@@ -3309,7 +3315,7 @@ class _EngagementBar extends StatelessWidget {
                 Icon(Icons.favorite, size: 13, color: Colors.pink),
                 const SizedBox(width: 3),
                 Text(
-                  '$likes likes',
+                  AppLocalizations.of(context)!.likesCount(likes),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -3328,7 +3334,7 @@ class _EngagementBar extends StatelessWidget {
           Icon(Icons.send, size: 13, color: Color(0xFF2E7D32)),
           const SizedBox(width: 3),
           Text(
-            '$shares share${shares == 1 ? '' : 's'}',
+            AppLocalizations.of(context)!.sharesCount(shares),
             style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
           ),
         ],
@@ -3392,7 +3398,7 @@ class _EventRailCardState extends State<_EventRailCard> {
     final now = DateTime.now();
     final isLive = ev.dateTime.isBefore(now) && ev.endTime.isAfter(now);
     final dateTimeLabel = isLive
-        ? 'LIVE · ${_time24(ev.dateTime)}'
+        ? '${AppLocalizations.of(context)!.liveNowLabel} · ${_time24(ev.dateTime)}'
         : '${_weekdayShort(ev.dateTime)}. ${_time24(ev.dateTime)}';
 
     return GestureDetector(
@@ -3537,7 +3543,7 @@ class _EventRailCardState extends State<_EventRailCard> {
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   String _weekdayShort(DateTime dt) =>
-      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dt.weekday - 1];
+      DateFormat.E(localeService.languageCode).format(dt);
 }
 
 // ─── Pulsing dot (live indicator) ─────────────────────────────────────────────

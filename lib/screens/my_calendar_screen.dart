@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/event.dart' as app_event;
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -13,16 +14,17 @@ import '../services/rsvp_store.dart';
 enum CalEventType { calClass, event, deadline, personal }
 
 extension CalEventTypeX on CalEventType {
-  String get label {
+  String label(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     switch (this) {
       case CalEventType.calClass:
-        return 'Class';
+        return l10n.calEventTypeClass;
       case CalEventType.event:
-        return 'Event';
+        return l10n.calEventTypeEvent;
       case CalEventType.deadline:
-        return 'Deadline';
+        return l10n.calEventTypeDeadline;
       case CalEventType.personal:
-        return 'Personal';
+        return l10n.calEventTypePersonal;
     }
   }
 
@@ -148,21 +150,36 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
   CalEventType? _filter; // null = all
   List<CalEvent> _userEvents = [];
 
-  static const _months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-  static const _dowShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  List<String> get _months {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      l10n.monthJanuary,
+      l10n.monthFebruary,
+      l10n.monthMarch,
+      l10n.monthApril,
+      l10n.monthMay,
+      l10n.monthJune,
+      l10n.monthJuly,
+      l10n.monthAugust,
+      l10n.monthSeptember,
+      l10n.monthOctober,
+      l10n.monthNovember,
+      l10n.monthDecember,
+    ];
+  }
+
+  List<String> get _dowShort {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      l10n.dowMon,
+      l10n.dowTue,
+      l10n.dowWed,
+      l10n.dowThu,
+      l10n.dowFri,
+      l10n.dowSat,
+      l10n.dowSun,
+    ];
+  }
 
   @override
   void initState() {
@@ -351,7 +368,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'My Calendar',
+                  AppLocalizations.of(context)!.myCalendarTitle,
                   style: TextStyle(
                     fontSize: 11,
                     color: AppColors.secondaryText,
@@ -359,7 +376,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                   ),
                 ),
                 Text(
-                  '$_monthCount item${_monthCount == 1 ? '' : 's'} this month',
+                  AppLocalizations.of(context)!.calendarItemsThisMonth(_monthCount),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -381,7 +398,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                 border: Border.all(color: AppColors.divider),
               ),
               child: Text(
-                'Today',
+                AppLocalizations.of(context)!.today,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -476,16 +493,17 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
   // ── Filter chips ─────────────────────────────────────────────────────────
 
   Widget _buildFilterChips() {
+    final l10n = AppLocalizations.of(context)!;
     final filters = [
-      (type: null as CalEventType?, label: 'All', color: AppColors.primaryRed),
+      (type: null as CalEventType?, label: l10n.all, color: AppColors.primaryRed),
       (
         type: CalEventType.event,
-        label: 'RSVP\'d',
+        label: l10n.calendarFilterRsvpd,
         color: CalEventType.event.color,
       ),
       (
         type: CalEventType.personal,
-        label: 'Personal',
+        label: l10n.calEventTypePersonal,
         color: CalEventType.personal.color,
       ),
     ];
@@ -681,7 +699,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
 
   Widget _buildAgenda(List<CalEvent> selected) {
     final label = _isCurrentMonth && _selDay == _today
-        ? 'Today'
+        ? AppLocalizations.of(context)!.today
         : '${_months[_month].substring(0, 3)} $_selDay';
 
     return ListView(
@@ -704,7 +722,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
             Expanded(child: Container(height: 1, color: AppColors.divider)),
             const SizedBox(width: 10),
             Text(
-              '${selected.length} item${selected.length == 1 ? '' : 's'}',
+              AppLocalizations.of(context)!.calendarItemsCount(selected.length),
               style: TextStyle(
                 fontSize: 10,
                 color: AppColors.secondaryText,
@@ -736,7 +754,7 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Nothing scheduled.',
+                  AppLocalizations.of(context)!.calendarNothingScheduled,
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.secondaryText,
@@ -754,9 +772,9 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                       color: AppColors.primaryRed,
                       borderRadius: BorderRadius.all(Radius.circular(999)),
                     ),
-                    child: const Text(
-                      '+ Add an event',
-                      style: TextStyle(
+                    child: Text(
+                      AppLocalizations.of(context)!.calendarAddEventButton,
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -883,7 +901,7 @@ class _AgendaItemState extends State<_AgendaItem> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Allow Calendar Access',
+              AppLocalizations.of(context)!.allowCalendarAccessTitle,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -893,7 +911,7 @@ class _AgendaItemState extends State<_AgendaItem> {
             ),
             const SizedBox(height: 10),
             Text(
-              'To save this event to your phone\'s Calendar app, we need permission to access your calendar.\n\nYour calendar data is only used to add events you choose.',
+              AppLocalizations.of(context)!.calendarPrePermissionBody,
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.secondaryText,
@@ -918,9 +936,9 @@ class _AgendaItemState extends State<_AgendaItem> {
                       side: BorderSide(color: AppColors.divider),
                     ),
                   ),
-                  child: const Text(
-                    'Not Now',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  child: Text(
+                    AppLocalizations.of(context)!.notNow,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -936,9 +954,9 @@ class _AgendaItemState extends State<_AgendaItem> {
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                   ),
-                  child: const Text(
-                    'Allow Access',
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                  child: Text(
+                    AppLocalizations.of(context)!.allowAccessButton,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -977,7 +995,7 @@ class _AgendaItemState extends State<_AgendaItem> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Calendar Access Denied',
+              AppLocalizations.of(context)!.calendarAccessDeniedTitle,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -987,7 +1005,7 @@ class _AgendaItemState extends State<_AgendaItem> {
             ),
             const SizedBox(height: 10),
             Text(
-              'To sync events to your phone, please allow calendar access in:\n\nSettings → Privacy & Security → Calendars',
+              AppLocalizations.of(context)!.calendarDeniedBody,
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.secondaryText,
@@ -1011,9 +1029,9 @@ class _AgendaItemState extends State<_AgendaItem> {
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
-              child: const Text(
-                'Got it',
-                style: TextStyle(fontWeight: FontWeight.w700),
+              child: Text(
+                AppLocalizations.of(context)!.gotIt,
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -1104,7 +1122,7 @@ class _AgendaItemState extends State<_AgendaItem> {
                           borderRadius: BorderRadius.all(Radius.circular(6)),
                         ),
                         child: Text(
-                          meta.label.toUpperCase(),
+                          meta.label(context).toUpperCase(),
                           style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w800,
@@ -1126,9 +1144,9 @@ class _AgendaItemState extends State<_AgendaItem> {
                             ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.all(Radius.circular(6)),
                           ),
-                          child: const Text(
-                            'RSVP\'D',
-                            style: TextStyle(
+                          child: Text(
+                            AppLocalizations.of(context)!.calendarRsvpdBadge,
+                            style: const TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                               color: Color(0xFF4CAF50),
@@ -1150,7 +1168,7 @@ class _AgendaItemState extends State<_AgendaItem> {
                             border: Border.all(color: AppColors.divider),
                           ),
                           child: Text(
-                            'Yours · tap to edit',
+                            AppLocalizations.of(context)!.calendarYoursTapToEdit,
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
@@ -1230,10 +1248,10 @@ class _AgendaItemState extends State<_AgendaItem> {
                             const SizedBox(width: 5),
                             Text(
                               _syncing
-                                  ? 'Adding…'
+                                  ? AppLocalizations.of(context)!.addingEllipsis
                                   : _isSynced
-                                  ? 'Added to phone'
-                                  : 'Add to phone',
+                                  ? AppLocalizations.of(context)!.calendarAddedToPhone
+                                  : AppLocalizations.of(context)!.calendarAddToPhone,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1324,20 +1342,23 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
   bool get _isEdit => widget.existing != null;
   bool get _canSave => _titleCtrl.text.trim().isNotEmpty;
 
-  static const _months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
+  List<String> get _months {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      l10n.monthJanuary,
+      l10n.monthFebruary,
+      l10n.monthMarch,
+      l10n.monthApril,
+      l10n.monthMay,
+      l10n.monthJune,
+      l10n.monthJuly,
+      l10n.monthAugust,
+      l10n.monthSeptember,
+      l10n.monthOctober,
+      l10n.monthNovember,
+      l10n.monthDecember,
+    ];
+  }
 
   @override
   void initState() {
@@ -1468,7 +1489,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Text(
-                      'Cancel',
+                      AppLocalizations.of(context)!.cancel,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1478,7 +1499,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   ),
                   Expanded(
                     child: Text(
-                      _isEdit ? 'Edit event' : 'New event',
+                      _isEdit
+                          ? AppLocalizations.of(context)!.calendarEditEvent
+                          : AppLocalizations.of(context)!.calendarNewEvent,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
@@ -1491,7 +1514,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   GestureDetector(
                     onTap: _canSave ? _save : null,
                     child: Text(
-                      _isEdit ? 'Save' : 'Add',
+                      _isEdit
+                          ? AppLocalizations.of(context)!.save
+                          : AppLocalizations.of(context)!.calendarAdd,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -1506,7 +1531,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
               const SizedBox(height: 18),
 
               // Type selector
-              _SectionLabel('Type'),
+              _SectionLabel(AppLocalizations.of(context)!.typeLabel),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -1539,7 +1564,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                               ),
                               const SizedBox(height: 5),
                               Text(
-                                t.label,
+                                t.label(context),
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
@@ -1560,17 +1585,17 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
               const SizedBox(height: 14),
 
               // Title
-              _SectionLabel('Title'),
+              _SectionLabel(AppLocalizations.of(context)!.titleFieldLabel),
               const SizedBox(height: 8),
               _Field(
                 controller: _titleCtrl,
-                hint: "What's happening?",
+                hint: AppLocalizations.of(context)!.whatsHappeningHint,
                 autofocus: true,
               ),
               const SizedBox(height: 14),
 
               // Date
-              _SectionLabel('Date'),
+              _SectionLabel(AppLocalizations.of(context)!.dateLabel),
               const SizedBox(height: 8),
               GestureDetector(
                 onTap: _pickDate,
@@ -1604,7 +1629,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SectionLabel('Starts'),
+                        _SectionLabel(AppLocalizations.of(context)!.startsLabel),
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: () => _pickTime(true),
@@ -1618,7 +1643,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SectionLabel('Ends'),
+                        _SectionLabel(AppLocalizations.of(context)!.endsLabel),
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: () => _pickTime(false),
@@ -1632,9 +1657,12 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
               const SizedBox(height: 14),
 
               // Location
-              _SectionLabel('Location (optional)'),
+              _SectionLabel(AppLocalizations.of(context)!.locationOptionalLabel),
               const SizedBox(height: 8),
-              _Field(controller: _locCtrl, hint: 'Where?'),
+              _Field(
+                controller: _locCtrl,
+                hint: AppLocalizations.of(context)!.whereHint,
+              ),
               const SizedBox(height: 18),
 
               // Preview chip
@@ -1663,7 +1691,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${_type.label.toUpperCase()} · Preview',
+                            AppLocalizations.of(context)!.calendarPreviewLabel(
+                              _type.label(context).toUpperCase(),
+                            ),
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
@@ -1674,7 +1704,7 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                           const SizedBox(height: 3),
                           Text(
                             _titleCtrl.text.isEmpty
-                                ? 'Untitled'
+                                ? AppLocalizations.of(context)!.untitledLabel
                                 : _titleCtrl.text,
                             style: TextStyle(
                               fontSize: 13,
@@ -1712,9 +1742,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                       border: Border.all(color: AppColors.divider),
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
-                      'Delete event',
-                      style: TextStyle(
+                    child: Text(
+                      AppLocalizations.of(context)!.calendarDeleteEventButton,
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFFEF5350),

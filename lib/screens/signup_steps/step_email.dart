@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'signup_theme.dart';
 
 class StepEmail extends StatefulWidget {
@@ -15,6 +16,26 @@ class StepEmail extends StatefulWidget {
 
   @override
   State<StepEmail> createState() => _StepEmailState();
+}
+
+// Splits the localized "only @ku.edu.tr addresses" sentence around the
+// literal domain so it can stay bold in every language.
+List<TextSpan> _kuEmailInfoSpans(BuildContext context) {
+  const domain = '@ku.edu.tr';
+  final text = AppLocalizations.of(context)!.onlyKuEmailInfoText;
+  final idx = text.indexOf(domain);
+  if (idx < 0) {
+    return [TextSpan(text: text)];
+  }
+  return [
+    if (idx > 0) TextSpan(text: text.substring(0, idx)),
+    TextSpan(
+      text: domain,
+      style: TextStyle(fontWeight: FontWeight.w700),
+    ),
+    if (idx + domain.length < text.length)
+      TextSpan(text: text.substring(idx + domain.length)),
+  ];
 }
 
 class _StepEmailState extends State<StepEmail> {
@@ -42,11 +63,17 @@ class _StepEmailState extends State<StepEmail> {
     if (_isSubmitting) return;
     final val = _controller.text.trim();
     if (val.isEmpty) {
-      setState(() => _error = 'Please enter your university email.');
+      setState(
+        () => _error = AppLocalizations.of(
+          context,
+        )!.pleaseEnterUniversityEmail,
+      );
       return;
     }
     if (!_emailRegex.hasMatch(val)) {
-      setState(() => _error = 'Only @ku.edu.tr addresses are accepted.');
+      setState(
+        () => _error = AppLocalizations.of(context)!.onlyKuAddressesAccepted,
+      );
       return;
     }
     setState(() {
@@ -79,7 +106,7 @@ class _StepEmailState extends State<StepEmail> {
               children: [
                 // Title
                 Text(
-                  "What's your\nschool email?",
+                  AppLocalizations.of(context)!.whatsYourSchoolEmail,
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -90,7 +117,7 @@ class _StepEmailState extends State<StepEmail> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  "We'll send a code to confirm you're a Koç student.",
+                  AppLocalizations.of(context)!.sendCodeToConfirmKocStudent,
                   style: TextStyle(
                     fontSize: 15,
                     color: SC.body,
@@ -113,7 +140,7 @@ class _StepEmailState extends State<StepEmail> {
                     letterSpacing: -0.1,
                   ),
                   decoration: SC.fieldDecoration(
-                    label: 'University email',
+                    label: AppLocalizations.of(context)!.universityEmailLabel,
                     hint: 'you@ku.edu.tr',
                     suffixText: '@ku.edu.tr',
                     errorText: _error,
@@ -162,17 +189,7 @@ class _StepEmailState extends State<StepEmail> {
                               fontSize: 12,
                               height: 1.4,
                             ),
-                            children: [
-                              TextSpan(text: 'Only '),
-                              TextSpan(
-                                text: '@ku.edu.tr',
-                                style: TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                              TextSpan(
-                                text:
-                                    " addresses are accepted. Personal emails won't work.",
-                              ),
-                            ],
+                            children: _kuEmailInfoSpans(context),
                           ),
                         ),
                       ),
@@ -202,7 +219,7 @@ class _StepEmailState extends State<StepEmail> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('Continue'),
+                  : Text(AppLocalizations.of(context)!.continueButton),
             ),
           ),
         ),

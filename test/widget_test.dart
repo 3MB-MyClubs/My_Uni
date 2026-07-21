@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/main.dart';
@@ -21,6 +22,8 @@ void main() {
     var signUpTapped = false;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: LoginScreen(
           onLogin: () {},
           onSignUp: () => signUpTapped = true,
@@ -38,4 +41,31 @@ void main() {
 
     expect(signUpTapped, isTrue);
   });
+<<<<<<< Updated upstream
+=======
+
+  testWidgets('community safety agreement can switch to Turkish', (
+    WidgetTester tester,
+  ) async {
+    await localeService.setLanguage('en');
+    await tester.pumpWidget(
+      ListenableBuilder(
+        listenable: localeService,
+        builder: (context, _) => MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale(localeService.languageCode),
+          home: TermsAcceptanceScreen(onAccepted: () async {}),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('TR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('TOPLULUK GÜVENLİĞİ KOŞULLARI'), findsOneWidget);
+    expect(find.text('Kabul et ve devam et'), findsOneWidget);
+    await localeService.setLanguage('en');
+  });
+>>>>>>> Stashed changes
 }

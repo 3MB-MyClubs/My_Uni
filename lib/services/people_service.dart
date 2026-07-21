@@ -1,10 +1,18 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import '../l10n/app_localizations.dart';
 import '../models/user.dart';
+import 'locale_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
 
 class PeopleService {
+  // No BuildContext is available this deep in the service layer; this
+  // fallback name is resolved here via the current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   List<User> _cachedPeople = const [];
   Set<String> _cachedFollowerIds = const {};
   final Map<String, Set<String>> _followersByUserId = {};
@@ -450,7 +458,7 @@ class PeopleService {
               byId[id] ??
               User(
                 id: id,
-                name: 'Student profile',
+                name: _l10n.studentProfile,
                 email: '',
                 password: '',
                 role: 'student',

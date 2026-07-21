@@ -8,7 +8,7 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/tutorial_service.dart';
 import '../services/tutorial_anchors.dart';
@@ -88,7 +88,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Create',
+                    AppLocalizations.of(sheetContext)!.createSheetTitle,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: primaryText,
                       fontWeight: FontWeight.w800,
@@ -96,7 +96,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Update your community',
+                    AppLocalizations.of(sheetContext)!.updateYourCommunity,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: secondaryText,
                       fontWeight: FontWeight.w600,
@@ -104,7 +104,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Create something inspiring',
+                    AppLocalizations.of(sheetContext)!.createSomethingInspiring,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: primaryText,
                       fontWeight: FontWeight.w700,
@@ -113,15 +113,19 @@ Future<void> showClubCreateSheet(
                   const SizedBox(height: 14),
                   _CreateSheetAction(
                     icon: Icons.article_outlined,
-                    title: 'Post',
-                    subtitle: 'Share an update with your followers',
+                    title: AppLocalizations.of(sheetContext)!.post,
+                    subtitle: AppLocalizations.of(
+                      sheetContext,
+                    )!.shareUpdateWithFollowers,
                     onTap: () => choose(onPost),
                   ),
                   const SizedBox(height: 10),
                   _CreateSheetAction(
                     icon: Icons.event_available_outlined,
-                    title: 'Event',
-                    subtitle: 'Add an event to the campus calendar',
+                    title: AppLocalizations.of(sheetContext)!.eventLabel,
+                    subtitle: AppLocalizations.of(
+                      sheetContext,
+                    )!.addEventToCampusCalendar,
                     onTap: () => choose(onEvent),
                   ),
                 ],
@@ -232,112 +236,108 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   // Student-only walkthrough. Each anchored step points at the real widget via
   // a shared key from [tutorialAnchors]; welcome/finale are centered heroes.
   List<AppTutorialStep> get _tutorialSteps => <AppTutorialStep>[
-    const AppTutorialStep(
-      eyebrow: 'Welcome',
-      title: 'Your campus, in one place',
-      description:
-          'A quick, tappable tour of the app — we’ll point to the real buttons as we go.',
+    AppTutorialStep(
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowWelcome,
+      title: AppLocalizations.of(context)!.tutorialTitleYourCampus,
+      description: AppLocalizations.of(context)!.tutorialDescWelcome,
       icon: Icons.waving_hand_rounded,
       tabIndex: 0,
       tips: [
-        'Tap Next, or tap anywhere, to advance.',
-        'Use Back to revisit a step.',
-        'Skip tour is always in the top-right.',
+        AppLocalizations.of(context)!.tutorialTipTapNext,
+        AppLocalizations.of(context)!.tutorialTipUseBack,
+        AppLocalizations.of(context)!.tutorialTipSkipTour,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Getting around',
-      title: 'Your five sections',
-      description:
-          'This bar stays with you everywhere: Home, Events, Search, Alerts, and Profile. The active one turns red.',
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowGettingAround,
+      title: AppLocalizations.of(context)!.tutorialTitleFiveSections,
+      description: AppLocalizations.of(context)!.tutorialDescFiveSections,
       icon: Icons.touch_app_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
       tabIndex: 0,
-      tips: ['Home is your personalized feed.', 'Badges flag new activity.'],
+      tips: [
+        AppLocalizations.of(context)!.tutorialTipHomeFeed,
+        AppLocalizations.of(context)!.tutorialTipBadgesFlag,
+      ],
     ),
     AppTutorialStep(
-      eyebrow: 'Home',
-      title: 'Your feed, your way',
-      description:
-          'Switch between Following and All to control what you see. Like, RSVP, save, and share right from each post.',
+      eyebrow: AppLocalizations.of(context)!.home,
+      title: AppLocalizations.of(context)!.tutorialTitleFeedYourWay,
+      description: AppLocalizations.of(context)!.tutorialDescFeedYourWay,
       icon: Icons.dynamic_feed_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
       tabIndex: 0,
       tips: [
-        'Following shows only clubs you follow.',
-        'All mixes in campus recommendations.',
+        AppLocalizations.of(context)!.tutorialTipFollowingShows,
+        AppLocalizations.of(context)!.tutorialTipAllMixes,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Events',
-      title: 'RSVP in one tap',
-      description:
-          'Tap RSVP to mark you’re going — it turns to “Going” and can flow into your calendar. Search and filter the agenda up top.',
+      eyebrow: AppLocalizations.of(context)!.events,
+      title: AppLocalizations.of(context)!.tutorialTitleRsvpOneTap,
+      description: AppLocalizations.of(context)!.tutorialDescRsvpOneTap,
       icon: Icons.event_available_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.eventsRsvp),
       tabIndex: 1,
       tips: [
-        'Filter by date, audience, or what’s live now.',
-        'Open any event for full details.',
+        AppLocalizations.of(context)!.tutorialTipFilterByDate,
+        AppLocalizations.of(context)!.tutorialTipOpenEventDetails,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Search',
-      title: 'Find people & clubs',
-      description:
-          'Search students by name or major, and clubs by name. Use the tabs above to switch between People and Clubs.',
+      eyebrow: AppLocalizations.of(context)!.search,
+      title: AppLocalizations.of(context)!.tutorialTitleFindPeopleClubs,
+      description: AppLocalizations.of(context)!.tutorialDescFindPeopleClubs,
       icon: Icons.manage_search_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.searchField),
       tabIndex: 2,
       tips: [
-        'Follow people and join clubs from the results.',
-        'Open a profile before you follow.',
+        AppLocalizations.of(context)!.tutorialTipFollowJoin,
+        AppLocalizations.of(context)!.tutorialTipOpenProfileBeforeFollow,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Alerts',
-      title: 'Stay in the loop',
-      description:
-          'Follows, club posts, and event changes collect here. Tap an alert to open it, filter with the chips, or clear them all with this button.',
+      eyebrow: AppLocalizations.of(context)!.alerts,
+      title: AppLocalizations.of(context)!.tutorialTitleStayInLoop,
+      description: AppLocalizations.of(context)!.tutorialDescStayInLoopStudent,
       icon: Icons.notifications_active_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
       tabIndex: 3,
       tips: [
-        'A badge on the bar means something’s new.',
-        'Opening this tab clears the badge.',
+        AppLocalizations.of(context)!.tutorialTipBadgeMeansNew,
+        AppLocalizations.of(context)!.tutorialTipOpeningClearsBadge,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Profile',
-      title: 'This is you',
-      description:
-          'Tap your photo, name, or bio to edit them so classmates recognize you. Your clubs, RSVPs, and stats live here too.',
+      eyebrow: AppLocalizations.of(context)!.profile,
+      title: AppLocalizations.of(context)!.tutorialTitleThisIsYou,
+      description: AppLocalizations.of(context)!.tutorialDescThisIsYou,
       icon: Icons.account_circle_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileHeader),
       tabIndex: 4,
       tips: [
-        'Tap Followers / Following to see who’s who.',
-        'Your “Up next” event is one tap away.',
+        AppLocalizations.of(context)!.tutorialTipFollowersFollowing,
+        AppLocalizations.of(context)!.tutorialTipUpNextEvent,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Settings',
-      title: 'Appearance & replay',
-      description:
-          'The gear opens Settings — appearance and “Replay App Tutorial” whenever you want this tour again.',
+      eyebrow: AppLocalizations.of(context)!.settings,
+      title: AppLocalizations.of(context)!.tutorialTitleAppearanceReplay,
+      description: AppLocalizations.of(context)!.tutorialDescAppearanceReplay(
+        AppLocalizations.of(context)!.replayTutorial,
+      ),
       icon: Icons.settings_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileSettings),
       tabIndex: 4,
-      tips: ['Switch between light and dark mode here.'],
+      tips: [AppLocalizations.of(context)!.tutorialTipSwitchLightDark],
     ),
-    const AppTutorialStep(
-      eyebrow: 'You’re set',
-      title: 'Explore at your own pace',
-      description:
-          'That’s the tour. It won’t pop up again automatically — replay it anytime from Profile → Settings.',
+    AppTutorialStep(
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowYoureSet,
+      title: AppLocalizations.of(context)!.tutorialTitleExploreOwnPace,
+      description: AppLocalizations.of(context)!.tutorialDescExploreOwnPace,
       icon: Icons.rocket_launch_rounded,
       tabIndex: 0,
-      tips: ['Your follows, RSVPs, and saves personalize the app.'],
+      tips: [AppLocalizations.of(context)!.tutorialTipFollowsRsvpsSaves],
     ),
   ];
 
@@ -345,94 +345,92 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   // different nav (no Search tab, a center "+" instead) and a different
   // Profile tab (ClubProfileScreen, not personal info).
   List<AppTutorialStep> get _clubTutorialSteps => <AppTutorialStep>[
-    const AppTutorialStep(
-      eyebrow: 'Welcome',
-      title: 'Run your club from here',
-      description:
-          'A quick tour of the tools you get as a club admin — we’ll point to the real buttons as we go.',
+    AppTutorialStep(
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowWelcome,
+      title: AppLocalizations.of(context)!.tutorialTitleRunClubFromHere,
+      description: AppLocalizations.of(context)!.tutorialDescRunClub,
       icon: Icons.waving_hand_rounded,
       tabIndex: 0,
       tips: [
-        'Tap Next, or tap anywhere, to advance.',
-        'Skip tour is always in the top-right.',
+        AppLocalizations.of(context)!.tutorialTipTapNext,
+        AppLocalizations.of(context)!.tutorialTipSkipTour,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Getting around',
-      title: 'Your four sections',
-      description:
-          'Home, Events, Alerts, and Profile stay with you everywhere. The center button replaces Search — it’s reserved for posting.',
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowGettingAround,
+      title: AppLocalizations.of(context)!.tutorialTitleFourSections,
+      description: AppLocalizations.of(context)!.tutorialDescFourSections,
       icon: Icons.touch_app_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
       tabIndex: 0,
-      tips: ['The active section turns red.', 'Badges flag new activity.'],
+      tips: [
+        AppLocalizations.of(context)!.tutorialTipActiveSectionRed,
+        AppLocalizations.of(context)!.tutorialTipBadgesFlag,
+      ],
     ),
     AppTutorialStep(
-      eyebrow: 'Create',
-      title: 'Post a new event',
-      description:
-          'Tap the center button anytime to open the event form — title, time, location, and audience.',
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowCreate,
+      title: AppLocalizations.of(context)!.tutorialTitlePostNewEvent,
+      description: AppLocalizations.of(context)!.tutorialDescPostNewEvent,
       icon: Icons.add_circle_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubCreateButton),
       tabIndex: 0,
-      tips: ['Your event shows up in Events for everyone right away.'],
+      tips: [AppLocalizations.of(context)!.tutorialTipEventShowsUpRightAway],
     ),
     AppTutorialStep(
-      eyebrow: 'Home',
-      title: 'Quick text updates',
-      description:
-          'This composer posts a quick update to your club’s followers — no need for the full event form for a text-only post.',
+      eyebrow: AppLocalizations.of(context)!.home,
+      title: AppLocalizations.of(context)!.tutorialTitleQuickTextUpdates,
+      description: AppLocalizations.of(context)!.tutorialDescQuickTextUpdates,
       icon: Icons.dynamic_feed_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
       tabIndex: 0,
-      tips: ['Add a photo for a bigger, more visible post.'],
+      tips: [AppLocalizations.of(context)!.tutorialTipAddPhotoBiggerPost],
     ),
     AppTutorialStep(
-      eyebrow: 'Your club',
-      title: 'Posts, Events, Collabs, Board',
-      description:
-          'This is your club’s public profile. Switch tabs to manage posts and events — tap the ⋯ menu on any of yours to pin or delete it, or tap an event’s attendee count to see who’s coming.',
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowYourClub,
+      title: AppLocalizations.of(
+        context,
+      )!.tutorialTitlePostsEventsCollabsBoard,
+      description: AppLocalizations.of(context)!.tutorialDescClubProfile,
       icon: Icons.view_agenda_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs),
       tabIndex: 4,
       tips: [
-        'Board lists your club’s board members and titles.',
-        'Collabs shows joint events with other clubs.',
+        AppLocalizations.of(context)!.tutorialTipBoardListsMembers,
+        AppLocalizations.of(context)!.tutorialTipCollabsJointEvents,
       ],
     ),
     AppTutorialStep(
-      eyebrow: 'Insights',
-      title: 'See what’s landing',
-      description:
-          'Track views, likes, and top posts so you know what your followers respond to.',
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowInsights,
+      title: AppLocalizations.of(context)!.tutorialTitleSeeWhatsLanding,
+      description: AppLocalizations.of(context)!.tutorialDescInsights,
       icon: Icons.insights_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubInsights),
       tabIndex: 4,
     ),
     AppTutorialStep(
-      eyebrow: 'Settings',
-      title: 'Board, appearance & replay',
-      description:
-          'The gear opens Settings — add or remove board members, switch appearance, and replay this tour whenever you want.',
+      eyebrow: AppLocalizations.of(context)!.settings,
+      title: AppLocalizations.of(context)!.tutorialTitleBoardAppearanceReplay,
+      description: AppLocalizations.of(
+        context,
+      )!.tutorialDescBoardAppearanceReplay,
       icon: Icons.settings_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubProfileSettings),
       tabIndex: 4,
-      tips: ['Board management lives under your club’s section in Settings.'],
+      tips: [AppLocalizations.of(context)!.tutorialTipBoardManagementSettings],
     ),
     AppTutorialStep(
-      eyebrow: 'Alerts',
-      title: 'Stay in the loop',
-      description:
-          'New followers and event activity collect here. Tap an alert to open it, or clear them all with this button.',
+      eyebrow: AppLocalizations.of(context)!.alerts,
+      title: AppLocalizations.of(context)!.tutorialTitleStayInLoop,
+      description: AppLocalizations.of(context)!.tutorialDescAlertsClub,
       icon: Icons.notifications_active_rounded,
       targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
       tabIndex: 3,
     ),
-    const AppTutorialStep(
-      eyebrow: 'You’re set',
-      title: 'Run your club at your own pace',
-      description:
-          'That’s the tour. It won’t pop up again automatically — replay it anytime from Profile → Settings.',
+    AppTutorialStep(
+      eyebrow: AppLocalizations.of(context)!.tutorialEyebrowYoureSet,
+      title: AppLocalizations.of(context)!.tutorialTitleRunClubOwnPace,
+      description: AppLocalizations.of(context)!.tutorialDescExploreOwnPace,
       icon: Icons.rocket_launch_rounded,
       tabIndex: 0,
     ),
@@ -576,41 +574,41 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         index: 0,
         icon: Icons.home_outlined,
         activeIcon: Icons.home_rounded,
-        label: S.home,
+        label: AppLocalizations.of(context)!.home,
       ),
       _NavSlot(
         index: 1,
         icon: Icons.calendar_today_outlined,
         activeIcon: Icons.calendar_today_rounded,
-        label: S.events,
+        label: AppLocalizations.of(context)!.events,
       ),
       if (!_isClubAdmin)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
           activeIcon: Icons.search_rounded,
-          label: S.search,
+          label: AppLocalizations.of(context)!.search,
         ),
       if (_isClubAdmin) const _NavSlot.center(),
       _NavSlot(
         index: 3,
         icon: Icons.notifications_none_rounded,
         activeIcon: Icons.notifications_rounded,
-        label: S.alerts,
+        label: AppLocalizations.of(context)!.alerts,
         badge: unreadAlerts,
       ),
       _NavSlot(
         index: 4,
         icon: Icons.person_outline_rounded,
         activeIcon: Icons.person_rounded,
-        label: S.profile,
+        label: AppLocalizations.of(context)!.profile,
       ),
       if (widget.isAdmin)
         _NavSlot(
           index: 5,
           icon: Icons.admin_panel_settings_outlined,
           activeIcon: Icons.admin_panel_settings_rounded,
-          label: S.admin,
+          label: AppLocalizations.of(context)!.admin,
         ),
     ];
 

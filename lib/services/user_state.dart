@@ -6,14 +6,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/notification.dart';
 import 'content_store.dart';
+import 'locale_service.dart';
 import 'photo_file_cache.dart';
 
 // Global state singleton. Extends ChangeNotifier so any ListenableBuilder
 // that wraps a follow button will rebuild instantly when state changes,
 // regardless of which screen triggered the mutation.
 class UserState extends ChangeNotifier {
+  // No BuildContext is available this deep in the service layer; these
+  // generated in-app notification messages are resolved here via the
+  // current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
   final Set<String> likedPostIds = {'n1'}; // pre-seed from mock likes
   final Set<String> followedClubIds = {
     'c1',
@@ -283,7 +290,7 @@ class UserState extends ChangeNotifier {
     final notif = AppNotification(
       id: notifId,
       userId: toId,
-      message: '$fromName wants to follow you.',
+      message: _l10n.followRequestMessage(fromName),
       createdAt: DateTime.now(),
       targetType: 'follow_request',
       targetId: fromId,
@@ -303,7 +310,7 @@ class UserState extends ChangeNotifier {
     final notif = AppNotification(
       id: 'follow_accepted_${fromId}_${DateTime.now().millisecondsSinceEpoch}',
       userId: fromId,
-      message: 'Your follow request was accepted.',
+      message: _l10n.followRequestAccepted,
       createdAt: DateTime.now(),
       targetType: 'follow_accepted',
       targetId: toId,

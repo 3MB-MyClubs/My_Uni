@@ -10,6 +10,11 @@ import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+<<<<<<< Updated upstream
+=======
+import '../services/content_safety_service.dart';
+import '../l10n/app_localizations.dart';
+>>>>>>> Stashed changes
 import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 
@@ -110,13 +115,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingRemote = false;
-        _loadError = 'Could not load profile options from Supabase.';
+        _loadError = AppLocalizations.of(context)!.couldNotLoadProfileOptions;
       });
     }
   }
 
   Future<void> _save() async {
     if (_isSaving) return;
+<<<<<<< Updated upstream
+=======
+    final rejected = contentSafetyService.isRejected([_bioCtrl.text]);
+    if (rejected) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.contentSafetyRejected),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+>>>>>>> Stashed changes
     setState(() => _isSaving = true);
 
     try {
@@ -145,8 +165,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not save profile to Supabase'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.couldNotSaveProfileSupabase),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -167,10 +187,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.profileUpdated),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     Navigator.pop(context);
@@ -224,14 +244,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _photoOption(Icons.camera_alt_outlined, 'Take a photo', () {
+              _photoOption(Icons.camera_alt_outlined, AppLocalizations.of(context)!.takePhotoOption, () {
                 Navigator.pop(context);
                 _pickPhoto(ImageSource.camera);
               }),
               Divider(height: 1, indent: 16, color: AppColors.divider),
               _photoOption(
                 Icons.photo_library_outlined,
-                'Choose from library',
+                AppLocalizations.of(context)!.chooseFromLibraryOption,
                 () {
                   Navigator.pop(context);
                   _pickPhoto(ImageSource.gallery);
@@ -241,7 +261,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 Divider(height: 1, indent: 16, color: AppColors.divider),
                 _photoOption(
                   Icons.delete_outline_rounded,
-                  'Remove photo',
+                  AppLocalizations.of(context)!.removePhoto,
                   () async {
                     Navigator.pop(context);
                     await _removePhoto();
@@ -294,8 +314,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Photo removed locally, but remote delete failed.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -324,14 +344,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         compressQuality: 72,
         uiSettings: [
           IOSUiSettings(
-            title: 'Crop Photo',
+            title: AppLocalizations.of(context)!.cropPhotoTitle,
             aspectRatioLockEnabled: true,
             resetAspectRatioEnabled: true,
             aspectRatioPickerButtonHidden: true,
             cropStyle: CropStyle.circle,
           ),
           AndroidUiSettings(
-            toolbarTitle: 'Crop Photo',
+            toolbarTitle: AppLocalizations.of(context)!.cropPhotoTitle,
             toolbarColor: AppColors.primaryRed,
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: true,
@@ -345,8 +365,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not open photo cropper.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.couldNotOpenPhotoCropper),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -373,8 +393,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Photo saved locally, but upload failed.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.photoSavedLocallyUploadFailed),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -393,14 +413,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         elevation: 0,
         foregroundColor: AppColors.text,
         title: Text(
-          'Edit Profile',
+          AppLocalizations.of(context)!.editProfile,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _save,
             child: Text(
-              _isSaving ? 'Saving...' : 'Save',
+              _isSaving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.save,
               style: TextStyle(
                 color: AppColors.primaryRed,
                 fontWeight: FontWeight.w800,
@@ -470,7 +490,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: TextButton(
               onPressed: _showPhotoOptions,
               child: Text(
-                'Change photo',
+                AppLocalizations.of(context)!.changePhotoButton,
                 style: TextStyle(
                   color: AppColors.primaryRed,
                   fontWeight: FontWeight.w700,
@@ -480,16 +500,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 8),
 
-          _label('Bio'),
+          _label(AppLocalizations.of(context)!.bioLabel),
           _field(
             controller: _bioCtrl,
-            hint: 'Tell people a little about yourself',
+            hint: AppLocalizations.of(context)!.bioHint,
             maxLength: 80,
             maxLines: 3,
           ),
           const SizedBox(height: 18),
 
-          _label('University year'),
+          _label(AppLocalizations.of(context)!.universityYearLabel),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -502,14 +522,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 18),
 
-          _label('Major'),
+          _label(AppLocalizations.of(context)!.majorLabel),
           AcademicProgramField(
             value: _major,
-            hint: 'Select your major',
+            hint: AppLocalizations.of(context)!.selectMajor,
             onTap: () async {
               final result = await showAcademicProgramPicker(
                 context: context,
-                title: 'Select major',
+                title: AppLocalizations.of(context)!.selectMajorHint,
                 selected: _major == null ? const [] : [_major!],
                 programs: _majorNames,
               );
@@ -519,18 +539,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 18),
 
-          _label('Double major'),
+          _label(AppLocalizations.of(context)!.doubleMajorLabel),
           _singleProgramEditor(
             value: _doubleMajor,
-            hint: 'Select a double major',
+            hint: AppLocalizations.of(context)!.selectDoubleMajorHint,
             onChanged: (value) => setState(() => _doubleMajor = value),
           ),
           const SizedBox(height: 18),
 
-          _label('Minor'),
+          _label(AppLocalizations.of(context)!.minorLabel),
           _singleProgramEditor(
             value: _minor,
-            hint: 'Select a minor',
+            hint: AppLocalizations.of(context)!.selectMinorHint,
             onChanged: (value) => setState(() => _minor = value),
           ),
           const SizedBox(height: 28),
@@ -547,7 +567,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               child: Text(
-                _isSaving ? 'Saving...' : 'Save changes',
+                _isSaving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.saveChangesButton,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
@@ -667,7 +687,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 color: AppColors.secondaryText,
               ),
               label: Text(
-                'Clear',
+                AppLocalizations.of(context)!.clear,
                 style: TextStyle(
                   color: AppColors.secondaryText,
                   fontWeight: FontWeight.w700,
