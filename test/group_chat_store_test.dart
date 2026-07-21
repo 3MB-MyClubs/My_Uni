@@ -82,11 +82,11 @@ void main() {
     )!;
 
     expect(store.groupDisplayName(threadId, 'u1'), 'Can, Emir');
-    store.addGroupMembers(threadId, ['u4', 'u5']);
+    store.addGroupMembers(threadId, ['u4', 'u5'], actorId: 'u1');
     expect(store.groupDisplayName(threadId, 'u1'), 'Can, Emir +2');
 
     store.setGroupCustomName(threadId, '  Study Crew  ');
-    store.removeGroupMember(threadId, 'u5');
+    store.removeGroupMember(threadId, actorId: 'u1', memberId: 'u5');
     expect(store.groupDisplayName(threadId, 'u1'), 'Study Crew');
 
     store.setGroupCustomName(threadId, '\t');
@@ -116,6 +116,53 @@ void main() {
     expect(
       store.sendMessage(threadId: threadId, senderId: 'u9', content: 'Nope'),
       isNull,
+    );
+  });
+
+  test('creator can delegate admin and only admins can remove members', () {
+    final threadId = store.createGroupThread(
+      creatorId: 'u1',
+      recipientIds: ['u2', 'u3', 'u4'],
+    )!;
+
+    expect(store.groupForThread(threadId)?.isAdmin('u1'), isTrue);
+    expect(store.groupForThread(threadId)?.isAdmin('u2'), isFalse);
+    expect(
+      store.removeGroupMember(threadId, actorId: 'u2', memberId: 'u4'),
+      isFalse,
+    );
+
+    expect(
+      store.setGroupMemberAdmin(
+        threadId,
+        actorId: 'u1',
+        memberId: 'u2',
+        isAdmin: true,
+      ),
+      isTrue,
+    );
+    expect(store.groupForThread(threadId)?.isAdmin('u2'), isTrue);
+    expect(
+      store.removeGroupMember(threadId, actorId: 'u2', memberId: 'u3'),
+      isTrue,
+    );
+    expect(
+      store.removeGroupMember(threadId, actorId: 'u2', memberId: 'u1'),
+      isFalse,
+    );
+    expect(
+      store.setGroupMemberAdmin(
+        threadId,
+        actorId: 'u1',
+        memberId: 'u2',
+        isAdmin: false,
+      ),
+      isTrue,
+    );
+    expect(store.groupForThread(threadId)?.isAdmin('u2'), isFalse);
+    expect(
+      store.removeGroupMember(threadId, actorId: 'u2', memberId: 'u4'),
+      isFalse,
     );
   });
 }

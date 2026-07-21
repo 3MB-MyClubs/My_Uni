@@ -11,6 +11,8 @@ import '../widgets/group_avatar_stack.dart';
 import '../widgets/group_photo_picker.dart';
 import '../widgets/user_avatar.dart';
 
+enum _GroupMemberAction { makeAdmin, dismissAdmin, remove }
+
 class GroupInfoScreen extends StatefulWidget {
   final String threadId;
   final String myId;
@@ -69,6 +71,63 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   void _saveName() {
     chatStore.setGroupCustomName(widget.threadId, _nameController.text);
     FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _confirmAndRemoveMember(String memberId) async {
+    final memberName = _nameFor(memberId);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove $memberName?'),
+        content: Text(
+          'Are you sure you want to remove $memberName from this group?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-remove-group-member'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    chatStore.removeGroupMember(
+      widget.threadId,
+      actorId: widget.myId,
+      memberId: memberId,
+    );
+  }
+
+  Future<void> _handleMemberAction(
+    _GroupMemberAction action,
+    String memberId,
+  ) async {
+    switch (action) {
+      case _GroupMemberAction.makeAdmin:
+        chatStore.setGroupMemberAdmin(
+          widget.threadId,
+          actorId: widget.myId,
+          memberId: memberId,
+          isAdmin: true,
+        );
+        return;
+      case _GroupMemberAction.dismissAdmin:
+        chatStore.setGroupMemberAdmin(
+          widget.threadId,
+          actorId: widget.myId,
+          memberId: memberId,
+          isAdmin: false,
+        );
+        return;
+      case _GroupMemberAction.remove:
+        await _confirmAndRemoveMember(memberId);
+        return;
+    }
   }
 
   Future<void> _showAddMembers() async {
@@ -177,7 +236,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                                 onTap: () {
                                   chatStore.addGroupMembers(widget.threadId, [
                                     user.id,
-                                  ]);
+                                  ], actorId: widget.myId);
                                   Navigator.pop(sheetContext);
                                 },
                               );
@@ -199,7 +258,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (group == null) {
       return const Scaffold(body: Center(child: Text('Group unavailable')));
     }
-    final isCreator = group.creatorId == widget.myId;
+    final canManage = group.isAdmin(widget.myId);
     final visibleIds = group.memberIds
         .where((id) => id != widget.myId)
         .toList();
@@ -217,7 +276,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
         children: [
           Center(
-            child: isCreator
+            child: canManage
                 ? GroupPhotoPicker(
                     imagePath: group.photoUrl,
                     memberIds: visibleIds,
@@ -244,7 +303,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          if (isCreator)
+          if (canManage)
             TextField(
               key: const ValueKey('edit-group-name-field'),
               controller: _nameController,
@@ -280,7 +339,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 ),
               ),
               const Spacer(),
-              if (isCreator)
+              if (canManage)
                 TextButton.icon(
                   onPressed: _showAddMembers,
                   icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
@@ -289,10 +348,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             ],
           ),
           ...group.memberIds.map((id) {
-            final canRemove =
-                isCreator &&
-                id != group.creatorId &&
-                group.memberIds.length > 2;
+            final isCreator = id == group.creatorId;
+            final isAdmin = group.isAdmin(id);
+            final canActOnMember = canManage && id != widget.myId && !isCreator;
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: UserAvatar(
@@ -308,17 +366,36 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   color: AppColors.text,
                 ),
               ),
-              subtitle: id == group.creatorId
-                  ? const Text('Group creator')
+              subtitle: isCreator
+                  ? const Text('Group creator · Admin')
+                  : isAdmin
+                  ? const Text('Group admin')
                   : null,
-              trailing: canRemove
-                  ? IconButton(
-                      tooltip: 'Remove member',
-                      onPressed: () =>
-                          chatStore.removeGroupMember(widget.threadId, id),
+              trailing: canActOnMember
+                  ? PopupMenuButton<_GroupMemberAction>(
+                      key: ValueKey('group-member-actions-$id'),
+                      tooltip: 'Member actions',
+                      onSelected: (action) => _handleMemberAction(action, id),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: isAdmin
+                              ? _GroupMemberAction.dismissAdmin
+                              : _GroupMemberAction.makeAdmin,
+                          child: Text(
+                            isAdmin
+                                ? 'Dismiss as group admin'
+                                : 'Make group admin',
+                          ),
+                        ),
+                        if (group.memberIds.length > 2)
+                          const PopupMenuItem(
+                            value: _GroupMemberAction.remove,
+                            child: Text('Remove member'),
+                          ),
+                      ],
                       icon: Icon(
-                        Icons.remove_circle_outline_rounded,
-                        color: AppColors.primaryRed,
+                        Icons.more_vert_rounded,
+                        color: AppColors.secondaryText,
                       ),
                     )
                   : null,

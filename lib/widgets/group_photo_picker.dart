@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../services/app_colors.dart';
-import '../services/photo_upload_quality.dart';
 import 'group_avatar_stack.dart';
+import 'group_photo_editor.dart';
+
+typedef GroupPhotoSourcePicker = Future<String?> Function(ImageSource source);
+typedef GroupPhotoEditorLauncher =
+    Future<String?> Function(BuildContext context, String sourcePath);
 
 class GroupPhotoPicker extends StatelessWidget {
   final String? imagePath;
@@ -12,6 +15,8 @@ class GroupPhotoPicker extends StatelessWidget {
   final String Function(String userId) nameForUser;
   final ValueChanged<String?> onChanged;
   final double size;
+  final GroupPhotoSourcePicker? sourcePicker;
+  final GroupPhotoEditorLauncher editorLauncher;
 
   const GroupPhotoPicker({
     super.key,
@@ -20,35 +25,30 @@ class GroupPhotoPicker extends StatelessWidget {
     required this.nameForUser,
     required this.onChanged,
     this.size = 88,
+    this.sourcePicker,
+    this.editorLauncher = showGroupPhotoEditor,
   });
 
   Future<void> _pickPhoto(BuildContext context, ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source);
-    if (picked == null || !context.mounted) return;
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-      maxWidth: PhotoUploadQuality.avatarMaxDimension,
-      maxHeight: PhotoUploadQuality.avatarMaxDimension,
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: PhotoUploadQuality.jpegQuality,
-      uiSettings: [
-        IOSUiSettings(
-          title: 'Crop Group Photo',
-          aspectRatioLockEnabled: true,
-          resetAspectRatioEnabled: false,
-          aspectRatioPickerButtonHidden: true,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: 'Crop Group Photo',
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: true,
-          hideBottomControls: false,
-        ),
-      ],
-    );
-    if (cropped != null && context.mounted) onChanged(cropped.path);
+    try {
+      final selectedPath = sourcePicker != null
+          ? await sourcePicker!(source)
+          : (await ImagePicker().pickImage(source: source))?.path;
+      if (selectedPath == null || !context.mounted) return;
+
+      final editedPath = await editorLauncher(context, selectedPath);
+      if (editedPath != null && context.mounted) onChanged(editedPath);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the photo editor.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 
   void _showPicker(BuildContext context) {

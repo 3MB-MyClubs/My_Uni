@@ -45,6 +45,10 @@ void main() {
       'Project Team',
     );
     expect(ChatGroup.fromMap(group.toMap()).photoUrl, '/temporary/group.jpg');
+    expect(group.isAdmin('me'), isTrue);
+    final delegated = group.withAdmins(['can']);
+    expect(delegated.isAdmin('can'), isTrue);
+    expect(ChatGroup.fromMap(delegated.toMap()).isAdmin('can'), isTrue);
     expect(
       group
           .withCustomName('   ')

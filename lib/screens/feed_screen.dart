@@ -1102,7 +1102,7 @@ class _FeedPostSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(
@@ -1112,40 +1112,39 @@ class _FeedPostSkeleton extends StatelessWidget {
           ),
         ),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SkeletonBox.circle(size: 44),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(
-                  width: 128,
-                  height: 14,
-                  borderRadius: BorderRadius.all(Radius.circular(7)),
-                ),
-                const SizedBox(height: 8),
-                SkeletonBox(
-                  width: double.infinity,
-                  height: 12,
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                ),
-                const SizedBox(height: 6),
-                SkeletonBox(
-                  width: MediaQuery.sizeOf(context).width * 0.46,
-                  height: 12,
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                ),
-                const SizedBox(height: 12),
-                SkeletonBox(
-                  width: double.infinity,
-                  height: 176,
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                ),
-              ],
-            ),
+          Row(
+            children: [
+              const SkeletonBox.circle(size: 44),
+              const SizedBox(width: 11),
+              SkeletonBox(
+                width: 128,
+                height: 14,
+                borderRadius: BorderRadius.all(Radius.circular(7)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SkeletonBox(
+            width: double.infinity,
+            height: (MediaQuery.sizeOf(context).width * 0.78)
+                .clamp(280.0, 340.0)
+                .toDouble(),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          const SizedBox(height: 10),
+          SkeletonBox(
+            width: double.infinity,
+            height: 12,
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+          ),
+          const SizedBox(height: 6),
+          SkeletonBox(
+            width: MediaQuery.sizeOf(context).width * 0.58,
+            height: 12,
+            borderRadius: BorderRadius.all(Radius.circular(6)),
           ),
         ],
       ),
@@ -2612,9 +2611,27 @@ class _PostCardState extends State<_PostCard>
     final ownContent = _isOwnerOfClub(widget.post.clubId);
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
+    final mediaHeight = (MediaQuery.sizeOf(context).width * 0.78)
+        .clamp(280.0, 340.0)
+        .toDouble();
+    final caption = ExpandablePostCaption(
+      key: ValueKey('home-feed-caption-${widget.post.id}'),
+      authorName: '',
+      caption: widget.post.content,
+      captionStyle: TextStyle(
+        color: AppColors.text,
+        fontSize: 14.5,
+        height: 1.45,
+      ),
+      moreStyle: TextStyle(
+        color: AppColors.primaryRed,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+      ),
+    );
 
-    // ── Twitter / X-style row: avatar gutter on the left, everything else in a
-    //    right-hand column, posts separated by a hairline divider. ──
+    // Keep the identity in a compact header so Home-feed media can use the
+    // full card width. Captions for photo posts deliberately follow the media.
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -2625,240 +2642,206 @@ class _PostCardState extends State<_PostCard>
           ),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Avatar gutter ──
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ClubProfileScreen(club: club, color: clubColor),
+          // Header: avatar + club identity + time, with follow + more.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClubProfileScreen(club: club, color: clubColor),
+                  ),
+                ),
+                child: ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: clubColor,
+                  imageUrl: club.logoUrl,
+                  size: 44,
+                  fontSize: 18,
+                  shape: 'circle',
+                ),
               ),
-            ),
-            child: ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
-              color: clubColor,
-              imageUrl: club.logoUrl,
-              size: 44,
-              fontSize: 18,
-              shape: 'circle',
-            ),
-          ),
-          const SizedBox(width: 11),
-          // ── Body column ──
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header: club identity + time, with follow + more on the right
-                Row(
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ClubProfileScreen(
-                                        club: club,
-                                        color: clubColor,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    club.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14.5,
-                                      color: AppColors.text,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 1),
-                          Text(
-                            _timeAgo(widget.post.createdAt),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (isStudent)
-                      ClubFollowButton(clubId: club.id, size: 'small'),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: _showPostOptions,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 4, top: 2),
-                        child: Icon(
-                          Icons.more_horiz,
-                          size: 18,
-                          color: AppColors.secondaryText,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ClubProfileScreen(club: club, color: clubColor),
                         ),
+                      ),
+                      child: Text(
+                        club.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14.5,
+                          color: AppColors.text,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      _timeAgo(widget.post.createdAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
                       ),
                     ),
                   ],
                 ),
-                // ── Announcement banner ──
-                if (widget.post.isAnnouncement) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+              ),
+              const SizedBox(width: 8),
+              if (isStudent) ClubFollowButton(clubId: club.id, size: 'small'),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _showPostOptions,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4, top: 2),
+                  child: Icon(
+                    Icons.more_horiz,
+                    size: 18,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // ── Announcement banner ──
+          if (widget.post.isAnnouncement) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: clubColor.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+                border: Border.all(color: clubColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.campaign_rounded, size: 15, color: clubColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    S.announcement.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: clubColor,
                     ),
-                    decoration: BoxDecoration(
-                      color: clubColor.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                      border: Border.all(
-                        color: clubColor.withValues(alpha: 0.3),
-                      ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          // Text-only posts keep their copy directly below the header.
+          if (!hasImage && widget.post.content.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            caption,
+          ],
+          // ── Poll ──
+          if (widget.post.poll != null)
+            PollCard(post: widget.post, accent: clubColor),
+          // ── Media (full-card width on Home) ──
+          if (hasImage) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              key: ValueKey('home-feed-photo-${widget.post.id}'),
+              onDoubleTap: isStudent ? _doubleTapLike : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    buildPostBanner(
+                      imagePath: widget.post.imagePath,
+                      fallbackColor: clubColor,
+                      fallbackLetter: club.name[0],
+                      height: mediaHeight,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.campaign_rounded,
-                          size: 15,
-                          color: clubColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          S.announcement.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
-                            color: clubColor,
+                    if (_showHeart)
+                      ScaleTransition(
+                        scale: Tween(begin: 0.5, end: 1.4).animate(
+                          CurvedAnimation(
+                            parent: _heartController,
+                            curve: Curves.elasticOut,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-                // ── Content ──
-                if (widget.post.content.trim().isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  ExpandablePostCaption(
-                    authorName: '',
-                    caption: widget.post.content,
-                    captionStyle: TextStyle(
-                      color: AppColors.text,
-                      fontSize: 14.5,
-                      height: 1.45,
-                    ),
-                    moreStyle: TextStyle(
-                      color: AppColors.primaryRed,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-                // ── Poll ──
-                if (widget.post.poll != null)
-                  PollCard(post: widget.post, accent: clubColor),
-                // ── Media (indented, rounded) ──
-                if (hasImage) ...[
-                  const SizedBox(height: 10),
-                  GestureDetector(
-                    onDoubleTap: isStudent ? _doubleTapLike : null,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.all(Radius.circular(16)),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          buildPostBanner(
-                            imagePath: widget.post.imagePath,
-                            fallbackColor: clubColor,
-                            fallbackLetter: club.name[0],
-                            height: 230,
-                          ),
-                          if (_showHeart)
-                            ScaleTransition(
-                              scale: Tween(begin: 0.5, end: 1.4).animate(
-                                CurvedAnimation(
-                                  parent: _heartController,
-                                  curve: Curves.elasticOut,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.favorite,
-                                color: Colors.white,
-                                size: 72,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                // ── Engagement stats (own-club admin only) ──
-                if (ownContent) ...[
-                  const SizedBox(height: 10),
-                  ListenableBuilder(
-                    listenable: viewTracker,
-                    builder: (context, _) => _EngagementBar(
-                      likes: likeCount,
-                      shares: shareCount,
-                      score: widget.score,
-                      views: viewTracker.viewCount(widget.post.id),
-                      onViewTap: () => showModalBottomSheet<void>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => _ViewersSheet(
-                          contentId: widget.post.id,
-                          title: 'Post Viewers',
+                        child: Icon(
+                          Icons.favorite,
+                          color: Colors.white,
+                          size: 72,
                         ),
                       ),
-                      onLikeTap: () => showModalBottomSheet<void>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => _LikersSheet(postId: widget.post.id),
-                      ),
-                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.post.content.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              caption,
+            ],
+          ],
+          // ── Engagement stats (own-club admin only) ──
+          if (ownContent) ...[
+            const SizedBox(height: 10),
+            ListenableBuilder(
+              listenable: viewTracker,
+              builder: (context, _) => _EngagementBar(
+                likes: likeCount,
+                shares: shareCount,
+                score: widget.score,
+                views: viewTracker.viewCount(widget.post.id),
+                onViewTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => _ViewersSheet(
+                    contentId: widget.post.id,
+                    title: 'Post Viewers',
                   ),
-                ],
-                const SizedBox(height: 4),
-                // ── Action row (X-style) ──
-                if (isStudent)
-                  Row(
-                    children: [
-                      _twAction(
-                        icon: isLiked
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        count: null,
-                        color: isLiked
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
-                        onTap: _toggleLike,
-                      ),
-                    ],
-                  ),
+                ),
+                onLikeTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => _LikersSheet(postId: widget.post.id),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          // ── Action row (X-style) ──
+          if (isStudent)
+            Row(
+              children: [
+                _twAction(
+                  icon: isLiked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  count: null,
+                  color: isLiked
+                      ? AppColors.primaryRed
+                      : AppColors.secondaryText,
+                  onTap: _toggleLike,
+                ),
               ],
             ),
-          ),
         ],
       ),
     );
