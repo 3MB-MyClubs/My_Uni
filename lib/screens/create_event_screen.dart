@@ -17,6 +17,7 @@ import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/photo_upload_quality.dart';
 import '../services/supabase_event_service.dart';
 import '../services/user_state.dart';
 import '../widgets/app_network_image.dart';
@@ -1020,9 +1021,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           _SectionHeader(
             icon: Icons.link_rounded,
             label: AppLocalizations.of(context)!.registrationLabel,
-            subtitle: AppLocalizations.of(
-              context,
-            )!.registrationSectionSubtitle,
+            subtitle: AppLocalizations.of(context)!.registrationSectionSubtitle,
             badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
@@ -1334,11 +1333,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            AppLocalizations.of(context)!.stepProgressLabel(
-              _step + 1,
-              _stepCount,
-              _stepTitles[_step],
-            ),
+            AppLocalizations.of(
+              context,
+            )!.stepProgressLabel(_step + 1, _stepCount, _stepTitles[_step]),
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -1833,7 +1830,9 @@ class _HeroEditor extends StatelessWidget {
                 bottom: 14,
                 child: Text(
                   titleText.isEmpty
-                      ? AppLocalizations.of(context)!.eventTitlePreviewPlaceholder
+                      ? AppLocalizations.of(
+                          context,
+                        )!.eventTitlePreviewPlaceholder
                       : titleText,
                   style: TextStyle(
                     color: titleText.isEmpty
@@ -1905,21 +1904,16 @@ class _PhotoEditButton extends StatelessWidget {
   });
 
   Future<void> _pickFromGallery(BuildContext context) async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 1920,
-      maxHeight: 1920,
-    );
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null || !context.mounted) return;
 
     final cropPhotoTitle = AppLocalizations.of(context)!.cropPhotoTitle;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      maxWidth: 1920,
-      maxHeight: 1920,
+      maxWidth: PhotoUploadQuality.contentMaxDimension,
+      maxHeight: PhotoUploadQuality.contentMaxDimension,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 85,
+      compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
           title: cropPhotoTitle,

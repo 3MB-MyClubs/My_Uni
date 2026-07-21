@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/app_colors.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
+import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -119,8 +120,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
-    final rejected = contentSafetyService.isRejected([_bioCtrl.text]);
-    if (rejected) {
+    final safetyMessage = contentSafetyService.rejectionMessage([
+      _bioCtrl.text,
+    ]);
+    if (safetyMessage != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -160,7 +163,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.couldNotSaveProfileSupabase),
+            content: Text(
+              AppLocalizations.of(context)!.couldNotSaveProfileSupabase,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -238,10 +243,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _photoOption(Icons.camera_alt_outlined, AppLocalizations.of(context)!.takePhotoOption, () {
-                Navigator.pop(context);
-                _pickPhoto(ImageSource.camera);
-              }),
+              _photoOption(
+                Icons.camera_alt_outlined,
+                AppLocalizations.of(context)!.takePhotoOption,
+                () {
+                  Navigator.pop(context);
+                  _pickPhoto(ImageSource.camera);
+                },
+              ),
               Divider(height: 1, indent: 16, color: AppColors.divider),
               _photoOption(
                 Icons.photo_library_outlined,
@@ -309,7 +318,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed),
+            content: Text(
+              AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -321,21 +332,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 72,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
+      final picked = await picker.pickImage(source: source);
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
+        maxWidth: PhotoUploadQuality.avatarMaxDimension,
+        maxHeight: PhotoUploadQuality.avatarMaxDimension,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 72,
+        compressQuality: PhotoUploadQuality.jpegQuality,
         uiSettings: [
           IOSUiSettings(
             title: AppLocalizations.of(context)!.cropPhotoTitle,
@@ -360,7 +366,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.couldNotOpenPhotoCropper),
+            content: Text(
+              AppLocalizations.of(context)!.couldNotOpenPhotoCropper,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -388,7 +396,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.photoSavedLocallyUploadFailed),
+            content: Text(
+              AppLocalizations.of(context)!.photoSavedLocallyUploadFailed,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -414,7 +424,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           TextButton(
             onPressed: _isSaving ? null : _save,
             child: Text(
-              _isSaving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.save,
+              _isSaving
+                  ? AppLocalizations.of(context)!.savingEllipsis
+                  : AppLocalizations.of(context)!.save,
               style: TextStyle(
                 color: AppColors.primaryRed,
                 fontWeight: FontWeight.w800,
@@ -561,7 +573,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               child: Text(
-                _isSaving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.saveChangesButton,
+                _isSaving
+                    ? AppLocalizations.of(context)!.savingEllipsis
+                    : AppLocalizations.of(context)!.saveChangesButton,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),

@@ -191,7 +191,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.auto_awesome_rounded,
                 color: AppColors.primaryRed,
                 size: 22,

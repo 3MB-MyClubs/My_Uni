@@ -76,14 +76,18 @@ Future<String?> showModerationReasonSheet(
                     color: AppColors.primaryRed,
                   ),
                   title: Text(
-                    AppLocalizations.of(context)!.moderationReasonLabel(reason.value),
+                    AppLocalizations.of(
+                      context,
+                    )!.moderationReasonLabel(reason.value),
                     style: TextStyle(
                       color: AppColors.text,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   subtitle: Text(
-                    AppLocalizations.of(context)!.moderationReasonDetail(reason.value),
+                    AppLocalizations.of(
+                      context,
+                    )!.moderationReasonDetail(reason.value),
                     style: TextStyle(color: AppColors.secondaryText),
                   ),
                   onTap: () => Navigator.pop(sheetContext, reason.value),

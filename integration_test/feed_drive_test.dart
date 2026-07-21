@@ -14,7 +14,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
 
 /// Drives the real Home feed on a simulator to visually verify:
@@ -74,7 +74,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     contentStore.applyToLists();
     authService.login('alice@ku.edu.tr');
 

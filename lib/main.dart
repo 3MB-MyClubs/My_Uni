@@ -12,6 +12,7 @@ import 'screens/signup_flow_screen.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
 import 'screens/language_choice_screen.dart';
+import 'screens/terms_acceptance_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
@@ -19,6 +20,7 @@ import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
 import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
+import 'services/chat_store.dart';
 import 'services/checkin_store.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
@@ -30,8 +32,12 @@ import 'services/theme_service.dart';
 import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
-import 'services/tutorial_service.dart';
+import 'onboarding/onboarding_service.dart';
+import 'onboarding/starter_checklist_service.dart';
 import 'services/event_cleanup_service.dart';
+import 'services/app_presence_service.dart';
+import 'services/moderation_service.dart';
+import 'services/terms_acceptance_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,16 +57,23 @@ void main() async {
   // background; readers await appBootstrap.ready (the post-frame hydration
   // below and the login/club-admin submit handlers — a login's network
   // round-trip dwarfs that wait).
-  await Future.wait([themeService.initialize(), localeService.initialize()]);
+  await Future.wait([
+    themeService.initialize(),
+    localeService.initialize(),
+    termsAcceptanceService.initialize(),
+  ]);
   appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
+    peopleService.initialize(),
     contentStore.initialize(),
+    chatStore.initialize(),
     checkinStore.initialize(),
     pollStore.initialize(),
     viewTracker.initialize(),
     personalizationService.initialize(),
     calendarSyncService.initialize(),
-    tutorialService.initialize(),
+    onboardingService.initialize(),
+    starterChecklistService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
   runApp(const ProviderScope(child: MyApp()));
@@ -89,14 +102,33 @@ void main() async {
         contentStore.loadBoardMemberTitles();
         // Restore any dynamic notifications that were generated at runtime.
         final dynNotifs = contentStore.loadDynamicNotifications();
+        final removedAdminDmNotificationIds = <String>{};
         if (dynNotifs != null) {
+          final compatibleNotifications = dynNotifs.where((notification) {
+            final remove =
+                notification.targetType == 'message' &&
+                ChatStore.isAdminAccountId(notification.userId);
+            if (remove) removedAdminDmNotificationIds.add(notification.id);
+            return !remove;
+          }).toList();
           userState.dynamicNotifications
             ..clear()
-            ..addAll(dynNotifs);
+            ..addAll(compatibleNotifications);
+          if (removedAdminDmNotificationIds.isNotEmpty) {
+            unawaited(
+              contentStore.saveDynamicNotifications(compatibleNotifications),
+            );
+          }
         }
-        userState.replaceReadNotificationIds(
-          contentStore.loadReadNotificationIds(),
-        );
+        final compatibleReadNotificationIds = contentStore
+            .loadReadNotificationIds()
+            .where((id) => !removedAdminDmNotificationIds.contains(id));
+        userState.replaceReadNotificationIds(compatibleReadNotificationIds);
+        if (removedAdminDmNotificationIds.isNotEmpty) {
+          unawaited(
+            contentStore.saveReadNotificationIds(userState.readNotificationIds),
+          );
+        }
       }),
     );
   });
@@ -134,11 +166,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(appPresenceService.stop());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    appPresenceService.handleLifecycleState(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _savePrefs();
@@ -154,6 +188,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // saveAll rewrites every debounced kind, flushing any pending
     // scheduleSave along the way (pause/detach and logout both land here).
     contentStore.saveAll(userState.dynamicNotifications);
+    chatStore.saveAll();
   }
 
   void _onLogin() {
@@ -169,6 +204,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showSignUp = false;
     });
     if (currentUserId != null) {
+      unawaited(appPresenceService.startForAuthenticatedSession());
+      unawaited(moderationService.activateForUser(currentUserId));
       _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
@@ -201,7 +238,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final ltRed = isDark ? DarkColors.lightRed : LightColors.lightRed;
     final lGray = isDark ? DarkColors.lightGray : LightColors.lightGray;
     final bright = isDark ? Brightness.dark : Brightness.light;
-    const red = AppColors.primaryRed;
+    final red = isDark ? DarkColors.primaryRed : LightColors.primaryRed;
+    final elevatedSurface = isDark
+        ? DarkColors.surfaceAlt
+        : LightColors.surfaceAlt;
 
     return ThemeData(
       brightness: bright,
@@ -238,7 +278,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         indicatorColor: ltRed,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: AppColors.primaryRed);
+            return IconThemeData(color: red);
           }
           return IconThemeData(color: sub);
         }),
@@ -277,10 +317,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           borderRadius: const BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide.none,
         ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: AppColors.primaryRed, width: 1.5),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: red, width: 1.5),
         ),
+      ),
+      dialogTheme: DialogThemeData(backgroundColor: elevatedSurface),
+      popupMenuTheme: PopupMenuThemeData(color: elevatedSurface),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: elevatedSurface,
+        modalBackgroundColor: elevatedSurface,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: ltRed,
@@ -305,7 +351,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
-        if (_loggedIn ||
+        if (!termsAcceptanceService.hasAcceptedCurrentTerms) {
+          homeWidget = TermsAcceptanceScreen(
+            onAccepted: () async {
+              await termsAcceptanceService.accept();
+              if (mounted) setState(() {});
+            },
+          );
+        } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
           final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
@@ -334,6 +387,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               isAdmin: isAdmin,
               onLogout: () {
                 _savePrefs();
+                unawaited(appPresenceService.stop());
+                moderationService.clearActiveUser();
                 _prefsLoadedForUserId = null;
                 setState(() {
                   _loggedIn = false;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
+import '../services/app_colors.dart';
 import '../services/theme_service.dart';
 import 'club_avatar.dart';
 import 'user_avatar.dart';
@@ -10,17 +11,17 @@ import 'user_avatar.dart';
 /// burgundy/white branding in both themes; the surrounding page chrome
 /// (background, buttons, cards, text) follows the app's light/dark setting.
 abstract final class _StudentDark {
-  static const background = Color(0xFF080000);
-  static const deep = Color(0xFF100005);
-  static const solid = Color(0xFF160008);
-  static const card = Color(0x0EFFFFFF);
+  static const background = DarkColors.background;
+  static const deep = DarkColors.card;
+  static const solid = DarkColors.surfaceAlt;
+  static const card = DarkColors.card;
   static const text = Colors.white;
   static const textSoft = Color(0xD1FFFFFF);
-  static const textMuted = Color(0x8CFFFFFF);
-  static const secondary = Color(0xFF8A8A8E);
-  static const border = Color(0x14FFFFFF);
-  static const borderStrong = Color(0x2EFFFFFF);
-  static const accent = Color(0xFFD96A8B);
+  static const textMuted = DarkColors.secondaryText;
+  static const secondary = DarkColors.secondaryText;
+  static const border = DarkColors.divider;
+  static const borderStrong = DarkColors.divider;
+  static const accent = Color(0xFF9E2045);
 }
 
 abstract final class _StudentLight {
@@ -115,6 +116,7 @@ class StudentCampusProfileView extends StatelessWidget {
   final Widget leading;
   final Widget trailing;
   final Widget? primaryAction;
+  final Widget? supplementalContent;
   final List<StudentCampusMembership> memberships;
   final String clubsTitle;
   final String? clubsActionLabel;
@@ -133,6 +135,7 @@ class StudentCampusProfileView extends StatelessWidget {
     required this.memberships,
     required this.clubsTitle,
     this.primaryAction,
+    this.supplementalContent,
     this.clubsActionLabel,
     this.onClubsAction,
     this.onClubTap,
@@ -196,12 +199,15 @@ class StudentCampusProfileView extends StatelessWidget {
                       child: primaryAction,
                     ),
                   ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: _StudentBioCard(bio: profile.bio),
+                if (supplementalContent != null)
+                  SliverToBoxAdapter(child: supplementalContent),
+                if (profile.bio.trim().isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _StudentBioCard(bio: profile.bio),
+                    ),
                   ),
-                ),
                 if (memberships.isNotEmpty) ...[
                   SliverToBoxAdapter(
                     child: Padding(
@@ -793,7 +799,9 @@ class StudentClubRoleBadge extends StatelessWidget {
     final background = _isFounder
         ? const Color(0x26FFC857)
         : _isMember
-        ? (themeService.isDark ? const Color(0x0FFFFFFF) : const Color(0x0A000000))
+        ? (themeService.isDark
+              ? const Color(0x0FFFFFFF)
+              : const Color(0x0A000000))
         : const Color(0x478C1D40);
     final border = _isFounder
         ? const Color(0x66FFC857)

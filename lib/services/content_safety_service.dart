@@ -1,3 +1,5 @@
+import 'app_strings.dart';
+
 /// Lightweight pre-publication safety filter.
 ///
 /// This is a first line of defense, not a substitute for human review. The
@@ -18,18 +20,25 @@ class ContentSafetyService {
     ),
   ];
 
-  // No BuildContext is available this deep in the service layer, so this
-  // only signals rejection — callers resolve the localized message
-  // themselves via AppLocalizations.of(context)!.contentSafetyRejected.
-  bool isRejected(Iterable<String> values) {
+  String? rejectionMessage(Iterable<String> values) {
     final content = values.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (content.isEmpty) return false;
-    return _blockedPatterns.any((pattern) => pattern.hasMatch(content));
+    if (content.isEmpty) return null;
+    if (_blockedPatterns.any((pattern) => pattern.hasMatch(content))) {
+      return S.contentSafetyRejected;
+    }
+    return null;
   }
+
+  bool isRejected(Iterable<String> values) => rejectionMessage(values) != null;
 }
 
 final contentSafetyService = ContentSafetyService();
 
 class ContentSafetyException implements Exception {
-  const ContentSafetyException();
+  final String message;
+
+  const ContentSafetyException(this.message);
+
+  @override
+  String toString() => message;
 }

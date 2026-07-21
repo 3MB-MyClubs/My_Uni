@@ -150,10 +150,10 @@ class _ThemePreviewCard extends StatelessWidget {
   static const _lightCard = Color(0xFFFFFFFF);
   static const _lightText = Color(0xFF1A0610);
   static const _lightSub = Color(0xFFD8C9C4);
-  static const _darkBg = Color(0xFF08000D);
-  static const _darkCard = Color(0xFF1A0B1E);
-  static const _darkText = Color(0xFFF2F2F7);
-  static const _darkSub = Color(0xFF3A2A40);
+  static const _darkBg = DarkColors.background;
+  static const _darkCard = DarkColors.card;
+  static const _darkText = Color(0xFFFFFFFF);
+  static const _darkSub = Color(0xFFA8A8A8);
   static const _accent = Color(0xFF9E2045);
 
   @override

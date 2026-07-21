@@ -21,6 +21,7 @@ import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart' as remote_profile;
 import '../services/student_club_role_service.dart';
 import '../services/supabase_club_service.dart';
@@ -121,21 +122,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 72,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
+      final picked = await picker.pickImage(source: source);
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
+        maxWidth: PhotoUploadQuality.avatarMaxDimension,
+        maxHeight: PhotoUploadQuality.avatarMaxDimension,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 72,
+        compressQuality: PhotoUploadQuality.jpegQuality,
         uiSettings: [
           IOSUiSettings(
             title: AppLocalizations.of(context)!.cropPhotoTitle,
@@ -160,7 +156,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.couldNotOpenPhotoCropper),
+            content: Text(
+              AppLocalizations.of(context)!.couldNotOpenPhotoCropper,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -247,7 +245,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ..hideCurrentSnackBar()
               ..showSnackBar(
                 SnackBar(
-                  content: Text(AppLocalizations.of(context)!.couldNotUploadClubPhoto),
+                  content: Text(
+                    AppLocalizations.of(context)!.couldNotUploadClubPhoto,
+                  ),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -266,7 +266,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ..hideCurrentSnackBar()
             ..showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.photoSavedLocallyUploadFailed),
+                content: Text(
+                  AppLocalizations.of(context)!.photoSavedLocallyUploadFailed,
+                ),
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -324,7 +326,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? selectedYear
                     : null,
                 dropdownColor: AppColors.card,
-                decoration: InputDecoration(labelText: AppLocalizations.of(context)!.yearLabel),
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.yearLabel,
+                ),
                 items: _yearOptions
                     .map(
                       (year) => DropdownMenuItem<String>(
@@ -905,7 +909,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                AppLocalizations.of(context)!.clubPhotoRemovedLocallyDeleteFailed,
+                AppLocalizations.of(
+                  context,
+                )!.clubPhotoRemovedLocallyDeleteFailed,
               ),
               behavior: SnackBarBehavior.floating,
             ),
@@ -921,7 +927,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed),
+            content: Text(
+              AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -934,7 +942,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = authService.currentUser;
     final admin = authService.currentAdmin;
     final myId = user?.id ?? admin?.id ?? '';
-    final realName = user?.name ?? admin?.name ?? AppLocalizations.of(context)!.guestName;
+    final realName =
+        user?.name ?? admin?.name ?? AppLocalizations.of(context)!.guestName;
     final displayName = userState.displayNameFor(myId, realName);
     final isAdmin = admin != null;
 
@@ -975,10 +984,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               name: name,
               email: user.email,
               graduation: _graduationLabel(year),
-              major: userState.majors[user.id] ?? AppLocalizations.of(context)!.majorNotAdded,
+              major:
+                  userState.majors[user.id] ??
+                  AppLocalizations.of(context)!.majorNotAdded,
               year: year ?? AppLocalizations.of(context)!.yearNotAdded,
               bio:
-                  userState.bios[user.id] ?? AppLocalizations.of(context)!.addBioIntro,
+                  userState.bios[user.id] ??
+                  AppLocalizations.of(context)!.addBioIntro,
               clubs: followedClubs.length,
               followers: followers.length,
               following: following.length,
@@ -1273,9 +1285,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _StatCell(value: '$postCount', label: AppLocalizations.of(context)!.posts),
-                      _StatCell(value: '$eventCount', label: AppLocalizations.of(context)!.events),
-                      _StatCell(value: '$boardMemberCount', label: AppLocalizations.of(context)!.membersLabel),
+                      _StatCell(
+                        value: '$postCount',
+                        label: AppLocalizations.of(context)!.posts,
+                      ),
+                      _StatCell(
+                        value: '$eventCount',
+                        label: AppLocalizations.of(context)!.events,
+                      ),
+                      _StatCell(
+                        value: '$boardMemberCount',
+                        label: AppLocalizations.of(context)!.membersLabel,
+                      ),
                     ],
                   ),
                 ),
@@ -1629,7 +1650,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _StatsBlock(value: '$clubCount', label: AppLocalizations.of(context)!.clubs),
+                    child: _StatsBlock(
+                      value: '$clubCount',
+                      label: AppLocalizations.of(context)!.clubs,
+                    ),
                   ),
                   VerticalDivider(width: 1, color: AppColors.divider),
                   Expanded(
@@ -2215,7 +2239,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) => _confirmDelete(AppLocalizations.of(context)!.deletePost, AppLocalizations.of(context)!.deletePostMsg),
+          confirmDismiss: (_) => _confirmDelete(
+            AppLocalizations.of(context)!.deletePost,
+            AppLocalizations.of(context)!.deletePostMsg,
+          ),
           onDismissed: (_) {
             final ok = contentStore.deletePost(p.id, adminId);
             if (mounted) {
@@ -2360,8 +2387,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) =>
-              _confirmDelete(AppLocalizations.of(context)!.deleteEvent, AppLocalizations.of(context)!.deleteEventMsg),
+          confirmDismiss: (_) => _confirmDelete(
+            AppLocalizations.of(context)!.deleteEvent,
+            AppLocalizations.of(context)!.deleteEventMsg,
+          ),
           onDismissed: (_) {
             final ok = contentStore.deleteEvent(e.id, adminId);
             if (mounted) {
@@ -2482,7 +2511,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Icon(Icons.people_outline, size: 14, color: color),
                         const SizedBox(width: 4),
                         Text(
-                          AppLocalizations.of(context)!.attendingViewRsvps(e.attendeeUserIds.length),
+                          AppLocalizations.of(
+                            context,
+                          )!.attendingViewRsvps(e.attendeeUserIds.length),
                           style: TextStyle(
                             fontSize: 12,
                             color: color,
@@ -2507,14 +2538,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final diff = DateTime.now().difference(dt);
     if (diff.isNegative) {
       final ahead = dt.difference(DateTime.now());
-      if (ahead.inDays > 0) return AppLocalizations.of(context)!.timeAgoInDays(ahead.inDays);
-      if (ahead.inHours > 0) return AppLocalizations.of(context)!.timeAgoInHours(ahead.inHours);
+      if (ahead.inDays > 0)
+        return AppLocalizations.of(context)!.timeAgoInDays(ahead.inDays);
+      if (ahead.inHours > 0)
+        return AppLocalizations.of(context)!.timeAgoInHours(ahead.inHours);
       return AppLocalizations.of(context)!.timeAgoSoon;
     }
-    if (diff.inSeconds < 60) return AppLocalizations.of(context)!.timeAgoJustNow;
-    if (diff.inMinutes < 60) return AppLocalizations.of(context)!.timeAgoMinutes(diff.inMinutes);
-    if (diff.inHours < 24) return AppLocalizations.of(context)!.timeAgoHours(diff.inHours);
-    if (diff.inDays < 7) return AppLocalizations.of(context)!.timeAgoDays(diff.inDays);
+    if (diff.inSeconds < 60)
+      return AppLocalizations.of(context)!.timeAgoJustNow;
+    if (diff.inMinutes < 60)
+      return AppLocalizations.of(context)!.timeAgoMinutes(diff.inMinutes);
+    if (diff.inHours < 24)
+      return AppLocalizations.of(context)!.timeAgoHours(diff.inHours);
+    if (diff.inDays < 7)
+      return AppLocalizations.of(context)!.timeAgoDays(diff.inDays);
     return '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
   }
 

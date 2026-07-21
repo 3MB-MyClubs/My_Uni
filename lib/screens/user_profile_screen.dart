@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
+import '../services/chat_store.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
@@ -14,6 +16,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/student_campus_profile.dart';
 import '../widgets/user_avatar.dart';
+import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'saved_posts_screen.dart';
 
@@ -67,16 +70,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return userState.followedUserIds
           .map((id) => knownPeople[id])
           .whereType<User>()
+          .where((user) => !moderationService.isUserBlocked(user.id))
           .toList();
     }
 
     final liveFollowing = peopleService.followingFor(widget.user.id);
-    if (liveFollowing.isNotEmpty) return liveFollowing;
+    if (liveFollowing.isNotEmpty) {
+      return liveFollowing
+          .where((user) => !moderationService.isUserBlocked(user.id))
+          .toList();
+    }
 
     final knownPeople = _knownPeopleById;
     return widget.user.followingUserIds
         .map((id) => knownPeople[id])
         .whereType<User>()
+        .where((user) => !moderationService.isUserBlocked(user.id))
         .toList();
   }
 
@@ -97,7 +106,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       followers[currentUser.id] = currentUser;
     }
 
-    return followers.values.toList();
+    return followers.values
+        .where((user) => !moderationService.isUserBlocked(user.id))
+        .toList();
   }
 
   @override
@@ -129,7 +140,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) return;
       setState(() {
         _connectionsLoading = false;
-        _connectionsError = AppLocalizations.of(context)!.couldNotLoadConnections;
+        _connectionsError = AppLocalizations.of(
+          context,
+        )!.couldNotLoadConnections;
       });
     }
   }
@@ -308,7 +321,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(
-            delivered ? AppLocalizations.of(context)!.userBlockedAndReported : AppLocalizations.of(context)!.userBlockedOffline,
+            delivered
+                ? AppLocalizations.of(context)!.userBlockedAndReported
+                : AppLocalizations.of(context)!.userBlockedOffline,
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -340,7 +355,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             StudentCampusMembership(
               club: club,
               color: _clubColor(club),
-              role: _roleTitleFor(club) ?? AppLocalizations.of(context)!.memberRoleFallback,
+              role:
+                  _roleTitleFor(club) ??
+                  AppLocalizations.of(context)!.memberRoleFallback,
               detail: AppLocalizations.of(context)!.membersCountLabel(
                 subscriptions.where((s) => s.clubId == club.id).length,
               ),
@@ -386,21 +403,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 )
               : const SizedBox(width: 36, height: 36),
           primaryAction: !_isOwnProfile && authService.isStudentSession
-              ? StudentProfilePrimaryButton(
-                  label: isPending
-                      ? AppLocalizations.of(context)!.requestedLabel
-                      : isFollowingUser
-                      ? AppLocalizations.of(context)!.following
-                      : _userFollowsMe(user)
-                      ? AppLocalizations.of(context)!.followBack
-                      : AppLocalizations.of(context)!.follow,
-                  filled: !isFollowingUser && !isPending,
-                  onTap: _handleFollowTap,
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: StudentProfilePrimaryButton(
+                        label: isPending
+                            ? AppLocalizations.of(context)!.requestedLabel
+                            : isFollowingUser
+                            ? AppLocalizations.of(context)!.following
+                            : _userFollowsMe(user)
+                            ? AppLocalizations.of(context)!.followBack
+                            : AppLocalizations.of(context)!.follow,
+                        filled: !isFollowingUser && !isPending,
+                        onTap: _handleFollowTap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: StudentProfilePrimaryButton(
+                        label: S.message,
+                        filled: false,
+                        onTap: () {
+                          final myId = authService.currentUser?.id ?? '';
+                          final threadId = chatStore.ensureDirectThread(
+                            myId,
+                            user.id,
+                          );
+                          if (threadId == null) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatThreadScreen(
+                                threadId: threadId,
+                                recipient: user,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 )
               : null,
           memberships: memberships,
-          clubsTitle: AppLocalizations.of(context)!.clubsCountTitle(subClubs.length),
-          clubsActionLabel: subClubs.length > 4 ? AppLocalizations.of(context)!.seeAll : null,
+          clubsTitle: AppLocalizations.of(
+            context,
+          )!.clubsCountTitle(subClubs.length),
+          clubsActionLabel: subClubs.length > 4
+              ? AppLocalizations.of(context)!.seeAll
+              : null,
           onClubsAction: () => _openConnections(_ConnTab.clubs),
           onClubTap: _openClub,
           onClubsTap: () => _openConnections(_ConnTab.clubs),
@@ -651,9 +702,21 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
 
     return Row(
       children: [
-        tabItem(AppLocalizations.of(context)!.clubs, clubsCount, _ConnTab.clubs),
-        tabItem(AppLocalizations.of(context)!.followers, followersCount, _ConnTab.followers),
-        tabItem(AppLocalizations.of(context)!.following, followingCount, _ConnTab.following),
+        tabItem(
+          AppLocalizations.of(context)!.clubs,
+          clubsCount,
+          _ConnTab.clubs,
+        ),
+        tabItem(
+          AppLocalizations.of(context)!.followers,
+          followersCount,
+          _ConnTab.followers,
+        ),
+        tabItem(
+          AppLocalizations.of(context)!.following,
+          followingCount,
+          _ConnTab.following,
+        ),
       ],
     );
   }

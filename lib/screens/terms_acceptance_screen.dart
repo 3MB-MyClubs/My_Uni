@@ -25,9 +25,11 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.couldNotOpenThisPage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.couldNotOpenThisPage),
+        ),
+      );
     }
   }
 
@@ -150,7 +152,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                         _term(
                           Icons.flag_outlined,
                           AppLocalizations.of(context)!.reportHarmfulContent,
-                          AppLocalizations.of(context)!.reportHarmfulContentBody,
+                          AppLocalizations.of(
+                            context,
+                          )!.reportHarmfulContentBody,
                         ),
                         _term(
                           Icons.block_rounded,
@@ -172,7 +176,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                                     ? AppLinks.termsOfUseTurkish
                                     : AppLinks.termsOfUse,
                               ),
-                              child: Text(AppLocalizations.of(context)!.readFullTerms),
+                              child: Text(
+                                AppLocalizations.of(context)!.readFullTerms,
+                              ),
                             ),
                             TextButton(
                               onPressed: () => _open(
@@ -180,7 +186,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                                     ? AppLinks.privacyPolicyTurkish
                                     : AppLinks.privacyPolicy,
                               ),
-                              child: Text(AppLocalizations.of(context)!.privacyPolicy),
+                              child: Text(
+                                AppLocalizations.of(context)!.privacyPolicy,
+                              ),
                             ),
                           ],
                         ),

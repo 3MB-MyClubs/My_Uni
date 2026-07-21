@@ -40,12 +40,17 @@ class UserState extends ChangeNotifier {
     'u2': 'https://i.pravatar.cc/150?img=11',
     'u3': 'https://i.pravatar.cc/150?img=15',
     'u4': 'https://i.pravatar.cc/150?img=44',
+    'u5': 'https://i.pravatar.cc/150?u=u5',
     'u6': 'https://i.pravatar.cc/150?img=5',
+    'u7': 'https://i.pravatar.cc/150?u=u7',
     'u8': 'https://i.pravatar.cc/150?img=9',
+    'u9': 'https://i.pravatar.cc/150?u=u9',
     'u10': 'https://i.pravatar.cc/150?img=32',
     'u11': 'https://i.pravatar.cc/150?img=21',
+    'u12': 'https://i.pravatar.cc/150?u=u12',
     'u13': 'https://i.pravatar.cc/150?img=53',
     'u14': 'https://i.pravatar.cc/150?img=58',
+    'u15': 'https://i.pravatar.cc/150?u=u15',
   };
 
   // Student bios keyed by user id.
@@ -56,6 +61,14 @@ class UserState extends ChangeNotifier {
 
   // Student years keyed by user id.
   final Map<String, String> years = {};
+
+  /// A compact label for messaging and directory rows. Missing profile
+  /// fields are omitted so the UI never shows empty separators.
+  String academicSummaryFor(String userId) {
+    final major = majors[userId]?.trim() ?? '';
+    final year = years[userId]?.trim() ?? '';
+    return [major, year].where((value) => value.isNotEmpty).join(' · ');
+  }
 
   // Student interest topics keyed by user id.
   final Map<String, List<String>> interests = {};

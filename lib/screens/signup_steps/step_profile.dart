@@ -3,11 +3,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../services/photo_upload_quality.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/signup_service.dart';
 import '../../widgets/app_network_image.dart';
 import '../../widgets/loading_skeleton.dart';
 import 'signup_theme.dart';
+
+typedef SignupImagePicker = Future<XFile?> Function(ImageSource source);
+typedef SignupImageCropper = Future<CroppedFile?> Function(String sourcePath);
 
 class StepProfile extends StatefulWidget {
   final String initialName;
@@ -24,6 +28,8 @@ class StepProfile extends StatefulWidget {
     String? imagePath,
   )
   onNext;
+  final SignupImagePicker? imagePickerOverride;
+  final SignupImageCropper? imageCropperOverride;
 
   const StepProfile({
     super.key,
@@ -33,6 +39,8 @@ class StepProfile extends StatefulWidget {
     required this.loadMajors,
     required this.loadAcademicYears,
     required this.onNext,
+    @visibleForTesting this.imagePickerOverride,
+    @visibleForTesting this.imageCropperOverride,
   });
 
   @override
@@ -49,6 +57,7 @@ class _StepProfileState extends State<StepProfile> {
   String _selectedYearId = '';
   String _selectedYearName = '';
   String? _imagePath;
+  bool _isPickingPhoto = false;
   bool _isLoadingLookups = true;
   String? _lookupError;
 
@@ -170,7 +179,7 @@ class _StepProfileState extends State<StepProfile> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
+      builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: SC.card,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -178,48 +187,53 @@ class _StepProfileState extends State<StepProfile> {
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
         child: SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: SC.hair,
-                  borderRadius: BorderRadius.all(Radius.circular(2)),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: SC.hair,
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              _photoOption(
-                Icons.camera_alt_outlined,
-                AppLocalizations.of(context)!.takePhoto,
-                () {
-                  Navigator.pop(context);
-                  _pickPhoto(ImageSource.camera);
-                },
-              ),
-              Divider(height: 1, indent: 16, color: SC.hair),
-              _photoOption(
-                Icons.photo_library_outlined,
-                AppLocalizations.of(context)!.chooseFromLib,
-                () {
-                  Navigator.pop(context);
-                  _pickPhoto(ImageSource.gallery);
-                },
-              ),
-              if (hasPhoto) ...[
+                const SizedBox(height: 16),
+                _photoOption(
+                  Icons.camera_alt_outlined,
+                  AppLocalizations.of(context)!.takePhoto,
+                  () => _pickPhotoAfterSheetCloses(
+                    sheetContext,
+                    ImageSource.camera,
+                  ),
+                  key: const ValueKey('signup-photo-camera'),
+                ),
                 Divider(height: 1, indent: 16, color: SC.hair),
                 _photoOption(
-                  Icons.delete_outline_rounded,
-                  AppLocalizations.of(context)!.removePhoto,
-                  () {
-                    Navigator.pop(context);
-                    setState(() => _imagePath = null);
-                  },
-                  danger: true,
+                  Icons.photo_library_outlined,
+                  AppLocalizations.of(context)!.chooseFromLib,
+                  () => _pickPhotoAfterSheetCloses(
+                    sheetContext,
+                    ImageSource.gallery,
+                  ),
+                  key: const ValueKey('signup-photo-library'),
                 ),
+                if (hasPhoto) ...[
+                  Divider(height: 1, indent: 16, color: SC.hair),
+                  _photoOption(
+                    Icons.delete_outline_rounded,
+                    AppLocalizations.of(context)!.removePhoto,
+                    () {
+                      Navigator.pop(context);
+                      setState(() => _imagePath = null);
+                    },
+                    danger: true,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -230,10 +244,12 @@ class _StepProfileState extends State<StepProfile> {
     IconData icon,
     String label,
     VoidCallback onTap, {
+    Key? key,
     bool danger = false,
   }) {
     final color = danger ? Colors.red.shade400 : SC.burgundy;
     return ListTile(
+      key: key,
       leading: Container(
         width: 42,
         height: 42,
@@ -254,59 +270,88 @@ class _StepProfileState extends State<StepProfile> {
     );
   }
 
+  Future<void> _pickPhotoAfterSheetCloses(
+    BuildContext sheetContext,
+    ImageSource source,
+  ) async {
+    Navigator.of(sheetContext).pop();
+    // Native camera controllers are sensitive to being presented while the
+    // modal sheet is still animating out, especially on iOS.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    await _pickPhoto(source);
+  }
+
   Future<void> _pickPhoto(ImageSource source) async {
-    CroppedFile? cropped;
+    if (_isPickingPhoto) return;
+    setState(() => _isPickingPhoto = true);
+
     try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 72,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
+      final picked = widget.imagePickerOverride != null
+          ? await widget.imagePickerOverride!(source)
+          : await ImagePicker().pickImage(
+              source: source,
+              maxWidth: PhotoUploadQuality.avatarMaxDimension.toDouble(),
+              maxHeight: PhotoUploadQuality.avatarMaxDimension.toDouble(),
+              imageQuality: PhotoUploadQuality.jpegQuality,
+              preferredCameraDevice: CameraDevice.front,
+            );
       if (picked == null || !mounted) return;
 
-      cropped = await ImageCropper().cropImage(
-        sourcePath: picked.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 72,
-        uiSettings: [
-          IOSUiSettings(
-            title: AppLocalizations.of(context)!.cropPhotoTitle,
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: true,
-            aspectRatioPickerButtonHidden: true,
-            cropStyle: CropStyle.circle,
-          ),
-          AndroidUiSettings(
-            toolbarTitle: AppLocalizations.of(context)!.cropPhotoTitle,
-            toolbarColor: SC.burgundy,
-            toolbarWidgetColor: Colors.white,
-            lockAspectRatio: true,
-            hideBottomControls: false,
-            cropStyle: CropStyle.circle,
-          ),
-        ],
-      );
+      if (source == ImageSource.camera) {
+        // On iOS the picker Future can resolve before the native camera has
+        // completely dismissed. Opening the cropper in that window fails or
+        // lets the "Use Photo" tap hit Continue underneath.
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
+      }
+
+      final cropped = widget.imageCropperOverride != null
+          ? await widget.imageCropperOverride!(picked.path)
+          : await ImageCropper().cropImage(
+              sourcePath: picked.path,
+              aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+              maxWidth: PhotoUploadQuality.avatarMaxDimension,
+              maxHeight: PhotoUploadQuality.avatarMaxDimension,
+              compressFormat: ImageCompressFormat.jpg,
+              compressQuality: PhotoUploadQuality.jpegQuality,
+              uiSettings: [
+                IOSUiSettings(
+                  title: 'Crop Photo',
+                  aspectRatioLockEnabled: true,
+                  resetAspectRatioEnabled: true,
+                  aspectRatioPickerButtonHidden: true,
+                  cropStyle: CropStyle.circle,
+                ),
+                AndroidUiSettings(
+                  toolbarTitle: 'Crop Photo',
+                  toolbarColor: SC.burgundy,
+                  toolbarWidgetColor: Colors.white,
+                  lockAspectRatio: true,
+                  hideBottomControls: false,
+                  cropStyle: CropStyle.circle,
+                ),
+              ],
+            );
+      if (cropped == null || !mounted) return;
+      setState(() => _imagePath = cropped.path);
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotOpenPhotoCropper,
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      return;
+      _showPhotoError(source);
+    } finally {
+      if (mounted) setState(() => _isPickingPhoto = false);
     }
-    if (cropped == null || !mounted) return;
-    setState(() => _imagePath = cropped!.path);
+  }
+
+  void _showPhotoError(ImageSource source) {
+    if (!mounted) return;
+    final message = source == ImageSource.camera
+        ? 'Could not use the camera. Check camera access and try again.'
+        : 'Could not open photo cropper.';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
   }
 
   // ── Initials from name ─────────────────────────────────────────
@@ -347,9 +392,8 @@ class _StepProfileState extends State<StepProfile> {
       hasError = true;
     } else if (nameParts.length < 2) {
       setState(
-        () => _nameError = AppLocalizations.of(
-          context,
-        )!.pleaseEnterFirstLastName,
+        () =>
+            _nameError = AppLocalizations.of(context)!.pleaseEnterFirstLastName,
       );
       hasError = true;
     } else {
@@ -363,9 +407,8 @@ class _StepProfileState extends State<StepProfile> {
       hasError = true;
     } else if (_selectedMajorId.isEmpty) {
       setState(
-        () => _majorError = AppLocalizations.of(
-          context,
-        )!.pleasePickMajorFromList,
+        () =>
+            _majorError = AppLocalizations.of(context)!.pleasePickMajorFromList,
       );
       hasError = true;
     } else {
@@ -412,12 +455,12 @@ class _StepProfileState extends State<StepProfile> {
         errorBuilder: (_) => Container(
           width: 92,
           height: 92,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: SC.burgundyTint,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: const Icon(
+          child: Icon(
             Icons.person_outline_rounded,
             color: SC.burgundy,
             size: 32,
@@ -479,6 +522,7 @@ class _StepProfileState extends State<StepProfile> {
                 // ── Avatar ─────────────────────────────────────
                 Center(
                   child: GestureDetector(
+                    key: const ValueKey('signup-profile-photo'),
                     onTap: _showPhotoOptions,
                     child: AnimatedBuilder(
                       animation: _nameController,
@@ -571,9 +615,10 @@ class _StepProfileState extends State<StepProfile> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: _isLoadingLookups ? null : _submit,
+              key: const ValueKey('signup-profile-continue'),
+              onPressed: _isLoadingLookups || _isPickingPhoto ? null : _submit,
               style: SC.primaryButtonStyle(),
-              child: _isLoadingLookups
+              child: _isLoadingLookups || _isPickingPhoto
                   ? const SizedBox(
                       width: 20,
                       height: 20,

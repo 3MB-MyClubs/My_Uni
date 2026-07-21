@@ -7,14 +7,16 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/moderation_service.dart';
 import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
@@ -231,7 +233,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (q.isEmpty) return _randomPeoplePreview;
 
     final matches = _people.where((person) {
-      if (person.id == _myId) return false;
+      if (person.id == _myId || moderationService.isUserBlocked(person.id)) {
+        return false;
+      }
       final name = userState
           .displayNameFor(person.id, person.name)
           .toLowerCase();
@@ -256,7 +260,10 @@ class _ExploreScreenState extends State<ExploreScreen>
     final source = preview.isNotEmpty
         ? preview
         : _people.where((person) => person.id != _myId).toList();
-    return source.take(10).toList();
+    return source
+        .where((person) => !moderationService.isUserBlocked(person.id))
+        .take(10)
+        .toList();
   }
 
   void _persist() => userPrefsService.save(_myId);
@@ -350,7 +357,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         ),
       ),
       body: ListenableBuilder(
-        listenable: userState,
+        listenable: Listenable.merge([userState, moderationService]),
         // Builder defers each tab's filter/sort work from children-list
         // construction to the page actually building — TabBarView only builds
         // the visible page (plus its neighbor mid-swipe), so only that tab
@@ -545,7 +552,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                 hint: AppLocalizations.of(context)!.searchClubs,
                 value: _clubQuery,
                 onChanged: (v) => setState(() => _clubQuery = v),
-                anchorKey: tutorialAnchors.keyFor(TutorialAnchors.searchField),
+                anchorKey: onboardingAnchors.keyFor(
+                  OnboardingAnchors.searchField,
+                ),
               ),
             ],
           ),
@@ -553,7 +562,10 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: filtered.isEmpty
-              ? _emptyState(AppLocalizations.of(context)!.noClubsMatch, AppLocalizations.of(context)!.tryDifferentSearch)
+              ? _emptyState(
+                  AppLocalizations.of(context)!.noClubsMatch,
+                  AppLocalizations.of(context)!.tryDifferentSearch,
+                )
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -630,7 +642,10 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: matchedEvents.isEmpty
-              ? _emptyState(AppLocalizations.of(context)!.noContentMatch, AppLocalizations.of(context)!.tryDifferentSearch)
+              ? _emptyState(
+                  AppLocalizations.of(context)!.noContentMatch,
+                  AppLocalizations.of(context)!.tryDifferentSearch,
+                )
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -779,7 +794,8 @@ class _ExploreScreenState extends State<ExploreScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    club?.name ?? AppLocalizations.of(context)!.campusEventFallback,
+                    club?.name ??
+                        AppLocalizations.of(context)!.campusEventFallback,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -816,13 +832,11 @@ class _ExploreScreenState extends State<ExploreScreen>
             children: [
               _searchField(
                 controller: _peopleSearchController,
-                hint: AppLocalizations.of(context)!.searchPeople,
+                hint: S.searchPeople,
                 value: _peopleQuery,
                 onChanged: (v) => setState(() => _peopleQuery = v),
               ),
-              if (_peopleHasError &&
-                  !_peopleLoading &&
-                  people.isEmpty) ...[
+              if (_peopleHasError && !_peopleLoading && people.isEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -933,7 +947,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                   height: 340,
                   child: _emptyState(
                     AppLocalizations.of(context)!.noOneMatches,
-                    searching ? AppLocalizations.of(context)!.tryNameSearch : AppLocalizations.of(context)!.profilesWillAppear,
+                    searching
+                        ? AppLocalizations.of(context)!.tryNameSearch
+                        : AppLocalizations.of(context)!.profilesWillAppear,
                   ),
                 );
               }
@@ -986,7 +1002,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (major != null && major.isNotEmpty) {
       return year != null && year.isNotEmpty ? '$major · $year' : major;
     }
-    return u.email.isNotEmpty ? u.email : AppLocalizations.of(context)!.studentProfile;
+    return u.email.isNotEmpty
+        ? u.email
+        : AppLocalizations.of(context)!.studentProfile;
   }
 }
 
@@ -1329,7 +1347,9 @@ class _PersonRowState extends State<_PersonRow> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _displayFollowing ? AppLocalizations.of(context)!.following : AppLocalizations.of(context)!.follow,
+                            _displayFollowing
+                                ? AppLocalizations.of(context)!.following
+                                : AppLocalizations.of(context)!.follow,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,

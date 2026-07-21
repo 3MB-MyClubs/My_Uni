@@ -127,7 +127,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(
-            delivered ? AppLocalizations.of(context)!.postReportedAndRemoved : AppLocalizations.of(context)!.postHiddenOffline,
+            delivered
+                ? AppLocalizations.of(context)!.postReportedAndRemoved
+                : AppLocalizations.of(context)!.postHiddenOffline,
           ),
           behavior: SnackBarBehavior.floating,
         ),

@@ -99,7 +99,7 @@ Widget buildPostBanner({
         height: height,
         // Banners span device width but rarely need more than this to look
         // sharp, even on high-density screens — avoids decoding the full
-        // up-to-1920px upload for what's usually a ~200-400dp-tall card.
+        // up-to-3840px upload for what's usually a ~200-400dp-tall card.
         cacheWidth: 500,
         placeholderBuilder: (_) => SkeletonBox(
           width: double.infinity,
@@ -364,7 +364,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   String _publishErrorMessage(BuildContext context, Object error) {
     final l10n = AppLocalizations.of(context)!;
-    if (error is ContentSafetyException) return l10n.contentSafetyRejected;
+    if (error is ContentSafetyException) return error.message;
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||
@@ -385,7 +385,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final adminName = authService.currentAdmin?.name ?? AppLocalizations.of(context)!.clubFallbackName;
+    final adminName =
+        authService.currentAdmin?.name ??
+        AppLocalizations.of(context)!.clubFallbackName;
     dynamic selectedClubModel;
     if (_selectedClub != null) {
       for (final c in clubs) {
@@ -412,7 +414,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
         leadingWidth: 84,
-        title: Text(AppLocalizations.of(context)!.newPostTitle, style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          AppLocalizations.of(context)!.newPostTitle,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -490,7 +495,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            AppLocalizations.of(context)!.postingAsClub(clubName),
+                            AppLocalizations.of(
+                              context,
+                            )!.postingAsClub(clubName),
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
@@ -564,7 +571,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           height: 1.6,
                         ),
                         decoration: InputDecoration(
-                          hintText: AppLocalizations.of(context)!.writeForClubMembersHint,
+                          hintText: AppLocalizations.of(
+                            context,
+                          )!.writeForClubMembersHint,
                           hintStyle: TextStyle(
                             fontSize: 15,
                             color: AppColors.secondaryText,
@@ -707,7 +716,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     height: 200,
                     compact: true,
                     emptyTitle: AppLocalizations.of(context)!.addAPhotoTitle,
-                    emptySubtitle: AppLocalizations.of(context)!.tapToPickFromCameraOrLibrary,
+                    emptySubtitle: AppLocalizations.of(
+                      context,
+                    )!.tapToPickFromCameraOrLibrary,
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -764,7 +775,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 isDense: true,
                                 filled: true,
                                 fillColor: AppColors.surfaceAlt,
-                                hintText: AppLocalizations.of(context)!.pollOptionHint(i + 1),
+                                hintText: AppLocalizations.of(
+                                  context,
+                                )!.pollOptionHint(i + 1),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.all(
                                     Radius.circular(12),
@@ -804,7 +817,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         color: AppColors.primaryRed,
                       ),
                       label: Text(
-                        AppLocalizations.of(context)!.pollOptionHint(_pollOptionControllers.length + 1),
+                        AppLocalizations.of(
+                          context,
+                        )!.pollOptionHint(_pollOptionControllers.length + 1),
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.primaryRed,

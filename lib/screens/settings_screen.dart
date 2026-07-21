@@ -18,7 +18,8 @@ import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/locale_service.dart';
 import '../l10n/app_localizations.dart';
-import '../services/tutorial_service.dart';
+import '../services/photo_upload_quality.dart';
+import '../onboarding/onboarding_service.dart';
 import '../widgets/club_avatar.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'edit_profile_screen.dart';
@@ -101,10 +102,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _clubPhotoOption(Icons.camera_alt_outlined, AppLocalizations.of(context)!.takePhoto, () {
-                Navigator.pop(context);
-                _pickClubPhoto(club, ImageSource.camera);
-              }),
+              _clubPhotoOption(
+                Icons.camera_alt_outlined,
+                AppLocalizations.of(context)!.takePhoto,
+                () {
+                  Navigator.pop(context);
+                  _pickClubPhoto(club, ImageSource.camera);
+                },
+              ),
               Divider(height: 1, indent: 16, color: AppColors.divider),
               _clubPhotoOption(
                 Icons.photo_library_outlined,
@@ -142,12 +147,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _pickClubPhoto(Club club, ImageSource source) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    final picked = await picker.pickImage(source: source);
     if (picked == null || !mounted) return;
 
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      maxWidth: PhotoUploadQuality.avatarMaxDimension,
+      maxHeight: PhotoUploadQuality.avatarMaxDimension,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
           title: AppLocalizations.of(context)!.cropPhoto,
@@ -222,7 +231,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ..hideCurrentSnackBar()
             ..showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.couldNotUploadClubPhoto),
+                content: Text(
+                  AppLocalizations.of(context)!.couldNotUploadClubPhoto,
+                ),
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -279,7 +290,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    AppLocalizations.of(context)!.descriptionAppearsOnClubProfile(club.name),
+                    AppLocalizations.of(
+                      context,
+                    )!.descriptionAppearsOnClubProfile(club.name),
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -293,7 +306,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     maxLines: 4,
                     style: TextStyle(color: AppColors.text, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: AppLocalizations.of(context)!.clubDescriptionHint,
+                      hintText: AppLocalizations.of(
+                        context,
+                      )!.clubDescriptionHint,
                       hintStyle: TextStyle(color: AppColors.secondaryText),
                       filled: true,
                       fillColor: AppColors.background,
@@ -359,7 +374,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ..showSnackBar(
                                         SnackBar(
                                           content: Text(
-                                            AppLocalizations.of(context)!.couldNotUpdateClubDescription,
+                                            AppLocalizations.of(
+                                              context,
+                                            )!.couldNotUpdateClubDescription,
                                           ),
                                           behavior: SnackBarBehavior.floating,
                                         ),
@@ -383,7 +400,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 }
                               : null,
                           child: Text(
-                            saving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.save,
+                            saving
+                                ? AppLocalizations.of(context)!.savingEllipsis
+                                : AppLocalizations.of(context)!.save,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -528,7 +547,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     decoration: InputDecoration(
                       labelText: AppLocalizations.of(context)!.customTags,
                       hintText: AppLocalizations.of(context)!.customTagsHint,
-                      helperText: AppLocalizations.of(context)!.separateWithCommas,
+                      helperText: AppLocalizations.of(
+                        context,
+                      )!.separateWithCommas,
                       filled: true,
                       fillColor: AppColors.background,
                       border: OutlineInputBorder(
@@ -612,10 +633,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _replayTutorial() async {
-    await tutorialService.reset(_userId);
+    await onboardingService.reset(_userId);
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
-    tutorialService.requestReplay();
+    onboardingService.requestReplay();
   }
 
   Future<void> _openExternalPage(String url) async {
@@ -626,7 +647,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!opened && mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.couldNotOpenPage)));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.couldNotOpenPage),
+          ),
+        );
     }
   }
 
@@ -680,7 +705,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.settings, style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          AppLocalizations.of(context)!.settings,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
       ),
@@ -694,7 +722,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Clubs and the super admin edit via the Club section / dashboard,
             // so the personal profile editor is shown for student accounts only.
             if (authService.isStudentSession) ...[
-              _SectionHeader(title: AppLocalizations.of(context)!.profileSection),
+              _SectionHeader(
+                title: AppLocalizations.of(context)!.profileSection,
+              ),
               ListenableBuilder(
                 listenable: userState,
                 builder: (context, _) {
@@ -1058,14 +1088,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       title: Text(
-                        themeService.isDark ? AppLocalizations.of(context)!.darkMode : AppLocalizations.of(context)!.lightMode,
+                        themeService.isDark
+                            ? AppLocalizations.of(context)!.darkMode
+                            : AppLocalizations.of(context)!.lightMode,
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: AppColors.text,
                         ),
                       ),
                       subtitle: Text(
-                        themeService.isDark ? AppLocalizations.of(context)!.switchToLight : AppLocalizations.of(context)!.switchToDark,
+                        themeService.isDark
+                            ? AppLocalizations.of(context)!.switchToLight
+                            : AppLocalizations.of(context)!.switchToDark,
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.secondaryText,
@@ -1112,7 +1146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.primaryRed, AppColors.darkRed],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1156,7 +1190,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    AppLocalizations.of(context)!.replayTutorial,
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.replayTutorial,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 16,
@@ -1165,7 +1201,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
-                                    AppLocalizations.of(context)!.replayTutorialSubtitle,
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.replayTutorialSubtitle,
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       height: 1.3,
@@ -1199,7 +1237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [AppColors.primaryRed, AppColors.darkRed],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1243,7 +1281,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    AppLocalizations.of(context)!.replayTutorial,
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.replayTutorial,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       fontSize: 16,
@@ -1252,7 +1292,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
-                                    AppLocalizations.of(context)!.replayTutorialSubtitle,
+                                    AppLocalizations.of(
+                                      context,
+                                    )!.replayTutorialSubtitle,
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       height: 1.3,
@@ -1281,7 +1323,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
 
             // ── Public support and legal pages ──────────────────────────────
-            _SectionHeader(title: AppLocalizations.of(context)!.supportAndLegal),
+            _SectionHeader(
+              title: AppLocalizations.of(context)!.supportAndLegal,
+            ),
             Container(
               color: AppColors.card,
               child: Column(
@@ -1289,7 +1333,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _externalPageTile(
                     icon: Icons.help_outline_rounded,
                     title: AppLocalizations.of(context)!.supportCenter,
-                    subtitle: AppLocalizations.of(context)!.supportCenterSubtitle,
+                    subtitle: AppLocalizations.of(
+                      context,
+                    )!.supportCenterSubtitle,
                     url: localeService.languageCode == 'tr'
                         ? AppLinks.supportTurkish
                         : AppLinks.support,
@@ -1298,7 +1344,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _externalPageTile(
                     icon: Icons.privacy_tip_outlined,
                     title: AppLocalizations.of(context)!.privacyPolicy,
-                    subtitle: AppLocalizations.of(context)!.privacyPolicySubtitle,
+                    subtitle: AppLocalizations.of(
+                      context,
+                    )!.privacyPolicySubtitle,
                     url: localeService.languageCode == 'tr'
                         ? AppLinks.privacyPolicyTurkish
                         : AppLinks.privacyPolicy,
@@ -1316,7 +1364,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _externalPageTile(
                     icon: Icons.delete_outline_rounded,
                     title: AppLocalizations.of(context)!.deleteAccount,
-                    subtitle: AppLocalizations.of(context)!.deleteAccountSubtitle,
+                    subtitle: AppLocalizations.of(
+                      context,
+                    )!.deleteAccountSubtitle,
                     url: localeService.languageCode == 'tr'
                         ? AppLinks.accountDeletionTurkish
                         : AppLinks.accountDeletion,
@@ -1535,7 +1585,9 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(value) : null,
                     child: Text(
-                      _saving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.saveName,
+                      _saving
+                          ? AppLocalizations.of(context)!.savingEllipsis
+                          : AppLocalizations.of(context)!.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -1752,7 +1804,9 @@ class _ChangeNameSheetState extends State<_ChangeNameSheet> {
                     ),
                     onPressed: canSave ? () => _save(customName) : null,
                     child: Text(
-                      _saving ? AppLocalizations.of(context)!.savingEllipsis : AppLocalizations.of(context)!.saveName,
+                      _saving
+                          ? AppLocalizations.of(context)!.savingEllipsis
+                          : AppLocalizations.of(context)!.saveName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,

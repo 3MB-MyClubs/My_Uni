@@ -6,14 +6,27 @@ import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/screens/login_screen.dart';
 import 'package:flutter_application_1/screens/terms_acceptance_screen.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('app opens on the login screen', (WidgetTester tester) async {
+  testWidgets('app requires terms before opening the login screen', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
-    // Brand header + the design's login affordances are the root UI.
-    expect(find.text('Koç University'), findsOneWidget);
+    expect(find.text('COMMUNITY SAFETY TERMS'), findsOneWidget);
+    expect(find.text('Agree and continue'), findsOneWidget);
+    expect(find.text('Log in'), findsNothing);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.tap(find.text('Agree and continue'));
+    await tester.pumpAndSettle();
+
+    // Authentication is inaccessible until the agreement is accepted.
+    expect(find.text('KOÇ UNIVERSITY'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Sign up'), findsOneWidget);
   });

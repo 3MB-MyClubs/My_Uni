@@ -68,7 +68,11 @@ abstract class AppLocalizations {
   final String localeName;
 
   static AppLocalizations? of(BuildContext context) {
-    return Localizations.of<AppLocalizations>(context, AppLocalizations);
+    // Some lightweight widget tests intentionally omit localization delegates.
+    // Keep the production lookup intact while providing a safe English fallback
+    // for those contexts instead of making every screen force-unwrap a null.
+    return Localizations.of<AppLocalizations>(context, AppLocalizations) ??
+        AppLocalizationsEn();
   }
 
   static const LocalizationsDelegate<AppLocalizations> delegate =

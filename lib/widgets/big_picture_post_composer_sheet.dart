@@ -13,6 +13,7 @@ import '../services/club_notification_service.dart';
 import '../services/content_safety_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/photo_upload_quality.dart';
 import '../services/supabase_post_service.dart';
 import 'club_avatar.dart';
 
@@ -101,19 +102,14 @@ class _BigPicturePostComposerSheetState
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 1920,
-      maxHeight: 1920,
-    );
+    final picked = await ImagePicker().pickImage(source: source);
     if (picked == null || !mounted) return;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      maxWidth: 1920,
-      maxHeight: 1920,
+      maxWidth: PhotoUploadQuality.contentMaxDimension,
+      maxHeight: PhotoUploadQuality.contentMaxDimension,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 85,
+      compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
           title: AppLocalizations.of(context)!.cropPhoto,
