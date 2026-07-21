@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/news_post.dart';
+import 'content_safety_service.dart';
 import 'supabase_config.dart';
 
 class SupabasePostService {
@@ -33,8 +34,6 @@ class SupabasePostService {
     PollData? poll,
     bool isAnnouncement = false,
   }) async {
-<<<<<<< Updated upstream
-=======
     final rejected = contentSafetyService.isRejected([
       content,
       if (poll != null) poll.question,
@@ -42,7 +41,6 @@ class SupabasePostService {
     ]);
     if (rejected) throw const ContentSafetyException();
 
->>>>>>> Stashed changes
     final client = _client;
     if (client == null) {
       return _localPost(

@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
-<<<<<<< Updated upstream
-=======
 import '../l10n/app_localizations.dart';
->>>>>>> Stashed changes
 import '../services/auth_service.dart';
 import '../services/locale_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/moderation_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/poll_card.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 
@@ -107,8 +106,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     setState(() {});
   }
 
-<<<<<<< Updated upstream
-=======
   Future<void> _reportPost() async {
     final reason = await showModerationReasonSheet(
       context,
@@ -137,7 +134,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
   }
 
->>>>>>> Stashed changes
   @override
   Widget build(BuildContext context) {
     final club = clubs.firstWhere((c) => c.id == widget.post.clubId);
@@ -160,15 +156,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-<<<<<<< Updated upstream
-=======
           if (isStudent)
             IconButton(
               tooltip: AppLocalizations.of(context)!.reportPost,
               icon: Icon(Icons.flag_outlined, color: AppColors.secondaryText),
               onPressed: _reportPost,
             ),
->>>>>>> Stashed changes
           if (_canDeletePost)
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red),

@@ -10,11 +10,8 @@ import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-<<<<<<< Updated upstream
-=======
 import '../services/content_safety_service.dart';
 import '../l10n/app_localizations.dart';
->>>>>>> Stashed changes
 import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 
@@ -122,8 +119,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (_isSaving) return;
-<<<<<<< Updated upstream
-=======
     final rejected = contentSafetyService.isRejected([_bioCtrl.text]);
     if (rejected) {
       ScaffoldMessenger.of(context)
@@ -136,7 +131,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
       return;
     }
->>>>>>> Stashed changes
     setState(() => _isSaving = true);
 
     try {

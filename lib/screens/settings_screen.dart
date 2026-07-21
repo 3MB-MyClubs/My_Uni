@@ -1288,26 +1288,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _externalPageTile(
                     icon: Icons.help_outline_rounded,
-<<<<<<< Updated upstream
-                    title: S.supportCenter,
-                    subtitle: S.supportCenterSubtitle,
-                    url: AppLinks.support,
-=======
                     title: AppLocalizations.of(context)!.supportCenter,
                     subtitle: AppLocalizations.of(context)!.supportCenterSubtitle,
                     url: localeService.languageCode == 'tr'
                         ? AppLinks.supportTurkish
                         : AppLinks.support,
->>>>>>> Stashed changes
                   ),
                   Divider(height: 1, indent: 56, color: AppColors.divider),
                   _externalPageTile(
                     icon: Icons.privacy_tip_outlined,
-<<<<<<< Updated upstream
-                    title: S.privacyPolicy,
-                    subtitle: S.privacyPolicySubtitle,
-                    url: AppLinks.privacyPolicy,
-=======
                     title: AppLocalizations.of(context)!.privacyPolicy,
                     subtitle: AppLocalizations.of(context)!.privacyPolicySubtitle,
                     url: localeService.languageCode == 'tr'
@@ -1322,22 +1311,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     url: localeService.languageCode == 'tr'
                         ? AppLinks.termsOfUseTurkish
                         : AppLinks.termsOfUse,
->>>>>>> Stashed changes
                   ),
                   Divider(height: 1, indent: 56, color: AppColors.divider),
                   _externalPageTile(
                     icon: Icons.delete_outline_rounded,
-<<<<<<< Updated upstream
-                    title: S.deleteAccount,
-                    subtitle: S.deleteAccountSubtitle,
-                    url: AppLinks.accountDeletion,
-=======
                     title: AppLocalizations.of(context)!.deleteAccount,
                     subtitle: AppLocalizations.of(context)!.deleteAccountSubtitle,
                     url: localeService.languageCode == 'tr'
                         ? AppLinks.accountDeletionTurkish
                         : AppLinks.accountDeletion,
->>>>>>> Stashed changes
                     color: Colors.red,
                   ),
                 ],

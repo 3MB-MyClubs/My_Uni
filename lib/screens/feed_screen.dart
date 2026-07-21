@@ -12,6 +12,7 @@ import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/lazy_content_loader.dart';
+import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
@@ -33,6 +34,7 @@ import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
@@ -2474,11 +2476,7 @@ class _PostCardState extends State<_PostCard>
                 ),
               tile(
                 icon: Icons.flag_outlined,
-<<<<<<< Updated upstream
-                label: 'Report post',
-=======
                 label: AppLocalizations.of(context)!.reportPost,
->>>>>>> Stashed changes
                 color: AppColors.primaryRed,
                 onTap: _reportPost,
               ),
@@ -2546,16 +2544,6 @@ class _PostCardState extends State<_PostCard>
     );
   }
 
-<<<<<<< Updated upstream
-  void _reportPost() {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card,
-        title: Text(
-          'Report this post?',
-          style: TextStyle(color: AppColors.text),
-=======
   Future<void> _reportPost() async {
     final reason = await showModerationReasonSheet(
       context,
@@ -2578,32 +2566,8 @@ class _PostCardState extends State<_PostCard>
             delivered ? AppLocalizations.of(context)!.postReportedAndRemoved : AppLocalizations.of(context)!.postHiddenOffline,
           ),
           behavior: SnackBarBehavior.floating,
->>>>>>> Stashed changes
         ),
-        content: Text(
-          'Our team will review it for violations of community guidelines.',
-          style: TextStyle(color: AppColors.secondaryText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Thanks for the report. We\'ll take a look.'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            child: const Text('Report'),
-          ),
-        ],
-      ),
-    );
+      );
   }
 
   @override

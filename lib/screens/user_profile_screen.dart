@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
-<<<<<<< Updated upstream
-=======
 import '../l10n/app_localizations.dart';
->>>>>>> Stashed changes
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/student_club_role_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/student_campus_profile.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
@@ -162,8 +161,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _handleFollowTap() =>
       _toggleUserFollow(widget.user, () => setState(() {}));
 
-<<<<<<< Updated upstream
-=======
   void _showSafetyOptions() {
     showModalBottomSheet<void>(
       context: context,
@@ -318,7 +315,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
   }
 
->>>>>>> Stashed changes
   void _openUserProfile(User u) {
     Navigator.push(
       context,
@@ -382,15 +378,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
                   ),
                 )
-<<<<<<< Updated upstream
-=======
               : authService.isStudentSession
               ? StudentProfileIconButton(
                   icon: Icons.more_horiz_rounded,
                   tooltip: AppLocalizations.of(context)!.safetyOptions,
                   onTap: _showSafetyOptions,
                 )
->>>>>>> Stashed changes
               : const SizedBox(width: 36, height: 36),
           primaryAction: !_isOwnProfile && authService.isStudentSession
               ? StudentProfilePrimaryButton(

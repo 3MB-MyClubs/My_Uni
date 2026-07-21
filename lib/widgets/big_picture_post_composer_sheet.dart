@@ -10,6 +10,7 @@ import '../services/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/club_notification_service.dart';
+import '../services/content_safety_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/supabase_post_service.dart';
@@ -217,17 +218,12 @@ class _BigPicturePostComposerSheetState
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-<<<<<<< Updated upstream
-          const SnackBar(
-            content: Text('Could not publish post. Check Supabase settings.'),
-=======
           SnackBar(
             content: Text(
               error is ContentSafetyException
                   ? AppLocalizations.of(context)!.contentSafetyRejected
                   : AppLocalizations.of(context)!.publishErrorGeneric,
             ),
->>>>>>> Stashed changes
             behavior: SnackBarBehavior.floating,
           ),
         );

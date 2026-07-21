@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
+import '../services/content_safety_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
@@ -361,13 +362,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-<<<<<<< Updated upstream
-  String _publishErrorMessage(Object error) {
-=======
   String _publishErrorMessage(BuildContext context, Object error) {
     final l10n = AppLocalizations.of(context)!;
     if (error is ContentSafetyException) return l10n.contentSafetyRejected;
->>>>>>> Stashed changes
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||

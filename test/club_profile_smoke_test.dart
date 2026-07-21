@@ -83,15 +83,11 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-<<<<<<< Updated upstream
-      ProviderScope(child: MaterialApp(home: ExploreScreen())),
-=======
       ProviderScope(
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,home: ExploreScreen(initialTabIndex: 2)),
       ),
->>>>>>> Stashed changes
     );
     await tester.pumpAndSettle();
 

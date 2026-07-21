@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/screens/login_screen.dart';
+import 'package:flutter_application_1/screens/terms_acceptance_screen.dart';
+import 'package:flutter_application_1/services/locale_service.dart';
 
 void main() {
   testWidgets('app opens on the login screen', (WidgetTester tester) async {
@@ -41,8 +43,6 @@ void main() {
 
     expect(signUpTapped, isTrue);
   });
-<<<<<<< Updated upstream
-=======
 
   testWidgets('community safety agreement can switch to Turkish', (
     WidgetTester tester,
@@ -67,5 +67,4 @@ void main() {
     expect(find.text('Kabul et ve devam et'), findsOneWidget);
     await localeService.setLanguage('en');
   });
->>>>>>> Stashed changes
 }
