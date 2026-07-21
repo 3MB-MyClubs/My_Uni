@@ -40,6 +40,8 @@ dependencies:
   timezone: ^0.9.2
   image_picker: ^1.1.2
   image_cropper: ^9.1.0
+  cropme: 0.0.3
+  pro_image_editor: 12.0.0
   supabase_flutter: ^2.10.3
   cached_network_image: ^3.4.1
   device_calendar: ^4.3.2

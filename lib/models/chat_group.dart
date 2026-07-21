@@ -2,6 +2,7 @@ class ChatGroup {
   final String id;
   final String creatorId;
   final List<String> memberIds;
+  final List<String> adminIds;
   final String? customName;
   final String? photoUrl;
   final DateTime createdAt;
@@ -10,12 +11,16 @@ class ChatGroup {
     required this.id,
     required this.creatorId,
     required this.memberIds,
+    this.adminIds = const [],
     required this.customName,
     required this.photoUrl,
     required this.createdAt,
   });
 
   String get threadId => 'group:$id';
+
+  bool isAdmin(String userId) =>
+      userId == creatorId || adminIds.contains(userId);
 
   static String automaticName(Iterable<String> memberNames) {
     final names = memberNames
@@ -39,10 +44,31 @@ class ChatGroup {
     );
   }
 
-  ChatGroup withMembers(Iterable<String> members) => ChatGroup(
+  ChatGroup withMembers(Iterable<String> members) {
+    final nextMembers = members.toSet();
+    final retainedAdmins = {
+      creatorId,
+      ...adminIds,
+    }.where(nextMembers.contains).toList(growable: false);
+    return ChatGroup(
+      id: id,
+      creatorId: creatorId,
+      memberIds: nextMembers.toList(growable: false),
+      adminIds: retainedAdmins,
+      customName: customName,
+      photoUrl: photoUrl,
+      createdAt: createdAt,
+    );
+  }
+
+  ChatGroup withAdmins(Iterable<String> admins) => ChatGroup(
     id: id,
     creatorId: creatorId,
-    memberIds: members.toSet().toList(growable: false),
+    memberIds: memberIds,
+    adminIds: {
+      creatorId,
+      ...admins.where(memberIds.contains),
+    }.toList(growable: false),
     customName: customName,
     photoUrl: photoUrl,
     createdAt: createdAt,
@@ -54,6 +80,7 @@ class ChatGroup {
       id: id,
       creatorId: creatorId,
       memberIds: memberIds,
+      adminIds: adminIds,
       customName: trimmed.isEmpty ? null : trimmed,
       photoUrl: photoUrl,
       createdAt: createdAt,
@@ -66,6 +93,7 @@ class ChatGroup {
       id: id,
       creatorId: creatorId,
       memberIds: memberIds,
+      adminIds: adminIds,
       customName: customName,
       photoUrl: trimmed.isEmpty ? null : trimmed,
       createdAt: createdAt,
@@ -76,6 +104,7 @@ class ChatGroup {
     'id': id,
     'creatorId': creatorId,
     'memberIds': memberIds,
+    'adminIds': {creatorId, ...adminIds}.toList(growable: false),
     'customName': customName,
     'photoUrl': photoUrl,
     'createdAt': createdAt.toIso8601String(),
@@ -87,6 +116,11 @@ class ChatGroup {
       id: map['id'].toString(),
       creatorId: map['creatorId']?.toString() ?? '',
       memberIds: (map['memberIds'] as List? ?? const [])
+          .map((id) => id.toString())
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(growable: false),
+      adminIds: (map['adminIds'] as List? ?? const [])
           .map((id) => id.toString())
           .where((id) => id.isNotEmpty)
           .toSet()

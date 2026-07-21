@@ -152,6 +152,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(GroupInfoScreen), findsOneWidget);
     expect(find.byKey(const ValueKey('edit-group-name-field')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('group-member-actions-u2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Make group admin'));
+    await tester.pumpAndSettle();
+    expect(chatStore.groupForThread(threadId)?.isAdmin('u2'), isTrue);
+    expect(find.text('Group admin'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('group-member-actions-u2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove member'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Can Serbester?'), findsOneWidget);
+    expect(
+      find.text(
+        'Are you sure you want to remove Can Serbester from this group?',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(chatStore.groupParticipants(threadId), contains('u2'));
+
+    await tester.tap(find.byKey(const ValueKey('group-member-actions-u2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove member'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-remove-group-member')));
+    await tester.pumpAndSettle();
+    expect(chatStore.groupParticipants(threadId), isNot(contains('u2')));
+    await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);
   });
 

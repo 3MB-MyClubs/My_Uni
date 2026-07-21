@@ -458,6 +458,7 @@ class ChatStore extends ChangeNotifier {
           id: id,
           creatorId: row['creator_id']?.toString() ?? '',
           memberIds: membersByGroup[id] ?? const [],
+          adminIds: _groups[id]?.adminIds ?? const [],
           customName: custom.isEmpty ? null : custom,
           photoUrl: row['photo_url']?.toString(),
           createdAt:
@@ -1032,6 +1033,7 @@ class ChatStore extends ChangeNotifier {
       id: id,
       creatorId: creatorId,
       memberIds: [creatorId, ...recipients],
+      adminIds: [creatorId],
       customName: trimmedName.isEmpty ? null : trimmedName,
       photoUrl: trimmedPhoto.isEmpty ? null : trimmedPhoto,
       createdAt: DateTime.now(),
@@ -1066,7 +1068,7 @@ class ChatStore extends ChangeNotifier {
     return true;
   }
 
-  bool updateGroupMembers(String threadId, Iterable<String> memberIds) {
+  bool _updateGroupMembers(String threadId, Iterable<String> memberIds) {
     final group = groupForThread(threadId);
     if (group == null) return false;
     final members = {
@@ -1082,19 +1084,57 @@ class ChatStore extends ChangeNotifier {
     return true;
   }
 
-  bool addGroupMembers(String threadId, Iterable<String> memberIds) {
+  bool addGroupMembers(
+    String threadId,
+    Iterable<String> memberIds, {
+    required String actorId,
+  }) {
     final group = groupForThread(threadId);
-    if (group == null) return false;
-    return updateGroupMembers(threadId, {...group.memberIds, ...memberIds});
+    if (group == null || !group.isAdmin(actorId)) return false;
+    return _updateGroupMembers(threadId, {...group.memberIds, ...memberIds});
   }
 
-  bool removeGroupMember(String threadId, String memberId) {
+  bool removeGroupMember(
+    String threadId, {
+    required String actorId,
+    required String memberId,
+  }) {
     final group = groupForThread(threadId);
-    if (group == null || memberId == group.creatorId) return false;
-    return updateGroupMembers(
+    if (group == null ||
+        !group.isAdmin(actorId) ||
+        memberId == group.creatorId ||
+        memberId == actorId) {
+      return false;
+    }
+    return _updateGroupMembers(
       threadId,
       group.memberIds.where((id) => id != memberId),
     );
+  }
+
+  bool setGroupMemberAdmin(
+    String threadId, {
+    required String actorId,
+    required String memberId,
+    required bool isAdmin,
+  }) {
+    final group = groupForThread(threadId);
+    if (group == null ||
+        !group.isAdmin(actorId) ||
+        !group.memberIds.contains(memberId) ||
+        memberId == group.creatorId ||
+        memberId == actorId) {
+      return false;
+    }
+    final admins = group.adminIds.toSet();
+    final changed = isAdmin ? admins.add(memberId) : admins.remove(memberId);
+    if (!changed) return false;
+    _groups[group.id] = group.withAdmins(admins);
+    _pendingRemoteGroupIds.add(group.id);
+    scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return true;
   }
 
   /// Appends a message and returns it, or returns null (no mutation) when the
