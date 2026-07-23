@@ -13,6 +13,7 @@ import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
 import 'screens/onboarding_carousel_screen.dart';
 import 'screens/terms_acceptance_screen.dart';
+import 'screens/boot_splash_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
@@ -147,6 +148,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _showSignUp = false;
   bool _loggedIn = false;
   String _signupEmail = '';
+
+  // One-shot guard for the cold-start boot animation. build() recomputes
+  // homeWidget on every rebuild (theme/locale toggles, login/logout, etc.), so
+  // this flag ensures the branding splash wraps only the very first frame and
+  // never replays afterwards.
+  bool _bootAnimationDone = false;
 
   // Set when the user leaves the first-run intro carousel (Get started or
   // Log in/Skip) so it isn't rebuilt this session before the device flag lands.
@@ -361,7 +368,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
-        if (!termsAcceptanceService.hasAcceptedCurrentTerms) {
+        if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
+            !_showSignUp &&
+            onboardingIntroService.hasCompletedOnceOnDevice) {
+          // New sign-ups accept the Terms via the checkbox on the sign-up
+          // flow's last step, so the full-screen gate must NOT preempt the
+          // first-run experience (intro carousel → sign-up). It only fires for
+          // returning users — devices that have already reached an
+          // authenticated state (hasCompletedOnceOnDevice) — which is the path
+          // that re-prompts when the Terms version is bumped. A returning user
+          // on a fresh install hits it right after logging in, since _onLogin
+          // marks the device completed.
           homeWidget = TermsAcceptanceScreen(
             onAccepted: () async {
               await termsAcceptanceService.accept();
@@ -455,7 +472,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
-          home: homeWidget,
+          home: _bootAnimationDone
+              ? homeWidget
+              : BootSplashScreen(
+                  onFinished: () => setState(() => _bootAnimationDone = true),
+                  child: homeWidget,
+                ),
         );
       },
     );

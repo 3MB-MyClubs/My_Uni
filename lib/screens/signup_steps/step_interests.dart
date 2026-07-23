@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/signup_service.dart';
+import '../widgets/terms_content.dart';
 import 'signup_theme.dart';
 
 const int kMinInterests = 3;
@@ -29,6 +30,7 @@ class _StepInterestsState extends State<StepInterests> {
   String? _error;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _agreedToTerms = false;
 
   @override
   void initState() {
@@ -90,6 +92,49 @@ class _StepInterestsState extends State<StepInterests> {
       _error = error;
       _isSubmitting = false;
     });
+  }
+
+  /// Presents the full Community Safety Terms in an in-app bottom sheet
+  /// (rather than handing off to the external browser) so the student can
+  /// review them without leaving the sign-up flow.
+  void _showTermsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: SC.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Drag handle
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 6),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: SC.hair,
+                  borderRadius: const BorderRadius.all(Radius.circular(2)),
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
+                child: const TermsContent(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -215,26 +260,87 @@ class _StepInterestsState extends State<StepInterests> {
           ),
         ),
 
-        // ── Finish setup — pinned to bottom ─────────────────────
+        // ── Terms acceptance + Finish setup — pinned to bottom ──
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _isLoading || _isSubmitting ? null : _submit,
-              style: SC.primaryButtonStyle(),
-              child: _isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(AppLocalizations.of(context)!.finishSetupButton),
-            ),
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Checkbox(
+                    value: _agreedToTerms,
+                    activeColor: SC.burgundy,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onChanged: (value) =>
+                        setState(() => _agreedToTerms = value ?? false),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)!.agreeToSafetyTerms,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: SC.body,
+                            height: 1.35,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: _showTermsSheet,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Text(
+                              AppLocalizations.of(context)!.readFullTerms,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: SC.burgundy,
+                                fontWeight: FontWeight.w600,
+                                height: 1.35,
+                                decoration: TextDecoration.underline,
+                                decorationColor: SC.burgundy,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed:
+                      _isLoading ||
+                          _isSubmitting ||
+                          _selected.length < kMinInterests ||
+                          !_agreedToTerms
+                      ? null
+                      : _submit,
+                  style: SC.primaryButtonStyle(),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          AppLocalizations.of(context)!.finishSetupButton,
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

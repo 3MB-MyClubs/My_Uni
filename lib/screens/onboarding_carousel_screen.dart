@@ -40,7 +40,14 @@ class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
       icon: Icons.explore_rounded,
       title: S.onboardingIntroDiscoverTitle,
       subtitle: S.onboardingIntroDiscoverSubtitle,
-      illustration: _redLottie('assets/lottie/location_pin.json'),
+      // Nudge only the pin glyph down a touch. Transform.translate is a
+      // paint-time shift, so it moves the Lottie inside its fixed 92px slot
+      // without changing any layout — the 124px badge and the title/subtitle
+      // stay exactly where they are on every other slide.
+      illustration: Transform.translate(
+        offset: const Offset(0, 4),
+        child: _redLottie('assets/lottie/location_pin.json'),
+      ),
     ),
     _IntroSlide(
       icon: Icons.event_available_rounded,

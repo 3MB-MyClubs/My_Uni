@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_colors.dart';
-import '../services/app_links.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
+import 'widgets/terms_content.dart';
 
 class TermsAcceptanceScreen extends StatefulWidget {
   final Future<void> Function() onAccepted;
@@ -18,20 +17,6 @@ class TermsAcceptanceScreen extends StatefulWidget {
 class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   bool _agreed = false;
   bool _saving = false;
-
-  Future<void> _open(String url) async {
-    final opened = await launchUrl(
-      Uri.parse(url),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.couldNotOpenThisPage),
-        ),
-      );
-    }
-  }
 
   Future<void> _continue() async {
     if (!_agreed || _saving) return;
@@ -129,71 +114,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                     borderRadius: const BorderRadius.all(Radius.circular(18)),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)!.communitySafetyTerms,
-                          style: TextStyle(
-                            color: AppColors.primaryRed,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.9,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _term(
-                          Icons.shield_outlined,
-                          AppLocalizations.of(context)!.zeroTolerance,
-                          AppLocalizations.of(context)!.zeroToleranceBody,
-                        ),
-                        _term(
-                          Icons.flag_outlined,
-                          AppLocalizations.of(context)!.reportHarmfulContent,
-                          AppLocalizations.of(
-                            context,
-                          )!.reportHarmfulContentBody,
-                        ),
-                        _term(
-                          Icons.block_rounded,
-                          AppLocalizations.of(context)!.blockAbusiveUsers,
-                          AppLocalizations.of(context)!.blockAbusiveUsersBody,
-                        ),
-                        _term(
-                          Icons.gavel_rounded,
-                          AppLocalizations.of(context)!.enforcement,
-                          AppLocalizations.of(context)!.enforcementBody,
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            TextButton(
-                              onPressed: () => _open(
-                                localeService.languageCode == 'tr'
-                                    ? AppLinks.termsOfUseTurkish
-                                    : AppLinks.termsOfUse,
-                              ),
-                              child: Text(
-                                AppLocalizations.of(context)!.readFullTerms,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => _open(
-                                localeService.languageCode == 'tr'
-                                    ? AppLinks.privacyPolicyTurkish
-                                    : AppLinks.privacyPolicy,
-                              ),
-                              child: Text(
-                                AppLocalizations.of(context)!.privacyPolicy,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  child: const SingleChildScrollView(
+                    padding: EdgeInsets.all(18),
+                    child: TermsContent(),
                   ),
                 ),
               ),
@@ -256,38 +179,6 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _term(IconData icon, String title, String body) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.primaryRed, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  body,
-                  style: TextStyle(color: AppColors.secondaryText, height: 1.4),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
