@@ -11,7 +11,7 @@ import 'screens/signup_flow_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
-import 'screens/language_choice_screen.dart';
+import 'screens/onboarding_carousel_screen.dart';
 import 'screens/terms_acceptance_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
@@ -38,6 +38,7 @@ import 'services/event_cleanup_service.dart';
 import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
+import 'services/onboarding_intro_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +62,7 @@ void main() async {
     themeService.initialize(),
     localeService.initialize(),
     termsAcceptanceService.initialize(),
+    onboardingIntroService.initialize(),
   ]);
   appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
@@ -146,6 +148,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _loggedIn = false;
   String _signupEmail = '';
 
+  // Set when the user leaves the first-run intro carousel (Get started or
+  // Log in/Skip) so it isn't rebuilt this session before the device flag lands.
+  bool _dismissedIntro = false;
+
   // Prefs/personalization are loaded once per logged-in user (from _onLogin or
   // the first build that sees the session) — not on every theme/locale
   // rebuild: personalizationService.load ends with notifyListeners(), which
@@ -192,6 +198,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _onLogin() {
+    // Reaching an authenticated state permanently retires the intro carousel
+    // on this device — covers "signed up then logged in" and "logged in on a
+    // new device with an existing account" alike.
+    unawaited(onboardingIntroService.markCompletedOnDevice());
     final currentUserId =
         authService.currentUser?.id ?? authService.currentAdmin?.id;
     // First-time accounts are always presented in light and asked to pick a
@@ -376,12 +386,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onChoose: (dark) =>
                   themeService.markThemeChosen(currentUserId, dark),
             );
-          } else if (currentUserId != null &&
-              !localeService.hasChosenLanguage(currentUserId)) {
-            homeWidget = LanguageChoiceScreen(
-              onChoose: (code) =>
-                  localeService.markLanguageChosen(currentUserId, code),
-            );
           } else {
             homeWidget = MainNavScreen(
               isAdmin: isAdmin,
@@ -397,6 +401,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               },
             );
           }
+        } else if (!onboardingIntroService.hasCompletedOnceOnDevice &&
+            !_dismissedIntro &&
+            !_showSignUp) {
+          // First-run intro carousel, shown once per device before any
+          // account exists. Get started → sign-up; Skip/Log in → login.
+          homeWidget = OnboardingCarouselScreen(
+            onGetStarted: () => setState(() {
+              _dismissedIntro = true;
+              _showSignUp = true;
+            }),
+            onLogIn: () => setState(() => _dismissedIntro = true),
+          );
         } else if (_showSignUp) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
