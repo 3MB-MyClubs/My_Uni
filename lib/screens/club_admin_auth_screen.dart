@@ -4,7 +4,6 @@ import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
 import '../services/club_passcode_auth_service.dart';
-import '../l10n/app_localizations.dart';
 import 'forgot_password_screen.dart';
 
 class ClubAdminAuthScreen extends StatefulWidget {
@@ -28,37 +27,15 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
     return at < 0 ? email : email.substring(0, at);
   }
 
-  String _errorMessage(ClubPasscodeAuthError code) {
-    final l10n = AppLocalizations.of(context)!;
-    switch (code) {
-      case ClubPasscodeAuthError.missingCredentials:
-        return l10n.clubEmailPasscodeRequired;
-      case ClubPasscodeAuthError.invalidPasscodeFormat:
-        return l10n.passcodeMustBe8Digits;
-      case ClubPasscodeAuthError.invalidCredentials:
-        return l10n.invalidClubCredentials;
-      case ClubPasscodeAuthError.notLinkedToClub:
-        return l10n.clubNotLinked;
-      case ClubPasscodeAuthError.linkedClubNotFound:
-        return l10n.linkedClubNotFound;
-      case ClubPasscodeAuthError.notConfigured:
-        return l10n.clubLoginNotReady;
-    }
-  }
-
   Future<void> _handleAdminLogin() async {
     final localPart = _localPart(_clubEmailController.text.trim());
     final passcode = _passwordController.text.trim();
     if (localPart.isEmpty || passcode.isEmpty) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.clubEmailPasscodeRequired,
-      );
+      setState(() => _error = 'Club email and passcode are required');
       return;
     }
     if (!authService.isValidClubPassword(passcode)) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.passcodeMustBe8Digits,
-      );
+      setState(() => _error = 'Passcode must be exactly 8 digits');
       return;
     }
 
@@ -82,11 +59,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
       authService.setClubAdmin(result.admin!);
       widget.onAdminLogin();
     } else {
-      setState(
-        () => _error = result.errorCode != null
-            ? _errorMessage(result.errorCode!)
-            : AppLocalizations.of(context)!.invalidClubCredentials,
-      );
+      setState(() => _error = result.error ?? 'Invalid club email or passcode');
     }
   }
 
@@ -154,7 +127,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               ),
               const SizedBox(height: 28),
               Text(
-                AppLocalizations.of(context)!.clubAdminLoginTitle,
+                'Club Admin Login',
                 style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.bold,
@@ -163,7 +136,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                AppLocalizations.of(context)!.clubAdminLoginSubtitle,
+                'Enter the club email and 8 digit passcode to manage your club.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.secondaryText,
@@ -174,7 +147,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
 
               _buildField(
                 controller: _clubEmailController,
-                label: AppLocalizations.of(context)!.clubEmailLabel,
+                label: 'Club Email',
                 hint: 'clubname',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.text,
@@ -195,8 +168,8 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 ],
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
-                  labelText: AppLocalizations.of(context)!.eightDigitPasscodeLabel,
-                  hintText: AppLocalizations.of(context)!.eightDigitsHint,
+                  labelText: '8 digit passcode',
+                  hintText: '8 digits',
                   prefixIcon: Icon(
                     Icons.lock_outline,
                     color: AppColors.secondaryText,
@@ -244,7 +217,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
-                    AppLocalizations.of(context)!.forgotPasscode,
+                    'Forgot passcode?',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -279,7 +252,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                           ),
                         )
                       : Text(
-                          AppLocalizations.of(context)!.signInAsAdmin,
+                          'Sign In as Admin',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

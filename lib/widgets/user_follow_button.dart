@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
@@ -42,10 +41,10 @@ class UserFollowButton extends ConsumerWidget {
     );
 
     final String label = isPending
-        ? AppLocalizations.of(context)!.requested
+        ? 'Requested'
         : isFollowing
-        ? AppLocalizations.of(context)!.following
-        : (followLabel ?? AppLocalizations.of(context)!.follow);
+        ? 'Following'
+        : (followLabel ?? 'Follow');
 
     final bool filled = !isFollowing && !isPending;
 

@@ -1,22 +1,12 @@
-import 'package:flutter/widgets.dart' show Locale;
-
-import '../l10n/app_localizations.dart';
 import '../models/recommendation.dart';
 import '../models/event.dart';
 import '../models/club.dart';
 import 'auth_service.dart';
-import 'locale_service.dart';
 import 'mock_data.dart';
 import 'personalization_service.dart';
 import 'user_state.dart';
 
 class RecommendationService {
-  // No BuildContext is available this deep in the service layer; these
-  // recommendation reason/subtitle strings are resolved here via the
-  // current locale.
-  AppLocalizations get _l10n =>
-      lookupAppLocalizations(Locale(localeService.languageCode));
-
   List<Recommendation>? _cached;
   DateTime? _cachedAt;
 
@@ -85,8 +75,8 @@ class RecommendationService {
     final isFollowing = userState.followedClubIds.contains(top.clubId);
 
     final reason = isFollowing
-        ? _l10n.liveNowFollowingClub(_shortName(club.name))
-        : _l10n.liveNowOnCampus;
+        ? 'Live now · you follow ${_shortName(club.name)}'
+        : 'Live now on campus';
 
     return Recommendation(
       type: RecType.happeningNow,
@@ -129,10 +119,10 @@ class RecommendationService {
     final club = _clubFor(top.clubId);
     final daysAway = top.dateTime.difference(now).inDays;
     final timeLabel = daysAway == 0
-        ? _l10n.today
+        ? 'Today'
         : daysAway == 1
-        ? _l10n.tomorrow
-        : _l10n.inDaysCount(daysAway);
+        ? 'Tomorrow'
+        : 'In $daysAway days';
 
     return Recommendation(
       type: RecType.bestThisWeek,
@@ -179,15 +169,15 @@ class RecommendationService {
     );
 
     final reason = matchedTag.isNotEmpty
-        ? _l10n.matchesYourInterest(matchedTag)
-        : _l10n.studentsAreMembersCount(count);
+        ? 'Matches your $matchedTag interest'
+        : '$count students are members';
 
     return Recommendation(
       type: RecType.bestThisWeek,
       targetType: RecTargetType.club,
       id: top.id,
       title: _shortName(top.name),
-      subtitle: _l10n.membersCount(count),
+      subtitle: '$count members',
       reason: reason,
       data: top,
     );
@@ -232,12 +222,12 @@ class RecommendationService {
     String subtitle;
     if (sharedClubIds.isNotEmpty) {
       final sharedClub = _clubFor(sharedClubIds.first);
-      reason = _l10n.bothInClub(_shortName(sharedClub.name));
+      reason = 'Both in ${_shortName(sharedClub.name)}';
       final n = sharedClubIds.length;
-      subtitle = _l10n.clubsInCommonCount(n);
+      subtitle = '$n club${n == 1 ? '' : 's'} in common';
     } else {
-      reason = _l10n.youMayKnowThemKuStudent;
-      subtitle = top.role == 'student' ? _l10n.kuStudentLabel : 'KU';
+      reason = 'You may know them · KU student';
+      subtitle = top.role == 'student' ? 'KU student' : 'KU';
     }
 
     return Recommendation(
@@ -266,18 +256,18 @@ class RecommendationService {
         .where((id) => userState.followedUserIds.contains(id))
         .length;
     if (followersGoing > 0) {
-      return _l10n.peopleYouFollowGoing;
+      return 'People you follow are going';
     }
     if (userState.followedClubIds.contains(event.clubId)) {
-      return _l10n.becauseYouFollowClub(_shortName(club.name));
+      return 'Because you follow ${_shortName(club.name)}';
     }
     final tags = personalizationService.interestsForClub(event.clubId);
     final matchedTag = tags.firstWhere(
       (t) => personalizationService.interests.contains(t),
       orElse: () => '',
     );
-    if (matchedTag.isNotEmpty) return _l10n.matchesYourInterest(matchedTag);
-    return _l10n.popularOnCampus;
+    if (matchedTag.isNotEmpty) return 'Matches your $matchedTag interest';
+    return 'Popular on campus';
   }
 
   // ── Utility ──────────────────────────────────────────────────────────────

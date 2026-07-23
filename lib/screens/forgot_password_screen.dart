@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/password_reset_service.dart';
-import '../l10n/app_localizations.dart';
 
 enum _ResetStep { email, code, password, done }
 
@@ -65,15 +64,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_isSubmitting) return;
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.pleaseEnterKuEmail,
-      );
+      setState(() => _error = 'Please enter your KU email.');
       return;
     }
     if (!_emailRegex.hasMatch(email)) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.useKuEmailAddress,
-      );
+      setState(() => _error = 'Use your @ku.edu.tr email address.');
       return;
     }
     setState(() {
@@ -117,7 +112,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
     _codeController.clear();
     setState(() {
-      _message = AppLocalizations.of(context)!.newCodeSent;
+      _message = 'New code sent.';
       _isSubmitting = false;
     });
   }
@@ -128,7 +123,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       setState(() {
         _message = null;
-        _error = AppLocalizations.of(context)!.enterSixDigitCode;
+        _error = 'Enter the 6-digit code.';
       });
       return;
     }
@@ -161,28 +156,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_isSubmitting) return;
     final password = _passwordController.text.trim();
     final confirm = _confirmPasswordController.text.trim();
+    final noun =
+        widget.passwordNoun[0].toUpperCase() + widget.passwordNoun.substring(1);
     if (!_isExactLength) {
       setState(() {
         _message = null;
-        _error = AppLocalizations.of(
-          context,
-        )!.credentialMustBeNDigits(widget.passwordNoun, widget.passwordLength);
+        _error = '$noun must be exactly ${widget.passwordLength} digits.';
       });
       return;
     }
     if (!_hasOnlyNumbers) {
       setState(() {
         _message = null;
-        _error = AppLocalizations.of(
-          context,
-        )!.credentialNumbersOnly(widget.passwordNoun);
+        _error = '$noun must contain numbers only.';
       });
       return;
     }
     if (password != confirm) {
       setState(() {
         _message = null;
-        _error = AppLocalizations.of(context)!.passwordsDoNotMatch;
+        _error = 'Passwords do not match.';
       });
       return;
     }
@@ -292,47 +285,43 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   String get _title {
-    final l10n = AppLocalizations.of(context)!;
     switch (_step) {
       case _ResetStep.email:
-        return l10n.resetCredentialTitle(widget.passwordNoun);
+        return 'Reset ${widget.passwordNoun}';
       case _ResetStep.code:
-        return l10n.checkYourEmailTitle;
+        return 'Check your email';
       case _ResetStep.password:
-        return l10n.createNewCredentialTitle(widget.passwordNoun);
+        return 'Create new ${widget.passwordNoun}';
       case _ResetStep.done:
-        return l10n.credentialUpdatedTitle(widget.passwordNoun);
+        return '${widget.passwordNoun[0].toUpperCase()}'
+            '${widget.passwordNoun.substring(1)} updated';
     }
   }
 
   String get _subtitle {
-    final l10n = AppLocalizations.of(context)!;
     switch (_step) {
       case _ResetStep.email:
-        return l10n.enterKuEmailSubtitle;
+        return 'Enter the KU email for your account.';
       case _ResetStep.code:
-        return l10n.enterCodeSubtitle(_email);
+        return 'Enter the one-time code sent to $_email.';
       case _ResetStep.password:
-        return l10n.newCredentialSubtitle(
-          widget.passwordNoun,
-          widget.passwordLength,
-        );
+        return 'Use a ${widget.passwordLength}-digit numbers-only '
+            '${widget.passwordNoun} for future sign-ins.';
       case _ResetStep.done:
-        return l10n.credentialUpdatedSubtitle(widget.passwordNoun);
+        return 'You can now sign in with your new password.';
     }
   }
 
   String get _buttonText {
-    final l10n = AppLocalizations.of(context)!;
     switch (_step) {
       case _ResetStep.email:
-        return l10n.sendCodeButton;
+        return 'Send code';
       case _ResetStep.code:
-        return l10n.verifyCodeButton;
+        return 'Verify code';
       case _ResetStep.password:
-        return l10n.updateCredentialButton(widget.passwordNoun);
+        return 'Update ${widget.passwordNoun}';
       case _ResetStep.done:
-        return l10n.backToSignIn;
+        return 'Back to sign in';
     }
   }
 
@@ -358,7 +347,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           autofocus: true,
           onSubmitted: (_) => _sendCode(),
           decoration: _fieldDecoration(
-            label: AppLocalizations.of(context)!.kuEmailLabel,
+            label: 'KU Email',
             hint: 'you@ku.edu.tr',
             icon: Icons.email_outlined,
             errorText: _error,
@@ -375,8 +364,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               maxLength: 6,
               onSubmitted: (_) => _verifyCode(),
               decoration: _fieldDecoration(
-                label: AppLocalizations.of(context)!.oneTimeCodeLabel,
-                hint: AppLocalizations.of(context)!.enterSixDigitCodeHint,
+                label: 'One-time code',
+                hint: 'Enter 6-digit code',
                 icon: Icons.password_outlined,
                 errorText: _error,
               ).copyWith(counterText: ''),
@@ -385,9 +374,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             TextButton(
               onPressed: _isSubmitting ? null : _resendCode,
               child: Text(
-                _isSubmitting
-                    ? AppLocalizations.of(context)!.sendingEllipsis
-                    : AppLocalizations.of(context)!.sendNewCode,
+                _isSubmitting ? 'Sending...' : 'Send a new code',
                 style: TextStyle(color: AppColors.primaryRed),
               ),
             ),
@@ -419,12 +406,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ],
               onChanged: (_) => setState(() => _error = null),
               decoration: _fieldDecoration(
-                label: AppLocalizations.of(
-                  context,
-                )!.newCredentialLabel(widget.passwordNoun),
-                hint: AppLocalizations.of(
-                  context,
-                )!.digitPinHint(widget.passwordLength),
+                label: 'New ${widget.passwordNoun}',
+                hint: '${widget.passwordLength}-digit PIN',
                 icon: Icons.lock_outline,
                 errorText: _error,
                 suffixIcon: _visibilityButton(
@@ -445,12 +428,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               onChanged: (_) => setState(() => _error = null),
               onSubmitted: (_) => _updatePassword(),
               decoration: _fieldDecoration(
-                label: AppLocalizations.of(
-                  context,
-                )!.confirmCredentialLabel(widget.passwordNoun),
-                hint: AppLocalizations.of(
-                  context,
-                )!.reenterDigitPinHint(widget.passwordLength),
+                label: 'Confirm ${widget.passwordNoun}',
+                hint: 'Re-enter ${widget.passwordLength}-digit PIN',
                 icon: Icons.lock_outline,
                 suffixIcon: _visibilityButton(
                   _obscureConfirm,
@@ -460,15 +439,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 18),
             _RuleRow(
-              label: AppLocalizations.of(
-                context,
-              )!.exactlyNDigits(widget.passwordLength),
+              label: 'Exactly ${widget.passwordLength} digits',
               passed: _isExactLength,
             ),
-            _RuleRow(
-              label: AppLocalizations.of(context)!.numbersOnly,
-              passed: _hasOnlyNumbers,
-            ),
+            _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
           ],
         );
       case _ResetStep.done:

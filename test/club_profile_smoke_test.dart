@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/club_profile_screen.dart';
 import 'package:flutter_application_1/screens/explore_screen.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
-import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
@@ -30,8 +28,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
           home: ClubProfileScreen(club: clubs.first, color: Colors.red),
         ),
       ),
@@ -49,8 +45,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
           home: ClubProfileScreen(club: clubs.first, color: Colors.red),
         ),
       ),
@@ -66,13 +60,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ExploreScreen(),
-        ),
-      ),
+      ProviderScope(child: MaterialApp(home: ExploreScreen())),
     );
 
     // Network-image placeholders can animate indefinitely in widget tests, so
@@ -93,11 +81,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ExploreScreen(initialTabIndex: 2),
-        ),
+        child: MaterialApp(home: ExploreScreen(initialTabIndex: 2)),
       ),
     );
     await tester.pump();
@@ -108,7 +92,7 @@ void main() {
     expect(previewAvatars, lessThanOrEqualTo(10));
 
     await tester.enterText(
-      find.widgetWithText(TextField, S.searchPeople),
+      find.widgetWithText(TextField, 'Search…'),
       users.first.name.split(' ').first,
     );
     await tester.pump(const Duration(milliseconds: 500));
@@ -124,13 +108,7 @@ void main() {
     authService.login(users.first.email, users.first.password);
 
     await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ProfileScreen(),
-        ),
-      ),
+      ProviderScope(child: MaterialApp(home: ProfileScreen())),
     );
 
     await tester.pumpAndSettle();
@@ -145,13 +123,7 @@ void main() {
     authService.login(users.first.email, users.first.password);
 
     await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ProfileScreen(),
-        ),
-      ),
+      ProviderScope(child: MaterialApp(home: ProfileScreen())),
     );
 
     await tester.pumpAndSettle();

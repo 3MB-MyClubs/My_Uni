@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
-import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -13,38 +11,6 @@ import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 
 void main() {
-  testWidgets('blank bios are omitted from student profiles', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: StudentCampusProfileView(
-            profile: const StudentCampusProfile(
-              userId: 'blank-bio-test',
-              name: 'Student',
-              email: 'student@ku.edu.tr',
-              major: '',
-              year: '',
-              bio: '   ',
-              clubs: 0,
-              following: 0,
-              followers: 0,
-            ),
-            title: 'Student Profile',
-            leading: const SizedBox.shrink(),
-            trailing: const SizedBox.shrink(),
-            memberships: const [],
-            clubsTitle: 'Clubs',
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('BIO'), findsNothing);
-    expect(find.text('No bio yet.'), findsNothing);
-    expect(find.text('Add a bio…'), findsNothing);
-  });
-
   testWidgets('student profile renders the Campus ID design at phone width', (
     tester,
   ) async {
@@ -83,8 +49,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
           home: StudentProfileScreen(
             onShare: () => shared = true,
             onSettings: () => openedSettings = true,
@@ -182,9 +146,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: UserProfileScreen(user: student)),
+        child: MaterialApp(home: UserProfileScreen(user: student)),
       ),
     );
     await tester.pump(const Duration(milliseconds: 400));
@@ -194,9 +156,7 @@ void main() {
     expect(find.text('STUDENT ID'), findsOneWidget);
     expect(find.text('CLUBS · 6'), findsOneWidget);
     expect(find.text('See all'), findsOneWidget);
-    // Visited profiles show Follow + Message side by side.
-    expect(find.byType(StudentProfilePrimaryButton), findsNWidgets(2));
-    expect(find.text('Message'), findsOneWidget);
+    expect(find.byType(StudentProfilePrimaryButton), findsOneWidget);
     final profileView = tester.widget<StudentCampusProfileView>(
       find.byType(StudentCampusProfileView),
     );
@@ -209,15 +169,6 @@ void main() {
       profileView.memberships.where((item) => item.club.id == roleOnlyClub.id),
       hasLength(1),
     );
-
-    await tester.tap(find.text('Message'));
-    await tester.pumpAndSettle();
-
-    final chat = tester.widget<ChatThreadScreen>(find.byType(ChatThreadScreen));
-    expect(chat.recipient?.id, student.id);
-    expect(chat.threadId, 'dm:u1|u2');
-    expect(find.text('Can Serbester'), findsOneWidget);
-    expect(find.text('Student profile'), findsNothing);
 
     expect(tester.takeException(), isNull);
   });
@@ -249,9 +200,7 @@ void main() {
     roleOnlyClub.boardMemberTitles[student.id] = 'President';
 
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: ProfileScreen())),
+      ProviderScope(child: MaterialApp(home: ProfileScreen())),
     );
     await tester.pump(const Duration(milliseconds: 400));
 

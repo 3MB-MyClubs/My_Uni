@@ -2,33 +2,30 @@ import 'package:flutter/material.dart';
 import 'theme_service.dart';
 
 // ─── Raw dark-theme constants (used in ThemeData builder, not widget code) ────
-// Warm near-black palette from the "Login Screen v2" design handoff: the base
-// is a red-tinted black (#0C0608) and every surface is white layered over it,
-// replacing the old neutral #121212 grays.
 class DarkColors {
-  static const Color background = Color(0xFF0C0608);
-  static const Color card = Color(0xFF191416);
-  static const Color surfaceAlt = Color(0xFF241F21);
+  static const Color background = Color(0xFF000000);
+  static const Color card = Color(0xFF0A0A0A);
+  static const Color surfaceAlt = Color(0xFF141414);
   static const Color primaryRed = Color(0xFF9E2045);
   static const Color darkRed = Color(0xFF6A1530);
   static const Color lightRed = Color(0x1A9E2045);
   static const Color text = Color(0xFFFFFFFF);
-  static const Color secondaryText = Color(0xFFAFA3A9);
-  static const Color lightGray = Color(0xFF241F21);
-  static const Color darkGray = Color(0xFF191416);
-  static const Color divider = Color(0xFF332E30);
-  static const Color accentGold = Color(0xFF9E2045);
+  static const Color secondaryText = Color(0xFFB8B8B8);
+  static const Color lightGray = Color(0xFF1F1F1F);
+  static const Color darkGray = Color(0xFF121212);
+  static const Color divider = Color(0xFF2A2A2A);
+  static const Color accentGold = Color(0xFFE8C84A);
   static const Color cardGlow = Color(0x189E2045);
-  static const Color glassEdge = Color(0xFF332E30);
+  static const Color glassEdge = Color(0x1AFFFFFF);
 }
 
 // ─── Theme-aware dynamic color accessors (use in all widget code) ─────────────
 class AppColors {
+  // Same in both themes — kept const for Icon/BoxDecoration const usage
+  static const Color primaryRed = Color(0xFF9E2045);
+  static const Color darkRed = Color(0xFF6A1530);
+
   // Theme-sensitive: return dark or light value based on current preference
-  static Color get primaryRed =>
-      themeService.isDark ? DarkColors.primaryRed : LightColors.primaryRed;
-  static Color get darkRed =>
-      themeService.isDark ? DarkColors.darkRed : LightColors.darkRed;
   static Color get background =>
       themeService.isDark ? DarkColors.background : LightColors.background;
   static Color get card =>

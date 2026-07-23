@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
@@ -17,12 +16,9 @@ import '../services/event_access.dart';
 import '../services/student_club_role_service.dart';
 import '../services/supabase_event_service.dart';
 import '../services/supabase_post_service.dart';
-import '../onboarding/onboarding_anchors.dart';
-import '../services/app_strings.dart';
-import '../services/chat_store.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
-import 'chat_thread_screen.dart';
 import 'club_insights_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -55,8 +51,8 @@ void _showClubRoleError(BuildContext context) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
-      SnackBar(
-        content: Text(AppLocalizations.of(context)!.couldNotUpdateBoardRole),
+      const SnackBar(
+        content: Text('Could not update board member role.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -139,19 +135,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return clubIsManagedByAdmin(widget.club, admin.id);
   }
 
-  void _openCommunityChat() {
-    final threadId = ChatStore.clubThreadId(widget.club.id);
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
-        settings: RouteSettings(
-          name: '/clubs/${widget.club.id}/community',
-          arguments: threadId,
-        ),
-        builder: (_) => ChatThreadScreen(threadId: threadId),
-      ),
-    );
-  }
-
   List<User> get _membersForThisClub {
     final byId = <String, User>{
       for (final member in clubMembers(widget.club.id)) member.id: member,
@@ -211,14 +194,27 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    final loc = AppLocalizations.of(context)!;
-    if (diff.inMinutes < 60) return loc.minutesAgo(diff.inMinutes);
-    if (diff.inHours < 24) return loc.hoursAgo(diff.inHours);
-    return loc.daysAgoShort(diff.inDays);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   String _monthAbbr(int m) {
-    return AppLocalizations.of(context)!.monthAbbr(m.toString());
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+    return months[m - 1];
   }
 
   List<String> _categoryTagsFor(Club club) {
@@ -293,7 +289,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     ),
                     const SizedBox(width: 3),
                     Text(
-                      AppLocalizations.of(context)!.officialClubLabel,
+                      'Official Club',
                       style: TextStyle(
                         fontSize: 10,
                         color: AppColors.primaryRed,
@@ -310,6 +306,12 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               // Board management now lives inside Settings.
               if (isCurrentAdminForClub(widget.club))
                 IconButton(
+                  // Only the logged-in club's own Profile tab root is a
+                  // singleton — other visits to this screen (e.g. via search)
+                  // must not share the same GlobalKey.
+                  key: widget.onSettings != null
+                      ? tutorialAnchors.keyFor(TutorialAnchors.clubInsights)
+                      : null,
                   icon: Icon(
                     Icons.insights_rounded,
                     color: panelText,
@@ -327,11 +329,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 ),
               if (widget.onSettings != null)
                 IconButton(
-                  // Only the logged-in club's own Profile tab root is a
-                  // singleton — other visits to this screen (e.g. via search)
-                  // must not share the same GlobalKey.
-                  key: onboardingAnchors.keyFor(
-                    OnboardingAnchors.clubProfileSettings,
+                  key: tutorialAnchors.keyFor(
+                    TutorialAnchors.clubProfileSettings,
                   ),
                   icon: Icon(
                     Icons.settings_outlined,
@@ -424,9 +423,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                   children: [
                                     _StatCell(
                                       value: '${clubPosts.length}',
-                                      label: AppLocalizations.of(
-                                        context,
-                                      )!.posts,
+                                      label: 'Posts',
                                       dark: true,
                                     ),
                                     Container(
@@ -436,9 +433,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                     ),
                                     _StatCell(
                                       value: '$memberCount',
-                                      label: AppLocalizations.of(
-                                        context,
-                                      )!.members,
+                                      label: 'Members',
                                       dark: true,
                                       onTap: _openMembersSheet,
                                     ),
@@ -449,9 +444,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                     ),
                                     _StatCell(
                                       value: '${clubEvents.length}',
-                                      label: AppLocalizations.of(
-                                        context,
-                                      )!.events,
+                                      label: 'Events',
                                       dark: true,
                                     ),
                                   ],
@@ -544,51 +537,15 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
 
                           const SizedBox(height: 14),
 
-                          // Every club has a members-only group chat
-                          // (membership == following). Students see Follow +
-                          // a Chat button that always opens the community;
-                          // the thread itself gates history/input until joined.
+                          // Students can follow clubs, but clubs do not have
+                          // direct messages.
                           if (showFollowAction) ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 48,
-                                    child: ClubFollowButton(
-                                      clubId: widget.club.id,
-                                      size: 'large',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                _ClubChatButton(
-                                  club: widget.club,
-                                  onPressed: _openCommunityChat,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                          ] else if (_isThisClubAdmin) ...[
                             SizedBox(
                               height: 48,
                               width: double.infinity,
-                              child: OutlinedButton.icon(
-                                key: ValueKey(
-                                  'club-community-button-${widget.club.id}',
-                                ),
-                                onPressed: _openCommunityChat,
-                                icon: const Icon(
-                                  Icons.chat_bubble_outline_rounded,
-                                  size: 18,
-                                ),
-                                label: Text(S.clubChat),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.primaryRed,
-                                  side: BorderSide(color: AppColors.primaryRed),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
+                              child: ClubFollowButton(
+                                clubId: widget.club.id,
+                                size: 'large',
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -613,7 +570,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               TabBar(
                 // Same singleton guard as the insights/settings icons above.
                 key: widget.onSettings != null
-                    ? onboardingAnchors.keyFor(OnboardingAnchors.clubProfileTabs)
+                    ? tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs)
                     : null,
                 controller: _tabController,
                 labelColor: AppColors.primaryRed,
@@ -622,24 +579,10 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 indicatorSize: TabBarIndicatorSize.tab,
                 labelPadding: EdgeInsets.zero,
                 tabs: [
-                  _IconTab(
-                    icon: Icons.view_agenda_outlined,
-                    label: AppLocalizations.of(context)!.posts.toUpperCase(),
-                  ),
-                  _IconTab(
-                    icon: Icons.event_rounded,
-                    label: AppLocalizations.of(context)!.events.toUpperCase(),
-                  ),
-                  _IconTab(
-                    icon: Icons.people_alt_outlined,
-                    label: AppLocalizations.of(
-                      context,
-                    )!.collabsTab.toUpperCase(),
-                  ),
-                  _IconTab(
-                    icon: Icons.assignment_outlined,
-                    label: AppLocalizations.of(context)!.board.toUpperCase(),
-                  ),
+                  _IconTab(icon: Icons.view_agenda_outlined, label: 'POSTS'),
+                  _IconTab(icon: Icons.event_rounded, label: 'EVENTS'),
+                  _IconTab(icon: Icons.people_alt_outlined, label: 'COLLABS'),
+                  _IconTab(icon: Icons.assignment_outlined, label: 'BOARD'),
                 ],
               ),
               backgroundColor: AppColors.card,
@@ -725,7 +668,7 @@ class _PostsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  AppLocalizations.of(context)!.noPostsYet,
+                  'No posts yet.',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -734,9 +677,7 @@ class _PostsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  AppLocalizations.of(
-                    context,
-                  )!.whenClubPostsHint(club.name),
+                  "When ${club.name} posts, it'll show up here.",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
@@ -780,11 +721,11 @@ class _PostsTab extends StatelessWidget {
         // instead of eagerly materializing every row up front.
         final items = <dynamic>[];
         if (newThisWeek.isNotEmpty) {
-          items.add(AppLocalizations.of(context)!.newThisWeek);
+          items.add('NEW THIS WEEK');
           items.addAll(newThisWeek);
         }
         if (earlier.isNotEmpty) {
-          items.add(AppLocalizations.of(context)!.earlier.toUpperCase());
+          items.add('EARLIER');
           items.addAll(earlier);
         }
         return ListView.builder(
@@ -856,16 +797,15 @@ class _ClubPostCompact extends StatelessWidget {
     required this.onChanged,
   });
 
-  String _timeAgo(BuildContext context, DateTime dt) {
+  String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    final loc = AppLocalizations.of(context)!;
-    if (diff.inMinutes < 1) return loc.justNowShort;
-    if (diff.inMinutes < 60) return loc.minutesAgo(diff.inMinutes);
-    if (diff.inHours < 24) return loc.hoursAgo(diff.inHours);
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) {
-      return loc.daysAgoLong(diff.inDays);
+      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
     }
-    return loc.weeksAgo((diff.inDays / 7).floor());
+    return '${(diff.inDays / 7).floor()}w ago';
   }
 
   void _openDetail(BuildContext context) => Navigator.push(
@@ -889,18 +829,18 @@ class _ClubPostCompact extends StatelessWidget {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          AppLocalizations.of(context)!.deletePost,
+          'Delete post?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Text(
-          AppLocalizations.of(context)!.deletePostFromClubMsg,
+          'This post will be permanently removed from your club.',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -913,7 +853,7 @@ class _ClubPostCompact extends StatelessWidget {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context)!.delete),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -931,10 +871,8 @@ class _ClubPostCompact extends StatelessWidget {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotDeletePostSupabase,
-            ),
+          const SnackBar(
+            content: Text('Could not delete post from Supabase.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1013,7 +951,7 @@ class _ClubPostCompact extends StatelessWidget {
                             const SizedBox(width: 4),
                           ],
                           Text(
-                            _timeAgo(context, post.createdAt as DateTime),
+                            _timeAgo(post.createdAt as DateTime),
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: pinned
@@ -1086,9 +1024,7 @@ class _ClubPostCompact extends StatelessWidget {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              pinned
-                                  ? AppLocalizations.of(context)!.unpinFromTop
-                                  : AppLocalizations.of(context)!.pinToTop,
+                              pinned ? 'Unpin from top' : 'Pin to top',
                               style: TextStyle(color: AppColors.text),
                             ),
                           ],
@@ -1105,7 +1041,7 @@ class _ClubPostCompact extends StatelessWidget {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              AppLocalizations.of(context)!.deletePostMenuItem,
+                              'Delete post',
                               style: TextStyle(color: Colors.red),
                             ),
                           ],
@@ -1172,11 +1108,7 @@ class _EventsTabState extends State<_EventsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of(context)!;
-    final segments = [
-      ('now', loc.nowSegmentLabel),
-      ('upcoming', loc.upcomingSegmentLabel),
-    ];
+    final segments = const [('now', 'Now'), ('upcoming', 'Upcoming')];
     final shown = _withStatus(_filter);
     final panelColor = _clubPagePanel(context);
 
@@ -1259,7 +1191,7 @@ class _EventsTabState extends State<_EventsTab> {
                       child: Column(
                         children: [
                           Text(
-                            AppLocalizations.of(context)!.nothingHereRightNow,
+                            'Nothing here right now.',
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
@@ -1269,14 +1201,10 @@ class _EventsTabState extends State<_EventsTab> {
                           const SizedBox(height: 4),
                           Text(
                             _filter == 'now'
-                                ? AppLocalizations.of(context)!.noLiveEventNow
+                                ? 'No event is live at the moment.'
                                 : _filter == 'past'
-                                ? AppLocalizations.of(
-                                    context,
-                                  )!.noPastEventsToShow
-                                : AppLocalizations.of(
-                                    context,
-                                  )!.checkBackSoonEvents,
+                                ? 'No past events to show.'
+                                : 'Check back soon for new events.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12,
@@ -1346,18 +1274,18 @@ class _EventCardV2 extends StatelessWidget {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          AppLocalizations.of(context)!.deleteEvent,
+          'Delete event?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Text(
-          AppLocalizations.of(context)!.deleteEventFromClubMsg,
+          'This event will be permanently removed from your club.',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -1370,7 +1298,7 @@ class _EventCardV2 extends StatelessWidget {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context)!.delete),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -1388,10 +1316,8 @@ class _EventCardV2 extends StatelessWidget {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotDeleteEventSupabase,
-            ),
+          const SnackBar(
+            content: Text('Could not delete event from Supabase.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1409,12 +1335,16 @@ class _EventCardV2 extends StatelessWidget {
     final panelColor = _clubPagePanel(context);
     final dt = event.dateTime as DateTime;
 
-    final loc = AppLocalizations.of(context)!;
     final timeLabel = isLive
-        ? loc.todayAtTime(_clock(dt))
+        ? 'Today · ${_clock(dt)}'
         : isPast
         ? '${monthAbbr(dt.month)} ${dt.day} · ${_clock(dt)}'
         : _clock(dt);
+    final countLabel = isPast
+        ? 'attended'
+        : isLive
+        ? 'attending'
+        : 'going';
     // Same visual dimming a wrapping Opacity(opacity: dim) would give, but
     // applied per-color so the card avoids an offscreen saveLayer.
     final dim = isPast ? 0.82 : 1.0;
@@ -1483,7 +1413,7 @@ class _EventCardV2 extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Status pill
-                  _statusPill(context, dim),
+                  _statusPill(dim),
                   const SizedBox(height: 6),
                   Text(
                     event.title as String,
@@ -1508,17 +1438,7 @@ class _EventCardV2 extends StatelessWidget {
                     const SizedBox(height: 4),
                     _infoRow(
                       Icons.people_outline,
-                      isPast
-                          ? loc.attendedCount(
-                              (event.attendeeUserIds as List).length,
-                            )
-                          : isLive
-                          ? loc.attendingCount(
-                              (event.attendeeUserIds as List).length,
-                            )
-                          : loc.goingCount(
-                              (event.attendeeUserIds as List).length,
-                            ),
+                      '${(event.attendeeUserIds as List).length} $countLabel',
                       dim,
                     ),
                   ],
@@ -1555,9 +1475,7 @@ class _EventCardV2 extends StatelessWidget {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              AppLocalizations.of(
-                                context,
-                              )!.deleteEventMenuItem,
+                              'Delete event',
                               style: TextStyle(color: Colors.red),
                             ),
                           ],
@@ -1582,11 +1500,11 @@ class _EventCardV2 extends StatelessWidget {
                   child: Text(
                     authService.isStudentSession
                         ? (isLive
-                              ? loc.join
+                              ? 'Join'
                               : isPast
-                              ? loc.recapLabel
-                              : loc.rsvp)
-                        : (isPast ? loc.recapLabel : loc.viewLabel),
+                              ? 'Recap'
+                              : 'RSVP')
+                        : (isPast ? 'Recap' : 'View'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -1602,8 +1520,7 @@ class _EventCardV2 extends StatelessWidget {
     );
   }
 
-  Widget _statusPill(BuildContext context, double dim) {
-    final loc = AppLocalizations.of(context)!;
+  Widget _statusPill(double dim) {
     if (status == 'now') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -1617,7 +1534,7 @@ class _EventCardV2 extends StatelessWidget {
             const _LiveDot(color: _green),
             const SizedBox(width: 5),
             Text(
-              loc.happeningNowLabel,
+              'HAPPENING NOW',
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
@@ -1638,7 +1555,7 @@ class _EventCardV2 extends StatelessWidget {
         borderRadius: BorderRadius.all(Radius.circular(999)),
       ),
       child: Text(
-        isPast ? loc.past.toUpperCase() : loc.upcomingSegmentLabel.toUpperCase(),
+        isPast ? 'PAST' : 'UPCOMING',
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w800,
@@ -1794,9 +1711,7 @@ class _CollaborationsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      AppLocalizations.of(
-                        context,
-                      )!.memberCountLabel(clubMemberCount(club.id)),
+                      '${clubMemberCount(club.id)} members',
                       style: TextStyle(
                         fontSize: 11,
                         color: AppColors.secondaryText,
@@ -1815,7 +1730,7 @@ class _CollaborationsTab extends StatelessWidget {
                   borderRadius: BorderRadius.all(Radius.circular(8)),
                 ),
                 child: Text(
-                  AppLocalizations.of(context)!.viewChevron,
+                  'View ›',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1918,7 +1833,7 @@ class _CollaborationsTab extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          AppLocalizations.of(context)!.collabBadge,
+                          'Collab',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -1993,7 +1908,7 @@ class _CollaborationsTab extends StatelessWidget {
             padding: EdgeInsets.all(40),
             child: Center(
               child: Text(
-                AppLocalizations.of(context)!.noCollaborationsYet,
+                'No collaborations yet.\nPosts that tag this club with @ will appear here.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.secondaryText, height: 1.6),
               ),
@@ -2012,7 +1927,7 @@ class _CollaborationsTab extends StatelessWidget {
         Padding(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Text(
-            AppLocalizations.of(context)!.partnerClubsHeader.toUpperCase(),
+            'PARTNER CLUBS',
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -2030,7 +1945,7 @@ class _CollaborationsTab extends StatelessWidget {
         Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text(
-            AppLocalizations.of(context)!.postsFeaturingClub.toUpperCase(),
+            'POSTS FEATURING THIS CLUB',
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -2199,7 +2114,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
       setState(() {
         _loadingFollowers = false;
         _followersError = _followers.isEmpty
-            ? AppLocalizations.of(context)!.followersLoadError
+            ? 'Followers could not be loaded.'
             : null;
       });
     }
@@ -2251,25 +2166,25 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text(
-          AppLocalizations.of(context)!.removeBoardMemberTitle,
+          'Remove Board Member',
           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          AppLocalizations.of(context)!.confirmRemoveBoardMemberBody(u.name),
+          'Are you sure you want to remove ${u.name} from the board?',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              AppLocalizations.of(context)!.removeLabel,
+              'Remove',
               style: TextStyle(color: AppColors.primaryRed),
             ),
           ),
@@ -2283,23 +2198,21 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text(
-          AppLocalizations.of(context)!.confirmRemovalTitle,
+          'Confirm Removal',
           style: TextStyle(
             color: AppColors.primaryRed,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
-          AppLocalizations.of(
-            context,
-          )!.confirmRemovalBody(u.name, widget.club.name),
+          'This will permanently remove ${u.name} from the board of ${widget.club.name}. Continue?',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -2308,7 +2221,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
               backgroundColor: AppColors.primaryRed,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context)!.yesRemoveLabel),
+            child: Text('Yes, Remove'),
           ),
         ],
       ),
@@ -2381,7 +2294,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        AppLocalizations.of(context)!.manageBoardMembers,
+                        'Manage Board Members',
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -2392,7 +2305,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    AppLocalizations.of(context)!.boardMembersPublicHint,
+                    'Followers added here are shown publicly in the Board tab.',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -2405,9 +2318,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
                     onChanged: (v) => setState(() => _query = v),
                     style: TextStyle(fontSize: 14, color: AppColors.text),
                     decoration: InputDecoration(
-                      hintText: AppLocalizations.of(
-                        context,
-                      )!.searchFollowersHint,
+                      hintText: 'Search followers by name...',
                       hintStyle: TextStyle(
                         color: AppColors.secondaryText,
                         fontSize: 14,
@@ -2490,10 +2401,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
           borderRadius: BorderRadius.all(Radius.circular(8)),
         ),
       ),
-      child: Text(
-        AppLocalizations.of(context)!.addLabel,
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
+      child: Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
     ),
   );
 
@@ -2521,7 +2429,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            hasTitle ? title! : AppLocalizations.of(context)!.noTitleSet,
+            hasTitle ? title! : 'No title set',
             style: TextStyle(
               fontSize: 12,
               color: hasTitle
@@ -2541,7 +2449,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
         children: [
           IconButton(
             icon: Icon(Icons.edit_outlined, color: Color(0xFF1565C0), size: 20),
-            tooltip: AppLocalizations.of(context)!.setTitleTooltip,
+            tooltip: 'Set title',
             onPressed: () => _editTitleInSheet(u),
           ),
           IconButton(
@@ -2550,7 +2458,7 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
               color: AppColors.secondaryText,
               size: 22,
             ),
-            tooltip: AppLocalizations.of(context)!.removeFromBoardLabel,
+            tooltip: 'Remove from board',
             onPressed: () => _removeMember(u),
           ),
         ],
@@ -2579,23 +2487,15 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
       );
     }
     if (availableFollowers.isNotEmpty) {
-      items.add(
-        _sectionHeader(
-          AppLocalizations.of(
-            context,
-          )!.followersCountHeader(availableFollowers.length),
-        ),
-      );
+      items.add(_sectionHeader('Followers (${availableFollowers.length})'));
       items.addAll(availableFollowers.map((u) => (user: u, isFollower: true)));
       items.add(const Divider(height: 16));
     }
     items.add(
       _sectionHeader(
         boardMembers.isEmpty
-            ? AppLocalizations.of(context)!.noBoardMembers
-            : AppLocalizations.of(
-                context,
-              )!.currentBoardMembersHeader(boardMembers.length),
+            ? 'No board members yet'
+            : 'Current Board Members (${boardMembers.length})',
       ),
     );
     if (boardMembers.isEmpty) {
@@ -2605,10 +2505,8 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
           child: Text(
             _followersError ??
                 (_followers.isEmpty
-                    ? AppLocalizations.of(context)!.noFollowersYet
-                    : AppLocalizations.of(
-                        context,
-                      )!.addFollowerAboveHint),
+                    ? 'No followers yet.'
+                    : 'Add a follower above to show them publicly on the Board tab.'),
             style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
           ),
         ),
@@ -2705,25 +2603,25 @@ class _BoardTabState extends State<_BoardTab> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text(
-          AppLocalizations.of(context)!.removeBoardMemberTitle,
+          'Remove Board Member',
           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          AppLocalizations.of(context)!.confirmRemoveBoardMemberBody(u.name),
+          'Are you sure you want to remove ${u.name} from the board?',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              AppLocalizations.of(context)!.removeLabel,
+              'Remove',
               style: TextStyle(color: AppColors.primaryRed),
             ),
           ),
@@ -2738,23 +2636,21 @@ class _BoardTabState extends State<_BoardTab> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text(
-          AppLocalizations.of(context)!.confirmRemovalTitle,
+          'Confirm Removal',
           style: TextStyle(
             color: AppColors.primaryRed,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
-          AppLocalizations.of(
-            context,
-          )!.confirmRemovalBody(u.name, widget.club.name),
+          'This will permanently remove ${u.name} from the board of ${widget.club.name}. Continue?',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -2763,7 +2659,7 @@ class _BoardTabState extends State<_BoardTab> {
               backgroundColor: AppColors.primaryRed,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context)!.yesRemoveLabel),
+            child: Text('Yes, Remove'),
           ),
         ],
       ),
@@ -2786,9 +2682,7 @@ class _BoardTabState extends State<_BoardTab> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          AppLocalizations.of(context)!.removedFromBoard(u.name),
-        ),
+        content: Text('${u.name} removed from the board.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -2823,7 +2717,7 @@ class _BoardTabState extends State<_BoardTab> {
           const Icon(Icons.shield_outlined, color: Color(0xFF1565C0), size: 20),
           const SizedBox(width: 8),
           Text(
-            AppLocalizations.of(context)!.boardMembers,
+            'Board Members',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.bold,
@@ -2890,7 +2784,7 @@ class _BoardTabState extends State<_BoardTab> {
                   )
                 else
                   Text(
-                    AppLocalizations.of(context)!.boardMemberLabel,
+                    'Board Member',
                     style: TextStyle(fontSize: 12, color: mutedText),
                   ),
                 Text(u.email, style: TextStyle(fontSize: 11, color: mutedText)),
@@ -2907,7 +2801,7 @@ class _BoardTabState extends State<_BoardTab> {
                             color: Color(0xFF1565C0),
                             size: 20,
                           ),
-                          tooltip: AppLocalizations.of(context)!.setTitleTooltip,
+                          tooltip: 'Set title',
                           onPressed: () => _editTitle(u),
                         ),
                       IconButton(
@@ -2916,9 +2810,7 @@ class _BoardTabState extends State<_BoardTab> {
                           color: mutedText,
                           size: 22,
                         ),
-                        tooltip: AppLocalizations.of(
-                          context,
-                        )!.removeFromBoardLabel,
+                        tooltip: 'Remove from board',
                         onPressed: () => _confirmRemove(u),
                       ),
                     ],
@@ -2932,8 +2824,8 @@ class _BoardTabState extends State<_BoardTab> {
                       color: const Color(0x1E1565C0),
                       borderRadius: BorderRadius.all(Radius.circular(8)),
                     ),
-                    child: Text(
-                      AppLocalizations.of(context)!.board,
+                    child: const Text(
+                      'Board',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -2955,12 +2847,12 @@ class _BoardTabState extends State<_BoardTab> {
           Icon(Icons.shield_outlined, size: 48, color: mutedText),
           SizedBox(height: 12),
           Text(
-            AppLocalizations.of(context)!.noBoardMembers,
+            'No board members yet.',
             style: TextStyle(fontSize: 15, color: mutedText),
           ),
           SizedBox(height: 6),
           Text(
-            AppLocalizations.of(context)!.clubAdminsAddMembersHint,
+            'Club admins can add members from Manage board members.',
             style: TextStyle(fontSize: 12, color: mutedText),
           ),
         ],
@@ -3015,7 +2907,7 @@ class _BoardTitleDialogState extends State<_BoardTitleDialog> {
     return AlertDialog(
       backgroundColor: AppColors.card,
       title: Text(
-        AppLocalizations.of(context)!.setTitleForMember(widget.memberName),
+        'Set title for ${widget.memberName}',
         style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
       ),
       content: TextField(
@@ -3025,7 +2917,7 @@ class _BoardTitleDialogState extends State<_BoardTitleDialog> {
         style: TextStyle(color: AppColors.text),
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
         decoration: InputDecoration(
-          hintText: AppLocalizations.of(context)!.presidentSecretaryHint,
+          hintText: 'e.g. President, Secretary…',
           hintStyle: TextStyle(color: AppColors.secondaryText),
         ),
       ),
@@ -3033,7 +2925,7 @@ class _BoardTitleDialogState extends State<_BoardTitleDialog> {
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(
-            AppLocalizations.of(context)!.cancel,
+            'Cancel',
             style: TextStyle(color: AppColors.secondaryText),
           ),
         ),
@@ -3041,13 +2933,13 @@ class _BoardTitleDialogState extends State<_BoardTitleDialog> {
           TextButton(
             onPressed: () => Navigator.pop(context, ''),
             child: Text(
-              AppLocalizations.of(context)!.removeRoleLabel,
+              'Remove role',
               style: TextStyle(color: AppColors.primaryRed),
             ),
           ),
         ElevatedButton(
           onPressed: () => Navigator.pop(context, _controller.text.trim()),
-          child: Text(AppLocalizations.of(context)!.save),
+          child: Text('Save'),
         ),
       ],
     );
@@ -3169,7 +3061,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
         );
         _loading = false;
         _error = widget.members.isEmpty
-            ? AppLocalizations.of(context)!.memberProfilesLoadError
+            ? 'Member profiles could not be loaded.'
             : null;
       });
     }
@@ -3225,10 +3117,8 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
       if (!mounted) return;
       setState(() => _members = _sortMembers(_members));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!.couldNotRemoveClubMember,
-          ),
+        const SnackBar(
+          content: Text('Could not remove this club member.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -3272,7 +3162,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
             ListTile(
               leading: Icon(Icons.person_outline, color: AppColors.text),
               title: Text(
-                AppLocalizations.of(context)!.viewProfileLabel,
+                'View profile',
                 style: TextStyle(
                   color: AppColors.text,
                   fontWeight: FontWeight.w600,
@@ -3289,9 +3179,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                hasRole
-                    ? AppLocalizations.of(context)!.editClubRoleLabel
-                    : AppLocalizations.of(context)!.assignClubRoleLabel,
+                hasRole ? 'Edit club role' : 'Assign club role',
                 style: TextStyle(
                   color: AppColors.text,
                   fontWeight: FontWeight.w600,
@@ -3308,8 +3196,8 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                   Icons.remove_circle_outline,
                   color: Colors.red,
                 ),
-                title: Text(
-                  AppLocalizations.of(context)!.removeFromBoardLabel,
+                title: const Text(
+                  'Remove from board',
                   style: TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.w600,
@@ -3325,8 +3213,8 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                 Icons.person_remove_outlined,
                 color: Colors.red,
               ),
-              title: Text(
-                AppLocalizations.of(context)!.removeFromClubLabel,
+              title: const Text(
+                'Remove from club',
                 style: TextStyle(
                   color: Colors.red,
                   fontWeight: FontWeight.w600,
@@ -3414,7 +3302,7 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      AppLocalizations.of(context)!.members,
+                      'Members',
                       style: TextStyle(
                         color: AppColors.text,
                         fontSize: 18,
@@ -3441,11 +3329,8 @@ class _ClubMembersSheetState extends State<_ClubMembersSheet> {
                         padding: const EdgeInsets.symmetric(horizontal: 28),
                         child: Text(
                           _loading
-                              ? AppLocalizations.of(context)!.loadingMembers
-                              : _error ??
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.noMembersToShowYet,
+                              ? 'Loading members...'
+                              : _error ?? 'No members to show yet.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppColors.secondaryText,
@@ -3563,50 +3448,6 @@ class _IconTab extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ── Header chat button ────────────────────────────────────────────────────────
-// Every student opens the club's canonical community route. Non-members see
-// the safe join prompt there; members enter the shared group conversation.
-class _ClubChatButton extends StatelessWidget {
-  final Club club;
-  final VoidCallback onPressed;
-
-  const _ClubChatButton({required this.club, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: userState,
-      builder: (context, _) {
-        final isMember = userState.isFollowing(club.id);
-        return GestureDetector(
-          key: ValueKey('club-community-button-${club.id}'),
-          onTap: onPressed,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: isMember ? AppColors.lightRed : Colors.transparent,
-              borderRadius: const BorderRadius.all(Radius.circular(10)),
-              border: Border.all(
-                color: isMember
-                    ? AppColors.primaryRed
-                    : AppColors.secondaryText.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Icon(
-              isMember
-                  ? Icons.chat_bubble_rounded
-                  : Icons.chat_bubble_outline_rounded,
-              size: 20,
-              color: isMember ? AppColors.primaryRed : AppColors.secondaryText,
-            ),
-          ),
-        );
-      },
     );
   }
 }

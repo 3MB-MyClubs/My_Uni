@@ -1,20 +1,17 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/content_safety_service.dart';
-import '../l10n/app_localizations.dart';
 import '../widgets/academic_program_picker.dart';
-import '../widgets/profile_photo_zoom_editor.dart';
 import '../widgets/user_avatar.dart';
 
 /// Full-page profile editor: name, photo, bio, university year, major,
@@ -34,6 +31,15 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  static const List<String> _fallbackYearOptions = [
+    '1st Year',
+    '2nd Year',
+    '3rd Year',
+    '4th Year',
+    '5th Year',
+    'Graduate',
+  ];
+
   late final TextEditingController _bioCtrl;
 
   String? _year;
@@ -52,7 +58,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<String> get _majorNames =>
       _majors.isEmpty ? kAcademicPrograms : _majors.map((m) => m.name).toList();
   List<String> get _yearOptions => _academicYears.isEmpty
-      ? fallbackAcademicYearNames
+      ? _fallbackYearOptions
       : _academicYears.map((year) => year.name).toList();
 
   @override
@@ -105,7 +111,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingRemote = false;
-        _loadError = AppLocalizations.of(context)!.couldNotLoadProfileOptions;
+        _loadError = 'Could not load profile options from Supabase.';
       });
     }
   }
@@ -120,7 +126,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.contentSafetyRejected),
+            content: Text(safetyMessage),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -154,10 +160,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotSaveProfileSupabase,
-            ),
+          const SnackBar(
+            content: Text('Could not save profile to Supabase'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -178,10 +182,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.profileUpdated),
+        const SnackBar(
+          content: Text('Profile updated'),
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
+          duration: Duration(seconds: 2),
         ),
       );
     Navigator.pop(context);
@@ -235,18 +239,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _photoOption(
-                Icons.camera_alt_outlined,
-                AppLocalizations.of(context)!.takePhotoOption,
-                () {
-                  Navigator.pop(context);
-                  _pickPhoto(ImageSource.camera);
-                },
-              ),
+              _photoOption(Icons.camera_alt_outlined, 'Take a photo', () {
+                Navigator.pop(context);
+                _pickPhoto(ImageSource.camera);
+              }),
               Divider(height: 1, indent: 16, color: AppColors.divider),
               _photoOption(
                 Icons.photo_library_outlined,
-                AppLocalizations.of(context)!.chooseFromLibraryOption,
+                'Choose from library',
                 () {
                   Navigator.pop(context);
                   _pickPhoto(ImageSource.gallery);
@@ -256,7 +256,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 Divider(height: 1, indent: 16, color: AppColors.divider),
                 _photoOption(
                   Icons.delete_outline_rounded,
-                  AppLocalizations.of(context)!.removePhoto,
+                  'Remove photo',
                   () async {
                     Navigator.pop(context);
                     await _removePhoto();
@@ -309,10 +309,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed,
-            ),
+          const SnackBar(
+            content: Text('Photo removed locally, but remote delete failed.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -321,49 +319,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    Uint8List? editedBytes;
+    CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: source);
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 72,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
       if (picked == null || !mounted) return;
 
-      editedBytes = await showProfilePhotoZoomEditor(context, picked.path);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotOpenPhotoCropper,
-            ),
-            behavior: SnackBarBehavior.floating,
+      cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        maxWidth: 512,
+        maxHeight: 512,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 72,
+        uiSettings: [
+          IOSUiSettings(
+            title: 'Crop Photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: true,
+            aspectRatioPickerButtonHidden: true,
+            cropStyle: CropStyle.circle,
           ),
-        );
-      return;
-    }
-    if (editedBytes == null || !mounted) return;
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    final permanentPath = '${docsDir.path}/profile_$_userId.jpg';
-    await File(permanentPath).writeAsBytes(editedBytes, flush: true);
-    if (!mounted) return;
-    userState.setProfilePhoto(_userId, permanentPath);
-    userPrefsService.save(_userId);
-    try {
-      await studentProfileService.uploadAvatar(
-        userId: _userId,
-        bytes: editedBytes,
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Photo',
+            toolbarColor: AppColors.primaryRed,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            cropStyle: CropStyle.circle,
+          ),
+        ],
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.photoSavedLocallyUploadFailed,
-            ),
+          const SnackBar(
+            content: Text('Could not open photo cropper.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+    if (cropped == null || !mounted) return;
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final ext = cropped.path.contains('.')
+        ? cropped.path.substring(cropped.path.lastIndexOf('.'))
+        : '.jpg';
+    final permanentPath = '${docsDir.path}/profile_$_userId$ext';
+    await File(cropped.path).copy(permanentPath);
+    if (!mounted) return;
+    userState.setProfilePhoto(_userId, permanentPath);
+    userPrefsService.save(_userId);
+    try {
+      await studentProfileService.uploadAvatar(
+        userId: _userId,
+        bytes: await File(permanentPath).readAsBytes(),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Photo saved locally, but upload failed.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -382,16 +408,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         elevation: 0,
         foregroundColor: AppColors.text,
         title: Text(
-          AppLocalizations.of(context)!.editProfile,
+          'Edit Profile',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _save,
             child: Text(
-              _isSaving
-                  ? AppLocalizations.of(context)!.savingEllipsis
-                  : AppLocalizations.of(context)!.save,
+              _isSaving ? 'Saving...' : 'Save',
               style: TextStyle(
                 color: AppColors.primaryRed,
                 fontWeight: FontWeight.w800,
@@ -461,7 +485,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: TextButton(
               onPressed: _showPhotoOptions,
               child: Text(
-                AppLocalizations.of(context)!.changePhotoButton,
+                'Change photo',
                 style: TextStyle(
                   color: AppColors.primaryRed,
                   fontWeight: FontWeight.w700,
@@ -471,36 +495,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 8),
 
-          _label(AppLocalizations.of(context)!.bioLabel),
+          _label('Bio'),
           _field(
             controller: _bioCtrl,
-            hint: AppLocalizations.of(context)!.bioHint,
+            hint: 'Tell people a little about yourself',
             maxLength: 80,
             maxLines: 3,
           ),
           const SizedBox(height: 18),
 
-          _label(AppLocalizations.of(context)!.universityYearLabel),
+          _label('University year'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: _yearOptions.map((y) {
               final on = _year == y;
-              return _choiceChip(academicYearDisplayName(y), on, () {
+              return _choiceChip(y, on, () {
                 setState(() => _year = on ? null : y);
               });
             }).toList(),
           ),
           const SizedBox(height: 18),
 
-          _label(AppLocalizations.of(context)!.majorLabel),
+          _label('Major'),
           AcademicProgramField(
             value: _major,
-            hint: AppLocalizations.of(context)!.selectMajor,
+            hint: 'Select your major',
             onTap: () async {
               final result = await showAcademicProgramPicker(
                 context: context,
-                title: AppLocalizations.of(context)!.selectMajorHint,
+                title: 'Select major',
                 selected: _major == null ? const [] : [_major!],
                 programs: _majorNames,
               );
@@ -510,18 +534,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 18),
 
-          _label(AppLocalizations.of(context)!.doubleMajorLabel),
+          _label('Double major'),
           _singleProgramEditor(
             value: _doubleMajor,
-            hint: AppLocalizations.of(context)!.selectDoubleMajorHint,
+            hint: 'Select a double major',
             onChanged: (value) => setState(() => _doubleMajor = value),
           ),
           const SizedBox(height: 18),
 
-          _label(AppLocalizations.of(context)!.minorLabel),
+          _label('Minor'),
           _singleProgramEditor(
             value: _minor,
-            hint: AppLocalizations.of(context)!.selectMinorHint,
+            hint: 'Select a minor',
             onChanged: (value) => setState(() => _minor = value),
           ),
           const SizedBox(height: 28),
@@ -538,9 +562,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               child: Text(
-                _isSaving
-                    ? AppLocalizations.of(context)!.savingEllipsis
-                    : AppLocalizations.of(context)!.saveChangesButton,
+                _isSaving ? 'Saving...' : 'Save changes',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
@@ -660,7 +682,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 color: AppColors.secondaryText,
               ),
               label: Text(
-                AppLocalizations.of(context)!.clear,
+                'Clear',
                 style: TextStyle(
                   color: AppColors.secondaryText,
                   fontWeight: FontWeight.w700,

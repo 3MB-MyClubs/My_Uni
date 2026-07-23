@@ -1,10 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'l10n/app_localizations.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
@@ -20,7 +18,6 @@ import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
 import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
-import 'services/chat_store.dart';
 import 'services/checkin_store.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
@@ -32,10 +29,8 @@ import 'services/theme_service.dart';
 import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
-import 'onboarding/onboarding_service.dart';
-import 'onboarding/starter_checklist_service.dart';
+import 'services/tutorial_service.dart';
 import 'services/event_cleanup_service.dart';
-import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
 
@@ -64,16 +59,13 @@ void main() async {
   ]);
   appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
-    peopleService.initialize(),
     contentStore.initialize(),
-    chatStore.initialize(),
     checkinStore.initialize(),
     pollStore.initialize(),
     viewTracker.initialize(),
     personalizationService.initialize(),
     calendarSyncService.initialize(),
-    onboardingService.initialize(),
-    starterChecklistService.initialize(),
+    tutorialService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
   runApp(const ProviderScope(child: MyApp()));
@@ -102,33 +94,14 @@ void main() async {
         contentStore.loadBoardMemberTitles();
         // Restore any dynamic notifications that were generated at runtime.
         final dynNotifs = contentStore.loadDynamicNotifications();
-        final removedAdminDmNotificationIds = <String>{};
         if (dynNotifs != null) {
-          final compatibleNotifications = dynNotifs.where((notification) {
-            final remove =
-                notification.targetType == 'message' &&
-                ChatStore.isAdminAccountId(notification.userId);
-            if (remove) removedAdminDmNotificationIds.add(notification.id);
-            return !remove;
-          }).toList();
           userState.dynamicNotifications
             ..clear()
-            ..addAll(compatibleNotifications);
-          if (removedAdminDmNotificationIds.isNotEmpty) {
-            unawaited(
-              contentStore.saveDynamicNotifications(compatibleNotifications),
-            );
-          }
+            ..addAll(dynNotifs);
         }
-        final compatibleReadNotificationIds = contentStore
-            .loadReadNotificationIds()
-            .where((id) => !removedAdminDmNotificationIds.contains(id));
-        userState.replaceReadNotificationIds(compatibleReadNotificationIds);
-        if (removedAdminDmNotificationIds.isNotEmpty) {
-          unawaited(
-            contentStore.saveReadNotificationIds(userState.readNotificationIds),
-          );
-        }
+        userState.replaceReadNotificationIds(
+          contentStore.loadReadNotificationIds(),
+        );
       }),
     );
   });
@@ -166,13 +139,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(appPresenceService.stop());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    appPresenceService.handleLifecycleState(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _savePrefs();
@@ -188,7 +159,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // saveAll rewrites every debounced kind, flushing any pending
     // scheduleSave along the way (pause/detach and logout both land here).
     contentStore.saveAll(userState.dynamicNotifications);
-    chatStore.saveAll();
   }
 
   void _onLogin() {
@@ -204,7 +174,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showSignUp = false;
     });
     if (currentUserId != null) {
-      unawaited(appPresenceService.startForAuthenticatedSession());
       unawaited(moderationService.activateForUser(currentUserId));
       _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
@@ -238,10 +207,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final ltRed = isDark ? DarkColors.lightRed : LightColors.lightRed;
     final lGray = isDark ? DarkColors.lightGray : LightColors.lightGray;
     final bright = isDark ? Brightness.dark : Brightness.light;
-    final red = isDark ? DarkColors.primaryRed : LightColors.primaryRed;
-    final elevatedSurface = isDark
-        ? DarkColors.surfaceAlt
-        : LightColors.surfaceAlt;
+    const red = AppColors.primaryRed;
 
     return ThemeData(
       brightness: bright,
@@ -278,7 +244,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         indicatorColor: ltRed,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return IconThemeData(color: red);
+            return const IconThemeData(color: AppColors.primaryRed);
           }
           return IconThemeData(color: sub);
         }),
@@ -317,16 +283,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           borderRadius: const BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide.none,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: red, width: 1.5),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: AppColors.primaryRed, width: 1.5),
         ),
-      ),
-      dialogTheme: DialogThemeData(backgroundColor: elevatedSurface),
-      popupMenuTheme: PopupMenuThemeData(color: elevatedSurface),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: elevatedSurface,
-        modalBackgroundColor: elevatedSurface,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: ltRed,
@@ -387,7 +347,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               isAdmin: isAdmin,
               onLogout: () {
                 _savePrefs();
-                unawaited(appPresenceService.stop());
                 moderationService.clearActiveUser();
                 _prefsLoadedForUserId = null;
                 setState(() {
@@ -431,14 +390,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           theme: _lightTheme ??= _buildTheme(false),
           darkTheme: _darkTheme ??= _buildTheme(true),
-          locale: Locale(localeService.languageCode),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
           home: homeWidget,
         );
       },

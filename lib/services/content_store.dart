@@ -257,8 +257,7 @@ class ContentStore extends ChangeNotifier {
     if (idx == -1) return false;
     if (!_isClubAdmin(updated.clubId, requestingUserId)) return false;
     events[idx] = updated;
-    unawaited(saveEvents());
-    notifyContentChanged();
+    saveEvents();
     return true;
   }
 
@@ -267,8 +266,7 @@ class ContentStore extends ChangeNotifier {
     if (idx == -1) return false;
     if (!canDeleteEvent(eventId, requestingUserId)) return false;
     events.removeAt(idx);
-    unawaited(saveEvents());
-    notifyContentChanged();
+    saveEvents();
     return true;
   }
 

@@ -118,7 +118,7 @@ class ClubAvatar extends ConsumerWidget {
     bool isCircle,
   ) {
     // Decode at the actual rendered size (accounting for screen density)
-    // instead of the full uploaded resolution (up to 3840px for a ~48px
+    // instead of the full uploaded resolution (up to 1920px for a ~48px
     // avatar slot). The full-resolution provider is kept for the tap-to-view
     // full-screen viewer below.
     final decodeSize = (size * MediaQuery.devicePixelRatioOf(context)).round();

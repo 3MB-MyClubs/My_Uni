@@ -6,21 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../l10n/app_localizations.dart';
 import '../models/notification.dart';
 import 'content_store.dart';
-import 'locale_service.dart';
 import 'photo_file_cache.dart';
 
 // Global state singleton. Extends ChangeNotifier so any ListenableBuilder
 // that wraps a follow button will rebuild instantly when state changes,
 // regardless of which screen triggered the mutation.
 class UserState extends ChangeNotifier {
-  // No BuildContext is available this deep in the service layer; these
-  // generated in-app notification messages are resolved here via the
-  // current locale.
-  AppLocalizations get _l10n =>
-      lookupAppLocalizations(Locale(localeService.languageCode));
   final Set<String> likedPostIds = {'n1'}; // pre-seed from mock likes
   final Set<String> followedClubIds = {
     'c1',
@@ -34,35 +27,18 @@ class UserState extends ChangeNotifier {
   // Profile photo image paths keyed by user/admin id.
   final Map<String, String> profilePhotoPaths = {};
 
-  // The local avatar filename is intentionally stable. Incrementing this
-  // token lets selective listeners distinguish new bytes written to the same
-  // path, even when a remote upload is unavailable.
-  final Map<String, int> _profilePhotoRevisions = {};
-
-  int profilePhotoRevisionFor(String userId) =>
-      _profilePhotoRevisions[userId] ?? 0;
-
-  void _bumpProfilePhotoRevision(String userId) {
-    _profilePhotoRevisions[userId] = profilePhotoRevisionFor(userId) + 1;
-  }
-
   // Mock network photo URLs for demo users (seeded at startup, overridden by a real upload).
   final Map<String, String> mockPhotoUrls = {
     'u1': 'https://i.pravatar.cc/150?img=47',
     'u2': 'https://i.pravatar.cc/150?img=11',
     'u3': 'https://i.pravatar.cc/150?img=15',
     'u4': 'https://i.pravatar.cc/150?img=44',
-    'u5': 'https://i.pravatar.cc/150?u=u5',
     'u6': 'https://i.pravatar.cc/150?img=5',
-    'u7': 'https://i.pravatar.cc/150?u=u7',
     'u8': 'https://i.pravatar.cc/150?img=9',
-    'u9': 'https://i.pravatar.cc/150?u=u9',
     'u10': 'https://i.pravatar.cc/150?img=32',
     'u11': 'https://i.pravatar.cc/150?img=21',
-    'u12': 'https://i.pravatar.cc/150?u=u12',
     'u13': 'https://i.pravatar.cc/150?img=53',
     'u14': 'https://i.pravatar.cc/150?img=58',
-    'u15': 'https://i.pravatar.cc/150?u=u15',
   };
 
   // Student bios keyed by user id.
@@ -73,14 +49,6 @@ class UserState extends ChangeNotifier {
 
   // Student years keyed by user id.
   final Map<String, String> years = {};
-
-  /// A compact label for messaging and directory rows. Missing profile
-  /// fields are omitted so the UI never shows empty separators.
-  String academicSummaryFor(String userId) {
-    final major = majors[userId]?.trim() ?? '';
-    final year = years[userId]?.trim() ?? '';
-    return [major, year].where((value) => value.isNotEmpty).join(' · ');
-  }
 
   // Student interest topics keyed by user id.
   final Map<String, List<String>> interests = {};
@@ -137,7 +105,6 @@ class UserState extends ChangeNotifier {
     photoFileCache.invalidate(profilePhotoPaths[userId]);
     photoFileCache.invalidate(path);
     profilePhotoPaths[userId] = path;
-    _bumpProfilePhotoRevision(userId);
     notifyListeners();
   }
 
@@ -151,36 +118,19 @@ class UserState extends ChangeNotifier {
     return FileImage(File(path));
   }
 
-  void _evictNetworkPhoto(String url) {
-    PaintingBinding.instance.imageCache.evict(NetworkImage(url));
-    PaintingBinding.instance.imageCache.evict(CachedNetworkImageProvider(url));
-    unawaited(CachedNetworkImage.evictFromCache(url));
-  }
-
   /// Removes the profile photo for [userId] and notifies all listeners.
   void removeProfilePhoto(String userId) {
     final removedLocal = profilePhotoPaths.remove(userId);
     photoFileCache.invalidate(removedLocal);
     final removedRemote = mockPhotoUrls.remove(userId) != null;
-    if (removedLocal != null || removedRemote) {
-      _bumpProfilePhotoRevision(userId);
-      notifyListeners();
-    }
+    if (removedLocal != null || removedRemote) notifyListeners();
   }
 
   /// Sets a remote profile photo URL for [userId] and notifies all listeners.
-  void setProfilePhotoUrl(
-    String userId,
-    String url, {
-    bool preserveLocal = false,
-  }) {
+  void setProfilePhotoUrl(String userId, String url) {
     final value = url.trim();
-    final previousRemote = mockPhotoUrls[userId];
-    if (previousRemote != null && previousRemote != value) {
-      _evictNetworkPhoto(previousRemote);
-    }
-    final localPath = preserveLocal ? null : profilePhotoPaths.remove(userId);
-    if (!preserveLocal && localPath != null) {
+    final localPath = profilePhotoPaths.remove(userId);
+    if (localPath != null) {
       PaintingBinding.instance.imageCache.evict(FileImage(File(localPath)));
       photoFileCache.invalidate(localPath);
     }
@@ -190,10 +140,9 @@ class UserState extends ChangeNotifier {
       // The URL is a stable storage path reused on every re-upload, so a
       // changed photo needs its old disk-cached bytes evicted too or every
       // avatar would keep showing the previous photo until reinstall.
-      _evictNetworkPhoto(value);
+      unawaited(CachedNetworkImage.evictFromCache(value));
       mockPhotoUrls[userId] = value;
     }
-    _bumpProfilePhotoRevision(userId);
     notifyListeners();
   }
 
@@ -334,7 +283,7 @@ class UserState extends ChangeNotifier {
     final notif = AppNotification(
       id: notifId,
       userId: toId,
-      message: _l10n.followRequestMessage(fromName),
+      message: '$fromName wants to follow you.',
       createdAt: DateTime.now(),
       targetType: 'follow_request',
       targetId: fromId,
@@ -354,7 +303,7 @@ class UserState extends ChangeNotifier {
     final notif = AppNotification(
       id: 'follow_accepted_${fromId}_${DateTime.now().millisecondsSinceEpoch}',
       userId: fromId,
-      message: _l10n.followRequestAccepted,
+      message: 'Your follow request was accepted.',
       createdAt: DateTime.now(),
       targetType: 'follow_accepted',
       targetId: toId,
