@@ -4,6 +4,7 @@ import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
 import '../services/theme_service.dart';
+import '../l10n/app_localizations.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -71,14 +72,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final localPart = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (localPart.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please enter your email and password');
+      setState(
+        () => _error = AppLocalizations.of(context)!.enterEmailAndPassword,
+      );
       return;
     }
     // Users type only the local part (e.g. "htuncay23"); the "@ku.edu.tr"
     // domain is appended automatically. Lower-cased so any casing logs in.
     final email = '${localPart.toLowerCase()}@ku.edu.tr';
     if (!authService.isValidStudentPassword(password)) {
-      setState(() => _error = 'Student password must be exactly 6 digits.');
+      setState(
+        () =>
+            _error = AppLocalizations.of(context)!.studentPasswordMustBe6Digits,
+      );
       return;
     }
     setState(() {
@@ -95,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       setState(() {
         _isSubmitting = false;
-        _error = 'Incorrect email or password';
+        _error = AppLocalizations.of(context)!.incorrectEmailOrPassword;
       });
     }
   }
@@ -711,7 +717,7 @@ class _SubmitButton extends StatelessWidget {
                     const SizedBox(width: 8),
                   ],
                   Text(
-                    'Log in',
+                    AppLocalizations.of(context)!.logIn,
                     style: TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w800,

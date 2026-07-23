@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/signup_service.dart';
 import 'signup_theme.dart';
 
@@ -44,14 +45,14 @@ class _StepInterestsState extends State<StepInterests> {
         _interests = interests;
         _isLoading = false;
         if (interests.isEmpty) {
-          _error = 'Could not load interests. Please try again.';
+          _error = AppLocalizations.of(context)!.couldNotLoadInterests;
         }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = 'Could not load interests. Please try again.';
+        _error = AppLocalizations.of(context)!.couldNotLoadInterests;
       });
     }
   }
@@ -72,7 +73,11 @@ class _StepInterestsState extends State<StepInterests> {
   Future<void> _submit() async {
     if (_isSubmitting) return;
     if (_selected.length < kMinInterests) {
-      setState(() => _error = 'Pick at least $kMinInterests to continue.');
+      setState(
+        () => _error = AppLocalizations.of(
+          context,
+        )!.pickAtLeastNInterests(kMinInterests),
+      );
       return;
     }
     setState(() {
@@ -100,7 +105,7 @@ class _StepInterestsState extends State<StepInterests> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "What's your scene?",
+                  AppLocalizations.of(context)!.whatsYourScene,
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -120,11 +125,12 @@ class _StepInterestsState extends State<StepInterests> {
                     ),
                     children: [
                       TextSpan(
-                        text:
-                            "Pick a few — we'll match you with clubs, events, and people. ",
+                        text: AppLocalizations.of(context)!.pickFewMatchHint,
                       ),
                       TextSpan(
-                        text: '($selCount of $kMinInterests min.)',
+                        text: AppLocalizations.of(
+                          context,
+                        )!.selectedOfMinCount(selCount, kMinInterests),
                         style: TextStyle(
                           color: selCount >= kMinInterests
                               ? SC.burgundy
@@ -227,7 +233,7 @@ class _StepInterestsState extends State<StepInterests> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('Finish setup'),
+                  : Text(AppLocalizations.of(context)!.finishSetupButton),
             ),
           ),
         ),

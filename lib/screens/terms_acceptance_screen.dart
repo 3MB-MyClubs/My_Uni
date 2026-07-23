@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_colors.dart';
 import '../services/app_links.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 
 class TermsAcceptanceScreen extends StatefulWidget {
@@ -25,9 +25,11 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.couldNotOpenThisPage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.couldNotOpenThisPage),
+        ),
+      );
     }
   }
 
@@ -100,7 +102,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               ),
               const SizedBox(height: 26),
               Text(
-                S.safetyHero,
+                AppLocalizations.of(context)!.safetyHero,
                 style: TextStyle(
                   color: AppColors.text,
                   fontSize: 27,
@@ -111,7 +113,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                S.safetyIntro,
+                AppLocalizations.of(context)!.safetyIntro,
                 style: TextStyle(
                   color: AppColors.secondaryText,
                   fontSize: 15,
@@ -133,7 +135,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          S.communitySafetyTerms,
+                          AppLocalizations.of(context)!.communitySafetyTerms,
                           style: TextStyle(
                             color: AppColors.primaryRed,
                             fontSize: 12,
@@ -144,23 +146,25 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                         const SizedBox(height: 14),
                         _term(
                           Icons.shield_outlined,
-                          S.zeroTolerance,
-                          S.zeroToleranceBody,
+                          AppLocalizations.of(context)!.zeroTolerance,
+                          AppLocalizations.of(context)!.zeroToleranceBody,
                         ),
                         _term(
                           Icons.flag_outlined,
-                          S.reportHarmfulContent,
-                          S.reportHarmfulContentBody,
+                          AppLocalizations.of(context)!.reportHarmfulContent,
+                          AppLocalizations.of(
+                            context,
+                          )!.reportHarmfulContentBody,
                         ),
                         _term(
                           Icons.block_rounded,
-                          S.blockAbusiveUsers,
-                          S.blockAbusiveUsersBody,
+                          AppLocalizations.of(context)!.blockAbusiveUsers,
+                          AppLocalizations.of(context)!.blockAbusiveUsersBody,
                         ),
                         _term(
                           Icons.gavel_rounded,
-                          S.enforcement,
-                          S.enforcementBody,
+                          AppLocalizations.of(context)!.enforcement,
+                          AppLocalizations.of(context)!.enforcementBody,
                         ),
                         const SizedBox(height: 4),
                         Wrap(
@@ -172,7 +176,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                                     ? AppLinks.termsOfUseTurkish
                                     : AppLinks.termsOfUse,
                               ),
-                              child: Text(S.readFullTerms),
+                              child: Text(
+                                AppLocalizations.of(context)!.readFullTerms,
+                              ),
                             ),
                             TextButton(
                               onPressed: () => _open(
@@ -180,7 +186,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                                     ? AppLinks.privacyPolicyTurkish
                                     : AppLinks.privacyPolicy,
                               ),
-                              child: Text(S.privacyPolicy),
+                              child: Text(
+                                AppLocalizations.of(context)!.privacyPolicy,
+                              ),
                             ),
                           ],
                         ),
@@ -208,7 +216,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(top: 11),
                           child: Text(
-                            S.agreeToSafetyTerms,
+                            AppLocalizations.of(context)!.agreeToSafetyTerms,
                             style: TextStyle(
                               color: AppColors.text,
                               fontSize: 14,
@@ -237,7 +245,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                           ),
                         )
                       : Text(
-                          S.agreeAndContinue,
+                          AppLocalizations.of(context)!.agreeAndContinue,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,

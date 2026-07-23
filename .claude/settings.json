@@ -33,7 +33,22 @@
       "Bash(npm --version)",
       "Bash(curl -sI --max-time 5 https://registry.npmjs.org/)",
       "Skill(artifact-design)",
-      "Skill(artifact-design:*)"
+      "Skill(artifact-design:*)",
+      "Bash(python -c ' *)",
+      "Bash(python3 -c \"import json; json.load\\(open\\(r'/c/Users/CANDOU~1/AppData/Local/Temp/claude/c--Users-Can-Do-u-Documents-GitHub-My-Uni/aab3b065-7288-4272-bd24-ca5bbd413cd2/scratchpad/i18n_batch3.json'\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import json; json.load\\(open\\(r'/c/Users/CANDOU~1/AppData/Local/Temp/claude/c--Users-Can-Do-u-Documents-GitHub-My-Uni/aab3b065-7288-4272-bd24-ca5bbd413cd2/scratchpad/i18n_batch3.json'\\)\\); print\\('OK'\\)\")",
+      "Bash(ls \"/c/Users/CANDOU~1/AppData/Local/Temp/claude/c--Users-Can-Do-u-Documents-GitHub-My-Uni/aab3b065-7288-4272-bd24-ca5bbd413cd2/scratchpad/\" 2>&1 | grep i18n_batch)",
+      "Read(//c/Users/CANDOU~1/AppData/Local/Temp/claude/c--Users-Can-Do-u-Documents-GitHub-My-Uni/aab3b065-7288-4272-bd24-ca5bbd413cd2/scratchpad//**)",
+      "Bash(sed -i \"s|/c/Users/CANDOU~1|C:/Users/CANDOU~1|\" /tmp/merge_i18n.js)",
+      "Bash(node /tmp/merge_i18n.js)",
+      "Bash(sed -i \"s|/tmp/|C:/Users/CANDOU~1/AppData/Local/Temp/claude/c--Users-Can-Do-u-Documents-GitHub-My-Uni/aab3b065-7288-4272-bd24-ca5bbd413cd2/scratchpad/|g\" /tmp/merge_i18n.js)",
+      "Read(//tmp/**)",
+      "Bash(node \"C:\\\\Users\\\\CANDOU~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Can-Do-u-Documents-GitHub-My-Uni\\\\aab3b065-7288-4272-bd24-ca5bbd413cd2\\\\scratchpad\\\\merge_i18n.js\")",
+      "Bash(node \"C:\\\\Users\\\\CANDOU~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Can-Do-u-Documents-GitHub-My-Uni\\\\aab3b065-7288-4272-bd24-ca5bbd413cd2\\\\scratchpad\\\\resolve_conflicts.js\")",
+      "Bash(node \"C:\\\\Users\\\\CANDOU~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Can-Do-u-Documents-GitHub-My-Uni\\\\aab3b065-7288-4272-bd24-ca5bbd413cd2\\\\scratchpad\\\\write_arb.js\")",
+      "Bash(node -e ' *)",
+      "Bash(grep -vE \"^\\\\S+:[0-9]+:Text\\\\\\('\\\\\\\\\\\\$\")",
+      "Bash(flutter test *)"
     ],
     "additionalDirectories": [
       "/tmp",

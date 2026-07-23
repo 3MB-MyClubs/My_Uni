@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/photo_upload_quality.dart';
 
@@ -14,8 +15,12 @@ class ContentImageUploader extends StatefulWidget {
   final String? imagePath;
   final ValueChanged<String?> onChanged;
   final double height;
-  final String emptyTitle;
-  final String emptySubtitle;
+
+  /// Falls back to a localized default when not provided.
+  final String? emptyTitle;
+
+  /// Falls back to a localized default when not provided.
+  final String? emptySubtitle;
 
   /// When true, the empty state is a small "add photo" button instead of a
   /// large tap area. The full-bleed preview is still shown once a photo is
@@ -27,8 +32,8 @@ class ContentImageUploader extends StatefulWidget {
     required this.imagePath,
     required this.onChanged,
     this.height = 180,
-    this.emptyTitle = 'Add cover photo (optional)',
-    this.emptySubtitle = 'Tap to pick from camera or library',
+    this.emptyTitle,
+    this.emptySubtitle,
     this.compact = false,
   });
 
@@ -40,6 +45,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
   Future<void> _pickPhoto(ImageSource source) async {
     final picked = await ImagePicker().pickImage(source: source);
     if (picked == null || !mounted) return;
+    final cropPhotoTitle = AppLocalizations.of(context)!.cropPhoto;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
       maxWidth: PhotoUploadQuality.contentMaxDimension,
@@ -48,12 +54,12 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
       compressQuality: PhotoUploadQuality.jpegQuality,
       uiSettings: [
         IOSUiSettings(
-          title: 'Crop Photo',
+          title: cropPhotoTitle,
           resetAspectRatioEnabled: true,
           rotateButtonsHidden: false,
         ),
         AndroidUiSettings(
-          toolbarTitle: 'Crop Photo',
+          toolbarTitle: cropPhotoTitle,
           toolbarColor: AppColors.primaryRed,
           toolbarWidgetColor: Colors.white,
           lockAspectRatio: false,
@@ -65,6 +71,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
   }
 
   void _showPickerSheet() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -92,7 +99,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                'Take a photo',
+                l10n.takePhoto,
                 style: TextStyle(color: AppColors.text),
               ),
               onTap: () {
@@ -106,7 +113,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                'Choose from library',
+                l10n.chooseFromLib,
                 style: TextStyle(color: AppColors.text),
               ),
               onTap: () {
@@ -118,7 +125,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.red),
                 title: Text(
-                  'Remove photo',
+                  l10n.removePhoto,
                   style: TextStyle(color: Colors.red),
                 ),
                 onTap: () {
@@ -134,6 +141,10 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final emptyTitle = widget.emptyTitle ?? l10n.addCoverPhotoOptional;
+    final emptySubtitle = widget.emptySubtitle ?? l10n.tapToPickPhotoHint;
+
     // Compact empty state — a small button rather than a large tap target.
     if (widget.compact && widget.imagePath == null) {
       return Align(
@@ -157,7 +168,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  widget.emptyTitle,
+                  emptyTitle,
                   style: TextStyle(
                     color: AppColors.text,
                     fontSize: 14,
@@ -219,7 +230,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                           Icon(Icons.edit, color: Colors.white, size: 13),
                           SizedBox(width: 4),
                           Text(
-                            'Change',
+                            l10n.changeLabel,
                             style: TextStyle(color: Colors.white, fontSize: 11),
                           ),
                         ],
@@ -238,7 +249,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.emptyTitle,
+                    emptyTitle,
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 13,
@@ -246,7 +257,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    widget.emptySubtitle,
+                    emptySubtitle,
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 11,

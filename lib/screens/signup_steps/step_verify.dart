@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../l10n/app_localizations.dart';
 import 'signup_theme.dart';
 
 class StepVerify extends StatefulWidget {
@@ -79,7 +80,7 @@ class _StepVerifyState extends State<StepVerify> {
     if (code.length < _codeLength) {
       setState(() {
         _message = null;
-        _error = 'Enter the full 6-digit code.';
+        _error = AppLocalizations.of(context)!.enterFullSixDigitCode;
       });
       return;
     }
@@ -113,7 +114,9 @@ class _StepVerifyState extends State<StepVerify> {
     }
     setState(() {
       _error = error;
-      _message = error == null ? 'New code sent.' : null;
+      _message = error == null
+          ? AppLocalizations.of(context)!.newCodeSent
+          : null;
       _isResending = false;
     });
     if (error == null) {
@@ -141,7 +144,9 @@ class _StepVerifyState extends State<StepVerify> {
 
   @override
   Widget build(BuildContext context) {
-    final displayEmail = widget.email.isNotEmpty ? widget.email : 'your email';
+    final displayEmail = widget.email.isNotEmpty
+        ? widget.email
+        : AppLocalizations.of(context)!.yourEmailFallback;
     return Column(
       children: [
         Expanded(
@@ -151,7 +156,7 @@ class _StepVerifyState extends State<StepVerify> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Check your inbox.',
+                  AppLocalizations.of(context)!.checkYourInboxTitle,
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -170,7 +175,9 @@ class _StepVerifyState extends State<StepVerify> {
                       letterSpacing: -0.1,
                     ),
                     children: [
-                      TextSpan(text: 'We sent a 6-digit code to\n'),
+                      TextSpan(
+                        text: AppLocalizations.of(context)!.weSentCodeToPrefix,
+                      ),
                       TextSpan(
                         text: displayEmail,
                         style: TextStyle(
@@ -226,17 +233,19 @@ class _StepVerifyState extends State<StepVerify> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Didn't get it?",
+                      AppLocalizations.of(context)!.didntGetCode,
                       style: TextStyle(fontSize: 14, color: SC.muted),
                     ),
                     GestureDetector(
                       onTap: _resend,
                       child: Text(
                         _isResending
-                            ? 'Sending...'
+                            ? AppLocalizations.of(context)!.sendingEllipsis
                             : _secondsLeft > 0
-                            ? 'Resend in $_timerLabel'
-                            : 'Resend code',
+                            ? AppLocalizations.of(
+                                context,
+                              )!.resendInTime(_timerLabel)
+                            : AppLocalizations.of(context)!.resendCodeButton,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -271,7 +280,7 @@ class _StepVerifyState extends State<StepVerify> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('Verify'),
+                  : Text(AppLocalizations.of(context)!.verifyButton),
             ),
           ),
         ),

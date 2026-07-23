@@ -1,5 +1,9 @@
+import 'package:flutter/widgets.dart' show Locale;
+
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import 'content_store.dart';
+import 'locale_service.dart';
 import 'supabase_club_service.dart';
 import 'user_state.dart';
 
@@ -14,6 +18,11 @@ typedef _RemoveRemoteBoardRole =
     Future<void> Function({required Club club, required String userId});
 
 class StudentClubRoleService {
+  // No BuildContext is available this deep in the service layer; this
+  // fallback title is resolved here via the current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   final _SetRemoteBoardRole _setRemoteBoardRole;
   final _RemoveRemoteBoardRole _removeRemoteBoardRole;
   final Future<void> Function() _saveBoardMemberIds;
@@ -48,7 +57,7 @@ class StudentClubRoleService {
   String? roleTitleFor(Club club, String userId) {
     if (!club.boardMemberIds.contains(userId)) return null;
     final title = club.boardMemberTitles[userId]?.trim() ?? '';
-    return title.isEmpty ? 'Board Member' : title;
+    return title.isEmpty ? _l10n.boardMemberFallbackTitle : title;
   }
 
   /// Builds the profile club list with every role club first, followed by the

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
 
 class AcademicProgramField extends StatelessWidget {
@@ -193,7 +193,7 @@ class _AcademicProgramPickerSheetState
                         setState(_selected.clear);
                       },
                       child: Text(
-                        S.clear,
+                        AppLocalizations.of(context)!.clear,
                         style: TextStyle(color: AppColors.secondaryText),
                       ),
                     ),
@@ -202,7 +202,7 @@ class _AcademicProgramPickerSheetState
                       onPressed: () =>
                           Navigator.pop(context, _selected.toList()),
                       child: Text(
-                        S.done,
+                        AppLocalizations.of(context)!.done,
                         style: TextStyle(
                           color: AppColors.primaryRed,
                           fontWeight: FontWeight.w800,
@@ -222,12 +222,14 @@ class _AcademicProgramPickerSheetState
                 textInputAction: TextInputAction.search,
                 onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
-                  hintText: S.searchMajors,
+                  hintText: AppLocalizations.of(context)!.searchMajorsHint,
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: S.clearSearch,
+                          tooltip: AppLocalizations.of(
+                            context,
+                          )!.clearSearchTooltip,
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');
@@ -259,7 +261,7 @@ class _AcademicProgramPickerSheetState
               child: matches.isEmpty
                   ? Center(
                       child: Text(
-                        S.noMatchingMajor,
+                        AppLocalizations.of(context)!.noMatchingMajor,
                         style: TextStyle(color: AppColors.secondaryText),
                       ),
                     )

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../services/app_strings.dart';
+import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
@@ -62,7 +64,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   int _peopleFeedbackVersion = 0;
   List<User> _people = const [];
   bool _peopleLoading = false;
-  String? _peopleError;
+  bool _peopleHasError = false;
 
   // Palette for the colored monograms (mirrors the design's per-item hues).
   static const List<Color> _hues = [
@@ -121,7 +123,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     }
   }
 
-  static String categoryFor(Club club) {
+  static String categoryFor(BuildContext context, Club club) {
     final category = club.categoryName?.trim();
     if (category != null && category.isNotEmpty) return category;
 
@@ -137,13 +139,13 @@ class _ExploreScreenState extends State<ExploreScreen>
       'kuswe',
       'kuacm',
     ])) {
-      return 'Engineering';
+      return AppLocalizations.of(context)!.categoryEngineering;
     }
     if (has(['ekonomi', 'girişimcilik', 'işletme', 'pazarlama', 'politik'])) {
-      return 'Business';
+      return AppLocalizations.of(context)!.categoryBusiness;
     }
     if (has(['dağcılık', 'fenerbahçe', 'kartal', 'spor'])) {
-      return 'Sports';
+      return AppLocalizations.of(context)!.categorySports;
     }
     if (has([
       'sanat',
@@ -161,7 +163,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       'thm',
       'koro',
     ])) {
-      return 'Arts';
+      return AppLocalizations.of(context)!.categoryArts;
     }
     if (has([
       'gönüllü',
@@ -172,17 +174,17 @@ class _ExploreScreenState extends State<ExploreScreen>
       'düşünce',
       'dayanışma',
     ])) {
-      return 'Social';
+      return AppLocalizations.of(context)!.categorySocial;
     }
     // Felsefe, Hukuk, Tarih, Tıp, Hemşirelik, Nöroloji, Münazara, Beşeri,
     // Türk Araştırmaları, Arkeoloji, Atatürkçü … and anything else.
-    return 'Academic';
+    return AppLocalizations.of(context)!.categoryAcademic;
   }
 
   List<Club> get _filteredClubs {
     final q = _clubQuery.toLowerCase();
     return clubs.where((c) {
-      final category = categoryFor(c).toLowerCase();
+      final category = categoryFor(context, c).toLowerCase();
       final matchesQuery =
           q.isEmpty ||
           c.name.toLowerCase().contains(q) ||
@@ -318,7 +320,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (_peopleLoading) return;
     setState(() {
       _peopleLoading = true;
-      _peopleError = null;
+      _peopleHasError = false;
     });
 
     try {
@@ -334,7 +336,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       setState(() {
         _people = users.where((user) => user.id != _myId).toList();
         _peopleLoading = false;
-        _peopleError = 'Could not load people from profiles.';
+        _peopleHasError = true;
       });
     }
   }
@@ -351,8 +353,8 @@ class _ExploreScreenState extends State<ExploreScreen>
     setState(() {
       _peopleFeedbackIsFollowing = nowFollowing;
       _peopleFeedback = nowFollowing
-          ? 'You are now following ${person.name}.'
-          : 'You unfollowed ${person.name}.';
+          ? AppLocalizations.of(context)!.nowFollowingPerson(person.name)
+          : AppLocalizations.of(context)!.unfollowedPerson(person.name);
     });
 
     try {
@@ -368,7 +370,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       if (!mounted) return;
       setState(() {
         _peopleFeedbackIsFollowing = !nowFollowing;
-        _peopleFeedback = 'Could not update follow. Please try again.';
+        _peopleFeedback = AppLocalizations.of(context)!.couldNotUpdateFollow;
       });
       return;
     }
@@ -387,7 +389,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          S.explore,
+          AppLocalizations.of(context)!.explore,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         bottom: TabBar(
@@ -396,9 +398,9 @@ class _ExploreScreenState extends State<ExploreScreen>
           unselectedLabelColor: AppColors.secondaryText,
           indicatorColor: AppColors.primaryRed,
           tabs: [
-            Tab(text: S.discoverClubs),
-            Tab(text: S.exploreContentTab),
-            Tab(text: S.findPeople),
+            Tab(text: AppLocalizations.of(context)!.discoverClubs),
+            Tab(text: AppLocalizations.of(context)!.exploreContentTab),
+            Tab(text: AppLocalizations.of(context)!.findPeople),
           ],
         ),
       ),
@@ -584,8 +586,8 @@ class _ExploreScreenState extends State<ExploreScreen>
     final filtered = _filteredClubs;
     final filtering = _clubQuery.isNotEmpty;
     final label = filtering
-        ? '${filtered.length} club${filtered.length == 1 ? '' : 's'}'
-        : S.allClubs;
+        ? AppLocalizations.of(context)!.clubsCountLabel(filtered.length)
+        : AppLocalizations.of(context)!.allClubs;
 
     return Column(
       children: [
@@ -595,7 +597,7 @@ class _ExploreScreenState extends State<ExploreScreen>
             children: [
               _searchField(
                 controller: _clubSearchController,
-                hint: S.searchClubs,
+                hint: AppLocalizations.of(context)!.searchClubs,
                 value: _clubQuery,
                 onChanged: (v) => setState(() => _clubQuery = v),
                 anchorKey: onboardingAnchors.keyFor(
@@ -608,7 +610,10 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: filtered.isEmpty
-              ? _emptyState(S.noClubsMatch, S.tryDifferentSearch)
+              ? _emptyState(
+                  AppLocalizations.of(context)!.noClubsMatch,
+                  AppLocalizations.of(context)!.tryDifferentSearch,
+                )
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -622,7 +627,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                     final club = filtered[i - 1];
                     return _ClubRow(
                       club: club,
-                      category: categoryFor(club),
+                      category: categoryFor(context, club),
                       members: clubMemberCount(club.id),
                       color: _hueFor(clubOrdinal(club.id)),
                       joined: userState.isFollowing(club.id),
@@ -677,7 +682,7 @@ class _ExploreScreenState extends State<ExploreScreen>
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: _searchField(
             controller: _contentSearchController,
-            hint: S.searchEventsPosts,
+            hint: AppLocalizations.of(context)!.searchEventsPosts,
             value: _contentQuery,
             onChanged: (v) => setState(() => _contentQuery = v),
           ),
@@ -685,7 +690,10 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: matchedEvents.isEmpty
-              ? _emptyState(S.noContentMatch, S.tryDifferentSearch)
+              ? _emptyState(
+                  AppLocalizations.of(context)!.noContentMatch,
+                  AppLocalizations.of(context)!.tryDifferentSearch,
+                )
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -698,8 +706,8 @@ class _ExploreScreenState extends State<ExploreScreen>
                     if (i == 0) {
                       return _sectionLabel(
                         searching
-                            ? '${S.filterEvents} · ${matchedEvents.length}'
-                            : S.upcomingEvents,
+                            ? '${AppLocalizations.of(context)!.filterEvents} · ${matchedEvents.length}'
+                            : AppLocalizations.of(context)!.upcomingEvents,
                       );
                     }
                     return _eventResultRow(matchedEvents[i - 1]);
@@ -709,16 +717,6 @@ class _ExploreScreenState extends State<ExploreScreen>
       ],
     );
   }
-
-  static const List<String> _weekdayLabels = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun',
-  ];
 
   Widget _eventResultRow(Event event) {
     final club = _clubById(event.clubId);
@@ -789,7 +787,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                         ),
                       ),
                       child: Text(
-                        '${_weekdayLabels[date.weekday - 1]}. $time',
+                        '${DateFormat.E(localeService.languageCode).format(date)}. $time',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -844,7 +842,8 @@ class _ExploreScreenState extends State<ExploreScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    club?.name ?? 'Campus event',
+                    club?.name ??
+                        AppLocalizations.of(context)!.campusEventFallback,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -890,7 +889,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final label = searching || filteringByMajor
         ? [
             if (filteringByMajor) _selectedPeopleMajor!,
-            S.peopleResultCount(people.length),
+            AppLocalizations.of(context)!.resultsCountLabel(people.length),
           ].join(' · ')
         : '';
 
@@ -956,15 +955,13 @@ class _ExploreScreenState extends State<ExploreScreen>
                   ),
                 ),
               ),
-              if (_peopleError != null &&
-                  !_peopleLoading &&
-                  people.isEmpty) ...[
+              if (_peopleHasError && !_peopleLoading && people.isEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        _peopleError ?? '',
+                        AppLocalizations.of(context)!.couldNotLoadPeople,
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.secondaryText,
@@ -1070,12 +1067,12 @@ class _ExploreScreenState extends State<ExploreScreen>
                   child: _emptyState(
                     filteringByMajor
                         ? S.noPeopleInSelectedMajor
-                        : S.noOneMatches,
+                        : AppLocalizations.of(context)!.noOneMatches,
                     filteringByMajor
                         ? S.tryAnotherMajorOrName
                         : searching
-                        ? S.tryNameSearch
-                        : S.profilesWillAppear,
+                        ? AppLocalizations.of(context)!.tryNameSearch
+                        : AppLocalizations.of(context)!.profilesWillAppear,
                   ),
                 );
               }
@@ -1128,7 +1125,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (major != null && major.isNotEmpty) {
       return year != null && year.isNotEmpty ? '$major · $year' : major;
     }
-    return u.email.isNotEmpty ? u.email : S.studentProfile;
+    return u.email.isNotEmpty
+        ? u.email
+        : AppLocalizations.of(context)!.studentProfile;
   }
 }
 
@@ -1204,7 +1203,9 @@ class _ClubRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '$members members · $category',
+                    AppLocalizations.of(
+                      context,
+                    )!.membersCategoryLabel(members, category),
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -1218,8 +1219,8 @@ class _ClubRow extends StatelessWidget {
             const SizedBox(width: 10),
             toggleBuilder(
               active: joined,
-              activeLabel: S.joined,
-              inactiveLabel: S.join,
+              activeLabel: AppLocalizations.of(context)!.joined,
+              inactiveLabel: AppLocalizations.of(context)!.join,
               onTap: onJoin,
             ),
           ],
@@ -1469,7 +1470,9 @@ class _PersonRowState extends State<_PersonRow> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _displayFollowing ? S.following : S.follow,
+                            _displayFollowing
+                                ? AppLocalizations.of(context)!.following
+                                : AppLocalizations.of(context)!.follow,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,

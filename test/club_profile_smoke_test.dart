@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/club_profile_screen.dart';
@@ -29,6 +30,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: ClubProfileScreen(club: clubs.first, color: Colors.red),
         ),
       ),
@@ -46,6 +49,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: ClubProfileScreen(club: clubs.first, color: Colors.red),
         ),
       ),
@@ -61,7 +66,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(home: ExploreScreen())),
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ExploreScreen(),
+        ),
+      ),
     );
 
     // Network-image placeholders can animate indefinitely in widget tests, so
@@ -82,7 +93,11 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(home: ExploreScreen(initialTabIndex: 2)),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ExploreScreen(initialTabIndex: 2),
+        ),
       ),
     );
     await tester.pump();
@@ -109,7 +124,13 @@ void main() {
     authService.login(users.first.email, users.first.password);
 
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(home: ProfileScreen())),
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ProfileScreen(),
+        ),
+      ),
     );
 
     await tester.pumpAndSettle();
@@ -124,7 +145,13 @@ void main() {
     authService.login(users.first.email, users.first.password);
 
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(home: ProfileScreen())),
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ProfileScreen(),
+        ),
+      ),
     );
 
     await tester.pumpAndSettle();

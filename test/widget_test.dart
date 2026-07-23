@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/main.dart';
@@ -36,6 +37,8 @@ void main() {
     var signUpTapped = false;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: LoginScreen(
           onLogin: () {},
           onSignUp: () => signUpTapped = true,
@@ -59,7 +62,15 @@ void main() {
   ) async {
     await localeService.setLanguage('en');
     await tester.pumpWidget(
-      MaterialApp(home: TermsAcceptanceScreen(onAccepted: () async {})),
+      ListenableBuilder(
+        listenable: localeService,
+        builder: (context, _) => MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale(localeService.languageCode),
+          home: TermsAcceptanceScreen(onAccepted: () async {}),
+        ),
+      ),
     );
 
     await tester.tap(find.text('TR'));

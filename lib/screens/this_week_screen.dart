@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
@@ -59,53 +61,10 @@ String _timeStr(DateTime dt) => '${_fmt2(dt.hour)}:${_fmt2(dt.minute)}';
 
 String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
-const _kMonths = [
-  '',
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-const _kFullMonths = [
-  '',
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-const _kWeekdays = [
-  '',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
-
-String _shortDay(DateTime d) {
-  if (_isDateToday(d)) return S.today;
-  if (_isDateTomorrow(d)) return S.tomorrow;
-  return '${_kWeekdays[d.weekday].substring(0, 3)} ${d.day}';
+String _shortDay(DateTime d, BuildContext context) {
+  if (_isDateToday(d)) return AppLocalizations.of(context)!.today;
+  if (_isDateTomorrow(d)) return AppLocalizations.of(context)!.tomorrow;
+  return '${DateFormat.E(localeService.languageCode).format(d)} ${d.day}';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -389,7 +348,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            S.discoverEvents,
+                            AppLocalizations.of(context)!.discoverEvents,
                             style: TextStyle(
                               fontSize: 27,
                               fontWeight: FontWeight.w800,
@@ -447,7 +406,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     // Audience
                     Expanded(
                       child: _FilterPillBtn(
-                        label: _audience == 'following' ? S.following : S.all,
+                        label: _audience == 'following'
+                            ? AppLocalizations.of(context)!.following
+                            : AppLocalizations.of(context)!.all,
                         icon: _audience == 'following'
                             ? Icons.favorite_outline_rounded
                             : Icons.people_outline_rounded,
@@ -461,10 +422,15 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     Expanded(
                       child: _FilterPillBtn(
                         label: _dateFilters.isEmpty
-                            ? S.anyDate
+                            ? AppLocalizations.of(context)!.anyDate
                             : _dateFilters.length == 1
-                            ? _shortDay(_dayKeyToDate(_dateFilters.first))
-                            : '${_dateFilters.length} days',
+                            ? _shortDay(
+                                _dayKeyToDate(_dateFilters.first),
+                                context,
+                              )
+                            : AppLocalizations.of(
+                                context,
+                              )!.daysCount(_dateFilters.length),
                         icon: Icons.calendar_today_outlined,
                         active: _dateFilters.isNotEmpty,
                         onTap: _showDateSheet,
@@ -518,7 +484,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
-                      '${results.length} ${results.length == 1 ? 'event' : 'events'}',
+                      AppLocalizations.of(context)!.eventsCount(results.length),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -602,15 +568,17 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   String _contextLabel() {
     final q = _query.trim();
-    if (q.isNotEmpty) return '· "$q"';
+    if (q.isNotEmpty) return AppLocalizations.of(context)!.filterQueryLabel(q);
     final parts = <String>[];
-    if (_showLive) parts.add('live now');
-    if (_audience == 'following') parts.add('following');
+    if (_showLive) parts.add(AppLocalizations.of(context)!.liveNowFilterLabel);
+    if (_audience == 'following') {
+      parts.add(AppLocalizations.of(context)!.followingFilterLabel);
+    }
     if (_dateFilters.isNotEmpty) {
       parts.add(
         _dateFilters.length == 1
-            ? _shortDay(_dayKeyToDate(_dateFilters.first))
-            : '${_dateFilters.length} days',
+            ? _shortDay(_dayKeyToDate(_dateFilters.first), context)
+            : AppLocalizations.of(context)!.daysCount(_dateFilters.length),
       );
     }
     if (parts.isEmpty) return '';
@@ -681,7 +649,7 @@ class _SearchBarState extends State<_SearchBar> {
                 disabledBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
-                hintText: S.searchEvents,
+                hintText: AppLocalizations.of(context)!.searchEvents,
                 hintStyle: TextStyle(
                   fontSize: 15,
                   color: AppColors.secondaryText,
@@ -825,7 +793,7 @@ class _LiveToggleBtn extends StatelessWidget {
             _PulseDot(color: active ? Colors.white : AppColors.primaryRed),
             const SizedBox(width: 6),
             Text(
-              S.live,
+              AppLocalizations.of(context)!.live,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -879,7 +847,7 @@ class _AudienceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            S.showEventsFrom,
+            AppLocalizations.of(context)!.showEventsFrom,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
@@ -889,16 +857,16 @@ class _AudienceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _AudienceOption(
-            label: S.allEvents,
-            subtitle: S.everythingOnCampus,
+            label: AppLocalizations.of(context)!.allEvents,
+            subtitle: AppLocalizations.of(context)!.everythingOnCampus,
             icon: Icons.public_outlined,
             selected: current == 'all',
             onTap: () => onPick('all'),
           ),
           const SizedBox(height: 10),
           _AudienceOption(
-            label: S.following,
-            subtitle: S.followingOnly,
+            label: AppLocalizations.of(context)!.following,
+            subtitle: AppLocalizations.of(context)!.followingOnly,
             icon: Icons.favorite_outline_rounded,
             selected: current == 'following',
             onTap: () => onPick('following'),
@@ -1157,7 +1125,26 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     _dragAdding = null;
   }
 
-  Widget _buildMonth(DateTime month) {
+  String _monthName(BuildContext context, int month) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (month) {
+      1 => l10n.monthJanuary,
+      2 => l10n.monthFebruary,
+      3 => l10n.monthMarch,
+      4 => l10n.monthApril,
+      5 => l10n.monthMay,
+      6 => l10n.monthJune,
+      7 => l10n.monthJuly,
+      8 => l10n.monthAugust,
+      9 => l10n.monthSeptember,
+      10 => l10n.monthOctober,
+      11 => l10n.monthNovember,
+      12 => l10n.monthDecember,
+      _ => '',
+    };
+  }
+
+  Widget _buildMonth(BuildContext context, DateTime month) {
     final today = _todayDate;
     final endDate = _endDate;
     final firstDay = DateTime(month.year, month.month);
@@ -1174,7 +1161,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 8, 0, 8),
             child: Text(
-              '${_kFullMonths[month.month]} ${month.year}',
+              '${_monthName(context, month.month)} ${month.year}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -1204,7 +1191,8 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               final isSelected = _temp.contains(dayKey);
 
               return Semantics(
-                label: '${_kFullMonths[day.month]} ${day.day}, ${day.year}',
+                label:
+                    '${_monthName(context, day.month)} ${day.day}, ${day.year}',
                 hint: 'Tap one date or drag horizontally to select a week',
                 selected: isSelected,
                 enabled: !isDisabled,
@@ -1310,7 +1298,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
           Row(
             children: [
               Text(
-                S.pickDate,
+                AppLocalizations.of(context)!.pickDate,
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -1323,7 +1311,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 GestureDetector(
                   onTap: () => setState(_temp.clear),
                   child: Text(
-                    S.clear,
+                    AppLocalizations.of(context)!.clear,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1360,7 +1348,8 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               key: const PageStorageKey('two-year-event-date-picker'),
               padding: const EdgeInsets.only(top: 2),
               itemCount: months.length,
-              itemBuilder: (context, index) => _buildMonth(months[index]),
+              itemBuilder: (context, index) =>
+                  _buildMonth(context, months[index]),
             ),
           ),
           const SizedBox(height: 12),
@@ -1387,8 +1376,10 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               ),
               child: Text(
                 _temp.isEmpty
-                    ? S.showAllDates
-                    : 'Show events for ${_temp.length} selected ${_temp.length == 1 ? 'date' : 'dates'}',
+                    ? AppLocalizations.of(context)!.showAllDates
+                    : AppLocalizations.of(
+                        context,
+                      )!.showEventsForSelectedDates(_temp.length),
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -1424,15 +1415,17 @@ class _WeekEventRow extends StatelessWidget {
     this.rsvpAnchorKey,
   });
 
-  String _dateTimeChipLabel() {
-    if (_isLive(event)) return 'LIVE · ${_timeStr(event.dateTime)}';
+  String _dateTimeChipLabel(BuildContext context) {
+    if (_isLive(event)) {
+      return '${AppLocalizations.of(context)!.liveNowLabel} · ${_timeStr(event.dateTime)}';
+    }
     if (_isDateToday(event.dateTime)) {
-      return '${S.today} · ${_timeStr(event.dateTime)}';
+      return '${AppLocalizations.of(context)!.today} · ${_timeStr(event.dateTime)}';
     }
     if (_isDateTomorrow(event.dateTime)) {
-      return '${S.tomorrow} · ${_timeStr(event.dateTime)}';
+      return '${AppLocalizations.of(context)!.tomorrow} · ${_timeStr(event.dateTime)}';
     }
-    return '${_kWeekdays[event.dateTime.weekday].substring(0, 3)}. ${_timeStr(event.dateTime)}';
+    return '${DateFormat.E(localeService.languageCode).format(event.dateTime)}. ${_timeStr(event.dateTime)}';
   }
 
   @override
@@ -1514,7 +1507,7 @@ class _WeekEventRow extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        _dateTimeChipLabel(),
+                        _dateTimeChipLabel(context),
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.94),
                           fontSize: 11,
@@ -1601,7 +1594,9 @@ class _WeekEventRow extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            '${event.attendeeUserIds.length} attending',
+                            AppLocalizations.of(
+                              context,
+                            )!.attendingCount(event.attendeeUserIds.length),
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -1646,7 +1641,7 @@ class _WeekRsvpPill extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
         ),
         child: Text(
-          S.ended,
+          AppLocalizations.of(context)!.ended,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1699,7 +1694,9 @@ class _WeekRsvpPill extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      attending ? S.going : S.rsvp,
+                      attending
+                          ? AppLocalizations.of(context)!.going
+                          : AppLocalizations.of(context)!.rsvp,
                       maxLines: 1,
                       style: TextStyle(
                         fontSize: 13,
@@ -1743,10 +1740,14 @@ class _EmptyState extends StatelessWidget {
     // to reset.
     final trulyEmpty = !searching && !hasFilter;
     final active = searching || hasFilter;
-    final String title = trulyEmpty ? S.noEventsYet : S.noEventsFound;
+    final String title = trulyEmpty
+        ? AppLocalizations.of(context)!.noEventsYet
+        : AppLocalizations.of(context)!.noEventsFound;
     final String subtitle = searching
-        ? S.tryDifferentKeyword
-        : (hasFilter ? S.nothingScheduled : S.checkBackLater);
+        ? AppLocalizations.of(context)!.tryDifferentKeyword
+        : (hasFilter
+              ? AppLocalizations.of(context)!.nothingScheduled
+              : AppLocalizations.of(context)!.checkBackLater);
 
     return Center(
       child: Padding(
@@ -1804,7 +1805,7 @@ class _EmptyState extends StatelessWidget {
                     borderRadius: BorderRadius.all(Radius.circular(100)),
                   ),
                   child: Text(
-                    S.resetFilters,
+                    AppLocalizations.of(context)!.resetFilters,
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
@@ -1953,7 +1954,7 @@ class _NewEventsSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        S.newEvents,
+                        AppLocalizations.of(context)!.newEvents,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
@@ -1962,7 +1963,9 @@ class _NewEventsSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${events.length} unopened ${events.length == 1 ? 'event' : 'events'}',
+                        AppLocalizations.of(
+                          context,
+                        )!.unopenedEventsCount(events.length),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -2026,7 +2029,7 @@ class _NoNewEventsState extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            S.allCaughtUp,
+            AppLocalizations.of(context)!.allCaughtUp,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w900,
@@ -2035,7 +2038,7 @@ class _NoNewEventsState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            S.newEventsHint,
+            AppLocalizations.of(context)!.newEventsHint,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -2096,7 +2099,9 @@ class _NewEventNotificationCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _kMonths[event.dateTime.month].toUpperCase(),
+                    DateFormat.MMM(
+                      localeService.languageCode,
+                    ).format(event.dateTime).toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 10,
@@ -2133,7 +2138,7 @@ class _NewEventNotificationCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _createdLabel(createdAt),
+                        _createdLabel(context, createdAt),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -2156,7 +2161,7 @@ class _NewEventNotificationCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${club.name} · ${_kWeekdays[event.dateTime.weekday].substring(0, 3)} · ${_timeStr(event.dateTime)}',
+                    '${club.name} · ${DateFormat.E(localeService.languageCode).format(event.dateTime)} · ${_timeStr(event.dateTime)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -2180,13 +2185,19 @@ class _NewEventNotificationCard extends StatelessWidget {
     );
   }
 
-  String _createdLabel(DateTime createdAt) {
+  String _createdLabel(BuildContext context, DateTime createdAt) {
     final diff = DateTime.now().difference(createdAt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return 'New';
+    if (diff.inMinutes < 1) return AppLocalizations.of(context)!.justNow;
+    if (diff.inMinutes < 60) {
+      return AppLocalizations.of(context)!.minutesAgo(diff.inMinutes);
+    }
+    if (diff.inHours < 24) {
+      return AppLocalizations.of(context)!.hoursAgo(diff.inHours);
+    }
+    if (diff.inDays < 7) {
+      return AppLocalizations.of(context)!.daysAgo(diff.inDays);
+    }
+    return AppLocalizations.of(context)!.newLabel;
   }
 }
 

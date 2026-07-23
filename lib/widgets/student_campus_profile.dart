@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/theme_service.dart';
@@ -269,23 +270,25 @@ class StudentCampusIdCard extends StatelessWidget {
     this.onFollowersTap,
   });
 
-  String get _majorLine {
+  String _majorLine(BuildContext context) {
     final programs = <String>[
       if (profile.major.trim().isNotEmpty) profile.major.trim(),
       ...profile.doubleMajors
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty),
     ];
-    return programs.isEmpty ? 'Major not added' : programs.join(' & ');
+    return programs.isEmpty
+        ? AppLocalizations.of(context)!.majorNotAdded
+        : programs.join(' & ');
   }
 
-  String get _minorLine {
+  String _minorLine(BuildContext context) {
     final values = profile.minors
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList();
     if (values.isEmpty) return '';
-    return 'Minor in ${values.join(' & ')}';
+    return AppLocalizations.of(context)!.minorIn(values.join(' & '));
   }
 
   @override
@@ -344,7 +347,7 @@ class StudentCampusIdCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'STUDENT ID',
+                      AppLocalizations.of(context)!.studentIdLabel,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.65),
                         fontSize: 9,
@@ -401,7 +404,7 @@ class StudentCampusIdCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _majorLine,
+                            _majorLine(context),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -409,10 +412,10 @@ class StudentCampusIdCard extends StatelessWidget {
                               fontSize: 11.5,
                             ),
                           ),
-                          if (_minorLine.isNotEmpty) ...[
+                          if (_minorLine(context).isNotEmpty) ...[
                             const SizedBox(height: 1),
                             Text(
-                              _minorLine,
+                              _minorLine(context),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -456,17 +459,17 @@ class StudentCampusIdCard extends StatelessWidget {
                   children: [
                     _CampusStat(
                       value: profile.clubs,
-                      label: 'Clubs',
+                      label: AppLocalizations.of(context)!.clubs,
                       onTap: onClubsTap,
                     ),
                     _CampusStat(
                       value: profile.following,
-                      label: 'Following',
+                      label: AppLocalizations.of(context)!.following,
                       onTap: onFollowingTap,
                     ),
                     _CampusStat(
                       value: profile.followers,
-                      label: 'Followers',
+                      label: AppLocalizations.of(context)!.followers,
                       onTap: onFollowersTap,
                       showDivider: false,
                     ),
@@ -651,7 +654,9 @@ class _StudentBioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = bio.trim();
+    final text = bio.trim().isEmpty
+        ? AppLocalizations.of(context)!.noBioYet
+        : bio.trim();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -663,7 +668,7 @@ class _StudentBioCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const StudentProfileSectionLabel('Bio'),
+          StudentProfileSectionLabel(AppLocalizations.of(context)!.bioLabel),
           const SizedBox(height: 6),
           Text(
             text,
@@ -762,15 +767,25 @@ class StudentClubRoleBadge extends StatelessWidget {
     this.compact = false,
   });
 
-  String get _label {
+  // Raw (untranslated) label used for state checks below — the role text
+  // itself is data-driven (e.g. "Member", "Founder"), so it must always be
+  // compared in its original form regardless of the display locale.
+  String get _rawLabel {
     final value = role.trim();
     return value.isEmpty ? 'Member' : value;
   }
 
-  bool get _isMember => _label.toLowerCase() == 'member';
+  String _displayLabel(BuildContext context) {
+    final value = role.trim();
+    return value.isEmpty
+        ? AppLocalizations.of(context)!.memberRoleDefault
+        : value;
+  }
+
+  bool get _isMember => _rawLabel.toLowerCase() == 'member';
 
   bool get _isFounder {
-    final value = _label.toLowerCase();
+    final value = _rawLabel.toLowerCase();
     return value.contains('founder') || value.contains('co-founder');
   }
 
@@ -799,8 +814,9 @@ class StudentClubRoleBadge extends StatelessWidget {
         ? Icons.person_outline_rounded
         : Icons.workspace_premium_rounded;
 
+    final displayLabel = _displayLabel(context);
     return Semantics(
-      label: 'Club role: $_label',
+      label: AppLocalizations.of(context)!.clubRoleSemanticLabel(displayLabel),
       child: Container(
         constraints: BoxConstraints(maxWidth: compact ? 112 : 150),
         padding: EdgeInsets.symmetric(
@@ -819,7 +835,7 @@ class StudentClubRoleBadge extends StatelessWidget {
             const SizedBox(width: 5),
             Flexible(
               child: Text(
-                _label,
+                displayLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
