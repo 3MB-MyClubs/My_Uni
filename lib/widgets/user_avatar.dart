@@ -34,19 +34,15 @@ class UserAvatar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds when one of these three values actually changes for this
     // user, instead of on any unrelated UserState mutation app-wide.
-    final avatarState = ref.watch(
+    final (photoPath, mockUrl, displayName) = ref.watch(
       userStateProvider.select(
         (s) => (
           s.profilePhotoPaths[userId],
           s.mockPhotoUrls[userId],
           s.displayNameFor(userId, name),
-          s.profilePhotoRevisionFor(userId),
         ),
       ),
     );
-    final photoPath = avatarState.$1;
-    final mockUrl = avatarState.$2;
-    final displayName = avatarState.$3;
     final bg = backgroundColor ?? AppColors.lightRed;
     final fg = textColor ?? AppColors.primaryRed;
     final isCircle = borderRadius == null;

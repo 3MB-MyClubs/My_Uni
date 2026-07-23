@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../l10n/app_localizations.dart';
 import '../models/club.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/student_campus_profile.dart';
-import '../onboarding/widgets/starter_checklist_card.dart';
 
 class StudentClubDetail {
   final Club club;
@@ -107,7 +106,7 @@ class StudentProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final memberships = _memberships(context).take(4).toList();
+    final memberships = _memberships.take(4).toList();
 
     return StudentCampusProfileView(
       profile: StudentCampusProfile(
@@ -123,23 +122,23 @@ class StudentProfileScreen extends StatelessWidget {
         minors: data.minors,
         doubleMajors: data.doubleMajors,
       ),
-      title: AppLocalizations.of(context)!.myProfileTitle,
+      title: 'My Profile',
       leading: StudentProfileIconButton(
         icon: Icons.ios_share_outlined,
-        tooltip: AppLocalizations.of(context)!.shareProfileTooltip,
+        tooltip: 'Share profile',
         onTap: onShare,
       ),
-      trailing: StudentProfileIconButton(
-        icon: Icons.settings_outlined,
-        tooltip: AppLocalizations.of(context)!.settings,
-        onTap: onSettings,
+      trailing: KeyedSubtree(
+        key: tutorialAnchors.keyFor(TutorialAnchors.profileSettings),
+        child: StudentProfileIconButton(
+          icon: Icons.settings_outlined,
+          tooltip: 'Settings',
+          onTap: onSettings,
+        ),
       ),
-      supplementalContent: const StarterChecklistCard(),
       memberships: memberships,
-      clubsTitle: AppLocalizations.of(context)!.myClubs,
-      clubsActionLabel: onFindClubs == null
-          ? AppLocalizations.of(context)!.seeAll
-          : AppLocalizations.of(context)!.findClubsAction,
+      clubsTitle: 'My Clubs',
+      clubsActionLabel: onFindClubs == null ? 'See all' : 'Find clubs',
       onClubsAction: onFindClubs ?? () => _showFollowedClubsSheet(context),
       onClubTap: onClubTap,
       onClubsTap: () => _showFollowedClubsSheet(context),
@@ -148,7 +147,7 @@ class StudentProfileScreen extends StatelessWidget {
     );
   }
 
-  List<StudentCampusMembership> _memberships(BuildContext context) {
+  List<StudentCampusMembership> get _memberships {
     if (data.clubDetails.isNotEmpty) {
       return [
         for (var index = 0; index < data.clubDetails.length; index++)
@@ -156,9 +155,7 @@ class StudentProfileScreen extends StatelessWidget {
             club: data.clubDetails[index].club,
             color: _clubColors[index % _clubColors.length],
             role: data.clubDetails[index].role,
-            detail: AppLocalizations.of(
-              context,
-            )!.membersCount(data.clubDetails[index].memberCount),
+            detail: '${data.clubDetails[index].memberCount} members',
           ),
       ];
     }
@@ -168,8 +165,8 @@ class StudentProfileScreen extends StatelessWidget {
         StudentCampusMembership(
           club: followedClubs[index],
           color: _clubColors[index % _clubColors.length],
-          role: AppLocalizations.of(context)!.memberRoleLabel,
-          detail: AppLocalizations.of(context)!.clubMembershipLabel,
+          role: 'Member',
+          detail: 'Club membership',
         ),
     ];
   }
@@ -208,7 +205,7 @@ class StudentProfileScreen extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    AppLocalizations.of(context)!.followedClubsTitle,
+                    'Followed clubs',
                     style: TextStyle(
                       color: StudentCampusPalette.text,
                       fontSize: 20,
@@ -222,7 +219,7 @@ class StudentProfileScreen extends StatelessWidget {
                 child: followedClubs.isEmpty
                     ? Center(
                         child: Text(
-                          AppLocalizations.of(context)!.noFollowedClubsYet,
+                          'No followed clubs yet.',
                           style: TextStyle(
                             color: StudentCampusPalette.secondary,
                             fontSize: 14,
@@ -280,9 +277,7 @@ class StudentProfileScreen extends StatelessWidget {
                               subtitle: detail == null
                                   ? null
                                   : Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      )!.membersCount(detail.memberCount),
+                                      '${detail.memberCount} members',
                                       style: TextStyle(
                                         color: StudentCampusPalette.secondary,
                                         fontSize: 11,
@@ -292,11 +287,7 @@ class StudentProfileScreen extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   StudentClubRoleBadge(
-                                    role:
-                                        detail?.role ??
-                                        AppLocalizations.of(
-                                          context,
-                                        )!.memberRoleLabel,
+                                    role: detail?.role ?? 'Member',
                                     compact: true,
                                   ),
                                   const SizedBox(width: 5),

@@ -12,7 +12,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/onboarding/onboarding_service.dart';
+import 'package:flutter_application_1/services/tutorial_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 
 /// Reproduces the 72px overflow on a student profile whose major is long.
@@ -29,7 +29,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await onboardingService.initialize();
+    await tutorialService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(true); // match the reported dark-mode screenshot
     authService.login('alice@ku.edu.tr', '11111111');

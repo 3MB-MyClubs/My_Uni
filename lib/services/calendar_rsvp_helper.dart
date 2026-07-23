@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../l10n/app_localizations.dart';
 import '../models/event.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_sync_service.dart';
@@ -18,19 +17,11 @@ Future<void> syncRsvpToDeviceCalendar(BuildContext context, Event event) async {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Row(
+            content: const Row(
               children: [
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: Colors.white,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    AppLocalizations.of(context)!.addedToBothCalendars,
-                  ),
-                ),
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                SizedBox(width: 8),
+                Expanded(child: Text('Added to both calendars')),
               ],
             ),
             backgroundColor: const Color(0xFF2E7D32),
@@ -54,8 +45,8 @@ Future<void> syncRsvpToDeviceCalendar(BuildContext context, Event event) async {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.enableCalendarAccessHint,
+            content: const Text(
+              "You're going! Enable calendar access in Settings to also sync to your phone.",
             ),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(

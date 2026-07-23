@@ -1,11 +1,8 @@
-import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
-import 'locale_service.dart';
 import 'mock_data.dart';
 import 'poll_store.dart';
 import 'supabase_config.dart';
@@ -13,11 +10,6 @@ import 'supabase_club_service.dart';
 import 'user_state.dart';
 
 class SupabaseContentService {
-  // No BuildContext is available this deep in the service layer; these
-  // fallback labels are resolved here via the current locale.
-  AppLocalizations get _l10n =>
-      lookupAppLocalizations(Locale(localeService.languageCode));
-
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -178,7 +170,7 @@ class SupabaseContentService {
     if (adminIds.isEmpty && id.isNotEmpty) adminIds.add(id);
     return Club(
       id: id,
-      name: _string(row, ['name', 'title'], fallback: _l10n.clubFallbackName),
+      name: _string(row, ['name', 'title'], fallback: 'Club'),
       shortName: _nullableString(row, ['short_name', 'shortName']),
       description: _string(row, ['description', 'bio']),
       logoUrl: supabaseClubService.publicLogoUrl(
@@ -254,13 +246,9 @@ class SupabaseContentService {
     return Event(
       id: _string(row, ['id']),
       clubId: _string(row, ['club_id', 'clubId']),
-      title: _string(row, ['title', 'name'], fallback: _l10n.eventFallbackTitle),
+      title: _string(row, ['title', 'name'], fallback: 'Event'),
       description: _string(row, ['description']),
-      location: _string(
-        row,
-        ['location'],
-        fallback: _l10n.campusFallbackLocation,
-      ),
+      location: _string(row, ['location'], fallback: 'Campus'),
       dateTime: start ?? DateTime.now(),
       endTime: end ?? DateTime.now().add(const Duration(hours: 2)),
       attendeeUserIds: _stringList(
@@ -472,7 +460,7 @@ class SupabaseContentService {
 
   DateTime? _date(Map<String, dynamic> row, List<String> keys) {
     final value = _nullableString(row, keys);
-    return tryParseEventDateTime(value);
+    return value == null ? null : DateTime.tryParse(value);
   }
 
   List<String> _stringList(dynamic raw) {

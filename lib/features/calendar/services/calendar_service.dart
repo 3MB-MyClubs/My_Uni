@@ -2,13 +2,10 @@ import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:device_calendar/device_calendar.dart' as dc;
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show Locale;
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
-import '../../../l10n/app_localizations.dart';
-import '../../../services/locale_service.dart';
 import '../data/calendar_event_model.dart';
 import '../providers/calendar_state.dart';
 
@@ -25,12 +22,6 @@ class CalendarResult {
 }
 
 class CalendarService {
-  // No BuildContext is available this deep in the service layer; these
-  // fallbacks are resolved here via the current locale rather than pushed
-  // up to a caller that may not exist yet.
-  AppLocalizations get _l10n =>
-      lookupAppLocalizations(Locale(localeService.languageCode));
-
   static const _prefPrefix = 'myclubs_cal_';
   static const _initialPermissionPromptSeenKey =
       'myclubs_calendar_permission_prompt_seen_v1';
@@ -98,9 +89,9 @@ class CalendarService {
       _initTz();
       final calId = await _findWritableCalendarId();
       if (calId == null) {
-        return CalendarResult(
+        return const CalendarResult(
           success: false,
-          error: _l10n.calendarNoWritableCalendar,
+          error: 'No writable calendar found on this device.',
         );
       }
 
@@ -130,7 +121,7 @@ class CalendarService {
             '';
         return CalendarResult(
           success: false,
-          error: msg.isNotEmpty ? msg : _l10n.calendarAddFailedGeneric,
+          error: msg.isNotEmpty ? msg : 'Failed to add event to calendar.',
         );
       }
       return const CalendarResult(success: true);
@@ -161,12 +152,12 @@ class CalendarService {
       final success = syncedIds?.contains(model.appEventId) ?? false;
       return CalendarResult(
         success: success,
-        error: success ? null : _l10n.calendarAppleAddFailed,
+        error: success ? null : 'Failed to add event to Apple Calendar.',
       );
     } on PlatformException catch (error) {
       return CalendarResult(
         success: false,
-        error: error.message ?? _l10n.calendarAppleAddFailed,
+        error: error.message ?? 'Failed to add event to Apple Calendar.',
       );
     }
   }

@@ -2,9 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
-import '../services/photo_upload_quality.dart';
 
 /// A reusable photo-upload card used in post and event creation screens.
 ///
@@ -15,12 +13,8 @@ class ContentImageUploader extends StatefulWidget {
   final String? imagePath;
   final ValueChanged<String?> onChanged;
   final double height;
-
-  /// Falls back to a localized default when not provided.
-  final String? emptyTitle;
-
-  /// Falls back to a localized default when not provided.
-  final String? emptySubtitle;
+  final String emptyTitle;
+  final String emptySubtitle;
 
   /// When true, the empty state is a small "add photo" button instead of a
   /// large tap area. The full-bleed preview is still shown once a photo is
@@ -32,8 +26,8 @@ class ContentImageUploader extends StatefulWidget {
     required this.imagePath,
     required this.onChanged,
     this.height = 180,
-    this.emptyTitle,
-    this.emptySubtitle,
+    this.emptyTitle = 'Add cover photo (optional)',
+    this.emptySubtitle = 'Tap to pick from camera or library',
     this.compact = false,
   });
 
@@ -43,23 +37,27 @@ class ContentImageUploader extends StatefulWidget {
 
 class _ContentImageUploaderState extends State<ContentImageUploader> {
   Future<void> _pickPhoto(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source);
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (picked == null || !mounted) return;
-    final cropPhotoTitle = AppLocalizations.of(context)!.cropPhoto;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      maxWidth: PhotoUploadQuality.contentMaxDimension,
-      maxHeight: PhotoUploadQuality.contentMaxDimension,
+      maxWidth: 1920,
+      maxHeight: 1920,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: PhotoUploadQuality.jpegQuality,
+      compressQuality: 85,
       uiSettings: [
         IOSUiSettings(
-          title: cropPhotoTitle,
+          title: 'Crop Photo',
           resetAspectRatioEnabled: true,
           rotateButtonsHidden: false,
         ),
         AndroidUiSettings(
-          toolbarTitle: cropPhotoTitle,
+          toolbarTitle: 'Crop Photo',
           toolbarColor: AppColors.primaryRed,
           toolbarWidgetColor: Colors.white,
           lockAspectRatio: false,
@@ -71,7 +69,6 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
   }
 
   void _showPickerSheet() {
-    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -99,7 +96,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                l10n.takePhoto,
+                'Take a photo',
                 style: TextStyle(color: AppColors.text),
               ),
               onTap: () {
@@ -113,7 +110,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                 color: AppColors.primaryRed,
               ),
               title: Text(
-                l10n.chooseFromLib,
+                'Choose from library',
                 style: TextStyle(color: AppColors.text),
               ),
               onTap: () {
@@ -125,7 +122,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.red),
                 title: Text(
-                  l10n.removePhoto,
+                  'Remove photo',
                   style: TextStyle(color: Colors.red),
                 ),
                 onTap: () {
@@ -141,10 +138,6 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final emptyTitle = widget.emptyTitle ?? l10n.addCoverPhotoOptional;
-    final emptySubtitle = widget.emptySubtitle ?? l10n.tapToPickPhotoHint;
-
     // Compact empty state — a small button rather than a large tap target.
     if (widget.compact && widget.imagePath == null) {
       return Align(
@@ -168,7 +161,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  emptyTitle,
+                  widget.emptyTitle,
                   style: TextStyle(
                     color: AppColors.text,
                     fontSize: 14,
@@ -230,7 +223,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                           Icon(Icons.edit, color: Colors.white, size: 13),
                           SizedBox(width: 4),
                           Text(
-                            l10n.changeLabel,
+                            'Change',
                             style: TextStyle(color: Colors.white, fontSize: 11),
                           ),
                         ],
@@ -249,7 +242,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    emptyTitle,
+                    widget.emptyTitle,
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 13,
@@ -257,7 +250,7 @@ class _ContentImageUploaderState extends State<ContentImageUploader> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    emptySubtitle,
+                    widget.emptySubtitle,
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 11,

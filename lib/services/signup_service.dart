@@ -1,12 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'academic_year_options.dart';
-import '../l10n/app_localizations.dart';
 import 'auth_service.dart';
-import 'locale_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
 
@@ -26,12 +22,6 @@ class SignupLookupItem {
 }
 
 class SignupService {
-  // No BuildContext is available this deep in the service layer; these
-  // fallbacks never come from the server, so they're resolved here via the
-  // current locale rather than pushed up to a caller that may not exist yet.
-  AppLocalizations get _l10n =>
-      lookupAppLocalizations(Locale(localeService.languageCode));
-
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -46,15 +36,7 @@ class SignupService {
   }
 
   Future<List<SignupLookupItem>> fetchAcademicYears() async {
-    final years = await _fetchLookupItems('academic_years');
-    return ensurePrepAcademicYear(
-      years,
-      nameOf: (year) => year.name,
-      createPrep: () => const SignupLookupItem(
-        id: prepAcademicYearId,
-        name: prepAcademicYearName,
-      ),
-    );
+    return _fetchLookupItems('academic_years');
   }
 
   Future<List<SignupLookupItem>> _fetchLookupItems(String tableName) async {
@@ -99,7 +81,9 @@ class SignupService {
     String? imagePath,
   }) async {
     if (!authService.isValidNewStudentPassword(password)) {
-      return SignupResult.failure(_l10n.studentPasswordRule);
+      return const SignupResult.failure(
+        'Use 6 numbers with no repeated or sequential numbers side by side.',
+      );
     }
 
     final result = await _invoke('complete-signup', {
@@ -144,7 +128,9 @@ class SignupService {
   ) async {
     final client = _client;
     if (client == null) {
-      return SignupResult.failure(_l10n.signupServerNotConfigured);
+      return const SignupResult.failure(
+        'Supabase is not configured. Start the app with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.',
+      );
     }
 
     try {
@@ -160,10 +146,12 @@ class SignupService {
         return SignupResult.failure(details['error'].toString());
       }
       return SignupResult.failure(
-        error.reasonPhrase ?? _l10n.signupRequestFailed,
+        error.reasonPhrase ?? 'Signup request failed.',
       );
     } catch (_) {
-      return SignupResult.failure(_l10n.couldNotReachSignupServer);
+      return const SignupResult.failure(
+        'Could not reach the signup server. Please try again.',
+      );
     }
   }
 }
