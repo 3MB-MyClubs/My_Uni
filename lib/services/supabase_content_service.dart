@@ -472,7 +472,7 @@ class SupabaseContentService {
 
   DateTime? _date(Map<String, dynamic> row, List<String> keys) {
     final value = _nullableString(row, keys);
-    return value == null ? null : DateTime.tryParse(value);
+    return tryParseEventDateTime(value);
   }
 
   List<String> _stringList(dynamic raw) {

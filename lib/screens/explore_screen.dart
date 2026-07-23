@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/moderation_service.dart';
 import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
@@ -20,6 +21,7 @@ import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
+import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -56,6 +58,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   // People tab state
   final _peopleSearchController = TextEditingController();
   String _peopleQuery = '';
+  String? _selectedPeopleMajor;
   String? _peopleFeedback;
   bool _peopleFeedbackIsFollowing = false;
   int _peopleFeedbackVersion = 0;
@@ -227,15 +230,58 @@ class _ExploreScreenState extends State<ExploreScreen>
     return 4;
   }
 
+  List<User> get _peopleDirectory {
+    final byId = <String, User>{
+      for (final person in peopleService.cachedPeople) person.id: person,
+      for (final person in _people) person.id: person,
+    };
+    return byId.values.toList();
+  }
+
+  List<String> get _majorFilterOptions {
+    final options = <String>[...kAcademicPrograms];
+    final normalized = options.map((major) => major.toLowerCase()).toSet();
+    final additional = <String>[];
+    for (final person in _peopleDirectory) {
+      final major = userState.majors[person.id]?.trim() ?? '';
+      if (major.isNotEmpty && normalized.add(major.toLowerCase())) {
+        additional.add(major);
+      }
+    }
+    additional.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return [...options, ...additional];
+  }
+
+  Future<void> _choosePeopleMajor() async {
+    final result = await showAcademicProgramPicker(
+      context: context,
+      title: S.filterByMajor,
+      selected: _selectedPeopleMajor == null
+          ? const []
+          : [_selectedPeopleMajor!],
+      programs: _majorFilterOptions,
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _selectedPeopleMajor = result.isEmpty ? null : result.first;
+    });
+  }
+
+  void _clearPeopleMajor() => setState(() => _selectedPeopleMajor = null);
+
   /// Search by first name, surname, or display name, with strongest matches first.
   List<User> get _filteredPeople {
     final q = _peopleQuery.toLowerCase().trim();
-    if (q.isEmpty) return _randomPeoplePreview;
+    final selectedMajor = _selectedPeopleMajor?.trim().toLowerCase() ?? '';
+    if (q.isEmpty && selectedMajor.isEmpty) return _randomPeoplePreview;
 
-    final matches = _people.where((person) {
+    final matches = _peopleDirectory.where((person) {
       if (person.id == _myId || moderationService.isUserBlocked(person.id)) {
         return false;
       }
+      final major = userState.majors[person.id]?.trim().toLowerCase() ?? '';
+      if (selectedMajor.isNotEmpty && major != selectedMajor) return false;
+      if (q.isEmpty) return true;
       final name = userState
           .displayNameFor(person.id, person.name)
           .toLowerCase();
@@ -243,14 +289,16 @@ class _ExploreScreenState extends State<ExploreScreen>
       return name.contains(q) || email.contains(q);
     }).toList();
     matches.sort((a, b) {
-      final byRelevance = _personSearchScore(
-        a,
-        q,
-      ).compareTo(_personSearchScore(b, q));
-      if (byRelevance != 0) return byRelevance;
+      if (q.isNotEmpty) {
+        final byRelevance = _personSearchScore(
+          a,
+          q,
+        ).compareTo(_personSearchScore(b, q));
+        if (byRelevance != 0) return byRelevance;
+      }
       final aName = userState.displayNameFor(a.id, a.name);
       final bName = userState.displayNameFor(b.id, b.name);
-      return aName.compareTo(bName);
+      return aName.toLowerCase().compareTo(bName.toLowerCase());
     });
     return matches;
   }
@@ -259,7 +307,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final preview = peopleService.randomProfiles(excludeId: _myId);
     final source = preview.isNotEmpty
         ? preview
-        : _people.where((person) => person.id != _myId).toList();
+        : _peopleDirectory.where((person) => person.id != _myId).toList();
     return source
         .where((person) => !moderationService.isUserBlocked(person.id))
         .take(10)
@@ -816,12 +864,33 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   // ─── Find People tab ─────────────────────────────────────────────────────
 
+  Widget _peopleResultsLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        text.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          letterSpacing: 0.9,
+          fontWeight: FontWeight.w600,
+          color: AppColors.secondaryText,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPeopleTab() {
     final searching = _peopleQuery.trim().isNotEmpty;
+    final filteringByMajor = _selectedPeopleMajor != null;
     final people = _filteredPeople;
 
-    final label = searching
-        ? AppLocalizations.of(context)!.resultsCountLabel(people.length)
+    final label = searching || filteringByMajor
+        ? [
+            if (filteringByMajor) _selectedPeopleMajor!,
+            AppLocalizations.of(context)!.resultsCountLabel(people.length),
+          ].join(' · ')
         : '';
 
     return Column(
@@ -835,6 +904,56 @@ class _ExploreScreenState extends State<ExploreScreen>
                 hint: S.searchPeople,
                 value: _peopleQuery,
                 onChanged: (v) => setState(() => _peopleQuery = v),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width - 32,
+                  ),
+                  child: InputChip(
+                    key: const ValueKey('people-major-filter'),
+                    avatar: Icon(
+                      Icons.school_outlined,
+                      size: 17,
+                      color: filteringByMajor
+                          ? AppColors.primaryRed
+                          : AppColors.secondaryText,
+                    ),
+                    label: Text(
+                      _selectedPeopleMajor ?? S.filterByMajor,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    selected: filteringByMajor,
+                    showCheckmark: false,
+                    backgroundColor: AppColors.card,
+                    selectedColor: AppColors.lightRed,
+                    side: BorderSide(
+                      color: filteringByMajor
+                          ? AppColors.primaryRed.withValues(alpha: 0.42)
+                          : AppColors.divider,
+                    ),
+                    labelStyle: TextStyle(
+                      color: filteringByMajor
+                          ? AppColors.primaryRed
+                          : AppColors.text,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    deleteIcon: Icon(
+                      Icons.close_rounded,
+                      key: const ValueKey('clear-people-major-filter'),
+                      size: 17,
+                      color: AppColors.primaryRed,
+                    ),
+                    deleteButtonTooltipMessage: S.clearMajorFilter,
+                    onDeleted: filteringByMajor ? _clearPeopleMajor : null,
+                    onPressed: _choosePeopleMajor,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
               ),
               if (_peopleHasError && !_peopleLoading && people.isEmpty) ...[
                 const SizedBox(height: 8),
@@ -937,7 +1056,7 @@ class _ExploreScreenState extends State<ExploreScreen>
               if (i == 0) {
                 return label.isEmpty
                     ? const SizedBox.shrink()
-                    : _sectionLabel(label);
+                    : _peopleResultsLabel(label);
               }
               if (_peopleLoading && people.isEmpty) {
                 return const _PersonRowSkeleton();
@@ -946,8 +1065,12 @@ class _ExploreScreenState extends State<ExploreScreen>
                 return SizedBox(
                   height: 340,
                   child: _emptyState(
-                    AppLocalizations.of(context)!.noOneMatches,
-                    searching
+                    filteringByMajor
+                        ? S.noPeopleInSelectedMajor
+                        : AppLocalizations.of(context)!.noOneMatches,
+                    filteringByMajor
+                        ? S.tryAnotherMajorOrName
+                        : searching
                         ? AppLocalizations.of(context)!.tryNameSearch
                         : AppLocalizations.of(context)!.profilesWillAppear,
                   ),

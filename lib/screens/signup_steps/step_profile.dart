@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../services/academic_year_options.dart';
 import '../../services/photo_upload_quality.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/signup_service.dart';
@@ -748,20 +749,27 @@ class _YearSelector extends StatelessWidget {
             ),
           )
         else
-          Row(
-            children: years.map((y) {
-              final sel = selectedId == y.id;
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: y != years.last ? 6 : 0),
-                  child: GestureDetector(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 7.0;
+              final itemWidth = (constraints.maxWidth - spacing * 2) / 3;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: years.map((y) {
+                  final sel = selectedId == y.id;
+                  return GestureDetector(
+                    key: ValueKey('signup-year-${y.id}'),
                     onTap: () => onSelect(y),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
+                      width: itemWidth,
                       height: 44,
                       decoration: BoxDecoration(
                         color: sel ? SC.burgundy : SC.card,
-                        borderRadius: BorderRadius.all(Radius.circular(11)),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(11),
+                        ),
                         border: Border.all(
                           color: sel ? SC.burgundy : SC.hair,
                           width: sel ? 1.5 : 1,
@@ -778,8 +786,10 @@ class _YearSelector extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(
-                          y.name,
+                          academicYearDisplayName(y.name),
                           textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -788,10 +798,10 @@ class _YearSelector extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
         if (errorText != null) ...[
           const SizedBox(height: 6),

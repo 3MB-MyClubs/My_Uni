@@ -14,6 +14,7 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/personalization_service.dart';
+import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -81,14 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   int _contentTab = 0; // 0 = Posts, 1 = Events
   String? _hydratedConnectionsForUserId;
-  static const List<String> _yearOptions = [
-    '1st Year',
-    '2nd Year',
-    '3rd Year',
-    '4th Year',
-    '5th Year',
-    'Graduate',
-  ];
+  static const List<String> _yearOptions = fallbackAcademicYearNames;
 
   Widget _initialAvatar(String name) => Container(
     decoration: BoxDecoration(
@@ -334,7 +328,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       (year) => DropdownMenuItem<String>(
                         value: year,
                         child: Text(
-                          year,
+                          academicYearDisplayName(year),
                           style: TextStyle(color: AppColors.text),
                         ),
                       ),
@@ -2538,20 +2532,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final diff = DateTime.now().difference(dt);
     if (diff.isNegative) {
       final ahead = dt.difference(DateTime.now());
-      if (ahead.inDays > 0)
+      if (ahead.inDays > 0) {
         return AppLocalizations.of(context)!.timeAgoInDays(ahead.inDays);
-      if (ahead.inHours > 0)
+      }
+      if (ahead.inHours > 0) {
         return AppLocalizations.of(context)!.timeAgoInHours(ahead.inHours);
+      }
       return AppLocalizations.of(context)!.timeAgoSoon;
     }
-    if (diff.inSeconds < 60)
+    if (diff.inSeconds < 60) {
       return AppLocalizations.of(context)!.timeAgoJustNow;
-    if (diff.inMinutes < 60)
+    }
+    if (diff.inMinutes < 60) {
       return AppLocalizations.of(context)!.timeAgoMinutes(diff.inMinutes);
-    if (diff.inHours < 24)
+    }
+    if (diff.inHours < 24) {
       return AppLocalizations.of(context)!.timeAgoHours(diff.inHours);
-    if (diff.inDays < 7)
+    }
+    if (diff.inDays < 7) {
       return AppLocalizations.of(context)!.timeAgoDays(diff.inDays);
+    }
     return '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
   }
 

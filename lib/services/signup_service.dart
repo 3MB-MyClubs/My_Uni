@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'academic_year_options.dart';
 import '../l10n/app_localizations.dart';
 import 'auth_service.dart';
 import 'locale_service.dart';
@@ -45,7 +46,15 @@ class SignupService {
   }
 
   Future<List<SignupLookupItem>> fetchAcademicYears() async {
-    return _fetchLookupItems('academic_years');
+    final years = await _fetchLookupItems('academic_years');
+    return ensurePrepAcademicYear(
+      years,
+      nameOf: (year) => year.name,
+      createPrep: () => const SignupLookupItem(
+        id: prepAcademicYearId,
+        name: prepAcademicYearName,
+      ),
+    );
   }
 
   Future<List<SignupLookupItem>> _fetchLookupItems(String tableName) async {

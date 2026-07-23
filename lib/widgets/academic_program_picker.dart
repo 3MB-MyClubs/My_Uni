@@ -215,6 +215,7 @@ class _AcademicProgramPickerSheetState
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: TextField(
+                key: const ValueKey('academic-program-picker-search'),
                 controller: _searchController,
                 focusNode: _searchFocus,
                 autocorrect: false,
@@ -226,7 +227,9 @@ class _AcademicProgramPickerSheetState
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: AppLocalizations.of(context)!.clearSearchTooltip,
+                          tooltip: AppLocalizations.of(
+                            context,
+                          )!.clearSearchTooltip,
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');
@@ -276,6 +279,7 @@ class _AcademicProgramPickerSheetState
                         final program = matches[index];
                         final isSelected = _selected.contains(program);
                         return ListTile(
+                          key: ValueKey('academic-program-$program'),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 3,

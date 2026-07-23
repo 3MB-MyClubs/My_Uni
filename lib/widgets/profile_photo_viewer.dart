@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../services/app_colors.dart';
 import 'loading_skeleton.dart';
 
 void showProfilePhotoViewer({
@@ -45,29 +44,22 @@ class _ProfilePhotoViewer extends StatelessWidget {
               child: InteractiveViewer(
                 minScale: 0.7,
                 maxScale: 5,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.all(Radius.circular(28)),
+                child: ClipOval(
                   child: Image(
                     image: imageProvider,
                     width: imageSize,
                     height: imageSize,
-                    fit: BoxFit.contain,
+                    fit: BoxFit.cover,
                     loadingBuilder: (_, child, progress) => progress == null
                         ? child
-                        : SkeletonBox(width: imageSize, height: imageSize),
+                        : ClipOval(
+                            child: SkeletonBox(
+                              width: imageSize,
+                              height: imageSize,
+                            ),
+                          ),
                   ),
                 ),
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: IconButton.filled(
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.card.withValues(alpha: 0.18),
-                ),
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
               ),
             ),
           ],

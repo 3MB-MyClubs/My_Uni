@@ -549,7 +549,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
       if (!mounted) return;
       if (ok) {
-        contentStore.notifyContentChanged();
         widget.onCreated?.call();
         Navigator.pop(context);
       } else {
