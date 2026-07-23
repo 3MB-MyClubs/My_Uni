@@ -1,7 +1,16 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../services/locale_service.dart';
 import '../data/calendar_event_model.dart';
 import '../services/calendar_service.dart';
 import 'calendar_state.dart';
+
+// No BuildContext is available this deep in the provider layer; these
+// fallbacks are resolved here via the current locale rather than pushed up
+// to a caller that may not exist yet.
+AppLocalizations get _l10n =>
+    lookupAppLocalizations(Locale(localeService.languageCode));
 
 final calendarServiceProvider = Provider<CalendarService>(
   (ref) => CalendarService(),
@@ -23,7 +32,7 @@ class CalendarEventNotifier extends StateNotifier<CalendarAddState> {
     final added = await _service.isAdded(eventId);
     if (mounted) {
       state = added
-          ? const CalendarAddSuccess('Added to calendar')
+          ? CalendarAddSuccess(_l10n.calendarAlreadyAdded)
           : const CalendarAddIdle();
     }
   }
@@ -35,7 +44,7 @@ class CalendarEventNotifier extends StateNotifier<CalendarAddState> {
     var permission = await _service.checkPermission();
 
     if (permission == CalendarPermissionState.unknown) {
-      state = const CalendarAddFailure('Unable to check calendar permissions.');
+      state = CalendarAddFailure(_l10n.calendarPermissionCheckFailed);
       return;
     }
 
@@ -59,10 +68,10 @@ class CalendarEventNotifier extends StateNotifier<CalendarAddState> {
 
     if (result.success) {
       if (!result.isDuplicate) await _service.markAdded(eventId);
-      state = const CalendarAddSuccess('Event added to calendar!');
+      state = CalendarAddSuccess(_l10n.calendarAddedSuccess);
     } else {
       state = CalendarAddFailure(
-        result.error ?? 'Failed to add event to calendar.',
+        result.error ?? _l10n.calendarAddFailedGeneric,
       );
     }
   }

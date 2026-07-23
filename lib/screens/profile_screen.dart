@@ -1,5 +1,6 @@
 import 'dart:io';
-import '../services/app_strings.dart';
+import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/personalization_service.dart';
+import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -20,6 +22,7 @@ import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart' as remote_profile;
 import '../services/student_club_role_service.dart';
 import '../services/supabase_club_service.dart';
@@ -79,14 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   int _contentTab = 0; // 0 = Posts, 1 = Events
   String? _hydratedConnectionsForUserId;
-  static const List<String> _yearOptions = [
-    '1st Year',
-    '2nd Year',
-    '3rd Year',
-    '4th Year',
-    '5th Year',
-    'Graduate',
-  ];
+  static const List<String> _yearOptions = fallbackAcademicYearNames;
 
   Widget _initialAvatar(String name) => Container(
     decoration: BoxDecoration(
@@ -120,31 +116,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     CroppedFile? cropped;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: source,
-        imageQuality: 72,
-        maxWidth: 1024,
-        maxHeight: 1024,
-      );
+      final picked = await picker.pickImage(source: source);
       if (picked == null || !mounted) return;
 
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: 512,
-        maxHeight: 512,
+        maxWidth: PhotoUploadQuality.avatarMaxDimension,
+        maxHeight: PhotoUploadQuality.avatarMaxDimension,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 72,
+        compressQuality: PhotoUploadQuality.jpegQuality,
         uiSettings: [
           IOSUiSettings(
-            title: 'Crop Photo',
+            title: AppLocalizations.of(context)!.cropPhotoTitle,
             aspectRatioLockEnabled: true,
             resetAspectRatioEnabled: true,
             aspectRatioPickerButtonHidden: true,
             cropStyle: CropStyle.circle,
           ),
           AndroidUiSettings(
-            toolbarTitle: 'Crop Photo',
+            toolbarTitle: AppLocalizations.of(context)!.cropPhotoTitle,
             toolbarColor: AppColors.primaryRed,
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: true,
@@ -158,8 +149,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not open photo cropper.'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.couldNotOpenPhotoCropper,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -176,7 +169,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          S.useThisPhoto,
+          AppLocalizations.of(context)!.useThisPhoto,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Center(
@@ -195,7 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              S.cancel,
+              AppLocalizations.of(context)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -208,7 +201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(S.usePhoto),
+            child: Text(AppLocalizations.of(context)!.usePhoto),
           ),
         ],
       ),
@@ -245,8 +238,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(
-                const SnackBar(
-                  content: Text('Could not upload club photo.'),
+                SnackBar(
+                  content: Text(
+                    AppLocalizations.of(context)!.couldNotUploadClubPhoto,
+                  ),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -264,8 +259,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(
-              const SnackBar(
-                content: Text('Photo saved locally, but upload failed.'),
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.photoSavedLocallyUploadFailed,
+                ),
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -291,7 +288,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           title: Text(
-            S.majorYearLabel,
+            AppLocalizations.of(context)!.majorYearLabel,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: AppColors.text,
@@ -302,11 +299,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               AcademicProgramField(
                 value: selectedMajor,
-                hint: S.selectMajorHint,
+                hint: AppLocalizations.of(context)!.selectMajorHint,
                 onTap: () async {
                   final result = await showAcademicProgramPicker(
                     context: ctx,
-                    title: S.selectMajor,
+                    title: AppLocalizations.of(context)!.selectMajor,
                     selected: selectedMajor == null
                         ? const []
                         : [selectedMajor!],
@@ -323,13 +320,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? selectedYear
                     : null,
                 dropdownColor: AppColors.card,
-                decoration: InputDecoration(labelText: S.yearLabel),
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.yearLabel,
+                ),
                 items: _yearOptions
                     .map(
                       (year) => DropdownMenuItem<String>(
                         value: year,
                         child: Text(
-                          year,
+                          academicYearDisplayName(year),
                           style: TextStyle(color: AppColors.text),
                         ),
                       ),
@@ -343,7 +342,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                S.cancel,
+                AppLocalizations.of(context)!.cancel,
                 style: TextStyle(color: AppColors.secondaryText),
               ),
             ),
@@ -354,7 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await userPrefsService.save(userId);
                 if (ctx.mounted) Navigator.pop(ctx);
               },
-              child: Text(S.save),
+              child: Text(AppLocalizations.of(context)!.save),
             ),
           ],
         ),
@@ -375,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          S.bioLabel,
+          AppLocalizations.of(context)!.bioLabel,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: TextField(
@@ -384,7 +383,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           maxLines: 3,
           style: TextStyle(color: AppColors.text),
           decoration: InputDecoration(
-            hintText: S.bioHint,
+            hintText: AppLocalizations.of(context)!.bioHint,
             hintStyle: TextStyle(color: AppColors.secondaryText),
           ),
         ),
@@ -392,7 +391,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              S.cancel,
+              AppLocalizations.of(context)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -402,7 +401,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               await userPrefsService.save(userId);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: Text(S.save),
+            child: Text(AppLocalizations.of(context)!.save),
           ),
         ],
       ),
@@ -432,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               peopleById[id] ??
               User(
                 id: id,
-                name: 'Student profile',
+                name: AppLocalizations.of(context)!.studentProfile,
                 email: '',
                 password: '',
                 role: 'student',
@@ -476,7 +475,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       (club) => club?.id == event.clubId,
       orElse: () => null,
     );
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final hour = event.dateTime.hour.toString().padLeft(2, '0');
     final minute = event.dateTime.minute.toString().padLeft(2, '0');
 
@@ -485,8 +483,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       day: event.dateTime.day.toString(),
       title: event.title,
       clubLine:
-          '${club?.name ?? 'Campus event'} · '
-          '${weekdays[event.dateTime.weekday - 1]} · $hour:$minute',
+          '${club?.name ?? AppLocalizations.of(context)!.campusEventFallback} · '
+          '${DateFormat.E(localeService.languageCode).format(event.dateTime)} · $hour:$minute',
       location: event.location,
     );
   }
@@ -503,7 +501,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("$name's profile link copied to clipboard"),
+        content: Text(AppLocalizations.of(context)!.profileLinkCopied(name)),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -545,7 +543,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    S.followers,
+                    AppLocalizations.of(context)!.followers,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -568,7 +566,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: followers.isEmpty
                     ? Center(
                         child: Text(
-                          S.noFollowersYet,
+                          AppLocalizations.of(context)!.noFollowersYet,
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.secondaryText,
@@ -672,7 +670,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    S.following,
+                    AppLocalizations.of(context)!.following,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -695,7 +693,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: following.isEmpty
                     ? Center(
                         child: Text(
-                          S.notFollowingAnyone,
+                          AppLocalizations.of(context)!.notFollowingAnyone,
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.secondaryText,
@@ -786,7 +784,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              S.changePhoto,
+              AppLocalizations.of(context)!.changePhoto,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -808,14 +806,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               title: Text(
-                S.takePhoto,
+                AppLocalizations.of(context)!.takePhoto,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: AppColors.text,
                 ),
               ),
               subtitle: Text(
-                S.useCamera,
+                AppLocalizations.of(context)!.useCamera,
                 style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
               onTap: () {
@@ -838,14 +836,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               title: Text(
-                S.chooseFromLib,
+                AppLocalizations.of(context)!.chooseFromLib,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: AppColors.text,
                 ),
               ),
               subtitle: Text(
-                S.pickFromLib,
+                AppLocalizations.of(context)!.pickFromLib,
                 style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
               ),
               onTap: () {
@@ -869,7 +867,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 title: Text(
-                  S.removePhoto,
+                  AppLocalizations.of(context)!.removePhoto,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Colors.red.shade400,
@@ -903,9 +901,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'Club photo removed locally, but remote delete failed.',
+                AppLocalizations.of(
+                  context,
+                )!.clubPhotoRemovedLocallyDeleteFailed,
               ),
               behavior: SnackBarBehavior.floating,
             ),
@@ -920,8 +920,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Photo removed locally, but remote delete failed.'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.photoRemovedLocallyDeleteFailed,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -934,7 +936,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = authService.currentUser;
     final admin = authService.currentAdmin;
     final myId = user?.id ?? admin?.id ?? '';
-    final realName = user?.name ?? admin?.name ?? 'Guest';
+    final realName =
+        user?.name ?? admin?.name ?? AppLocalizations.of(context)!.guestName;
     final displayName = userState.displayNameFor(myId, realName);
     final isAdmin = admin != null;
 
@@ -959,7 +962,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 .where((s) => s.clubId == club.id)
                 .length;
             final role =
-                studentClubRoleService.roleTitleFor(club, user.id) ?? 'Member';
+                studentClubRoleService.roleTitleFor(club, user.id) ??
+                AppLocalizations.of(context)!.memberRoleFallback;
             return StudentClubDetail(
               club: club,
               memberCount: memberCount,
@@ -974,10 +978,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               name: name,
               email: user.email,
               graduation: _graduationLabel(year),
-              major: userState.majors[user.id] ?? 'Major not added',
-              year: year ?? 'Year not added',
+              major:
+                  userState.majors[user.id] ??
+                  AppLocalizations.of(context)!.majorNotAdded,
+              year: year ?? AppLocalizations.of(context)!.yearNotAdded,
               bio:
-                  userState.bios[user.id] ?? 'Add a bio to introduce yourself.',
+                  userState.bios[user.id] ??
+                  AppLocalizations.of(context)!.addBioIntro,
               clubs: followedClubs.length,
               followers: followers.length,
               following: following.length,
@@ -1272,9 +1279,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _StatCell(value: '$postCount', label: S.posts),
-                      _StatCell(value: '$eventCount', label: S.events),
-                      _StatCell(value: '$boardMemberCount', label: 'Members'),
+                      _StatCell(
+                        value: '$postCount',
+                        label: AppLocalizations.of(context)!.posts,
+                      ),
+                      _StatCell(
+                        value: '$eventCount',
+                        label: AppLocalizations.of(context)!.events,
+                      ),
+                      _StatCell(
+                        value: '$boardMemberCount',
+                        label: AppLocalizations.of(context)!.membersLabel,
+                      ),
                     ],
                   ),
                 ),
@@ -1332,7 +1348,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    isSuperAdmin ? 'Super Admin' : 'Club Admin',
+                    isSuperAdmin
+                        ? AppLocalizations.of(context)!.superAdmin
+                        : AppLocalizations.of(context)!.clubAdmin,
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white,
@@ -1549,7 +1567,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 if (major.isNotEmpty) major,
                                 if (year.isNotEmpty) year,
                               ].join(' · ')
-                            : S.addMajorYear,
+                            : AppLocalizations.of(context)!.addMajorYear,
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.secondaryText,
@@ -1575,7 +1593,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () => _editBio(context, userId),
             child: bio.isEmpty
                 ? Text(
-                    'Add a bio…',
+                    AppLocalizations.of(context)!.addBio,
                     style: TextStyle(
                       fontSize: 13.5,
                       color: AppColors.secondaryText,
@@ -1626,7 +1644,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _StatsBlock(value: '$clubCount', label: S.clubs),
+                    child: _StatsBlock(
+                      value: '$clubCount',
+                      label: AppLocalizations.of(context)!.clubs,
+                    ),
                   ),
                   VerticalDivider(width: 1, color: AppColors.divider),
                   Expanded(
@@ -1635,7 +1656,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () => _showFollowersSheet(followers),
                       child: _StatsBlock(
                         value: '${followers.length}',
-                        label: S.followers,
+                        label: AppLocalizations.of(context)!.followers,
                       ),
                     ),
                   ),
@@ -1646,7 +1667,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () => _showFollowingSheet(following),
                       child: _StatsBlock(
                         value: '${following.length}',
-                        label: S.following,
+                        label: AppLocalizations.of(context)!.following,
                       ),
                     ),
                   ),
@@ -1686,7 +1707,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    S.myClubs,
+                    AppLocalizations.of(context)!.myClubs,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1739,7 +1760,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           SizedBox(height: 8),
                           Text(
-                            S.noClubsYet,
+                            AppLocalizations.of(context)!.noClubsYet,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.secondaryText,
@@ -1749,7 +1770,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            S.exploreClubsHint,
+                            AppLocalizations.of(context)!.exploreClubsHint,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppColors.secondaryText,
@@ -1860,7 +1881,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        S.boardMembers,
+                        AppLocalizations.of(context)!.boardMembers,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1923,7 +1944,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         SizedBox(height: 6),
                         Text(
-                          S.noBoardMembers,
+                          AppLocalizations.of(context)!.noBoardMembers,
                           style: TextStyle(
                             color: Color(0xFF1565C0),
                             fontSize: 13,
@@ -1932,7 +1953,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          S.approvedHere,
+                          AppLocalizations.of(context)!.approvedHere,
                           style: TextStyle(
                             color: Color(0xFF1565C0),
                             fontSize: 11,
@@ -2031,7 +2052,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                       SizedBox(width: 4),
                                       Text(
-                                        S.board,
+                                        AppLocalizations.of(context)!.board,
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
@@ -2089,7 +2110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Icon(Icons.grid_view_rounded, size: 18, color: clubColor),
                     const SizedBox(width: 8),
                     Text(
-                      S.myContent,
+                      AppLocalizations.of(context)!.myContent,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -2125,7 +2146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Row(
                   children: [
                     _ContentTabChip(
-                      label: S.posts,
+                      label: AppLocalizations.of(context)!.posts,
                       count: myPosts.length,
                       selected: _contentTab == 0,
                       color: clubColor,
@@ -2133,7 +2154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(width: 8),
                     _ContentTabChip(
-                      label: S.events,
+                      label: AppLocalizations.of(context)!.events,
                       count: myEvents.length,
                       selected: _contentTab == 1,
                       color: clubColor,
@@ -2177,7 +2198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              S.cancel,
+              AppLocalizations.of(context)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -2190,7 +2211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(S.delete),
+            child: Text(AppLocalizations.of(context)!.delete),
           ),
         ],
       ),
@@ -2199,7 +2220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildPostsList(List myPosts, Color color, String adminId) {
     if (myPosts.isEmpty) {
-      return _EmptyHint(text: S.noPostsYet);
+      return _EmptyHint(text: AppLocalizations.of(context)!.noPostsYet);
     }
     return Column(
       children: myPosts.map((p) {
@@ -2212,7 +2233,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) => _confirmDelete(S.deletePost, S.deletePostMsg),
+          confirmDismiss: (_) => _confirmDelete(
+            AppLocalizations.of(context)!.deletePost,
+            AppLocalizations.of(context)!.deletePostMsg,
+          ),
           onDismissed: (_) {
             final ok = contentStore.deletePost(p.id, adminId);
             if (mounted) {
@@ -2320,7 +2344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildEventsList(List myEvents, Color color, String adminId) {
     if (myEvents.isEmpty) {
-      return _EmptyHint(text: S.noEventsYet);
+      return _EmptyHint(text: AppLocalizations.of(context)!.noEventsYet);
     }
     return Column(
       children: myEvents.map((e) {
@@ -2332,19 +2356,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         String statusLabel;
         Color statusColor;
         if (isLive) {
-          statusLabel = S.live;
+          statusLabel = AppLocalizations.of(context)!.live;
           statusColor = Colors.green;
         } else if (isPast) {
-          statusLabel = S.ended;
+          statusLabel = AppLocalizations.of(context)!.ended;
           statusColor = AppColors.secondaryText;
         } else if (diff.inDays == 0) {
-          statusLabel = S.today;
+          statusLabel = AppLocalizations.of(context)!.today;
           statusColor = Colors.orange;
         } else if (diff.inDays == 1) {
-          statusLabel = S.tomorrow;
+          statusLabel = AppLocalizations.of(context)!.tomorrow;
           statusColor = color;
         } else {
-          statusLabel = 'In ${diff.inDays}d';
+          statusLabel = AppLocalizations.of(context)!.eventInDays(diff.inDays);
           statusColor = color;
         }
 
@@ -2357,8 +2381,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.red.withValues(alpha: 0.85),
             child: Icon(Icons.delete_outline, color: Colors.white, size: 22),
           ),
-          confirmDismiss: (_) =>
-              _confirmDelete(S.deleteEvent, S.deleteEventMsg),
+          confirmDismiss: (_) => _confirmDelete(
+            AppLocalizations.of(context)!.deleteEvent,
+            AppLocalizations.of(context)!.deleteEventMsg,
+          ),
           onDismissed: (_) {
             final ok = contentStore.deleteEvent(e.id, adminId);
             if (mounted) {
@@ -2479,7 +2505,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Icon(Icons.people_outline, size: 14, color: color),
                         const SizedBox(width: 4),
                         Text(
-                          '${e.attendeeUserIds.length} attending · View RSVPs',
+                          AppLocalizations.of(
+                            context,
+                          )!.attendingViewRsvps(e.attendeeUserIds.length),
                           style: TextStyle(
                             fontSize: 12,
                             color: color,
@@ -2504,45 +2532,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final diff = DateTime.now().difference(dt);
     if (diff.isNegative) {
       final ahead = dt.difference(DateTime.now());
-      if (ahead.inDays > 0) return 'in ${ahead.inDays}d';
-      if (ahead.inHours > 0) return 'in ${ahead.inHours}h';
-      return 'soon';
+      if (ahead.inDays > 0) {
+        return AppLocalizations.of(context)!.timeAgoInDays(ahead.inDays);
+      }
+      if (ahead.inHours > 0) {
+        return AppLocalizations.of(context)!.timeAgoInHours(ahead.inHours);
+      }
+      return AppLocalizations.of(context)!.timeAgoSoon;
     }
-    if (diff.inSeconds < 60) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const m = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${m[dt.month - 1]} ${dt.day}';
+    if (diff.inSeconds < 60) {
+      return AppLocalizations.of(context)!.timeAgoJustNow;
+    }
+    if (diff.inMinutes < 60) {
+      return AppLocalizations.of(context)!.timeAgoMinutes(diff.inMinutes);
+    }
+    if (diff.inHours < 24) {
+      return AppLocalizations.of(context)!.timeAgoHours(diff.inHours);
+    }
+    if (diff.inDays < 7) {
+      return AppLocalizations.of(context)!.timeAgoDays(diff.inDays);
+    }
+    return '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
   }
 
-  String _monthAbbr(int m) => [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ][m - 1];
+  String _monthAbbr(int m) =>
+      DateFormat.MMM(localeService.languageCode).format(DateTime(2024, m));
 }
 
 class _ContentTabChip extends StatelessWidget {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/club_insights_service.dart';
@@ -34,9 +35,9 @@ class ClubInsightsScreen extends StatelessWidget {
               borderRadius: 9,
             ),
             const SizedBox(width: 8),
-            const Text(
-              'Insights',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            Text(
+              AppLocalizations.of(context)!.insightsTitle,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
             ),
           ],
         ),
@@ -50,18 +51,30 @@ class ClubInsightsScreen extends StatelessWidget {
               // ── Overview tiles ──
               Row(
                 children: [
-                  _tile('Followers', data.followers, Icons.people_outline),
+                  _tile(
+                    AppLocalizations.of(context)!.followers,
+                    data.followers,
+                    Icons.people_outline,
+                  ),
                   const SizedBox(width: 10),
-                  _tile('RSVPs', data.totalRsvps, Icons.event_available),
+                  _tile(
+                    AppLocalizations.of(context)!.rsvpsLabel,
+                    data.totalRsvps,
+                    Icons.event_available,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
-                  _tile('Post likes', data.totalLikes, Icons.favorite_border),
+                  _tile(
+                    AppLocalizations.of(context)!.postLikes,
+                    data.totalLikes,
+                    Icons.favorite_border,
+                  ),
                   const SizedBox(width: 10),
                   _tile(
-                    'Post views',
+                    AppLocalizations.of(context)!.postViews,
                     data.totalViews,
                     Icons.visibility_outlined,
                   ),
@@ -71,7 +84,7 @@ class ClubInsightsScreen extends StatelessWidget {
               // ── Top posts ──
               if (data.topPosts.isNotEmpty) ...[
                 const SizedBox(height: 22),
-                _sectionHead('Top posts'),
+                _sectionHead(AppLocalizations.of(context)!.topPosts),
                 const SizedBox(height: 10),
                 for (final stat in data.topPosts) _postRow(stat),
               ],

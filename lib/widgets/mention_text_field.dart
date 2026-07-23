@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
 enum MentionType { club, student }
 
@@ -227,7 +228,11 @@ class _MentionTextFieldState extends State<MentionTextField> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          isClub ? 'Club' : 'Student',
+                          isClub
+                              ? AppLocalizations.of(context)!.mentionTypeClub
+                              : AppLocalizations.of(
+                                  context,
+                                )!.mentionTypeStudent,
                           style: TextStyle(
                             color: AppColors.secondaryText,
                             fontSize: 11,

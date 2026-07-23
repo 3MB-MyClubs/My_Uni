@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -71,7 +72,9 @@ class ClubFollowButton extends ConsumerWidget {
       ),
       child: Center(
         child: Text(
-          isFollowing ? 'Following' : 'Follow',
+          isFollowing
+              ? AppLocalizations.of(context)!.following
+              : AppLocalizations.of(context)!.follow,
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.w600,
