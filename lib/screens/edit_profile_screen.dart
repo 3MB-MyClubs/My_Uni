@@ -1,18 +1,19 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
-import '../services/photo_upload_quality.dart';
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/content_safety_service.dart';
 import '../widgets/academic_program_picker.dart';
+import '../widgets/profile_photo_zoom_editor.dart';
 import '../widgets/user_avatar.dart';
 
 /// Full-page profile editor: name, photo, bio, university year, major,
@@ -32,15 +33,6 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  static const List<String> _fallbackYearOptions = [
-    '1st Year',
-    '2nd Year',
-    '3rd Year',
-    '4th Year',
-    '5th Year',
-    'Graduate',
-  ];
-
   late final TextEditingController _bioCtrl;
 
   String? _year;
@@ -59,7 +51,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<String> get _majorNames =>
       _majors.isEmpty ? kAcademicPrograms : _majors.map((m) => m.name).toList();
   List<String> get _yearOptions => _academicYears.isEmpty
-      ? _fallbackYearOptions
+      ? fallbackAcademicYearNames
       : _academicYears.map((year) => year.name).toList();
 
   @override
@@ -320,64 +312,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    CroppedFile? cropped;
+    Uint8List? editedBytes;
     try {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: source);
       if (picked == null || !mounted) return;
 
-      cropped = await ImageCropper().cropImage(
-        sourcePath: picked.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        maxWidth: PhotoUploadQuality.avatarMaxDimension,
-        maxHeight: PhotoUploadQuality.avatarMaxDimension,
-        compressFormat: ImageCompressFormat.jpg,
-        compressQuality: PhotoUploadQuality.jpegQuality,
-        uiSettings: [
-          IOSUiSettings(
-            title: 'Crop Photo',
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: true,
-            aspectRatioPickerButtonHidden: true,
-            cropStyle: CropStyle.circle,
-          ),
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Photo',
-            toolbarColor: AppColors.primaryRed,
-            toolbarWidgetColor: Colors.white,
-            lockAspectRatio: true,
-            hideBottomControls: false,
-            cropStyle: CropStyle.circle,
-          ),
-        ],
-      );
+      editedBytes = await showProfilePhotoZoomEditor(context, picked.path);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
-            content: Text('Could not open photo cropper.'),
+            content: Text('Could not open the photo editor.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
       return;
     }
-    if (cropped == null || !mounted) return;
+    if (editedBytes == null || !mounted) return;
 
     final docsDir = await getApplicationDocumentsDirectory();
-    final ext = cropped.path.contains('.')
-        ? cropped.path.substring(cropped.path.lastIndexOf('.'))
-        : '.jpg';
-    final permanentPath = '${docsDir.path}/profile_$_userId$ext';
-    await File(cropped.path).copy(permanentPath);
+    final permanentPath = '${docsDir.path}/profile_$_userId.jpg';
+    await File(permanentPath).writeAsBytes(editedBytes, flush: true);
     if (!mounted) return;
     userState.setProfilePhoto(_userId, permanentPath);
     userPrefsService.save(_userId);
     try {
       await studentProfileService.uploadAvatar(
         userId: _userId,
-        bytes: await File(permanentPath).readAsBytes(),
+        bytes: editedBytes,
       );
     } catch (_) {
       if (!mounted) return;
@@ -506,7 +471,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             runSpacing: 8,
             children: _yearOptions.map((y) {
               final on = _year == y;
-              return _choiceChip(y, on, () {
+              return _choiceChip(academicYearDisplayName(y), on, () {
                 setState(() => _year = on ? null : y);
               });
             }).toList(),

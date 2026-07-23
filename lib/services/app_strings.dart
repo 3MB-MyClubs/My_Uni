@@ -71,6 +71,23 @@ class S {
   static String get noOneMatches => _t('No one found', 'Kimse bulunamadı');
   static String get tryNameSearch =>
       _t('Try a name, surname, or email', 'İsim, soyisim veya e-posta dene');
+  static String get filterByMajor =>
+      _t('Filter by major', 'Bölüme göre filtrele');
+  static String get clearMajorFilter =>
+      _t('Clear major filter', 'Bölüm filtresini temizle');
+  static String get searchMajors => _t('Search majors', 'Bölüm ara');
+  static String get noMatchingMajor =>
+      _t('No matching major', 'Eşleşen bölüm yok');
+  static String get clearSearch => _t('Clear search', 'Aramayı temizle');
+  static String get done => _t('Done', 'Bitti');
+  static String peopleResultCount(int count) =>
+      _t(count == 1 ? '1 result' : '$count results', '$count sonuç');
+  static String get noPeopleInSelectedMajor =>
+      _t('No students found in this major', 'Bu bölümde öğrenci bulunamadı');
+  static String get tryAnotherMajorOrName => _t(
+    'Try another major or change the name search',
+    'Başka bir bölüm seç veya isim aramasını değiştir',
+  );
 
   // ── This Week
   static String get discoverEvents =>
@@ -655,6 +672,7 @@ class S {
   );
 
   // ── Profile
+  static String get prepYear => _t('Prep', 'Hazırlık');
   static String get graduate => _t('Graduate', 'Lisansüstü');
 
   // ── Chats

@@ -13,6 +13,7 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/personalization_service.dart';
+import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -80,14 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   int _contentTab = 0; // 0 = Posts, 1 = Events
   String? _hydratedConnectionsForUserId;
-  static const List<String> _yearOptions = [
-    '1st Year',
-    '2nd Year',
-    '3rd Year',
-    '4th Year',
-    '5th Year',
-    'Graduate',
-  ];
+  static const List<String> _yearOptions = fallbackAcademicYearNames;
 
   Widget _initialAvatar(String name) => Container(
     decoration: BoxDecoration(
@@ -325,7 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       (year) => DropdownMenuItem<String>(
                         value: year,
                         child: Text(
-                          year,
+                          academicYearDisplayName(year),
                           style: TextStyle(color: AppColors.text),
                         ),
                       ),

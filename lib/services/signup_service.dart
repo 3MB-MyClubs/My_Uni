@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'academic_year_options.dart';
 import 'auth_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
@@ -36,7 +37,15 @@ class SignupService {
   }
 
   Future<List<SignupLookupItem>> fetchAcademicYears() async {
-    return _fetchLookupItems('academic_years');
+    final years = await _fetchLookupItems('academic_years');
+    return ensurePrepAcademicYear(
+      years,
+      nameOf: (year) => year.name,
+      createPrep: () => const SignupLookupItem(
+        id: prepAcademicYearId,
+        name: prepAcademicYearName,
+      ),
+    );
   }
 
   Future<List<SignupLookupItem>> _fetchLookupItems(String tableName) async {

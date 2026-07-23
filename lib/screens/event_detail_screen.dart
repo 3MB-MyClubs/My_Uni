@@ -73,7 +73,12 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
-  bool get _saved => userState.isSaved(widget.event.id);
+  Event get _event => events.firstWhere(
+    (event) => event.id == widget.event.id,
+    orElse: () => widget.event,
+  );
+
+  bool get _saved => userState.isSaved(_event.id);
 
   String get _currentAdminId => authService.currentAdmin?.id ?? '';
 
@@ -81,22 +86,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   bool get _canDeleteEvent =>
-      contentStore.canDeleteEvent(widget.event.id, _currentAdminId);
+      contentStore.canDeleteEvent(_event.id, _currentAdminId);
 
   // The owning club sees a dedicated, editable admin screen.
-  bool get _ownContent => currentAdminOwnsClubId(widget.event.clubId);
+  bool get _ownContent => currentAdminOwnsClubId(_event.clubId);
 
   bool get _isLive {
     final now = DateTime.now();
-    return !widget.event.dateTime.isAfter(now) &&
-        widget.event.endTime.isAfter(now);
+    return !_event.dateTime.isAfter(now) && _event.endTime.isAfter(now);
   }
 
-  bool get _isPast => !widget.event.endTime.isAfter(DateTime.now());
+  bool get _isPast => !_event.endTime.isAfter(DateTime.now());
 
   @override
   void initState() {
     super.initState();
+    contentStore.addListener(_onContentChanged);
     final userId = authService.currentUser?.id ?? '';
     rsvpStore.seed(
       widget.event.id,
@@ -107,15 +112,25 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     viewTracker.recordView(widget.event.id, viewerId);
   }
 
-  Color get _accent => widget.event.accentColorHex != null
-      ? Color(int.parse('FF${widget.event.accentColorHex}', radix: 16))
+  @override
+  void dispose() {
+    contentStore.removeListener(_onContentChanged);
+    super.dispose();
+  }
+
+  void _onContentChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Color get _accent => _event.accentColorHex != null
+      ? Color(int.parse('FF${_event.accentColorHex}', radix: 16))
       : widget.color;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   void _toggleSaved() {
     if (!authService.isStudentSession) return;
 
-    setState(() => userState.toggleSave(widget.event.id));
+    setState(() => userState.toggleSave(_event.id));
     userPrefsService.save(_currentSessionId);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -134,9 +149,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void _shareEvent() {
     if (!authService.isStudentSession) return;
 
-    Clipboard.setData(
-      ClipboardData(text: 'kuclubs://event/${widget.event.id}'),
-    );
+    Clipboard.setData(ClipboardData(text: 'kuclubs://event/${_event.id}'));
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -190,7 +203,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     ).then((confirmed) async {
       if (confirmed != true || !mounted) return;
       try {
-        await supabaseEventService.deleteEvent(widget.event);
+        await supabaseEventService.deleteEvent(_event);
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context)
@@ -203,7 +216,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           );
         return;
       }
-      final ok = contentStore.deleteEvent(widget.event.id, _currentAdminId);
+      final ok = contentStore.deleteEvent(_event.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context);
@@ -215,7 +228,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   String _countdownLabel() {
     if (_isLive) return 'Happening now';
-    final diff = widget.event.dateTime.difference(DateTime.now());
+    final diff = _event.dateTime.difference(DateTime.now());
     if (diff.isNegative) return 'Ended';
     if (diff.inDays == 0) return 'Today';
     if (diff.inDays == 1) return 'Tomorrow';
@@ -224,7 +237,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   void _openClub() {
     final club = clubs.firstWhere(
-      (c) => c.id == widget.event.clubId,
+      (c) => c.id == _event.clubId,
       orElse: () => clubs.first,
     );
     Navigator.push(
@@ -240,10 +253,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // The owning club sees a dedicated, editable admin screen instead of the
     // student-facing detail.
     if (_ownContent) {
-      return ClubEventAdminScreen(event: widget.event, accent: _accent);
+      return ClubEventAdminScreen(event: _event, accent: _accent);
     }
 
-    final event = widget.event;
+    final event = _event;
     final accent = _accent;
     final hasReg =
         event.registrationUrl != null &&
@@ -452,6 +465,12 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   void initState() {
     super.initState();
     _loadRemoteAttendees();
+  }
+
+  @override
+  void didUpdateWidget(covariant ClubEventAdminScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.event != widget.event) _event = widget.event;
   }
 
   Future<void> _loadRemoteAttendees() async {

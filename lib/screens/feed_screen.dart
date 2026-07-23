@@ -329,7 +329,12 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _onContentChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // The mixed feed and events rail retain Event instances. An edit replaces
+    // the Event in the global list, so a rebuild alone is not enough: discard
+    // the cached instances before rebuilding the Home visuals.
+    _feedCache = null;
+    setState(() {});
   }
 
   void _hydrateVisiblePostViews({bool force = false}) {
@@ -816,7 +821,8 @@ class _FeedScreenState extends State<FeedScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: shown.length,
                 separatorBuilder: (_, i) => const SizedBox(width: 12),
-                itemBuilder: (ctx, i) => _EventRailCard(event: shown[i]),
+                itemBuilder: (ctx, i) =>
+                    _EventRailCard(key: ValueKey(shown[i].id), event: shown[i]),
               ),
             ),
           ],
@@ -946,6 +952,7 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _buildFeedCard(_FeedItem item, int rank) {
     if (item.isEvent) {
       return _EventCard(
+        key: ValueKey(item.id),
         event: item.data as Event,
         score: item.score,
         rank: rank,
@@ -2890,6 +2897,7 @@ class _EventCard extends StatefulWidget {
   final VoidCallback onUpdate;
 
   const _EventCard({
+    super.key,
     required this.event,
     required this.score,
     required this.rank,
@@ -3359,7 +3367,7 @@ class _ActionBtn extends StatelessWidget {
 
 class _EventRailCard extends StatefulWidget {
   final Event event;
-  const _EventRailCard({required this.event});
+  const _EventRailCard({super.key, required this.event});
 
   @override
   State<_EventRailCard> createState() => _EventRailCardState();
