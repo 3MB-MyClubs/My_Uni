@@ -440,6 +440,41 @@ class S {
     'User blocked on this device. The report could not be sent; please try again when online.',
     'Kullanıcı bu cihazda engellendi. Bildirim gönderilemedi; çevrimiçi olduğunda tekrar dene.',
   );
+  static String get blockedAccounts =>
+      _t('Blocked people and clubs', 'Engellenen kişiler ve kulüpler');
+  static String get blockedAccountsSubtitle => _t(
+    'Review and unblock accounts you have hidden.',
+    'Gizlediğin hesapları incele ve engellerini kaldır.',
+  );
+  static String get people => _t('People', 'Kişiler');
+  static String get clubsLabel => _t('Clubs', 'Kulüpler');
+  static String get unblock => _t('Unblock', 'Engeli kaldır');
+  static String unblockQuestion(String name) =>
+      _t('Unblock $name?', '$name için engel kaldırılsın mı?');
+  static String get unblockExplanation => _t(
+    'Their profile and content will appear in your experience again.',
+    'Profili ve içeriği deneyiminde yeniden görünecek.',
+  );
+  static String get unblockFailed => _t(
+    'Could not unblock this account. Please try again.',
+    'Bu hesabın engeli kaldırılamadı. Lütfen tekrar dene.',
+  );
+  static String get noBlockedPeople =>
+      _t('You have not blocked anyone.', 'Engellediğin kimse yok.');
+  static String get noBlockedClubs =>
+      _t('You have not blocked any clubs.', 'Engellediğin kulüp yok.');
+  static String get whyBlockClub =>
+      _t('Why are you blocking this club?', 'Bu kulübü neden engelliyorsun?');
+  static String blockClubQuestion(String name) =>
+      _t('Block $name?', '$name engellensin mi?');
+  static String get blockAndReportClub =>
+      _t('Block and report club', 'Kulübü engelle ve bildir');
+  static String get clubBlockedAndReported =>
+      _t('Club blocked and reported.', 'Kulüp engellendi ve bildirildi.');
+  static String get clubBlockedOffline => _t(
+    'Club blocked on this device. The report could not be sent; please try again when online.',
+    'Kulüp bu cihazda engellendi. Bildirim gönderilemedi; çevrimiçi olduğunda tekrar dene.',
+  );
   static String get postReportedAndRemoved => _t(
     'Post reported and removed from your feed.',
     'Gönderi bildirildi ve akışından kaldırıldı.',

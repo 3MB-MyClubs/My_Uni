@@ -484,10 +484,8 @@ class _EventBody extends StatelessWidget {
         ? 'Tomorrow'
         : 'In $daysAway days';
 
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = clubForId(event.clubId);
+    if (club == null) return const SizedBox.shrink();
 
     return GestureDetector(
       onTap: () => Navigator.push(

@@ -45,32 +45,35 @@ class SupabaseContentService {
         .map((row) => _clubFromRow(Map<String, dynamic>.from(row as Map)))
         .where((club) => club.id.isNotEmpty)
         .toList();
+    final visibleClubIds = nextClubs.map((club) => club.id).toSet();
     await _hydrateBoardMembers(client, nextClubs);
     final nextEvents = (results[1] as List)
         .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
-        .where((event) => event.id.isNotEmpty && event.clubId.isNotEmpty)
+        .where(
+          (event) =>
+              event.id.isNotEmpty && visibleClubIds.contains(event.clubId),
+        )
         .toList();
     var nextPosts = (results[2] as List)
         .map((row) => _postFromRow(Map<String, dynamic>.from(row as Map)))
-        .where((post) => post.id.isNotEmpty && post.clubId.isNotEmpty)
+        .where(
+          (post) => post.id.isNotEmpty && visibleClubIds.contains(post.clubId),
+        )
         .toList();
     nextPosts = await _attachPolls(client, nextPosts);
 
-    if (nextClubs.isNotEmpty) {
-      clubs
-        ..clear()
-        ..addAll(nextClubs);
-    }
-    if (nextEvents.isNotEmpty) {
-      events
-        ..clear()
-        ..addAll(nextEvents);
-    }
-    if (nextPosts.isNotEmpty) {
-      newsPosts
-        ..clear()
-        ..addAll(nextPosts);
-    }
+    // A successful empty response is authoritative. Keeping the previous/mock
+    // rows here could retain content that RLS intentionally filtered out and
+    // later make an orphan event appear under an unrelated fallback club.
+    clubs
+      ..clear()
+      ..addAll(nextClubs);
+    events
+      ..clear()
+      ..addAll(nextEvents);
+    newsPosts
+      ..clear()
+      ..addAll(nextPosts);
   }
 
   Future<void> refreshEngagementCounts() async {

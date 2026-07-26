@@ -223,10 +223,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _openClub() {
-    final club = clubs.firstWhere(
-      (c) => c.id == widget.event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = clubForId(widget.event.clubId);
+    if (club == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1845,10 +1843,8 @@ class _HostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = clubForId(event.clubId);
+    if (club == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(

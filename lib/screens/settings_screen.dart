@@ -21,6 +21,7 @@ import '../services/app_strings.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/club_avatar.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
+import 'blocked_accounts_screen.dart';
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -1030,6 +1031,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
             ],
+
+            const SizedBox(height: 24),
+
+            // ── Safety section ───────────────────────────────────────────────
+            _SectionHeader(title: S.safetyOptions),
+            Container(
+              color: AppColors.card,
+              child: ListTile(
+                leading: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightRed,
+                    borderRadius: const BorderRadius.all(Radius.circular(10)),
+                  ),
+                  child: Icon(
+                    Icons.block_outlined,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  S.blockedAccounts,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+                subtitle: Text(
+                  S.blockedAccountsSubtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.secondaryText,
+                ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BlockedAccountsScreen(),
+                  ),
+                ),
+              ),
+            ),
 
             const SizedBox(height: 24),
 

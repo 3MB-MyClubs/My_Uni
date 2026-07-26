@@ -247,10 +247,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               _buildHeader(totalUnread),
               Expanded(
-                child: all.isEmpty
-                    ? const _BEmpty()
-                    : CustomScrollView(
-                        slivers: [
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: all.isEmpty
+                      ? const [
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _BEmpty(),
+                          ),
+                        ]
+                      : [
                           SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (context, i) => _row(all[i]),
@@ -259,7 +265,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 16)),
                         ],
-                      ),
+                ),
               ),
             ],
           );

@@ -4,10 +4,12 @@ import '../models/event.dart';
 import '../models/news_post.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_follow_service.dart';
 import '../services/mock_data.dart';
+import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
@@ -19,6 +21,7 @@ import '../services/supabase_post_service.dart';
 import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import 'club_insights_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -169,6 +172,67 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       // BOARD tab and header stats reflect them immediately.
       if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _blockClub() async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: S.whyBlockClub,
+    );
+    if (reason == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          S.blockClubQuestion(widget.club.name),
+          style: TextStyle(color: AppColors.text),
+        ),
+        content: Text(
+          S.blockUserExplanation,
+          style: TextStyle(color: AppColors.secondaryText, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(S.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(S.blockAndReportClub),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    userState.followedClubIds.remove(widget.club.id);
+    final myId = authService.currentUser?.id ?? '';
+    await userPrefsService.save(myId);
+
+    var delivered = true;
+    try {
+      await moderationService.blockClub(widget.club.id, reason: reason);
+    } catch (_) {
+      delivered = false;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.maybePop(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            delivered ? S.clubBlockedAndReported : S.clubBlockedOffline,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   String _handleFor(Club club) {
@@ -338,6 +402,37 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     size: 22,
                   ),
                   onPressed: () => widget.onSettings!(),
+                ),
+              if (showFollowAction)
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    color: panelText,
+                    size: 22,
+                  ),
+                  color: AppColors.card,
+                  onSelected: (value) {
+                    if (value == 'block') _blockClub();
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'block',
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.block_rounded,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            S.blockAndReportClub,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
             ],
           ),

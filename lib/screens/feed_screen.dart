@@ -163,6 +163,7 @@ class _FeedScreenState extends State<FeedScreen> {
         events
             .where(
               (e) =>
+                  !moderationService.isClubBlocked(e.clubId) &&
                   e.dateTime.isAfter(now.subtract(const Duration(hours: 2))) &&
                   e.dateTime.isBefore(weekEnd),
             )
@@ -176,7 +177,8 @@ class _FeedScreenState extends State<FeedScreen> {
   Set<String> get _followedIds => userState.followedClubIds;
 
   bool _clubVisible(String clubId) =>
-      !_followedOnly || _followedIds.contains(clubId);
+      !moderationService.isClubBlocked(clubId) &&
+      (!_followedOnly || _followedIds.contains(clubId));
 
   List<_FeedItem> _buildFeed() {
     final items = newsPosts
@@ -2373,7 +2375,8 @@ void _openShareSheet(
 bool _isOwnerOfClub(String clubId) {
   final admin = authService.currentAdmin;
   if (admin == null) return false;
-  final club = clubForId(clubId) ?? clubs.first;
+  final club = clubForId(clubId);
+  if (club == null) return false;
   return clubIsManagedByAdmin(club, admin.id);
 }
 
@@ -3387,7 +3390,8 @@ class _EventRailCardState extends State<_EventRailCard> {
   @override
   Widget build(BuildContext context) {
     final ev = widget.event;
-    final club = clubForId(ev.clubId) ?? clubs.first;
+    final club = clubForId(ev.clubId);
+    if (club == null) return const SizedBox.shrink();
     final idx = clubOrdinal(club.id);
     final color = _colors[idx < 0 ? 0 : idx % _colors.length];
     final now = DateTime.now();

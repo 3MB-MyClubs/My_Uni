@@ -9,6 +9,7 @@ import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
+import '../services/moderation_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
@@ -135,7 +136,10 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     final now = DateTime.now();
     final userId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    for (final e in events.where((e) => e.endTime.isAfter(now))) {
+    for (final e in events.where(
+      (e) =>
+          e.endTime.isAfter(now) && !moderationService.isClubBlocked(e.clubId),
+    )) {
       rsvpStore.seed(e.id, e.attendeeUserIds.contains(userId));
     }
   }
@@ -176,7 +180,12 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     final now = DateTime.now();
     final end = _today.add(const Duration(days: 30));
     return events
-        .where((e) => e.endTime.isAfter(now) && e.dateTime.isBefore(end))
+        .where(
+          (e) =>
+              clubForId(e.clubId) != null &&
+              e.endTime.isAfter(now) &&
+              e.dateTime.isBefore(end),
+        )
         .toList();
   }
 
@@ -184,11 +193,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     if (e.title.toLowerCase().contains(q)) return true;
     if (e.description.toLowerCase().contains(q)) return true;
     if (e.location.toLowerCase().contains(q)) return true;
-    final club = clubs.firstWhere(
-      (c) => c.id == e.clubId,
-      orElse: () => clubs.first,
-    );
-    return club.name.toLowerCase().contains(q);
+    return clubForId(e.clubId)?.name.toLowerCase().contains(q) ?? false;
   }
 
   List<Event> _results() {
@@ -237,6 +242,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     if (viewerId.isEmpty) return [];
     final now = DateTime.now();
     return events.where((event) {
+        if (moderationService.isClubBlocked(event.clubId)) return false;
         if (!_isCreatedInApp(event)) return false;
         if (!event.endTime.isAfter(now)) return false;
         return !viewTracker.viewerIds(event.id).contains(viewerId);
@@ -1987,10 +1993,8 @@ class _NewEventNotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = clubForId(event.clubId);
+    if (club == null) return const SizedBox.shrink();
     final color = _clubColor(event.clubId);
     return GestureDetector(
       onTap: onTap,

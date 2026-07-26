@@ -179,6 +179,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   List<Club> get _filteredClubs {
     final q = _clubQuery.toLowerCase();
     return clubs.where((c) {
+      if (moderationService.isClubBlocked(c.id)) return false;
       final category = categoryFor(c).toLowerCase();
       final matchesQuery =
           q.isEmpty ||
@@ -607,6 +608,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final q = _contentQuery.trim().toLowerCase();
     final now = DateTime.now();
     final list = events.where((e) {
+      if (moderationService.isClubBlocked(e.clubId)) return false;
       if (q.isEmpty) return e.endTime.isAfter(now);
       final clubName = _clubById(e.clubId)?.name.toLowerCase() ?? '';
       return e.title.toLowerCase().contains(q) ||
