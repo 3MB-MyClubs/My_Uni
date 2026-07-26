@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../features/calendar/widgets/add_to_calendar_button.dart';
 import '../models/event.dart';
@@ -11,12 +10,11 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
-import '../services/locale_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/supabase_event_service.dart';
-import '../l10n/app_localizations.dart';
+import '../services/app_strings.dart';
 import '../services/checkin_store.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/user_prefs_service.dart';
@@ -46,7 +44,7 @@ Widget _eventHeroImage({required String path, required Color accent}) {
       url: path,
       fit: BoxFit.cover,
       // Full-bleed hero — wider than a feed banner but still bounded well
-      // under typical upload resolutions (up to 3840px).
+      // under typical upload resolutions (up to 1920px).
       cacheWidth: 800,
       placeholderBuilder: (_) => const SkeletonBox(),
       errorBuilder: (_) => _GradientHero(color: accent),
@@ -75,12 +73,7 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
-  Event get _event => events.firstWhere(
-    (event) => event.id == widget.event.id,
-    orElse: () => widget.event,
-  );
-
-  bool get _saved => userState.isSaved(_event.id);
+  bool get _saved => userState.isSaved(widget.event.id);
 
   String get _currentAdminId => authService.currentAdmin?.id ?? '';
 
@@ -88,22 +81,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   bool get _canDeleteEvent =>
-      contentStore.canDeleteEvent(_event.id, _currentAdminId);
+      contentStore.canDeleteEvent(widget.event.id, _currentAdminId);
 
   // The owning club sees a dedicated, editable admin screen.
-  bool get _ownContent => currentAdminOwnsClubId(_event.clubId);
+  bool get _ownContent => currentAdminOwnsClubId(widget.event.clubId);
 
   bool get _isLive {
     final now = DateTime.now();
-    return !_event.dateTime.isAfter(now) && _event.endTime.isAfter(now);
+    return !widget.event.dateTime.isAfter(now) &&
+        widget.event.endTime.isAfter(now);
   }
 
-  bool get _isPast => !_event.endTime.isAfter(DateTime.now());
+  bool get _isPast => !widget.event.endTime.isAfter(DateTime.now());
 
   @override
   void initState() {
     super.initState();
-    contentStore.addListener(_onContentChanged);
     final userId = authService.currentUser?.id ?? '';
     rsvpStore.seed(
       widget.event.id,
@@ -114,35 +107,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     viewTracker.recordView(widget.event.id, viewerId);
   }
 
-  @override
-  void dispose() {
-    contentStore.removeListener(_onContentChanged);
-    super.dispose();
-  }
-
-  void _onContentChanged() {
-    if (mounted) setState(() {});
-  }
-
-  Color get _accent => _event.accentColorHex != null
-      ? Color(int.parse('FF${_event.accentColorHex}', radix: 16))
+  Color get _accent => widget.event.accentColorHex != null
+      ? Color(int.parse('FF${widget.event.accentColorHex}', radix: 16))
       : widget.color;
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   void _toggleSaved() {
     if (!authService.isStudentSession) return;
 
-    setState(() => userState.toggleSave(_event.id));
+    setState(() => userState.toggleSave(widget.event.id));
     userPrefsService.save(_currentSessionId);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            _saved
-                ? AppLocalizations.of(context)!.savedToEvents
-                : AppLocalizations.of(context)!.removedFromSaved,
-          ),
+          content: Text(_saved ? 'Saved to your events' : 'Removed from saved'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: _saved ? _accent : null,
           shape: RoundedRectangleBorder(
@@ -155,12 +134,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void _shareEvent() {
     if (!authService.isStudentSession) return;
 
-    Clipboard.setData(ClipboardData(text: 'kuclubs://event/${_event.id}'));
+    Clipboard.setData(
+      ClipboardData(text: 'kuclubs://event/${widget.event.id}'),
+    );
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.eventLinkCopied),
+          content: const Text('Event link copied to clipboard'),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -178,18 +159,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          AppLocalizations.of(context)!.deleteEvent,
+          'Delete event?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Text(
-          AppLocalizations.of(context)!.deleteEventMsg,
+          'This event will be permanently removed.',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -202,29 +183,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context)!.delete),
+            child: const Text('Delete'),
           ),
         ],
       ),
     ).then((confirmed) async {
       if (confirmed != true || !mounted) return;
       try {
-        await supabaseEventService.deleteEvent(_event);
+        await supabaseEventService.deleteEvent(widget.event);
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!.couldNotDeleteEventSupabase,
-              ),
+            const SnackBar(
+              content: Text('Could not delete event from Supabase.'),
               behavior: SnackBarBehavior.floating,
             ),
           );
         return;
       }
-      final ok = contentStore.deleteEvent(_event.id, _currentAdminId);
+      final ok = contentStore.deleteEvent(widget.event.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context);
@@ -235,19 +214,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   String _countdownLabel() {
-    if (_isLive) return AppLocalizations.of(context)!.happeningNow;
-    final diff = _event.dateTime.difference(DateTime.now());
-    if (diff.isNegative) return AppLocalizations.of(context)!.ended;
-    if (diff.inDays == 0) return AppLocalizations.of(context)!.today;
-    if (diff.inDays == 1) return AppLocalizations.of(context)!.tomorrow;
-    return AppLocalizations.of(context)!.inDaysCount(diff.inDays);
+    if (_isLive) return 'Happening now';
+    final diff = widget.event.dateTime.difference(DateTime.now());
+    if (diff.isNegative) return 'Ended';
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Tomorrow';
+    return 'In ${diff.inDays} days';
   }
 
   void _openClub() {
-    final club = clubs.firstWhere(
-      (c) => c.id == _event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = clubForId(widget.event.clubId);
+    if (club == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -261,10 +238,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // The owning club sees a dedicated, editable admin screen instead of the
     // student-facing detail.
     if (_ownContent) {
-      return ClubEventAdminScreen(event: _event, accent: _accent);
+      return ClubEventAdminScreen(event: widget.event, accent: _accent);
     }
 
-    final event = _event;
+    final event = widget.event;
     final accent = _accent;
     final hasReg =
         event.registrationUrl != null &&
@@ -353,7 +330,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SecHead(AppLocalizations.of(context)!.aboutThisEvent),
+                        const _SecHead('About this event'),
                         const SizedBox(height: 12),
                         Text(
                           event.description,
@@ -374,7 +351,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SecHead(AppLocalizations.of(context)!.tags),
+                          const _SecHead('Tags'),
                           const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
@@ -395,7 +372,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SecHead(AppLocalizations.of(context)!.programme),
+                          const _SecHead('Programme'),
                           const SizedBox(height: 12),
                           _ProgrammeTimeline(
                             slots: event.schedule!,
@@ -407,9 +384,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                   // Speakers
                   if (hasSpeakers) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                      child: _SecHead(AppLocalizations.of(context)!.speakers),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 24, 16, 0),
+                      child: _SecHead('Speakers'),
                     ),
                     const SizedBox(height: 12),
                     _SpeakersRow(speakers: event.speakers),
@@ -475,12 +452,6 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
     _loadRemoteAttendees();
   }
 
-  @override
-  void didUpdateWidget(covariant ClubEventAdminScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.event != widget.event) _event = widget.event;
-  }
-
   Future<void> _loadRemoteAttendees() async {
     final attendees = await supabaseInteractionService.fetchEventAttendees(
       _event.id,
@@ -490,12 +461,12 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   }
 
   String _countdownLabel() {
-    if (_isLive) return AppLocalizations.of(context)!.happeningNow;
+    if (_isLive) return 'Happening now';
     final diff = _event.dateTime.difference(DateTime.now());
-    if (diff.isNegative) return AppLocalizations.of(context)!.ended;
-    if (diff.inDays == 0) return AppLocalizations.of(context)!.today;
-    if (diff.inDays == 1) return AppLocalizations.of(context)!.tomorrow;
-    return AppLocalizations.of(context)!.inDaysCount(diff.inDays);
+    if (diff.isNegative) return 'Ended';
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Tomorrow';
+    return 'In ${diff.inDays} days';
   }
 
   void _refresh() {
@@ -520,20 +491,19 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          AppLocalizations.of(context)!.deleteThisEventConfirm,
+          'Delete this event?',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Text(
-          AppLocalizations.of(
-            context,
-          )!.deleteEventPermanentWarning(_event.title),
+          '"${_event.title}" and all RSVP data will be permanently removed. '
+          'This cannot be undone.',
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              AppLocalizations.of(context)!.cancel,
+              'Cancel',
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -546,7 +516,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context)!.deleteEventButton),
+            child: const Text('Delete Event'),
           ),
         ],
       ),
@@ -559,10 +529,8 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!.couldNotDeleteEventSupabase,
-              ),
+            const SnackBar(
+              content: Text('Could not delete event from Supabase.'),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -639,9 +607,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _isPast
-                                ? AppLocalizations.of(context)!.attendedBadge
-                                : AppLocalizations.of(context)!.rsvpsBadge,
+                            _isPast ? 'ATTENDED' : 'RSVPs',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -692,10 +658,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _AdminSecHead(
-                          AppLocalizations.of(context)!.aboutThisEvent,
-                          onEdit: _openEdit,
-                        ),
+                        _AdminSecHead('About this event', onEdit: _openEdit),
                         const SizedBox(height: 12),
                         Text(
                           _event.description,
@@ -727,10 +690,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _AdminSecHead(
-                            AppLocalizations.of(context)!.agenda,
-                            onEdit: _openEdit,
-                          ),
+                          _AdminSecHead('Agenda', onEdit: _openEdit),
                           const SizedBox(height: 12),
                           _ProgrammeTimeline(
                             slots: _event.schedule!,
@@ -744,10 +704,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                   if (hasSpeakers) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                      child: _AdminSecHead(
-                        AppLocalizations.of(context)!.speakers,
-                        onEdit: _openEdit,
-                      ),
+                      child: _AdminSecHead('Speakers', onEdit: _openEdit),
                     ),
                     const SizedBox(height: 12),
                     _SpeakersRow(speakers: _event.speakers),
@@ -779,9 +736,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                     child: ElevatedButton.icon(
                       onPressed: _openEdit,
                       icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: Text(
-                        AppLocalizations.of(context)!.editEventButton,
-                      ),
+                      label: const Text('Edit Event'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: widget.accent,
                         foregroundColor: Colors.white,
@@ -802,9 +757,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _confirmDelete,
                       icon: const Icon(Icons.delete_outline_rounded, size: 17),
-                      label: Text(
-                        AppLocalizations.of(context)!.deleteEventButton,
-                      ),
+                      label: const Text('Delete Event'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: BorderSide(
@@ -918,9 +871,9 @@ class _AdminHero extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        AppLocalizations.of(context)!.managingBadge,
-                        style: const TextStyle(
+                      const Text(
+                        'MANAGING',
+                        style: TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.8,
@@ -964,9 +917,7 @@ class _AdminHero extends StatelessWidget {
                       borderRadius: BorderRadius.all(Radius.circular(999)),
                     ),
                     child: Text(
-                      isLive
-                          ? AppLocalizations.of(context)!.happeningNowBadge
-                          : AppLocalizations.of(context)!.upcomingBadge,
+                      isLive ? 'HAPPENING NOW' : 'UPCOMING',
                       style: TextStyle(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w800,
@@ -1024,7 +975,7 @@ class _AdminAttendees extends StatelessWidget {
         Row(
           children: [
             Text(
-              AppLocalizations.of(context)!.attendees,
+              'Attendees',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -1036,7 +987,7 @@ class _AdminAttendees extends StatelessWidget {
             ListenableBuilder(
               listenable: checkinStore,
               builder: (_, _) => Text(
-                '${AppLocalizations.of(context)!.checkedInCounter(checkinStore.countFor(event.id), attendees.length)} · ${AppLocalizations.of(context)!.totalCount(attendees.length)}',
+                '${S.checkedInCounter(checkinStore.countFor(event.id), attendees.length)} · ${attendees.length} total',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -1059,7 +1010,7 @@ class _AdminAttendees extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 22),
                   child: Center(
                     child: Text(
-                      AppLocalizations.of(context)!.noRsvpsYet,
+                      'No RSVPs yet.',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.secondaryText,
@@ -1182,9 +1133,7 @@ class _AdminAttendees extends StatelessWidget {
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
-                                            AppLocalizations.of(
-                                              context,
-                                            )!.checkedIn,
+                                            S.checkedIn,
                                             style: TextStyle(
                                               fontSize: 10.5,
                                               fontWeight: FontWeight.w700,
@@ -1246,7 +1195,7 @@ class _AdminSecHead extends StatelessWidget {
             color: AppColors.secondaryText,
           ),
           label: Text(
-            AppLocalizations.of(context)!.edit,
+            'Edit',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -1434,12 +1383,12 @@ class _StatusPill extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            const _PulseDot(color: Colors.white),
-            const SizedBox(width: 6),
+          children: const [
+            _PulseDot(color: Colors.white),
+            SizedBox(width: 6),
             Text(
-              AppLocalizations.of(context)!.happeningNowBadge,
-              style: const TextStyle(
+              'HAPPENING NOW',
+              style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
@@ -1450,9 +1399,7 @@ class _StatusPill extends StatelessWidget {
         ),
       );
     }
-    final label = isPast
-        ? AppLocalizations.of(context)!.pastBadge
-        : AppLocalizations.of(context)!.upcomingBadge;
+    final label = isPast ? 'PAST' : 'UPCOMING';
     final bg = isPast ? Colors.black.withValues(alpha: 0.55) : accent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
@@ -1567,6 +1514,32 @@ class _TicketCard extends StatelessWidget {
     required this.takenSeats,
   });
 
+  static const _months = [
+    '',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
+  ];
+  static const _wdays = [
+    '',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
   String _two(int n) => n.toString().padLeft(2, '0');
 
   @override
@@ -1613,9 +1586,7 @@ class _TicketCard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              DateFormat.MMM(
-                                localeService.languageCode,
-                              ).format(dt).toUpperCase(),
+                              _months[dt.month],
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
@@ -1636,9 +1607,7 @@ class _TicketCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              DateFormat.EEEE(
-                                localeService.languageCode,
-                              ).format(dt),
+                              _wdays[dt.weekday],
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -1813,16 +1782,27 @@ class _CapacityBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                AppLocalizations.of(context)!.seatsTaken(taken, capacity),
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.text.withValues(alpha: 0.8),
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.text.withValues(alpha: 0.8),
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '$taken',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    TextSpan(text: ' of $capacity seats taken'),
+                  ],
                 ),
               ),
               const Spacer(),
               Text(
-                AppLocalizations.of(context)!.percentFull(pct),
+                '$pct% full',
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w700,
@@ -1863,10 +1843,8 @@ class _HostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final club = clubs.firstWhere(
-      (c) => c.id == event.clubId,
-      orElse: () => clubs.first,
-    );
+    final club = clubForId(event.clubId);
+    if (club == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
@@ -1891,7 +1869,7 @@ class _HostCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  AppLocalizations.of(context)!.hostedBy,
+                  'HOSTED BY',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -1937,7 +1915,7 @@ class _HostCard extends StatelessWidget {
                 ),
               ),
               child: Text(
-                AppLocalizations.of(context)!.view,
+                'View',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -1983,9 +1961,7 @@ class _RegistrationCard extends StatelessWidget {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotOpenRegistrationForm,
-            ),
+            content: const Text("Couldn't open the registration form"),
             behavior: SnackBarBehavior.floating,
             backgroundColor: accent,
             shape: RoundedRectangleBorder(
@@ -2026,7 +2002,7 @@ class _RegistrationCard extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        AppLocalizations.of(context)!.registration,
+                        'Registration',
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
@@ -2044,7 +2020,7 @@ class _RegistrationCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    AppLocalizations.of(context)!.signUpOnClubForm(_pretty),
+                    "Sign up on the club's form · $_pretty",
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -2277,9 +2253,7 @@ class _SpeakersRow extends StatelessWidget {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.couldNotOpenLinkedIn(s.name),
-            ),
+            content: Text("Couldn't open ${s.name}'s LinkedIn"),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -2394,8 +2368,8 @@ class _StickyCtaState extends State<_StickyCta> {
         SnackBar(
           content: Text(
             _remind
-                ? AppLocalizations.of(context)!.reminderSetMsg
-                : AppLocalizations.of(context)!.reminderRemoved,
+                ? "Reminder set — we'll alert you before it starts"
+                : 'Reminder removed',
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: _remind ? widget.accent : null,

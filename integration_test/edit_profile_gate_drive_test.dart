@@ -10,7 +10,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/onboarding/onboarding_service.dart';
+import 'package:flutter_application_1/services/tutorial_service.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +23,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await onboardingService.initialize();
+    await tutorialService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(false);
   }

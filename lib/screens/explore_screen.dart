@@ -1,27 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../l10n/app_localizations.dart';
+import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
-import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/moderation_service.dart';
 import '../services/club_follow_helper.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
-import '../onboarding/onboarding_anchors.dart';
+import '../services/tutorial_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
-import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -58,13 +54,12 @@ class _ExploreScreenState extends State<ExploreScreen>
   // People tab state
   final _peopleSearchController = TextEditingController();
   String _peopleQuery = '';
-  String? _selectedPeopleMajor;
   String? _peopleFeedback;
   bool _peopleFeedbackIsFollowing = false;
   int _peopleFeedbackVersion = 0;
   List<User> _people = const [];
   bool _peopleLoading = false;
-  bool _peopleHasError = false;
+  String? _peopleError;
 
   // Palette for the colored monograms (mirrors the design's per-item hues).
   static const List<Color> _hues = [
@@ -123,7 +118,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     }
   }
 
-  static String categoryFor(BuildContext context, Club club) {
+  static String categoryFor(Club club) {
     final category = club.categoryName?.trim();
     if (category != null && category.isNotEmpty) return category;
 
@@ -139,13 +134,13 @@ class _ExploreScreenState extends State<ExploreScreen>
       'kuswe',
       'kuacm',
     ])) {
-      return AppLocalizations.of(context)!.categoryEngineering;
+      return 'Engineering';
     }
     if (has(['ekonomi', 'girişimcilik', 'işletme', 'pazarlama', 'politik'])) {
-      return AppLocalizations.of(context)!.categoryBusiness;
+      return 'Business';
     }
     if (has(['dağcılık', 'fenerbahçe', 'kartal', 'spor'])) {
-      return AppLocalizations.of(context)!.categorySports;
+      return 'Sports';
     }
     if (has([
       'sanat',
@@ -163,7 +158,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       'thm',
       'koro',
     ])) {
-      return AppLocalizations.of(context)!.categoryArts;
+      return 'Arts';
     }
     if (has([
       'gönüllü',
@@ -174,17 +169,18 @@ class _ExploreScreenState extends State<ExploreScreen>
       'düşünce',
       'dayanışma',
     ])) {
-      return AppLocalizations.of(context)!.categorySocial;
+      return 'Social';
     }
     // Felsefe, Hukuk, Tarih, Tıp, Hemşirelik, Nöroloji, Münazara, Beşeri,
     // Türk Araştırmaları, Arkeoloji, Atatürkçü … and anything else.
-    return AppLocalizations.of(context)!.categoryAcademic;
+    return 'Academic';
   }
 
   List<Club> get _filteredClubs {
     final q = _clubQuery.toLowerCase();
     return clubs.where((c) {
-      final category = categoryFor(context, c).toLowerCase();
+      if (moderationService.isClubBlocked(c.id)) return false;
+      final category = categoryFor(c).toLowerCase();
       final matchesQuery =
           q.isEmpty ||
           c.name.toLowerCase().contains(q) ||
@@ -230,58 +226,15 @@ class _ExploreScreenState extends State<ExploreScreen>
     return 4;
   }
 
-  List<User> get _peopleDirectory {
-    final byId = <String, User>{
-      for (final person in peopleService.cachedPeople) person.id: person,
-      for (final person in _people) person.id: person,
-    };
-    return byId.values.toList();
-  }
-
-  List<String> get _majorFilterOptions {
-    final options = <String>[...kAcademicPrograms];
-    final normalized = options.map((major) => major.toLowerCase()).toSet();
-    final additional = <String>[];
-    for (final person in _peopleDirectory) {
-      final major = userState.majors[person.id]?.trim() ?? '';
-      if (major.isNotEmpty && normalized.add(major.toLowerCase())) {
-        additional.add(major);
-      }
-    }
-    additional.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return [...options, ...additional];
-  }
-
-  Future<void> _choosePeopleMajor() async {
-    final result = await showAcademicProgramPicker(
-      context: context,
-      title: S.filterByMajor,
-      selected: _selectedPeopleMajor == null
-          ? const []
-          : [_selectedPeopleMajor!],
-      programs: _majorFilterOptions,
-    );
-    if (result == null || !mounted) return;
-    setState(() {
-      _selectedPeopleMajor = result.isEmpty ? null : result.first;
-    });
-  }
-
-  void _clearPeopleMajor() => setState(() => _selectedPeopleMajor = null);
-
   /// Search by first name, surname, or display name, with strongest matches first.
   List<User> get _filteredPeople {
     final q = _peopleQuery.toLowerCase().trim();
-    final selectedMajor = _selectedPeopleMajor?.trim().toLowerCase() ?? '';
-    if (q.isEmpty && selectedMajor.isEmpty) return _randomPeoplePreview;
+    if (q.isEmpty) return _randomPeoplePreview;
 
-    final matches = _peopleDirectory.where((person) {
+    final matches = _people.where((person) {
       if (person.id == _myId || moderationService.isUserBlocked(person.id)) {
         return false;
       }
-      final major = userState.majors[person.id]?.trim().toLowerCase() ?? '';
-      if (selectedMajor.isNotEmpty && major != selectedMajor) return false;
-      if (q.isEmpty) return true;
       final name = userState
           .displayNameFor(person.id, person.name)
           .toLowerCase();
@@ -289,16 +242,14 @@ class _ExploreScreenState extends State<ExploreScreen>
       return name.contains(q) || email.contains(q);
     }).toList();
     matches.sort((a, b) {
-      if (q.isNotEmpty) {
-        final byRelevance = _personSearchScore(
-          a,
-          q,
-        ).compareTo(_personSearchScore(b, q));
-        if (byRelevance != 0) return byRelevance;
-      }
+      final byRelevance = _personSearchScore(
+        a,
+        q,
+      ).compareTo(_personSearchScore(b, q));
+      if (byRelevance != 0) return byRelevance;
       final aName = userState.displayNameFor(a.id, a.name);
       final bName = userState.displayNameFor(b.id, b.name);
-      return aName.toLowerCase().compareTo(bName.toLowerCase());
+      return aName.compareTo(bName);
     });
     return matches;
   }
@@ -307,7 +258,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final preview = peopleService.randomProfiles(excludeId: _myId);
     final source = preview.isNotEmpty
         ? preview
-        : _peopleDirectory.where((person) => person.id != _myId).toList();
+        : _people.where((person) => person.id != _myId).toList();
     return source
         .where((person) => !moderationService.isUserBlocked(person.id))
         .take(10)
@@ -320,7 +271,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (_peopleLoading) return;
     setState(() {
       _peopleLoading = true;
-      _peopleHasError = false;
+      _peopleError = null;
     });
 
     try {
@@ -336,7 +287,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       setState(() {
         _people = users.where((user) => user.id != _myId).toList();
         _peopleLoading = false;
-        _peopleHasError = true;
+        _peopleError = 'Could not load people from profiles.';
       });
     }
   }
@@ -353,8 +304,8 @@ class _ExploreScreenState extends State<ExploreScreen>
     setState(() {
       _peopleFeedbackIsFollowing = nowFollowing;
       _peopleFeedback = nowFollowing
-          ? AppLocalizations.of(context)!.nowFollowingPerson(person.name)
-          : AppLocalizations.of(context)!.unfollowedPerson(person.name);
+          ? 'You are now following ${person.name}.'
+          : 'You unfollowed ${person.name}.';
     });
 
     try {
@@ -370,7 +321,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       if (!mounted) return;
       setState(() {
         _peopleFeedbackIsFollowing = !nowFollowing;
-        _peopleFeedback = AppLocalizations.of(context)!.couldNotUpdateFollow;
+        _peopleFeedback = 'Could not update follow. Please try again.';
       });
       return;
     }
@@ -389,7 +340,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         backgroundColor: AppColors.card,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          AppLocalizations.of(context)!.explore,
+          S.explore,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         bottom: TabBar(
@@ -398,9 +349,9 @@ class _ExploreScreenState extends State<ExploreScreen>
           unselectedLabelColor: AppColors.secondaryText,
           indicatorColor: AppColors.primaryRed,
           tabs: [
-            Tab(text: AppLocalizations.of(context)!.discoverClubs),
-            Tab(text: AppLocalizations.of(context)!.exploreContentTab),
-            Tab(text: AppLocalizations.of(context)!.findPeople),
+            Tab(text: S.discoverClubs),
+            Tab(text: S.exploreContentTab),
+            Tab(text: S.findPeople),
           ],
         ),
       ),
@@ -586,8 +537,8 @@ class _ExploreScreenState extends State<ExploreScreen>
     final filtered = _filteredClubs;
     final filtering = _clubQuery.isNotEmpty;
     final label = filtering
-        ? AppLocalizations.of(context)!.clubsCountLabel(filtered.length)
-        : AppLocalizations.of(context)!.allClubs;
+        ? '${filtered.length} club${filtered.length == 1 ? '' : 's'}'
+        : S.allClubs;
 
     return Column(
       children: [
@@ -597,12 +548,10 @@ class _ExploreScreenState extends State<ExploreScreen>
             children: [
               _searchField(
                 controller: _clubSearchController,
-                hint: AppLocalizations.of(context)!.searchClubs,
+                hint: S.searchClubs,
                 value: _clubQuery,
                 onChanged: (v) => setState(() => _clubQuery = v),
-                anchorKey: onboardingAnchors.keyFor(
-                  OnboardingAnchors.searchField,
-                ),
+                anchorKey: tutorialAnchors.keyFor(TutorialAnchors.searchField),
               ),
             ],
           ),
@@ -610,10 +559,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: filtered.isEmpty
-              ? _emptyState(
-                  AppLocalizations.of(context)!.noClubsMatch,
-                  AppLocalizations.of(context)!.tryDifferentSearch,
-                )
+              ? _emptyState(S.noClubsMatch, S.tryDifferentSearch)
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -627,7 +573,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                     final club = filtered[i - 1];
                     return _ClubRow(
                       club: club,
-                      category: categoryFor(context, club),
+                      category: categoryFor(club),
                       members: clubMemberCount(club.id),
                       color: _hueFor(clubOrdinal(club.id)),
                       joined: userState.isFollowing(club.id),
@@ -662,6 +608,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final q = _contentQuery.trim().toLowerCase();
     final now = DateTime.now();
     final list = events.where((e) {
+      if (moderationService.isClubBlocked(e.clubId)) return false;
       if (q.isEmpty) return e.endTime.isAfter(now);
       final clubName = _clubById(e.clubId)?.name.toLowerCase() ?? '';
       return e.title.toLowerCase().contains(q) ||
@@ -682,7 +629,7 @@ class _ExploreScreenState extends State<ExploreScreen>
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: _searchField(
             controller: _contentSearchController,
-            hint: AppLocalizations.of(context)!.searchEventsPosts,
+            hint: S.searchEventsPosts,
             value: _contentQuery,
             onChanged: (v) => setState(() => _contentQuery = v),
           ),
@@ -690,10 +637,7 @@ class _ExploreScreenState extends State<ExploreScreen>
         const SizedBox(height: 14),
         Expanded(
           child: matchedEvents.isEmpty
-              ? _emptyState(
-                  AppLocalizations.of(context)!.noContentMatch,
-                  AppLocalizations.of(context)!.tryDifferentSearch,
-                )
+              ? _emptyState(S.noContentMatch, S.tryDifferentSearch)
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -706,8 +650,8 @@ class _ExploreScreenState extends State<ExploreScreen>
                     if (i == 0) {
                       return _sectionLabel(
                         searching
-                            ? '${AppLocalizations.of(context)!.filterEvents} · ${matchedEvents.length}'
-                            : AppLocalizations.of(context)!.upcomingEvents,
+                            ? '${S.filterEvents} · ${matchedEvents.length}'
+                            : S.upcomingEvents,
                       );
                     }
                     return _eventResultRow(matchedEvents[i - 1]);
@@ -717,6 +661,16 @@ class _ExploreScreenState extends State<ExploreScreen>
       ],
     );
   }
+
+  static const List<String> _weekdayLabels = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
 
   Widget _eventResultRow(Event event) {
     final club = _clubById(event.clubId);
@@ -787,7 +741,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                         ),
                       ),
                       child: Text(
-                        '${DateFormat.E(localeService.languageCode).format(date)}. $time',
+                        '${_weekdayLabels[date.weekday - 1]}. $time',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -842,8 +796,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    club?.name ??
-                        AppLocalizations.of(context)!.campusEventFallback,
+                    club?.name ?? 'Campus event',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -864,33 +817,12 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   // ─── Find People tab ─────────────────────────────────────────────────────
 
-  Widget _peopleResultsLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        text.toUpperCase(),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 10,
-          letterSpacing: 0.9,
-          fontWeight: FontWeight.w600,
-          color: AppColors.secondaryText,
-        ),
-      ),
-    );
-  }
-
   Widget _buildPeopleTab() {
     final searching = _peopleQuery.trim().isNotEmpty;
-    final filteringByMajor = _selectedPeopleMajor != null;
     final people = _filteredPeople;
 
-    final label = searching || filteringByMajor
-        ? [
-            if (filteringByMajor) _selectedPeopleMajor!,
-            AppLocalizations.of(context)!.resultsCountLabel(people.length),
-          ].join(' · ')
+    final label = searching
+        ? '${people.length} result${people.length == 1 ? '' : 's'}'
         : '';
 
     return Column(
@@ -905,63 +837,15 @@ class _ExploreScreenState extends State<ExploreScreen>
                 value: _peopleQuery,
                 onChanged: (v) => setState(() => _peopleQuery = v),
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.sizeOf(context).width - 32,
-                  ),
-                  child: InputChip(
-                    key: const ValueKey('people-major-filter'),
-                    avatar: Icon(
-                      Icons.school_outlined,
-                      size: 17,
-                      color: filteringByMajor
-                          ? AppColors.primaryRed
-                          : AppColors.secondaryText,
-                    ),
-                    label: Text(
-                      _selectedPeopleMajor ?? S.filterByMajor,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    selected: filteringByMajor,
-                    showCheckmark: false,
-                    backgroundColor: AppColors.card,
-                    selectedColor: AppColors.lightRed,
-                    side: BorderSide(
-                      color: filteringByMajor
-                          ? AppColors.primaryRed.withValues(alpha: 0.42)
-                          : AppColors.divider,
-                    ),
-                    labelStyle: TextStyle(
-                      color: filteringByMajor
-                          ? AppColors.primaryRed
-                          : AppColors.text,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    deleteIcon: Icon(
-                      Icons.close_rounded,
-                      key: const ValueKey('clear-people-major-filter'),
-                      size: 17,
-                      color: AppColors.primaryRed,
-                    ),
-                    deleteButtonTooltipMessage: S.clearMajorFilter,
-                    onDeleted: filteringByMajor ? _clearPeopleMajor : null,
-                    onPressed: _choosePeopleMajor,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ),
-              if (_peopleHasError && !_peopleLoading && people.isEmpty) ...[
+              if (_peopleError != null &&
+                  !_peopleLoading &&
+                  people.isEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        AppLocalizations.of(context)!.couldNotLoadPeople,
+                        _peopleError ?? '',
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.secondaryText,
@@ -981,7 +865,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                       opacity: animation,
                       child: SizeTransition(
                         sizeFactor: animation,
-                        axisAlignment: -1,
+                        alignment: Alignment.topCenter,
                         child: child,
                       ),
                     );
@@ -1056,7 +940,7 @@ class _ExploreScreenState extends State<ExploreScreen>
               if (i == 0) {
                 return label.isEmpty
                     ? const SizedBox.shrink()
-                    : _peopleResultsLabel(label);
+                    : _sectionLabel(label);
               }
               if (_peopleLoading && people.isEmpty) {
                 return const _PersonRowSkeleton();
@@ -1065,14 +949,8 @@ class _ExploreScreenState extends State<ExploreScreen>
                 return SizedBox(
                   height: 340,
                   child: _emptyState(
-                    filteringByMajor
-                        ? S.noPeopleInSelectedMajor
-                        : AppLocalizations.of(context)!.noOneMatches,
-                    filteringByMajor
-                        ? S.tryAnotherMajorOrName
-                        : searching
-                        ? AppLocalizations.of(context)!.tryNameSearch
-                        : AppLocalizations.of(context)!.profilesWillAppear,
+                    S.noOneMatches,
+                    searching ? S.tryNameSearch : S.profilesWillAppear,
                   ),
                 );
               }
@@ -1125,9 +1003,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     if (major != null && major.isNotEmpty) {
       return year != null && year.isNotEmpty ? '$major · $year' : major;
     }
-    return u.email.isNotEmpty
-        ? u.email
-        : AppLocalizations.of(context)!.studentProfile;
+    return u.email.isNotEmpty ? u.email : S.studentProfile;
   }
 }
 
@@ -1203,9 +1079,7 @@ class _ClubRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    AppLocalizations.of(
-                      context,
-                    )!.membersCategoryLabel(members, category),
+                    '$members members · $category',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -1219,8 +1093,8 @@ class _ClubRow extends StatelessWidget {
             const SizedBox(width: 10),
             toggleBuilder(
               active: joined,
-              activeLabel: AppLocalizations.of(context)!.joined,
-              inactiveLabel: AppLocalizations.of(context)!.join,
+              activeLabel: S.joined,
+              inactiveLabel: S.join,
               onTap: onJoin,
             ),
           ],
@@ -1470,9 +1344,7 @@ class _PersonRowState extends State<_PersonRow> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            _displayFollowing
-                                ? AppLocalizations.of(context)!.following
-                                : AppLocalizations.of(context)!.follow,
+                            _displayFollowing ? S.following : S.follow,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,

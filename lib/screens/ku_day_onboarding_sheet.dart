@@ -7,7 +7,6 @@ import '../services/personalization_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
-import '../l10n/app_localizations.dart';
 
 /// Lightweight onboarding bottom sheet: interests → major → times → clubs.
 /// Call via [showKuDayOnboarding].
@@ -161,7 +160,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
     key: ValueKey('ku-day-skip-step-$_step'),
     onPressed: _skip,
     child: Text(
-      AppLocalizations.of(context)!.skipSetup,
+      'Skip setup',
       style: TextStyle(
         color: AppColors.secondaryText,
         fontSize: 13,
@@ -191,7 +190,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.auto_awesome_rounded,
                 color: AppColors.primaryRed,
                 size: 22,
@@ -203,7 +202,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AppLocalizations.of(context)!.yourKuDay,
+                    'Your KU Day',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -211,7 +210,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     ),
                   ),
                   Text(
-                    AppLocalizations.of(context)!.quickSetupSteps,
+                    'Quick setup — just 4 steps',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -225,7 +224,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         ),
         const SizedBox(height: 24),
         Text(
-          AppLocalizations.of(context)!.whatAreYouInto,
+          'What are you into?',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -234,7 +233,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         ),
         const SizedBox(height: 6),
         Text(
-          AppLocalizations.of(context)!.pickAsManyInterests,
+          'Pick as many as you like. We\'ll surface what matters to you.',
           style: TextStyle(
             fontSize: 13,
             color: AppColors.secondaryText,
@@ -305,7 +304,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              AppLocalizations.of(context)!.nextArrow,
+              'Next →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
@@ -339,7 +338,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                AppLocalizations.of(context)!.whatsYourMajor,
+                'What\'s your major?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -354,7 +353,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         Padding(
           padding: EdgeInsets.only(left: 30),
           child: Text(
-            AppLocalizations.of(context)!.suggestClubsFitField,
+            'We\'ll suggest clubs that fit your field.',
             style: TextStyle(
               fontSize: 13,
               color: AppColors.secondaryText,
@@ -476,7 +475,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              AppLocalizations.of(context)!.nextArrow,
+              'Next →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
@@ -517,7 +516,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                AppLocalizations.of(context)!.whenDoYouHaveTime,
+                'When do you usually have time?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -532,7 +531,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         Padding(
           padding: EdgeInsets.only(left: 30),
           child: Text(
-            AppLocalizations.of(context)!.prioritiseEventsSchedule,
+            'We\'ll prioritise events that fit your schedule.',
             style: TextStyle(
               fontSize: 13,
               color: AppColors.secondaryText,
@@ -606,7 +605,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              AppLocalizations.of(context)!.nextArrow,
+              'Next →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
@@ -669,7 +668,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AppLocalizations.of(context)!.clubsPickedForYou,
+                    'Clubs picked for you',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -677,7 +676,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     ),
                   ),
                   Text(
-                    AppLocalizations.of(context)!.followToSeePosts,
+                    'Follow to see their posts.',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -696,7 +695,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               onPressed: () =>
                   setState(() => _followedInOnboarding.addAll(recommended)),
               child: Text(
-                AppLocalizations.of(context)!.followAll,
+                'Follow all',
                 style: TextStyle(
                   color: AppColors.primaryRed,
                   fontSize: 13,
@@ -743,7 +742,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Center(
               child: Text(
-                AppLocalizations.of(context)!.noNewClubsToSuggest,
+                'No new clubs to suggest — you\'re already well-connected!',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
               ),
@@ -823,9 +822,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                                 ),
                               ),
                               child: Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!.interestMatchCount(matchCount),
+                                '$matchCount interest match${matchCount > 1 ? 'es' : ''}',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: AppColors.accentGold,
@@ -864,9 +861,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                           ),
                         ),
                         child: Text(
-                          isFollowed
-                              ? AppLocalizations.of(context)!.following
-                              : AppLocalizations.of(context)!.follow,
+                          isFollowed ? 'Following' : 'Follow',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -897,18 +892,40 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              AppLocalizations.of(context)!.letsGoArrow,
+              'Let\'s go →',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
         ),
         const SizedBox(height: 8),
         Center(
-          child: Text(
-            AppLocalizations.of(
-              context,
-            )!.followingClubsCount(_followedInOnboarding.length),
-            style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Following ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+                TextSpan(
+                  text: '${_followedInOnboarding.length}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primaryRed,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(
+                  text: ' clubs',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

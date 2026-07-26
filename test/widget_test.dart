@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/main.dart';
@@ -26,7 +25,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Authentication is inaccessible until the agreement is accepted.
-    expect(find.text('KOÇ UNIVERSITY'), findsOneWidget);
+    expect(find.text('Koç University'), findsOneWidget);
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Sign up'), findsOneWidget);
   });
@@ -37,8 +36,6 @@ void main() {
     var signUpTapped = false;
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
         home: LoginScreen(
           onLogin: () {},
           onSignUp: () => signUpTapped = true,
@@ -62,15 +59,7 @@ void main() {
   ) async {
     await localeService.setLanguage('en');
     await tester.pumpWidget(
-      ListenableBuilder(
-        listenable: localeService,
-        builder: (context, _) => MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: Locale(localeService.languageCode),
-          home: TermsAcceptanceScreen(onAccepted: () async {}),
-        ),
-      ),
+      MaterialApp(home: TermsAcceptanceScreen(onAccepted: () async {})),
     );
 
     await tester.tap(find.text('TR'));
