@@ -41,12 +41,14 @@ import 'services/terms_acceptance_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SupabaseConfig.validate();
 
   await Future.wait([
     if (SupabaseConfig.isConfigured)
       Supabase.initialize(
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.clientKey,
+        debug: false,
       ),
     hiveBootstrap.initialize(),
   ]);

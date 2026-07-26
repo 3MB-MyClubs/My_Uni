@@ -37,7 +37,7 @@ void main() {
     // Not related to the nav bar redesign under test, so sidestep it here by
     // emptying the feed rather than touching feed_screen.dart.
     newsPosts.clear();
-    authService.login('alice@ku.edu.tr');
+    authService.login('alice@ku.edu.tr', '111111');
     await onboardingService.complete(authService.currentUser!.id);
     await themeService.setDark(dark);
 

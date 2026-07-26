@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/event.dart';
 import 'supabase_config.dart';
@@ -147,8 +148,7 @@ class SupabaseEventService {
     }
 
     final bytes = await File(imagePath).readAsBytes();
-    final objectPath =
-        'events/$clubId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final objectPath = 'events/$clubId/${const Uuid().v4()}.jpg';
 
     await client.storage
         .from(_imageBucket)
@@ -156,8 +156,9 @@ class SupabaseEventService {
           objectPath,
           bytes,
           fileOptions: const FileOptions(
-            upsert: true,
+            upsert: false,
             contentType: 'image/jpeg',
+            cacheControl: '31536000',
           ),
         );
 

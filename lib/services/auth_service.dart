@@ -12,6 +12,7 @@ import 'supabase_interaction_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
 import 'app_presence_service.dart';
+import 'lazy_content_loader.dart';
 import 'people_service.dart';
 
 // ...existing code...
@@ -29,6 +30,7 @@ class AuthService {
       _currentUser!.role == 'student';
 
   void setClubAdmin(AppAdmin admin) {
+    lazyContentLoader.invalidate();
     _currentAdmin = admin;
     _currentUser = null;
   }
@@ -74,14 +76,13 @@ class AuthService {
     return isValidNewStudentPassword(password);
   }
 
-  bool login(String email, [String? password]) {
-    if (email == appAdmin.email &&
-        (password == null || appAdmin.password == password)) {
+  bool login(String email, String password) {
+    if (email == appAdmin.email && appAdmin.password == password) {
       _currentAdmin = appAdmin;
       return true;
     }
     final clubAdmin = clubAdmins.firstWhere(
-      (a) => a.email == email && (password == null || a.password == password),
+      (a) => a.email == email && a.password == password,
       orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
     );
     if (clubAdmin.id.isNotEmpty) {
@@ -89,7 +90,7 @@ class AuthService {
       return true;
     }
     final user = users.firstWhere(
-      (u) => u.email == email && (password == null || u.password == password),
+      (u) => u.email == email && u.password == password,
       orElse: () => User(
         id: '',
         name: '',
@@ -112,11 +113,19 @@ class AuthService {
     final isMockAdmin =
         appAdmin.email.toLowerCase() == normalizedEmail ||
         clubAdmins.any((a) => a.email.toLowerCase() == normalizedEmail);
-    if (isMockAdmin) {
+    if (SupabaseConfig.canUseMockAuth && isMockAdmin) {
       return isValidClubPassword(password) && login(email, password);
     }
 
     if (!isValidStudentPassword(password)) return false;
+    if (SupabaseConfig.canUseMockAuth &&
+        users.any(
+          (user) =>
+              user.email.toLowerCase() == normalizedEmail &&
+              user.password == password,
+        )) {
+      return login(email, password);
+    }
 
     if (SupabaseConfig.isConfigured) {
       try {
@@ -126,6 +135,7 @@ class AuthService {
         );
         final authUser = response.user;
         if (authUser == null) return false;
+        lazyContentLoader.invalidate();
 
         // Login blocks only on the single `profiles` row (name/email/role/
         // avatar/bio); interests, majors and minors hydrate in the background
@@ -170,7 +180,7 @@ class AuthService {
       }
     }
 
-    return login(email, password);
+    return SupabaseConfig.canUseMockAuth && login(email, password);
   }
 
   Future<void> _hydrateStudentState(String userId) async {
@@ -313,17 +323,22 @@ class AuthService {
     }
   }
 
-  void logout() {
-    unawaited(appPresenceService.stop());
+  Future<void> logout() async {
+    final presenceStop = appPresenceService.stop();
+    lazyContentLoader.invalidate();
+    _currentUser = null;
+    _currentAdmin = null;
+
     if (SupabaseConfig.isConfigured) {
       try {
-        unawaited(Supabase.instance.client.auth.signOut());
+        // Wait for token removal so a fast account switch cannot race a
+        // previous session's asynchronous sign-out.
+        await Supabase.instance.client.auth.signOut();
       } catch (_) {
         // Tests may exercise logout without bootstrapping Supabase.
       }
     }
-    _currentUser = null;
-    _currentAdmin = null;
+    await presenceStop;
   }
 }
 

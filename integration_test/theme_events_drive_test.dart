@@ -19,14 +19,15 @@ void main() {
     await binding.takeScreenshot(name);
   }
 
-  testWidgets('First-time theme picker — light, preview dark, proceed',
-      (tester) async {
+  testWidgets('First-time theme picker — light, preview dark, proceed', (
+    tester,
+  ) async {
     await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await themeService.initialize();
     contentStore.applyToLists();
-    authService.login('htuncay23@ku.edu.tr');
+    authService.login('htuncay23@ku.edu.tr', '111111');
     await themeService.setDark(false); // first-time = light
 
     var chosen = false;
@@ -37,13 +38,13 @@ void main() {
           builder: (context, _) => ProviderScope(
             child: MaterialApp(
               debugShowCheckedModeBanner: false,
-              themeMode:
-                  themeService.isDark ? ThemeMode.dark : ThemeMode.light,
+              themeMode: themeService.isDark ? ThemeMode.dark : ThemeMode.light,
               theme: ThemeData(brightness: Brightness.light),
               darkTheme: ThemeData(brightness: Brightness.dark),
               home: chosen
                   ? const Scaffold(
-                      body: Center(child: Text('Proceeded to the app')))
+                      body: Center(child: Text('Proceeded to the app')),
+                    )
                   : ThemeChoiceScreen(
                       onChoose: (d) {
                         themeService.setDark(d);
@@ -87,7 +88,7 @@ void main() {
     await contentStore.initialize();
     await themeService.initialize();
     contentStore.applyToLists();
-    authService.login('htuncay23@ku.edu.tr');
+    authService.login('htuncay23@ku.edu.tr', '111111');
     await themeService.setDark(false);
 
     await tester.pumpWidget(
@@ -106,7 +107,10 @@ void main() {
 
     // Pull down to refresh and capture the spinner mid-refresh.
     await tester.fling(
-        find.byType(Scrollable).first, const Offset(0, 320), 1000);
+      find.byType(Scrollable).first,
+      const Offset(0, 320),
+      1000,
+    );
     await tester.pump(); // start the indicator
     await tester.pump(const Duration(milliseconds: 200));
     await shot(tester, 'ev-02-refreshing');

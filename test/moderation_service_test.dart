@@ -10,7 +10,7 @@ void main() {
     'reported posts are hidden immediately and persist for the account',
     () async {
       SharedPreferences.setMockInitialValues({});
-      authService.login('alice@ku.edu.tr');
+      authService.login('alice@ku.edu.tr', '111111');
       final userId = authService.currentUser!.id;
       await moderationService.activateForUser(userId);
 
@@ -34,7 +34,7 @@ void main() {
 
   test('blocking a user hides posts authored by that user', () async {
     SharedPreferences.setMockInitialValues({});
-    authService.login('alice@ku.edu.tr');
+    authService.login('alice@ku.edu.tr', '111111');
     final userId = authService.currentUser!.id;
     await moderationService.activateForUser(userId);
 
@@ -53,7 +53,7 @@ void main() {
 
   test('unblocking a user restores their posts', () async {
     SharedPreferences.setMockInitialValues({});
-    authService.login('alice@ku.edu.tr');
+    authService.login('alice@ku.edu.tr', '111111');
     final userId = authService.currentUser!.id;
     await moderationService.activateForUser(userId);
     await moderationService.blockUser('u4', reason: 'harassment');
@@ -73,7 +73,7 @@ void main() {
 
   test('blocking and unblocking a club controls its posts', () async {
     SharedPreferences.setMockInitialValues({});
-    authService.login('alice@ku.edu.tr');
+    authService.login('alice@ku.edu.tr', '111111');
     final userId = authService.currentUser!.id;
     await moderationService.activateForUser(userId);
 

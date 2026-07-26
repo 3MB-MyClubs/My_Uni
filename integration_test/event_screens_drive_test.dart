@@ -36,17 +36,17 @@ void main() {
   }
 
   Widget wrap(Widget home) => ListenableBuilder(
-        listenable: themeService,
-        builder: (context, _) => ProviderScope(
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            themeMode: themeService.isDark ? ThemeMode.dark : ThemeMode.light,
-            theme: ThemeData(brightness: Brightness.light),
-            darkTheme: ThemeData(brightness: Brightness.dark),
-            home: home,
-          ),
-        ),
-      );
+    listenable: themeService,
+    builder: (context, _) => ProviderScope(
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        themeMode: themeService.isDark ? ThemeMode.dark : ThemeMode.light,
+        theme: ThemeData(brightness: Brightness.light),
+        darkTheme: ThemeData(brightness: Brightness.dark),
+        home: home,
+      ),
+    ),
+  );
 
   testWidgets('Club creates event — form with new sections', (tester) async {
     await boot();
@@ -69,7 +69,7 @@ void main() {
 
   testWidgets('Attendee sees event — full detail + sticky CTA', (tester) async {
     await boot();
-    authService.login('htuncay23@ku.edu.tr'); // a student attendee
+    authService.login('htuncay23@ku.edu.tr', '111111'); // a student attendee
 
     final now = DateTime.now();
     final event = Event(
@@ -88,17 +88,36 @@ void main() {
       capacity: 120,
       registrationUrl: 'https://forms.gle/kuadk-panel',
       speakers: const [
-        EventSpeaker(name: 'Prof. Elif Yıldız', role: 'History', linkedin: 'https://linkedin.com/in/elif-yildiz'),
-        EventSpeaker(name: 'Dr. Mert Kaya', role: 'Pol. Sci.', linkedin: 'https://linkedin.com/in/mert-kaya'),
+        EventSpeaker(
+          name: 'Prof. Elif Yıldız',
+          role: 'History',
+          linkedin: 'https://linkedin.com/in/elif-yildiz',
+        ),
+        EventSpeaker(
+          name: 'Dr. Mert Kaya',
+          role: 'Pol. Sci.',
+          linkedin: 'https://linkedin.com/in/mert-kaya',
+        ),
         EventSpeaker(name: 'Prof. Selin Aydın', role: 'Law'),
       ],
       schedule: [
-        EventSlot(time: now.add(const Duration(days: 3, hours: 2)), title: 'Opening remarks', subtitle: 'Club president'),
-        EventSlot(time: now.add(const Duration(days: 3, hours: 3)), title: 'Panel', subtitle: '4 speakers', isHighlighted: true),
+        EventSlot(
+          time: now.add(const Duration(days: 3, hours: 2)),
+          title: 'Opening remarks',
+          subtitle: 'Club president',
+        ),
+        EventSlot(
+          time: now.add(const Duration(days: 3, hours: 3)),
+          title: 'Panel',
+          subtitle: '4 speakers',
+          isHighlighted: true,
+        ),
       ],
     );
 
-    await tester.pumpWidget(wrap(EventDetailScreen(event: event, color: AppColors.primaryRed)));
+    await tester.pumpWidget(
+      wrap(EventDetailScreen(event: event, color: AppColors.primaryRed)),
+    );
     await tester.pump(const Duration(milliseconds: 600));
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();

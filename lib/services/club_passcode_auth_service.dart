@@ -59,6 +59,18 @@ class ClubPasscodeAuthService {
       );
     }
 
+    if (SupabaseConfig.canUseMockAuth) {
+      final mockAdmin = clubAdmins.firstWhere(
+        (admin) =>
+            admin.email.toLowerCase() == normalizedEmail &&
+            admin.password == normalizedPasscode,
+        orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
+      );
+      if (mockAdmin.id.isNotEmpty) {
+        return ClubPasscodeAuthResult.success(mockAdmin);
+      }
+    }
+
     if (SupabaseConfig.isConfigured) {
       try {
         final client = Supabase.instance.client;
@@ -111,8 +123,9 @@ class ClubPasscodeAuthService {
         final club = Map<String, dynamic>.from(linkedClubs.first as Map);
         final clubName =
             club['name']?.toString() ??
-            lookupAppLocalizations(Locale(localeService.languageCode))
-                .clubFallbackName;
+            lookupAppLocalizations(
+              Locale(localeService.languageCode),
+            ).clubFallbackName;
         final clubEmail = club['email']?.toString() ?? normalizedEmail;
         return ClubPasscodeAuthResult.success(
           AppAdmin(id: clubId, name: clubName, email: clubEmail, password: ''),
@@ -130,14 +143,10 @@ class ClubPasscodeAuthService {
       }
     }
 
-    final mockAdmin = clubAdmins.firstWhere(
-      (admin) =>
-          admin.email.toLowerCase() == normalizedEmail &&
-          admin.password == normalizedPasscode,
-      orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
-    );
-    if (mockAdmin.id.isNotEmpty) {
-      return ClubPasscodeAuthResult.success(mockAdmin);
+    if (!SupabaseConfig.canUseMockAuth) {
+      return ClubPasscodeAuthResult.failure(
+        ClubPasscodeAuthError.notConfigured,
+      );
     }
     return ClubPasscodeAuthResult.failure(
       ClubPasscodeAuthError.invalidCredentials,

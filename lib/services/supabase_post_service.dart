@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/news_post.dart';
 import 'content_safety_service.dart';
@@ -117,8 +118,7 @@ class SupabasePostService {
 
     final file = File(imagePath);
     final bytes = await file.readAsBytes();
-    final objectPath =
-        'club_posts/$clubId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final objectPath = 'club_posts/$clubId/${const Uuid().v4()}.jpg';
 
     await client.storage
         .from(_imageBucket)
@@ -126,8 +126,9 @@ class SupabasePostService {
           objectPath,
           bytes,
           fileOptions: const FileOptions(
-            upsert: true,
+            upsert: false,
             contentType: 'image/jpeg',
+            cacheControl: '31536000',
           ),
         );
 

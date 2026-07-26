@@ -13,6 +13,8 @@ import 'supabase_club_service.dart';
 import 'user_state.dart';
 
 class SupabaseContentService {
+  bool _hasAppliedRemoteContent = false;
+
   // No BuildContext is available this deep in the service layer; these
   // fallback labels are resolved here via the current locale.
   AppLocalizations get _l10n =>
@@ -23,9 +25,9 @@ class SupabaseContentService {
     return Supabase.instance.client;
   }
 
-  Future<void> refreshPublicContent() async {
+  Future<bool> refreshPublicContent({bool Function()? shouldApply}) async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) return true;
 
     // Events older than EventCleanupService's 24h-past-end retention window
     // are already permanently deleted, so this cutoff (with margin for
@@ -35,16 +37,22 @@ class SupabaseContentService {
         .subtract(const Duration(days: 2))
         .toIso8601String();
     final results = await Future.wait([
-      client.from('clubs').select('*, club_categories(name)'),
+      client
+          .from('clubs')
+          .select(
+            'id, name, short_name, description, logo_url, category_id, email, club_categories(name)',
+          ),
       client
           .from('events')
-          .select()
+          .select(
+            'id, club_id, title, description, location, image_url, starts_at, ends_at, image_path, created_by_user_id, tags, registration_url, schedule, speakers',
+          )
           .gte('starts_at', eventsCutoff)
           .order('starts_at', ascending: true)
           .limit(500),
       client
           .from('club_posts')
-          .select()
+          .select('id, club_id, content, image_url, image_path, created_at')
           .order('created_at', ascending: false)
           .limit(500),
     ]);
@@ -68,7 +76,9 @@ class SupabaseContentService {
           (post) => post.id.isNotEmpty && visibleClubIds.contains(post.clubId),
         )
         .toList();
-    nextPosts = await _attachPolls(client, nextPosts);
+    nextPosts = await _attachPolls(client, nextPosts, shouldApply: shouldApply);
+
+    if (shouldApply != null && !shouldApply()) return false;
 
     // A successful empty response is authoritative. Keeping the previous/mock
     // rows here could retain content that RLS intentionally filtered out and
@@ -82,11 +92,13 @@ class SupabaseContentService {
     newsPosts
       ..clear()
       ..addAll(nextPosts);
+    _hasAppliedRemoteContent = true;
+    return true;
   }
 
-  Future<void> refreshEngagementCounts() async {
+  Future<bool> refreshEngagementCounts({bool Function()? shouldApply}) async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) return true;
 
     final nextMemberCounts = <String, int>{};
     final nextPostLikeCounts = <String, int>{};
@@ -159,6 +171,8 @@ class SupabaseContentService {
       }
     }
 
+    if (shouldApply != null && !shouldApply()) return false;
+
     for (final event in events) {
       final attendeeIds = nextEventRsvpIds[event.id];
       if (attendeeIds == null) continue;
@@ -173,6 +187,22 @@ class SupabaseContentService {
     supabasePostLikeCounts
       ..clear()
       ..addAll(nextPostLikeCounts);
+    return true;
+  }
+
+  /// Removes only snapshots that came from Supabase.
+  ///
+  /// Local/mock fixtures remain intact in widget tests and offline builds, but
+  /// RLS-filtered rows from one authenticated account cannot remain visible
+  /// while another account signs in.
+  void clearSessionContent() {
+    if (!_hasAppliedRemoteContent) return;
+    clubs.clear();
+    events.clear();
+    newsPosts.clear();
+    supabaseClubMemberCounts.clear();
+    supabasePostLikeCounts.clear();
+    _hasAppliedRemoteContent = false;
   }
 
   Club _clubFromRow(Map<String, dynamic> row) {
@@ -257,13 +287,14 @@ class SupabaseContentService {
     return Event(
       id: _string(row, ['id']),
       clubId: _string(row, ['club_id', 'clubId']),
-      title: _string(row, ['title', 'name'], fallback: _l10n.eventFallbackTitle),
+      title: _string(row, [
+        'title',
+        'name',
+      ], fallback: _l10n.eventFallbackTitle),
       description: _string(row, ['description']),
-      location: _string(
-        row,
-        ['location'],
-        fallback: _l10n.campusFallbackLocation,
-      ),
+      location: _string(row, [
+        'location',
+      ], fallback: _l10n.campusFallbackLocation),
       dateTime: start ?? DateTime.now(),
       endTime: end ?? DateTime.now().add(const Duration(hours: 2)),
       attendeeUserIds: _stringList(
@@ -353,8 +384,9 @@ class SupabaseContentService {
   /// Supabase project) degrades gracefully to poll-less posts.
   Future<List<NewsPost>> _attachPolls(
     SupabaseClient client,
-    List<NewsPost> posts,
-  ) async {
+    List<NewsPost> posts, {
+    bool Function()? shouldApply,
+  }) async {
     if (posts.isEmpty) return posts;
     try {
       final rows = await client
@@ -378,7 +410,7 @@ class SupabaseContentService {
 
       // One batched poll_votes query for every poll on the feed, instead of
       // two queries per poll card at render time.
-      await _seedPollVotes(client, pollsByPostId);
+      await _seedPollVotes(client, pollsByPostId, shouldApply: shouldApply);
 
       return [
         for (final post in posts)
@@ -408,8 +440,9 @@ class SupabaseContentService {
   /// hydrate queries. Degrades independently of poll attachment.
   Future<void> _seedPollVotes(
     SupabaseClient client,
-    Map<String, PollData> pollsByPostId,
-  ) async {
+    Map<String, PollData> pollsByPostId, {
+    bool Function()? shouldApply,
+  }) async {
     try {
       final postIdByPollId = <String, String>{
         for (final entry in pollsByPostId.entries)
@@ -435,6 +468,7 @@ class SupabaseContentService {
         }
         votesByPostId[postId]![profileId] = optionIndex;
       }
+      if (shouldApply != null && !shouldApply()) return;
       pollStore.seedRemoteVotes(votesByPostId);
     } catch (_) {
       // Poll cards fall back to their own lazy hydrate.

@@ -1,52 +1,175 @@
 import 'dart:async';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'event_cleanup_service.dart';
 import 'supabase_content_service.dart';
+import 'supabase_config.dart';
+
+typedef GuardedContentRefresh =
+    Future<bool> Function(bool Function() shouldApply);
+typedef ContentCacheScopeProvider = String Function();
 
 class LazyContentLoader {
+  LazyContentLoader({
+    Duration contentTtl = const Duration(minutes: 2),
+    Duration countsTtl = const Duration(seconds: 30),
+    DateTime Function()? now,
+    ContentCacheScopeProvider? scopeProvider,
+    GuardedContentRefresh? contentRefresh,
+    GuardedContentRefresh? countsRefresh,
+    Future<void> Function()? cleanupExpiredEvents,
+  }) : _contentTtl = contentTtl,
+       _countsTtl = countsTtl,
+       _now = now ?? DateTime.now,
+       _scopeProvider = scopeProvider ?? _supabaseScope,
+       _contentRefresh = contentRefresh ?? _refreshPublicContent,
+       _countsRefresh = countsRefresh ?? _refreshEngagementCounts,
+       _cleanupExpiredEvents =
+           cleanupExpiredEvents ?? eventCleanupService.cleanupExpiredEvents;
+
+  final Duration _contentTtl;
+  final Duration _countsTtl;
+  final DateTime Function() _now;
+  final ContentCacheScopeProvider _scopeProvider;
+  final GuardedContentRefresh _contentRefresh;
+  final GuardedContentRefresh _countsRefresh;
+  final Future<void> Function() _cleanupExpiredEvents;
+
   Future<void>? _contentLoad;
   Future<void>? _countLoad;
-  bool _contentLoaded = false;
-  bool _countsLoaded = false;
+  DateTime? _contentLoadedAt;
+  DateTime? _countsLoadedAt;
+  String? _cacheScope;
+  int _generation = 0;
 
-  Future<void> ensureContentLoaded() {
-    if (_contentLoaded) return Future.value();
-    return _contentLoad ??= _loadContent();
+  Future<void> ensureContentLoaded({bool force = false}) {
+    final request = _requestContext();
+    if (!force && _isFresh(_contentLoadedAt, _contentTtl)) {
+      return Future.value();
+    }
+
+    final inFlight = _contentLoad;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> future;
+    future = _loadContent(request).whenComplete(() {
+      if (identical(_contentLoad, future)) _contentLoad = null;
+    });
+    _contentLoad = future;
+    return future;
   }
 
   Future<void> refreshContent() async {
-    _contentLoaded = false;
-    _countsLoaded = false;
+    _requestContext();
+    await ensureContentLoaded(force: true);
+    await ensureCountsLoaded(force: true);
+  }
+
+  Future<void> ensureCountsLoaded({bool force = false}) {
+    final request = _requestContext();
+    if (!force && _isFresh(_countsLoadedAt, _countsTtl)) {
+      return Future.value();
+    }
+
+    final inFlight = _countLoad;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> future;
+    future = _loadCounts(request).whenComplete(() {
+      if (identical(_countLoad, future)) _countLoad = null;
+    });
+    _countLoad = future;
+    return future;
+  }
+
+  /// Drops all request state at an authentication boundary.
+  ///
+  /// Supabase RLS can return different public rows for different accounts
+  /// (for example test-only clubs), so cached snapshots must never survive an
+  /// account switch. In-flight responses receive a generation guard and are
+  /// ignored if they complete after this call.
+  void invalidate({bool clearRemoteContent = true}) {
+    _generation++;
+    _cacheScope = null;
+    _contentLoadedAt = null;
+    _countsLoadedAt = null;
     _contentLoad = null;
     _countLoad = null;
-    await ensureContentLoaded();
-    await ensureCountsLoaded();
+    if (clearRemoteContent) {
+      supabaseContentService.clearSessionContent();
+    }
   }
 
-  Future<void> ensureCountsLoaded() {
-    if (_countsLoaded) return Future.value();
-    return _countLoad ??= _loadCounts();
+  Future<void> _loadContent(_CacheRequest request) async {
+    final applied = await _contentRefresh(() => _requestIsCurrent(request));
+    if (!applied || !_requestIsCurrent(request)) return;
+
+    await _cleanupExpiredEvents();
+    if (!_requestIsCurrent(request)) return;
+    _contentLoadedAt = _now();
+    unawaited(ensureCountsLoaded());
   }
 
-  Future<void> _loadContent() async {
-    try {
-      await supabaseContentService.refreshPublicContent();
-      await eventCleanupService.cleanupExpiredEvents();
-      _contentLoaded = true;
-      unawaited(ensureCountsLoaded());
-    } finally {
+  Future<void> _loadCounts(_CacheRequest request) async {
+    final applied = await _countsRefresh(() => _requestIsCurrent(request));
+    if (applied && _requestIsCurrent(request)) {
+      _countsLoadedAt = _now();
+    }
+  }
+
+  _CacheRequest _requestContext() {
+    final scope = _scopeProvider();
+    if (_cacheScope != scope) {
+      _generation++;
+      _cacheScope = scope;
+      _contentLoadedAt = null;
+      _countsLoadedAt = null;
       _contentLoad = null;
+      _countLoad = null;
+      supabaseContentService.clearSessionContent();
+    }
+    return _CacheRequest(scope: scope, generation: _generation);
+  }
+
+  bool _requestIsCurrent(_CacheRequest request) =>
+      request.generation == _generation &&
+      request.scope == _cacheScope &&
+      request.scope == _scopeProvider();
+
+  bool _isFresh(DateTime? loadedAt, Duration ttl) {
+    if (loadedAt == null) return false;
+    final age = _now().difference(loadedAt);
+    return age.isNegative || age < ttl;
+  }
+
+  static String _supabaseScope() {
+    if (!SupabaseConfig.isConfigured) return 'local';
+    try {
+      return Supabase.instance.client.auth.currentUser?.id ?? 'anonymous';
+    } catch (_) {
+      return 'local';
     }
   }
 
-  Future<void> _loadCounts() async {
-    try {
-      await supabaseContentService.refreshEngagementCounts();
-      _countsLoaded = true;
-    } finally {
-      _countLoad = null;
-    }
+  static Future<bool> _refreshPublicContent(bool Function() shouldApply) {
+    return supabaseContentService.refreshPublicContent(
+      shouldApply: shouldApply,
+    );
+  }
+
+  static Future<bool> _refreshEngagementCounts(bool Function() shouldApply) {
+    return supabaseContentService.refreshEngagementCounts(
+      shouldApply: shouldApply,
+    );
   }
 }
 
 final lazyContentLoader = LazyContentLoader();
+
+class _CacheRequest {
+  final String scope;
+  final int generation;
+
+  const _CacheRequest({required this.scope, required this.generation});
+}

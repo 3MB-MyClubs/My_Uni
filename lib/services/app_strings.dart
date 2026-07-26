@@ -765,5 +765,4 @@ class S {
   );
   static String get messagesLabel => _t('Messages', 'Mesajlar');
   static String get viewProfile => _t('View profile', 'Profili gör');
-  static String get clubsLabel => _t('Clubs', 'Kulüpler');
 }

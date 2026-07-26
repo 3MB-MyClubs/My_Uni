@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/app_links.dart';
+import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/rsvp_store.dart';
@@ -1447,8 +1448,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                onTap: () {
-                  authService.logout();
+                onTap: () async {
+                  await authService.logout();
+                  if (!context.mounted) return;
                   rsvpStore.clear();
                   Navigator.of(context).popUntil((route) => route.isFirst);
                   widget.onLogout();

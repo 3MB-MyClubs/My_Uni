@@ -76,11 +76,14 @@ void main() {
     await themeService.initialize();
     await onboardingService.initialize();
     contentStore.applyToLists();
-    authService.login('alice@ku.edu.tr');
+    authService.login('alice@ku.edu.tr', '111111');
 
     await tester.pumpWidget(
       const ProviderScope(
-        child: MaterialApp(debugShowCheckedModeBanner: false, home: FeedScreen()),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: FeedScreen(),
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));

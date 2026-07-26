@@ -18,14 +18,15 @@ void main() {
     await binding.takeScreenshot(name);
   }
 
-  testWidgets('Date sheet — drag range-select and tap toggle both work',
-      (tester) async {
+  testWidgets('Date sheet — drag range-select and tap toggle both work', (
+    tester,
+  ) async {
     await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await themeService.initialize();
     contentStore.applyToLists();
-    authService.login('htuncay23@ku.edu.tr');
+    authService.login('htuncay23@ku.edu.tr', '111111');
     await themeService.setDark(false);
 
     await tester.pumpWidget(
@@ -54,10 +55,8 @@ void main() {
     final today = DateTime(now.year, now.month, now.day);
     final thisWeekMonday = today.subtract(Duration(days: today.weekday - 1));
     final nextMonday = thisWeekMonday.add(const Duration(days: 7));
-    String labelFor(int offsetDaysFromNextMonday) => nextMonday
-        .add(Duration(days: offsetDaysFromNextMonday))
-        .day
-        .toString();
+    String labelFor(int offsetDaysFromNextMonday) =>
+        nextMonday.add(Duration(days: offsetDaysFromNextMonday)).day.toString();
 
     Finder dayText(String d) => find.text(d);
 
@@ -90,9 +89,11 @@ void main() {
 
     final afterDrag = currentLabel();
     debugPrint('LABEL AFTER DRAG: $afterDrag');
-    expect(afterDrag.contains('5 selected'), true,
-        reason:
-            'drag across Mon..Fri should select 5 dates, got: $afterDrag');
+    expect(
+      afterDrag.contains('5 selected'),
+      true,
+      reason: 'drag across Mon..Fri should select 5 dates, got: $afterDrag',
+    );
 
     // Tap next Monday again — should deselect just that one cell (tap-toggle
     // still works independently of the drag handler).
@@ -101,9 +102,12 @@ void main() {
     await shot(tester, 'ds-03-after-tap-toggle-off');
     final afterTapOff = currentLabel();
     debugPrint('LABEL AFTER TAP TOGGLE OFF: $afterTapOff');
-    expect(afterTapOff.contains('4 selected'), true,
-        reason:
-            'tapping next Monday should deselect it, leaving 4, got: $afterTapOff');
+    expect(
+      afterTapOff.contains('4 selected'),
+      true,
+      reason:
+          'tapping next Monday should deselect it, leaving 4, got: $afterTapOff',
+    );
 
     // Tap an unselected day (next Sunday) — should add it back via simple tap.
     await tester.tap(dayText(labelFor(6)).first);
@@ -111,8 +115,10 @@ void main() {
     await shot(tester, 'ds-04-after-tap-add');
     final afterTapOn = currentLabel();
     debugPrint('LABEL AFTER TAP ADD: $afterTapOn');
-    expect(afterTapOn.contains('5 selected'), true,
-        reason:
-            'tapping next Sunday should add it, back to 5, got: $afterTapOn');
+    expect(
+      afterTapOn.contains('5 selected'),
+      true,
+      reason: 'tapping next Sunday should add it, back to 5, got: $afterTapOn',
+    );
   });
 }
