@@ -119,12 +119,8 @@ class SupabaseEventService {
       title: data['title']?.toString() ?? fallback.title,
       description: data['description']?.toString() ?? fallback.description,
       location: data['location']?.toString() ?? fallback.location,
-      dateTime:
-          DateTime.tryParse(data['starts_at']?.toString() ?? '') ??
-          fallback.dateTime,
-      endTime:
-          DateTime.tryParse(data['ends_at']?.toString() ?? '') ??
-          fallback.endTime,
+      dateTime: tryParseEventDateTime(data['starts_at']) ?? fallback.dateTime,
+      endTime: tryParseEventDateTime(data['ends_at']) ?? fallback.endTime,
       attendeeUserIds: fallback.attendeeUserIds,
       rsvpTimestamps: fallback.rsvpTimestamps,
       imagePath:

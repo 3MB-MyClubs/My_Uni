@@ -1,3 +1,15 @@
+/// Event times are displayed as local campus/device wall-clock values.
+/// Supabase `timestamptz` fields commonly arrive with `Z` or an explicit
+/// offset, so normalize them at the model boundary instead of requiring every
+/// screen to remember to call `toLocal()`.
+DateTime? tryParseEventDateTime(Object? raw) {
+  final value = raw?.toString().trim() ?? '';
+  if (value.isEmpty) return null;
+  return DateTime.tryParse(value)?.toLocal();
+}
+
+DateTime parseEventDateTime(String raw) => DateTime.parse(raw).toLocal();
+
 class EventSlot {
   final DateTime time;
   final String title;
@@ -19,7 +31,7 @@ class EventSlot {
   };
 
   factory EventSlot.fromMap(Map<String, dynamic> m) => EventSlot(
-    time: DateTime.parse(m['time'] as String),
+    time: parseEventDateTime(m['time'] as String),
     title: m['title'] as String,
     subtitle: m['subtitle'] as String?,
     isHighlighted: m['isHighlighted'] as bool? ?? false,
@@ -128,8 +140,8 @@ class Event {
     clubId: m['clubId'] as String,
     title: m['title'] as String,
     description: m['description'] as String,
-    dateTime: DateTime.parse(m['dateTime'] as String),
-    endTime: DateTime.parse(m['endTime'] as String),
+    dateTime: parseEventDateTime(m['dateTime'] as String),
+    endTime: parseEventDateTime(m['endTime'] as String),
     location: m['location'] as String,
     attendeeUserIds: List<String>.from(m['attendeeUserIds'] as List? ?? []),
     rsvpTimestamps: m['rsvpTimestamps'] != null

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
 import '../services/club_insights_service.dart';
@@ -87,9 +88,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         backgroundColor: AppColors.card,
         foregroundColor: AppColors.text,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
-          'Admin Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Text(
+          AppLocalizations.of(context)!.adminDashboardTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ),
       body: RefreshIndicator(
@@ -101,25 +102,37 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Row(
               children: [
                 _tile(
-                  'Students',
+                  AppLocalizations.of(context)!.students,
                   _peopleCount == 0 ? users.length : _peopleCount,
                   Icons.school_outlined,
                 ),
                 const SizedBox(width: 10),
-                _tile('Clubs', clubs.length, Icons.groups_2_outlined),
+                _tile(
+                  AppLocalizations.of(context)!.clubs,
+                  clubs.length,
+                  Icons.groups_2_outlined,
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                _tile('Events', events.length, Icons.event_outlined),
+                _tile(
+                  AppLocalizations.of(context)!.events,
+                  events.length,
+                  Icons.event_outlined,
+                ),
                 const SizedBox(width: 10),
-                _tile('Posts', newsPosts.length, Icons.article_outlined),
+                _tile(
+                  AppLocalizations.of(context)!.posts,
+                  newsPosts.length,
+                  Icons.article_outlined,
+                ),
               ],
             ),
             const SizedBox(height: 24),
             Text(
-              'CLUB LEADERBOARD',
+              AppLocalizations.of(context)!.clubLeaderboard.toUpperCase(),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -227,7 +240,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             const SizedBox(width: 8),
             Text(
-              '${stat.followers} followers · ${stat.totalRsvps} RSVPs',
+              AppLocalizations.of(context)!.followersAndRsvpsSummary(
+                stat.followers,
+                stat.totalRsvps,
+              ),
               style: TextStyle(fontSize: 11.5, color: AppColors.secondaryText),
             ),
             Icon(

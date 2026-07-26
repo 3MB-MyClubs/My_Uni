@@ -1,24 +1,29 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
+import '../services/app_bootstrap.dart';
 import '../services/app_colors.dart';
-import '../services/auth_service.dart';
-import '../services/mock_data.dart';
-import '../services/user_state.dart';
-import '../services/theme_service.dart';
 import '../services/app_strings.dart';
+import '../services/auth_service.dart';
+import '../services/chat_store.dart';
+import '../services/mock_data.dart';
+import '../services/theme_service.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
-import '../services/tutorial_service.dart';
-import '../services/tutorial_anchors.dart';
-import '../widgets/app_tutorial_overlay.dart';
+import '../onboarding/onboarding_anchors.dart';
+import '../onboarding/onboarding_flow.dart';
+import '../onboarding/onboarding_service.dart';
+import '../onboarding/onboarding_steps.dart';
+import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
 import 'explore_screen.dart';
-import 'notifications_screen.dart';
+import 'chats_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
@@ -40,7 +45,7 @@ Future<void> showClubCreateSheet(
     builder: (sheetContext) {
       final theme = Theme.of(sheetContext);
       final isDark = theme.brightness == Brightness.dark;
-      final surface = isDark ? const Color(0xFF16181D) : Colors.white;
+      final surface = isDark ? DarkColors.card : Colors.white;
       final primaryText = isDark ? Colors.white : AppColors.text;
       final secondaryText = isDark
           ? Colors.white.withValues(alpha: 0.68)
@@ -88,7 +93,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Create',
+                    AppLocalizations.of(sheetContext)!.createSheetTitle,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: primaryText,
                       fontWeight: FontWeight.w800,
@@ -96,7 +101,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Update your community',
+                    AppLocalizations.of(sheetContext)!.updateYourCommunity,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: secondaryText,
                       fontWeight: FontWeight.w600,
@@ -104,7 +109,7 @@ Future<void> showClubCreateSheet(
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Create something inspiring',
+                    AppLocalizations.of(sheetContext)!.createSomethingInspiring,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: primaryText,
                       fontWeight: FontWeight.w700,
@@ -113,15 +118,19 @@ Future<void> showClubCreateSheet(
                   const SizedBox(height: 14),
                   _CreateSheetAction(
                     icon: Icons.article_outlined,
-                    title: 'Post',
-                    subtitle: 'Share an update with your followers',
+                    title: AppLocalizations.of(sheetContext)!.post,
+                    subtitle: AppLocalizations.of(
+                      sheetContext,
+                    )!.shareUpdateWithFollowers,
                     onTap: () => choose(onPost),
                   ),
                   const SizedBox(height: 10),
                   _CreateSheetAction(
                     icon: Icons.event_available_outlined,
-                    title: 'Event',
-                    subtitle: 'Add an event to the campus calendar',
+                    title: AppLocalizations.of(sheetContext)!.eventLabel,
+                    subtitle: AppLocalizations.of(
+                      sheetContext,
+                    )!.addEventToCampusCalendar,
                     onTap: () => choose(onEvent),
                   ),
                 ],
@@ -143,10 +152,16 @@ class MainNavScreen extends ConsumerStatefulWidget {
   ConsumerState<MainNavScreen> createState() => _MainNavScreenState();
 }
 
-class _MainNavScreenState extends ConsumerState<MainNavScreen> {
+class _MainNavScreenState extends ConsumerState<MainNavScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
-  bool _showTutorial = false;
+  bool _showOnboarding = false;
+  // True while the current run was requested from Settings, so finishing it
+  // doesn't re-trigger the first-run calendar permission prompt.
+  bool _isOnboardingReplay = false;
   double? _navDragDx;
+  final ChatsController _chatsController = ChatsController();
+  late final AnimationController _tabTransitionController;
 
   // Built once and never replaced by nav taps or content-creation callbacks,
   // so IndexedStack sees the same widget instances and Flutter's element-
@@ -160,7 +175,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     FeedScreen(), // 0
     ThisWeekScreen(isTutorialHost: true), // 1
     ExploreScreen(), // 2
-    NotificationsScreen(isTutorialHost: true), // 3
+    ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
     ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
     if (widget.isAdmin) AdminDashboard(), // 5
   ];
@@ -171,12 +186,28 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   @override
   void initState() {
     super.initState();
-    tutorialService.replayRequests.addListener(_onTutorialReplayRequested);
+    _tabTransitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 340),
+      value: 1,
+    );
+    onboardingService.replayRequests.addListener(_onOnboardingReplayRequested);
+    onboardingService.tabRequests.addListener(_onTabRequested);
     themeService.addListener(_onThemeOrLocaleChanged);
     localeService.addListener(_onThemeOrLocaleChanged);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _startInitialExperience(),
-    );
+    // Keeps the Chats badge live when a message arrives on another screen.
+    chatStore.addListener(_onThemeOrLocaleChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startInitialExperience();
+      unawaited(
+        appBootstrap.ready.then((_) {
+          if (!mounted) return;
+          if (authService.isStudentSession) {
+            unawaited(chatStore.startDirectMessageSync(_currentUserId));
+          }
+        }),
+      );
+    });
   }
 
   void _onThemeOrLocaleChanged() {
@@ -185,258 +216,66 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
     if (mounted) setState(() {});
   }
 
-  // Students get the student tour; club admins get the separate club tour
-  // (_clubTutorialSteps). Neither runs for the super admin.
+  // Students get the student tour; club admins get the separate club tour.
+  // Neither runs for the super admin.
   void _startInitialExperience() {
     if (!mounted) return;
     if ((authService.isStudentSession || _isClubAdmin) &&
-        !tutorialService.isComplete(_currentUserId)) {
-      _startTutorial();
+        !onboardingService.isComplete(_currentUserId)) {
+      _startOnboarding(isReplay: false);
       return;
     }
     _requestCalendarIfNeeded();
   }
 
-  void _onTutorialReplayRequested() {
+  void _onOnboardingReplayRequested() {
     if (!mounted || !(authService.isStudentSession || _isClubAdmin)) return;
-    _startTutorial();
+    _startOnboarding(isReplay: true);
   }
 
-  void _startTutorial() {
+  void _onTabRequested() {
+    final index = onboardingService.tabRequests.value;
+    if (index == null || !mounted) return;
+    _selectNavIndex(index);
+  }
+
+  void _startOnboarding({required bool isReplay}) {
     setState(() {
       _selectedIndex = 0;
-      _showTutorial = true;
+      _showOnboarding = true;
+      _isOnboardingReplay = isReplay;
     });
   }
 
-  Future<void> _finishTutorial() async {
-    if (!_showTutorial) return;
-    setState(() {
-      _showTutorial = false;
-      _selectedIndex = 0;
-    });
-    await tutorialService.complete(_currentUserId);
-    if (mounted) await _requestCalendarIfNeeded();
+  // The flow starts the animated return Home before invoking this callback;
+  // this method owns persistence and the post-tour checklist lifecycle.
+  Future<void> _finishOnboarding() async {
+    if (!_showOnboarding) return;
+    setState(() => _showOnboarding = false);
+    await onboardingService.complete(_currentUserId);
+    if (!mounted) return;
+    if (authService.isStudentSession) {
+      await starterChecklistService.startFor(_currentUserId);
+    }
+    if (mounted && !_isOnboardingReplay) await _requestCalendarIfNeeded();
   }
 
-  void _onTutorialStepChanged(AppTutorialStep step) {
+  void _onOnboardingStepChanged(OnboardingStep step) {
     if (_selectedIndex == step.tabIndex) return;
+    _tabTransitionController.forward(from: 0);
     setState(() => _selectedIndex = step.tabIndex);
+    if (step.tabIndex == 3) _chatsController.showStudents();
   }
 
-  // Whichever tour applies to the current session. Kept as a single getter so
-  // build() and the orchestration methods don't need to branch themselves.
-  List<AppTutorialStep> get _activeTutorialSteps =>
-      _isClubAdmin ? _clubTutorialSteps : _tutorialSteps;
+  String get _onboardingFirstName {
+    final name =
+        authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
+    final parts = name.trim().split(' ');
+    return parts.isNotEmpty ? parts.first : '';
+  }
 
-  // Student-only walkthrough. Each anchored step points at the real widget via
-  // a shared key from [tutorialAnchors]; welcome/finale are centered heroes.
-  List<AppTutorialStep> get _tutorialSteps => <AppTutorialStep>[
-    const AppTutorialStep(
-      eyebrow: 'Welcome',
-      title: 'Your campus, in one place',
-      description:
-          'A quick, tappable tour of the app — we’ll point to the real buttons as we go.',
-      icon: Icons.waving_hand_rounded,
-      tabIndex: 0,
-      tips: [
-        'Tap Next, or tap anywhere, to advance.',
-        'Use Back to revisit a step.',
-        'Skip tour is always in the top-right.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Getting around',
-      title: 'Your five sections',
-      description:
-          'This bar stays with you everywhere: Home, Events, Search, Alerts, and Profile. The active one turns red.',
-      icon: Icons.touch_app_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
-      tabIndex: 0,
-      tips: ['Home is your personalized feed.', 'Badges flag new activity.'],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Home',
-      title: 'Your feed, your way',
-      description:
-          'Switch between Following and All to control what you see. Like, RSVP, save, and share right from each post.',
-      icon: Icons.dynamic_feed_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
-      tabIndex: 0,
-      tips: [
-        'Following shows only clubs you follow.',
-        'All mixes in campus recommendations.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Events',
-      title: 'RSVP in one tap',
-      description:
-          'Tap RSVP to mark you’re going — it turns to “Going” and can flow into your calendar. Search and filter the agenda up top.',
-      icon: Icons.event_available_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.eventsRsvp),
-      tabIndex: 1,
-      tips: [
-        'Filter by date, audience, or what’s live now.',
-        'Open any event for full details.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Search',
-      title: 'Find people & clubs',
-      description:
-          'Search students by name or major, and clubs by name. Use the tabs above to switch between People and Clubs.',
-      icon: Icons.manage_search_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.searchField),
-      tabIndex: 2,
-      tips: [
-        'Follow people and join clubs from the results.',
-        'Open a profile before you follow.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Alerts',
-      title: 'Stay in the loop',
-      description:
-          'Follows, club posts, and event changes collect here. Tap an alert to open it, filter with the chips, or clear them all with this button.',
-      icon: Icons.notifications_active_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
-      tabIndex: 3,
-      tips: [
-        'A badge on the bar means something’s new.',
-        'Opening this tab clears the badge.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Profile',
-      title: 'This is you',
-      description:
-          'Tap your photo, name, or bio to edit them so classmates recognize you. Your clubs, RSVPs, and stats live here too.',
-      icon: Icons.account_circle_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileHeader),
-      tabIndex: 4,
-      tips: [
-        'Tap Followers / Following to see who’s who.',
-        'Your “Up next” event is one tap away.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Settings',
-      title: 'Appearance & replay',
-      description:
-          'The gear opens Settings — appearance and “Replay App Tutorial” whenever you want this tour again.',
-      icon: Icons.settings_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.profileSettings),
-      tabIndex: 4,
-      tips: ['Switch between light and dark mode here.'],
-    ),
-    const AppTutorialStep(
-      eyebrow: 'You’re set',
-      title: 'Explore at your own pace',
-      description:
-          'That’s the tour. It won’t pop up again automatically — replay it anytime from Profile → Settings.',
-      icon: Icons.rocket_launch_rounded,
-      tabIndex: 0,
-      tips: ['Your follows, RSVPs, and saves personalize the app.'],
-    ),
-  ];
-
-  // Club-admin walkthrough. Separate from _tutorialSteps because clubs get a
-  // different nav (no Search tab, a center "+" instead) and a different
-  // Profile tab (ClubProfileScreen, not personal info).
-  List<AppTutorialStep> get _clubTutorialSteps => <AppTutorialStep>[
-    const AppTutorialStep(
-      eyebrow: 'Welcome',
-      title: 'Run your club from here',
-      description:
-          'A quick tour of the tools you get as a club admin — we’ll point to the real buttons as we go.',
-      icon: Icons.waving_hand_rounded,
-      tabIndex: 0,
-      tips: [
-        'Tap Next, or tap anywhere, to advance.',
-        'Skip tour is always in the top-right.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Getting around',
-      title: 'Your four sections',
-      description:
-          'Home, Events, Alerts, and Profile stay with you everywhere. The center button replaces Search — it’s reserved for posting.',
-      icon: Icons.touch_app_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.navBar),
-      tabIndex: 0,
-      tips: ['The active section turns red.', 'Badges flag new activity.'],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Create',
-      title: 'Post a new event',
-      description:
-          'Tap the center button anytime to open the event form — title, time, location, and audience.',
-      icon: Icons.add_circle_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubCreateButton),
-      tabIndex: 0,
-      tips: ['Your event shows up in Events for everyone right away.'],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Home',
-      title: 'Quick text updates',
-      description:
-          'This composer posts a quick update to your club’s followers — no need for the full event form for a text-only post.',
-      icon: Icons.dynamic_feed_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
-      tabIndex: 0,
-      tips: ['Add a photo for a bigger, more visible post.'],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Your club',
-      title: 'Posts, Events, Collabs, Board',
-      description:
-          'This is your club’s public profile. Switch tabs to manage posts and events — tap the ⋯ menu on any of yours to pin or delete it, or tap an event’s attendee count to see who’s coming.',
-      icon: Icons.view_agenda_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubProfileTabs),
-      tabIndex: 4,
-      tips: [
-        'Board lists your club’s board members and titles.',
-        'Collabs shows joint events with other clubs.',
-      ],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Insights',
-      title: 'See what’s landing',
-      description:
-          'Track views, likes, and top posts so you know what your followers respond to.',
-      icon: Icons.insights_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubInsights),
-      tabIndex: 4,
-    ),
-    AppTutorialStep(
-      eyebrow: 'Settings',
-      title: 'Board, appearance & replay',
-      description:
-          'The gear opens Settings — add or remove board members, switch appearance, and replay this tour whenever you want.',
-      icon: Icons.settings_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.clubProfileSettings),
-      tabIndex: 4,
-      tips: ['Board management lives under your club’s section in Settings.'],
-    ),
-    AppTutorialStep(
-      eyebrow: 'Alerts',
-      title: 'Stay in the loop',
-      description:
-          'New followers and event activity collect here. Tap an alert to open it, or clear them all with this button.',
-      icon: Icons.notifications_active_rounded,
-      targetKey: tutorialAnchors.keyFor(TutorialAnchors.alertsMarkAllRead),
-      tabIndex: 3,
-    ),
-    const AppTutorialStep(
-      eyebrow: 'You’re set',
-      title: 'Run your club at your own pace',
-      description:
-          'That’s the tour. It won’t pop up again automatically — replay it anytime from Profile → Settings.',
-      icon: Icons.rocket_launch_rounded,
-      tabIndex: 0,
-    ),
-  ];
+  String get _onboardingUserId =>
+      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   Future<void> _requestCalendarIfNeeded() async {
     final service = ref.read(calendarServiceProvider);
@@ -452,28 +291,26 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
 
   @override
   void dispose() {
-    tutorialService.replayRequests.removeListener(_onTutorialReplayRequested);
+    onboardingService.replayRequests.removeListener(
+      _onOnboardingReplayRequested,
+    );
+    onboardingService.tabRequests.removeListener(_onTabRequested);
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
+    chatStore.removeListener(_onThemeOrLocaleChanged);
+    _chatsController.dispose();
+    _tabTransitionController.dispose();
     super.dispose();
   }
 
-  void _onNotificationsOpened() {
-    final currentId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final visible = [
-      ...notifications,
-      ...userState.dynamicNotifications,
-    ].where((n) => n.userId == currentId && n.targetType != 'story');
-    userState.markNotificationsRead(visible);
-  }
-
+  // Chat unreads clear per-thread when a conversation is opened (see
+  // ChatThreadScreen), so unlike the old Alerts tab there's nothing to
+  // mark read when the Chats tab itself is selected.
   void _selectNavIndex(int index) {
+    if (index == 3) _chatsController.showStudents();
     if (_selectedIndex != index) {
+      if (_showOnboarding) _tabTransitionController.forward(from: 0);
       setState(() => _selectedIndex = index);
-    }
-    if (index == 3) {
-      _onNotificationsOpened();
     }
   }
 
@@ -491,7 +328,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       slots.length - 1,
     );
     final navIndex = slots[slotIndex].index;
-    final shouldOpenNotifications = navIndex == 3 && _selectedIndex != 3;
+    final enteringChats = navIndex == 3 && _selectedIndex != 3;
 
     setState(() {
       _navDragDx = clampedDx;
@@ -499,10 +336,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         _selectedIndex = navIndex;
       }
     });
-
-    if (shouldOpenNotifications) {
-      _onNotificationsOpened();
-    }
+    if (enteringChats) _chatsController.showStudents();
   }
 
   void _endNavDrag() {
@@ -541,16 +375,41 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         children: [
           Scaffold(
             extendBody: true,
-            body: LazyIndexedStack(index: _selectedIndex, children: _screens),
+            body: AnimatedBuilder(
+              animation: _tabTransitionController,
+              child: LazyIndexedStack(
+                index: _selectedIndex,
+                children: _screens,
+              ),
+              builder: (context, child) {
+                final motion = Curves.easeOutCubic.transform(
+                  _tabTransitionController.value,
+                );
+                return Opacity(
+                  opacity: 0.88 + (0.12 * motion),
+                  child: Transform.scale(
+                    scale: 0.985 + (0.015 * motion),
+                    child: child,
+                  ),
+                );
+              },
+            ),
             bottomNavigationBar: _buildBottomNav(context),
           ),
-          if (_showTutorial)
+          if (_showOnboarding)
             Positioned.fill(
-              child: AppTutorialOverlay(
-                steps: _activeTutorialSteps,
-                onStepChanged: _onTutorialStepChanged,
-                onComplete: _finishTutorial,
-                onSkip: _finishTutorial,
+              child: OnboardingFlow(
+                steps: _isClubAdmin
+                    ? clubAdminOnboardingSteps()
+                    : studentOnboardingSteps(),
+                userId: _onboardingUserId,
+                firstName: _onboardingFirstName,
+                showChecklist: authService.isStudentSession,
+                onStepChanged: _onOnboardingStepChanged,
+                onComplete: _finishOnboarding,
+                onSkip: _finishOnboarding,
+                onNavigateHome: () => _selectNavIndex(0),
+                onDeepLink: _selectNavIndex,
               ),
             ),
         ],
@@ -561,12 +420,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
   Widget _buildBottomNav(BuildContext context) {
     final currentId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final unreadAlerts = userState.unreadNotificationCountFor(
-      [
-        ...notifications,
-        ...userState.dynamicNotifications,
-      ].where((n) => n.userId == currentId && n.targetType != 'story'),
-    );
+    final unreadChats = chatStore.totalUnreadFor(currentId);
     final isDark = themeService.isDark;
 
     // Ordered slots so the sliding highlight can be positioned purely from
@@ -576,41 +430,41 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
         index: 0,
         icon: Icons.home_outlined,
         activeIcon: Icons.home_rounded,
-        label: S.home,
+        label: AppLocalizations.of(context)!.home,
       ),
       _NavSlot(
         index: 1,
         icon: Icons.calendar_today_outlined,
         activeIcon: Icons.calendar_today_rounded,
-        label: S.events,
+        label: AppLocalizations.of(context)!.events,
       ),
       if (!_isClubAdmin)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
           activeIcon: Icons.search_rounded,
-          label: S.search,
+          label: AppLocalizations.of(context)!.search,
         ),
       if (_isClubAdmin) const _NavSlot.center(),
       _NavSlot(
         index: 3,
-        icon: Icons.notifications_none_rounded,
-        activeIcon: Icons.notifications_rounded,
-        label: S.alerts,
-        badge: unreadAlerts,
+        icon: Icons.chat_bubble_outline_rounded,
+        activeIcon: Icons.chat_bubble_rounded,
+        label: S.chats,
+        badge: unreadChats,
       ),
       _NavSlot(
         index: 4,
         icon: Icons.person_outline_rounded,
         activeIcon: Icons.person_rounded,
-        label: S.profile,
+        label: AppLocalizations.of(context)!.profile,
       ),
       if (widget.isAdmin)
         _NavSlot(
           index: 5,
           icon: Icons.admin_panel_settings_outlined,
           activeIcon: Icons.admin_panel_settings_rounded,
-          label: S.admin,
+          label: AppLocalizations.of(context)!.admin,
         ),
     ];
 
@@ -622,7 +476,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         child: ClipRRect(
-          key: tutorialAnchors.keyFor(TutorialAnchors.navBar),
           borderRadius: BorderRadius.all(Radius.circular(30)),
           child: BackdropFilter.grouped(
             filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
@@ -799,12 +652,33 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen> {
                               for (final slot in slots)
                                 slot.isCenterButton
                                     ? _CenterAddButton(
-                                        key: tutorialAnchors.keyFor(
-                                          TutorialAnchors.clubCreateButton,
+                                        key: onboardingAnchors.keyFor(
+                                          OnboardingAnchors.clubCreateButton,
                                         ),
                                         onTap: _onAddTap,
                                       )
                                     : _NavItem(
+                                        // The super-admin Dashboard slot (5) has
+                                        // no tour step, and reusing navProfile
+                                        // there would mount one GlobalKey twice.
+                                        key: switch (slot.index!) {
+                                          0 => onboardingAnchors.keyFor(
+                                            OnboardingAnchors.navHome,
+                                          ),
+                                          1 => onboardingAnchors.keyFor(
+                                            OnboardingAnchors.navEvents,
+                                          ),
+                                          2 => onboardingAnchors.keyFor(
+                                            OnboardingAnchors.navSearch,
+                                          ),
+                                          3 => onboardingAnchors.keyFor(
+                                            OnboardingAnchors.navChats,
+                                          ),
+                                          4 => onboardingAnchors.keyFor(
+                                            OnboardingAnchors.navProfile,
+                                          ),
+                                          _ => null,
+                                        },
                                         icon: slot.icon!,
                                         activeIcon: slot.activeIcon!,
                                         label: slot.label!,
@@ -865,6 +739,7 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _NavItem({
+    super.key,
     required this.icon,
     required this.activeIcon,
     required this.label,

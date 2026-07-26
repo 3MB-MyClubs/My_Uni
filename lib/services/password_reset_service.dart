@@ -1,5 +1,8 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
+import 'locale_service.dart';
 import 'supabase_config.dart';
 
 class PasswordResetResult {
@@ -11,6 +14,12 @@ class PasswordResetResult {
 }
 
 class PasswordResetService {
+  // No BuildContext is available this deep in the service layer; these two
+  // fallbacks never come from the server, so they're resolved here via the
+  // current locale rather than pushed up to a caller that may not exist yet.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -46,7 +55,7 @@ class PasswordResetService {
   ) async {
     final client = _client;
     if (client == null) {
-      return const PasswordResetResult.failure('Supabase is not configured.');
+      return PasswordResetResult.failure(_l10n.supabaseNotConfigured);
     }
 
     try {
@@ -62,12 +71,10 @@ class PasswordResetService {
         return PasswordResetResult.failure(details['error'].toString());
       }
       return PasswordResetResult.failure(
-        error.reasonPhrase ?? 'Password reset request failed.',
+        error.reasonPhrase ?? _l10n.passwordResetRequestFailed,
       );
     } catch (_) {
-      return const PasswordResetResult.failure(
-        'Could not reach the password reset server. Please try again.',
-      );
+      return PasswordResetResult.failure(_l10n.couldNotReachResetServer);
     }
   }
 }

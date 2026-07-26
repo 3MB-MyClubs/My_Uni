@@ -1,11 +1,14 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import '../models/notification.dart';
 import '../models/user.dart';
 import 'auth_service.dart';
+import 'locale_service.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
@@ -23,6 +26,12 @@ import 'user_state.dart';
 ///   - Runtime follows by other (not currently logged-in) accounts are not
 ///     visible here — a real backend would query a follows table instead.
 class ClubNotificationService {
+  // No BuildContext is available this deep in the service layer; these
+  // generated in-app notification messages are resolved here via the
+  // current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   // ── Recipient resolution ─────────────────────────────────────────────────────
 
   /// Returns the user IDs that should receive a notification for [clubId],
@@ -115,7 +124,7 @@ class ClubNotificationService {
     if (user != null) return user.name;
     final currentUser = authService.currentUser;
     if (currentUser?.id == userId) return currentUser!.name;
-    return 'A student';
+    return _l10n.studentFallbackName;
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
@@ -133,7 +142,7 @@ class ClubNotificationService {
         AppNotification(
           id: notifId,
           userId: userId,
-          message: '${club.name} shared a new post',
+          message: _l10n.clubSharedNewPost(club.name),
           createdAt: DateTime.now(),
           targetType: 'post',
           targetId: post.id,
@@ -157,7 +166,7 @@ class ClubNotificationService {
         AppNotification(
           id: notifId,
           userId: userId,
-          message: '${club.name} posted a new event: ${event.title}',
+          message: _l10n.clubPostedNewEvent(club.name, event.title),
           createdAt: DateTime.now(),
           targetType: 'event',
           targetId: event.id,
@@ -190,7 +199,7 @@ class ClubNotificationService {
         AppNotification(
           id: notifId,
           userId: userId,
-          message: '${club.name} mentioned you in a post',
+          message: _l10n.clubMentionedYouInPost(club.name),
           createdAt: DateTime.now(),
           targetType: 'post',
           targetId: post.id,
@@ -213,7 +222,7 @@ class ClubNotificationService {
       AppNotification(
         id: notifId,
         userId: recipientId,
-        message: '${_actorName(actorUserId)} liked your post',
+        message: _l10n.actorLikedYourPost(_actorName(actorUserId)),
         createdAt: DateTime.now(),
         targetType: 'post',
         targetId: post.id,
@@ -238,7 +247,7 @@ class ClubNotificationService {
       AppNotification(
         id: notifId,
         userId: recipientId,
-        message: '${_actorName(actorUserId)} commented on your post',
+        message: _l10n.actorCommentedOnYourPost(_actorName(actorUserId)),
         createdAt: DateTime.now(),
         targetType: 'post',
         targetId: post.id,
@@ -260,7 +269,7 @@ class ClubNotificationService {
       AppNotification(
         id: notifId,
         userId: recipientId,
-        message: "${_actorName(actorUserId)} RSVP'd to ${event.title}",
+        message: _l10n.actorRsvpdToEvent(_actorName(actorUserId), event.title),
         createdAt: DateTime.now(),
         targetType: 'event',
         targetId: event.id,

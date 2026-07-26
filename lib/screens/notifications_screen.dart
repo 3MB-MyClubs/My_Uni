@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/notification.dart';
@@ -8,8 +8,9 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-import '../services/tutorial_anchors.dart';
+import '../services/chat_store.dart';
 import '../widgets/club_avatar.dart';
+import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
@@ -19,12 +20,7 @@ import 'user_profile_screen.dart';
 /// mark-all-read. Tapping a row marks it read and opens its target. Follow
 /// requests keep their working Accept / Decline actions.
 class NotificationsScreen extends StatefulWidget {
-  /// True only for the instance hosted in the main nav bar's IndexedStack, so
-  /// the app tour's "mark all read" anchor attaches to a single widget — this
-  /// screen is also pushed as a route from the feed bell.
-  final bool isTutorialHost;
-
-  const NotificationsScreen({super.key, this.isTutorialHost = false});
+  const NotificationsScreen({super.key});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -35,11 +31,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   List<AppNotification> get _allNotifs =>
-      [
-          ...notifications,
-          ...userState.dynamicNotifications,
-        ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      [...notifications, ...userState.dynamicNotifications].where((n) {
+        if (n.userId != _myId || n.targetType == 'story') return false;
+        return !(ChatStore.isAdminAccountId(_myId) &&
+            n.targetType == 'message');
+      }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   @override
   void initState() {
@@ -70,14 +66,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ── Time helper ───────────────────────────────────────────────────────────
   String _timeAgo(DateTime dt) {
+    final l10n = AppLocalizations.of(context)!;
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays == 1) return S.yesterday;
-    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inMinutes < 1) return l10n.justNowShort;
+    if (diff.inMinutes < 60) return l10n.minutesShort(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.hoursShort(diff.inHours);
+    if (diff.inDays == 1) return l10n.yesterday;
+    if (diff.inDays < 7) return l10n.daysShort(diff.inDays);
     final weeks = (diff.inDays / 7).floor();
-    return '${weeks}w';
+    return l10n.weeksShort(weeks);
   }
 
   // ── Navigation (only types with a real destination) ─────────────────────────
@@ -171,6 +168,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           context,
           MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
         );
+      case 'message':
+        // Admin accounts never enter direct-message routes, including from
+        // stale notifications created by older app versions.
+        if (ChatStore.isAdminAccountId(_myId)) return;
+        if (ChatStore.isGroupThread(id)) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ChatThreadScreen(threadId: id)),
+          );
+          return;
+        }
+        // targetId (and fromId when set) is the other participant's id.
+        final peerId = n.fromId ?? id;
+        if (_myId.isEmpty) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                ChatThreadScreen(threadId: ChatStore.dmThreadId(_myId, peerId)),
+          ),
+        );
     }
   }
 
@@ -185,6 +203,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   (IconData, Color) _tileStyle(AppNotification n) {
     final msg = n.message.toLowerCase();
     switch (n.targetType) {
+      case 'message':
+        return (Icons.chat_bubble_rounded, const Color(0xFF1565C0));
       case 'event':
         return (Icons.event_rounded, const Color(0xFF2E9E5B));
       case 'follow_request':
@@ -303,7 +323,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   Text(
-                    S.notifications,
+                    AppLocalizations.of(context)!.notifications,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -335,11 +355,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   const Spacer(),
                   GestureDetector(
-                    key: widget.isTutorialHost
-                        ? tutorialAnchors.keyFor(
-                            TutorialAnchors.alertsMarkAllRead,
-                          )
-                        : null,
                     onTap: _markAllRead,
                     child: Container(
                       width: 38,
@@ -533,7 +548,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               borderRadius: BorderRadius.all(Radius.circular(100)),
             ),
             child: Text(
-              S.accept,
+              AppLocalizations.of(context)!.accept,
               style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -557,7 +572,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               border: Border.all(color: AppColors.divider),
             ),
             child: Text(
-              S.decline,
+              AppLocalizations.of(context)!.decline,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -598,7 +613,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              S.nothingHereNotif,
+              AppLocalizations.of(context)!.nothingHereNotif,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
@@ -607,7 +622,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              S.noNotificationsFor(''),
+              AppLocalizations.of(context)!.noNotificationsFor(''),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,

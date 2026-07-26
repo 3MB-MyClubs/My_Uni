@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/event.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
@@ -79,7 +80,7 @@ class _RsvpButtonState extends State<RsvpButton> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _CompactChip(
-              label: '✓ Going',
+              label: '✓ ${AppLocalizations.of(context)!.going}',
               icon: Icons.check_circle_rounded,
               active: true,
               enabled: true,
@@ -104,7 +105,7 @@ class _RsvpButtonState extends State<RsvpButton> {
                       ),
                       SizedBox(width: 3),
                       Text(
-                        'Not Coming',
+                        AppLocalizations.of(context)!.notComing,
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.secondaryText,
@@ -121,7 +122,7 @@ class _RsvpButtonState extends State<RsvpButton> {
       }
       return _CompactChip(
         key: const ValueKey('compact-rsvp'),
-        label: 'RSVP',
+        label: AppLocalizations.of(context)!.rsvp,
         icon: Icons.how_to_reg_rounded,
         active: false,
         enabled: true,
@@ -161,22 +162,22 @@ class _RsvpButtonState extends State<RsvpButton> {
                     ),
                   ],
                 ),
-                child: const Center(
+                child: Center(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.check_circle_rounded,
                         color: Colors.white,
                         size: 19,
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          "You're going",
+                          AppLocalizations.of(context)!.youreGoing,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -213,7 +214,7 @@ class _RsvpButtonState extends State<RsvpButton> {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        'Cancel',
+                        AppLocalizations.of(context)!.cancel,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -262,11 +263,15 @@ class _RsvpButtonState extends State<RsvpButton> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20),
-                SizedBox(width: 8),
+                const Icon(
+                  Icons.how_to_reg_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
                 Text(
-                  'RSVP',
-                  style: TextStyle(
+                  AppLocalizations.of(context)!.rsvp,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/checkin_store.dart';
 import '../services/event_access.dart';
+import '../services/locale_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_state.dart';
 
@@ -22,11 +24,11 @@ class RsvpListScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: color,
           foregroundColor: Colors.white,
-          title: const Text('Attendees'),
+          title: Text(AppLocalizations.of(context)!.attendees),
         ),
         body: Center(
           child: Text(
-            'Only the event poster can view RSVPs.',
+            AppLocalizations.of(context)!.onlyPosterCanViewRsvps,
             style: TextStyle(color: AppColors.secondaryText),
           ),
         ),
@@ -54,11 +56,11 @@ class RsvpListScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Attendees',
+              AppLocalizations.of(context)!.attendees,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
             ),
             Text(
-              '$totalCount registered',
+              AppLocalizations.of(context)!.registeredCount(totalCount),
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
             ),
           ],
@@ -68,7 +70,7 @@ class RsvpListScreen extends StatelessWidget {
       body: totalCount == 0
           ? Center(
               child: Text(
-                'No RSVPs yet.',
+                AppLocalizations.of(context)!.noRsvpsYet,
                 style: TextStyle(color: AppColors.secondaryText, fontSize: 16),
               ),
             )
@@ -92,7 +94,7 @@ class RsvpListScreen extends StatelessWidget {
                   (u) => u.id == userId,
                   orElse: () => User(
                     id: userId,
-                    name: 'Unknown User',
+                    name: AppLocalizations.of(context)!.unknownUser,
                     email: '',
                     password: '',
                     role: '',
@@ -128,7 +130,9 @@ class RsvpListScreen extends StatelessWidget {
                   ),
                   subtitle: timestamp != null
                       ? Text(
-                          'RSVP\'d ${_formatTimestamp(timestamp)}',
+                          AppLocalizations.of(
+                            context,
+                          )!.rsvpdAt(_formatTimestamp(timestamp)),
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryText,
@@ -159,7 +163,7 @@ class RsvpListScreen extends StatelessWidget {
                             Icon(Icons.check_rounded, size: 12, color: color),
                             const SizedBox(width: 3),
                             Text(
-                              S.checkedIn,
+                              AppLocalizations.of(context)!.checkedIn,
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
@@ -178,23 +182,9 @@ class RsvpListScreen extends StatelessWidget {
   }
 
   String _formatTimestamp(DateTime dt) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final m = dt.minute.toString().padLeft(2, '0');
     final period = dt.hour < 12 ? 'AM' : 'PM';
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}  ·  $h:$m $period';
+    return '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}, ${dt.year}  ·  $h:$m $period';
   }
 }

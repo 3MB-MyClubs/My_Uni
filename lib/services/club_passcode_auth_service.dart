@@ -1,27 +1,42 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/app_admin.dart';
+import 'locale_service.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
+
+// No BuildContext is available this deep in the service layer, so failures
+// are signaled as a code — callers resolve the localized message themselves
+// via AppLocalizations.of(context)!.
+enum ClubPasscodeAuthError {
+  missingCredentials,
+  invalidPasscodeFormat,
+  invalidCredentials,
+  notLinkedToClub,
+  linkedClubNotFound,
+  notConfigured,
+}
 
 class ClubPasscodeAuthResult {
   final bool success;
   final AppAdmin? admin;
-  final String? error;
+  final ClubPasscodeAuthError? errorCode;
 
   const ClubPasscodeAuthResult._({
     required this.success,
     this.admin,
-    this.error,
+    this.errorCode,
   });
 
   factory ClubPasscodeAuthResult.success(AppAdmin admin) {
     return ClubPasscodeAuthResult._(success: true, admin: admin);
   }
 
-  factory ClubPasscodeAuthResult.failure(String error) {
-    return ClubPasscodeAuthResult._(success: false, error: error);
+  factory ClubPasscodeAuthResult.failure(ClubPasscodeAuthError errorCode) {
+    return ClubPasscodeAuthResult._(success: false, errorCode: errorCode);
   }
 }
 
@@ -35,12 +50,12 @@ class ClubPasscodeAuthService {
 
     if (normalizedEmail.isEmpty || normalizedPasscode.isEmpty) {
       return ClubPasscodeAuthResult.failure(
-        'Club email and passcode are required',
+        ClubPasscodeAuthError.missingCredentials,
       );
     }
     if (!RegExp(r'^[0-9]{8}$').hasMatch(normalizedPasscode)) {
       return ClubPasscodeAuthResult.failure(
-        'Passcode must be exactly 8 digits',
+        ClubPasscodeAuthError.invalidPasscodeFormat,
       );
     }
 
@@ -54,7 +69,7 @@ class ClubPasscodeAuthService {
         final authUser = response.user;
         if (authUser == null) {
           return ClubPasscodeAuthResult.failure(
-            'Invalid club email or passcode',
+            ClubPasscodeAuthError.invalidCredentials,
           );
         }
 
@@ -67,7 +82,7 @@ class ClubPasscodeAuthService {
         if (accounts.isEmpty) {
           await client.auth.signOut();
           return ClubPasscodeAuthResult.failure(
-            'This login is not linked to a club',
+            ClubPasscodeAuthError.notLinkedToClub,
           );
         }
 
@@ -76,7 +91,7 @@ class ClubPasscodeAuthService {
         if (clubId.isEmpty) {
           await client.auth.signOut();
           return ClubPasscodeAuthResult.failure(
-            'This login is not linked to a club',
+            ClubPasscodeAuthError.notLinkedToClub,
           );
         }
 
@@ -88,22 +103,29 @@ class ClubPasscodeAuthService {
         final linkedClubs = clubRows as List;
         if (linkedClubs.isEmpty) {
           await client.auth.signOut();
-          return ClubPasscodeAuthResult.failure('Linked club was not found');
+          return ClubPasscodeAuthResult.failure(
+            ClubPasscodeAuthError.linkedClubNotFound,
+          );
         }
 
         final club = Map<String, dynamic>.from(linkedClubs.first as Map);
-        final clubName = club['name']?.toString() ?? 'Club';
+        final clubName =
+            club['name']?.toString() ??
+            lookupAppLocalizations(Locale(localeService.languageCode))
+                .clubFallbackName;
         final clubEmail = club['email']?.toString() ?? normalizedEmail;
         return ClubPasscodeAuthResult.success(
           AppAdmin(id: clubId, name: clubName, email: clubEmail, password: ''),
         );
       } on AuthException {
-        return ClubPasscodeAuthResult.failure('Invalid club email or passcode');
+        return ClubPasscodeAuthResult.failure(
+          ClubPasscodeAuthError.invalidCredentials,
+        );
       } catch (error, stackTrace) {
         debugPrint('Club Supabase Auth login failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         return ClubPasscodeAuthResult.failure(
-          'Club login is not ready. Check club_auth_accounts in Supabase.',
+          ClubPasscodeAuthError.notConfigured,
         );
       }
     }
@@ -117,7 +139,9 @@ class ClubPasscodeAuthService {
     if (mockAdmin.id.isNotEmpty) {
       return ClubPasscodeAuthResult.success(mockAdmin);
     }
-    return ClubPasscodeAuthResult.failure('Invalid club email or passcode');
+    return ClubPasscodeAuthResult.failure(
+      ClubPasscodeAuthError.invalidCredentials,
+    );
   }
 }
 
