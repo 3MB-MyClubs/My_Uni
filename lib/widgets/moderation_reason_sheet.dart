@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 
 class ModerationReason {
   final String value;
@@ -59,7 +59,7 @@ Future<String?> showModerationReasonSheet(
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Text(
-              S.chooseReportReason,
+              AppLocalizations.of(context)!.chooseReportReason,
               style: TextStyle(color: AppColors.secondaryText, height: 1.4),
             ),
           ),
@@ -76,14 +76,18 @@ Future<String?> showModerationReasonSheet(
                     color: AppColors.primaryRed,
                   ),
                   title: Text(
-                    S.moderationReasonLabel(reason.value),
+                    AppLocalizations.of(
+                      context,
+                    )!.moderationReasonLabel(reason.value),
                     style: TextStyle(
                       color: AppColors.text,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   subtitle: Text(
-                    S.moderationReasonDetail(reason.value),
+                    AppLocalizations.of(
+                      context,
+                    )!.moderationReasonDetail(reason.value),
                     style: TextStyle(color: AppColors.secondaryText),
                   ),
                   onTap: () => Navigator.pop(sheetContext, reason.value),

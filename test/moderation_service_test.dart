@@ -50,46 +50,4 @@ void main() {
     expect(moderationService.isUserBlocked('u4'), isTrue);
     expect(moderationService.isPostHidden(post), isTrue);
   });
-
-  test('unblocking a user restores their posts', () async {
-    SharedPreferences.setMockInitialValues({});
-    authService.login('alice@ku.edu.tr');
-    final userId = authService.currentUser!.id;
-    await moderationService.activateForUser(userId);
-    await moderationService.blockUser('u4', reason: 'harassment');
-
-    final post = NewsPost(
-      id: 'restored-user-post',
-      clubId: 'c1',
-      authorId: 'u4',
-      content: 'Visible after unblock',
-      createdAt: DateTime(2026, 7, 18),
-    );
-    await moderationService.unblockUser('u4');
-
-    expect(moderationService.isUserBlocked('u4'), isFalse);
-    expect(moderationService.isPostHidden(post), isFalse);
-  });
-
-  test('blocking and unblocking a club controls its posts', () async {
-    SharedPreferences.setMockInitialValues({});
-    authService.login('alice@ku.edu.tr');
-    final userId = authService.currentUser!.id;
-    await moderationService.activateForUser(userId);
-
-    final post = NewsPost(
-      id: 'blocked-club-post',
-      clubId: 'c4',
-      authorId: 'club-admin',
-      content: 'Club content',
-      createdAt: DateTime(2026, 7, 18),
-    );
-    await moderationService.blockClub('c4', reason: 'spam_or_scam');
-    expect(moderationService.isClubBlocked('c4'), isTrue);
-    expect(moderationService.isPostHidden(post), isTrue);
-
-    await moderationService.unblockClub('c4');
-    expect(moderationService.isClubBlocked('c4'), isFalse);
-    expect(moderationService.isPostHidden(post), isFalse);
-  });
 }

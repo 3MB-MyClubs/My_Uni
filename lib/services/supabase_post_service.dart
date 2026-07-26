@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/news_post.dart';
-import 'supabase_config.dart';
 import 'content_safety_service.dart';
+import 'supabase_config.dart';
 
 class SupabasePostService {
   static const _imageBucket = 'post-images';

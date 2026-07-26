@@ -62,9 +62,3 @@ create policy "user_blocks_update_own" on user_blocks
 
 create policy "user_blocks_delete_own" on user_blocks
   for delete using (blocker_id = auth.uid());
-
--- The publishable client runs as the authenticated Postgres role after login.
--- RLS policies restrict rows; these grants expose only the operations the app
--- needs through the Data API.
-grant insert on table moderation_reports to authenticated;
-grant select, insert, update, delete on table user_blocks to authenticated;

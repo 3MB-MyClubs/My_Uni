@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
+import '../services/locale_service.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/user_prefs_service.dart';
@@ -54,7 +57,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Saved'),
+        title: Text(AppLocalizations.of(context)!.savedTitle),
         backgroundColor: AppColors.card,
       ),
       body: ListenableBuilder(
@@ -63,7 +66,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
           if (!isStudent) {
             return Center(
               child: Text(
-                'Saved posts are only available for students.',
+                AppLocalizations.of(context)!.savedPostsStudentsOnly,
                 style: TextStyle(color: AppColors.secondaryText),
               ),
             );
@@ -142,8 +145,8 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   Widget _buildPostsList(List<NewsPost> saved) {
     if (saved.isEmpty) {
       return _buildEmpty(
-        'No saved posts yet',
-        'Tap the bookmark icon on any post to keep it here.',
+        AppLocalizations.of(context)!.noSavedPostsYet,
+        AppLocalizations.of(context)!.tapBookmarkPostHint,
       );
     }
 
@@ -178,8 +181,8 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   Widget _buildEventsList(List<Event> saved) {
     if (saved.isEmpty) {
       return _buildEmpty(
-        'No saved events yet',
-        'Tap the bookmark icon on any event to keep it here.',
+        AppLocalizations.of(context)!.noSavedEventsYet,
+        AppLocalizations.of(context)!.tapBookmarkEventHint,
       );
     }
 
@@ -235,8 +238,14 @@ class _SegmentedBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _segmentButton('Posts ($postCount)', 0),
-          _segmentButton('Events ($eventCount)', 1),
+          _segmentButton(
+            AppLocalizations.of(context)!.postsCountLabel(postCount),
+            0,
+          ),
+          _segmentButton(
+            AppLocalizations.of(context)!.eventsCountLabel(eventCount),
+            1,
+          ),
         ],
       ),
     );
@@ -299,7 +308,7 @@ class _SavedPostRow extends StatelessWidget {
           children: [
             ClubAvatar(
               clubId: club?.id ?? post.clubId,
-              clubName: club?.name ?? 'Club',
+              clubName: club?.name ?? AppLocalizations.of(context)!.clubFallbackName,
               color: color,
               imageUrl: club?.logoUrl,
               size: 42,
@@ -315,7 +324,7 @@ class _SavedPostRow extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          club?.name ?? 'Campus post',
+                          club?.name ?? AppLocalizations.of(context)!.campusPostFallback,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -351,7 +360,7 @@ class _SavedPostRow extends StatelessWidget {
             ),
             IconButton(
               icon: Icon(Icons.bookmark, color: color),
-              tooltip: 'Remove from saved',
+              tooltip: AppLocalizations.of(context)!.removeFromSaved,
               onPressed: onRemove,
             ),
           ],
@@ -375,21 +384,6 @@ class _SavedEventRow extends StatelessWidget {
     required this.onOpen,
     required this.onRemove,
   });
-
-  static const List<String> _months = [
-    'JAN',
-    'FEB',
-    'MAR',
-    'APR',
-    'MAY',
-    'JUN',
-    'JUL',
-    'AUG',
-    'SEP',
-    'OCT',
-    'NOV',
-    'DEC',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -417,7 +411,9 @@ class _SavedEventRow extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    _months[date.month - 1],
+                    DateFormat.MMM(
+                      localeService.languageCode,
+                    ).format(date).toUpperCase(),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -453,7 +449,7 @@ class _SavedEventRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${club?.name ?? 'Campus event'} · $time · ${event.location}',
+                    '${club?.name ?? AppLocalizations.of(context)!.campusEventFallback} · $time · ${event.location}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -467,7 +463,7 @@ class _SavedEventRow extends StatelessWidget {
             ),
             IconButton(
               icon: Icon(Icons.bookmark, color: color),
-              tooltip: 'Remove from saved',
+              tooltip: AppLocalizations.of(context)!.removeFromSaved,
               onPressed: onRemove,
             ),
           ],

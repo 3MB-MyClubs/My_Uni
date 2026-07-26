@@ -19,12 +19,10 @@ class ModerationService extends ChangeNotifier {
 
   final Set<String> _hiddenPostIds = {};
   final Set<String> _blockedUserIds = {};
-  final Set<String> _blockedClubIds = {};
   String? _activeUserId;
 
   Set<String> get hiddenPostIds => Set.unmodifiable(_hiddenPostIds);
   Set<String> get blockedUserIds => Set.unmodifiable(_blockedUserIds);
-  Set<String> get blockedClubIds => Set.unmodifiable(_blockedClubIds);
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
@@ -40,15 +38,12 @@ class ModerationService extends ChangeNotifier {
 
   String _hiddenKey(String userId) => 'moderation_hidden_posts_$userId';
   String _blockedKey(String userId) => 'moderation_blocked_users_$userId';
-  String _blockedClubsKey(String userId) => 'moderation_blocked_clubs_$userId';
 
   bool isPostHidden(NewsPost post) =>
       _hiddenPostIds.contains(post.id) ||
-      _blockedClubIds.contains(post.clubId) ||
       (post.authorId.isNotEmpty && _blockedUserIds.contains(post.authorId));
 
   bool isUserBlocked(String userId) => _blockedUserIds.contains(userId);
-  bool isClubBlocked(String clubId) => _blockedClubIds.contains(clubId);
 
   /// Loads this account's safety choices and merges server-side blocks.
   Future<void> activateForUser(String userId) async {
@@ -61,30 +56,18 @@ class ModerationService extends ChangeNotifier {
     _blockedUserIds
       ..clear()
       ..addAll(preferences.getStringList(_blockedKey(userId)) ?? const []);
-    _blockedClubIds
-      ..clear()
-      ..addAll(preferences.getStringList(_blockedClubsKey(userId)) ?? const []);
     notifyListeners();
 
     final client = _client;
     if (client == null || !_uuidPattern.hasMatch(userId)) return;
     try {
-      final results = await Future.wait([
-        client
-            .from('user_blocks')
-            .select('blocked_id')
-            .eq('blocker_id', userId),
-        client.from('club_blocks').select('club_id').eq('blocker_id', userId),
-      ]);
-      final rows = results[0];
+      final rows = await client
+          .from('user_blocks')
+          .select('blocked_id')
+          .eq('blocker_id', userId);
       _blockedUserIds.addAll(
         rows
             .map((row) => (row as Map)['blocked_id']?.toString() ?? '')
-            .where((id) => id.isNotEmpty),
-      );
-      _blockedClubIds.addAll(
-        results[1]
-            .map((row) => (row as Map)['club_id']?.toString() ?? '')
             .where((id) => id.isNotEmpty),
       );
       await _persist();
@@ -98,7 +81,6 @@ class ModerationService extends ChangeNotifier {
     _activeUserId = null;
     _hiddenPostIds.clear();
     _blockedUserIds.clear();
-    _blockedClubIds.clear();
     notifyListeners();
   }
 
@@ -158,90 +140,6 @@ class ModerationService extends ChangeNotifier {
     );
   }
 
-  Future<void> unblockUser(String userId) async {
-    if (!_blockedUserIds.contains(userId)) return;
-    final actorId = _actorId;
-    _blockedUserIds.remove(userId);
-    await _persist();
-    notifyListeners();
-
-    final client = _client;
-    if (client == null ||
-        !_uuidPattern.hasMatch(actorId) ||
-        !_uuidPattern.hasMatch(userId)) {
-      return;
-    }
-    try {
-      await client
-          .from('user_blocks')
-          .delete()
-          .eq('blocker_id', actorId)
-          .eq('blocked_id', userId);
-    } catch (error) {
-      _blockedUserIds.add(userId);
-      await _persist();
-      notifyListeners();
-      rethrow;
-    }
-  }
-
-  Future<void> blockClub(String clubId, {required String reason}) async {
-    final actorId = _actorId;
-    if (clubId.isEmpty) return;
-
-    _blockedClubIds.add(clubId);
-    await _persist();
-    notifyListeners();
-
-    final client = _client;
-    if (client != null &&
-        _uuidPattern.hasMatch(actorId) &&
-        _uuidPattern.hasMatch(clubId)) {
-      try {
-        await client.from('club_blocks').upsert({
-          'blocker_id': actorId,
-          'club_id': clubId,
-        }, onConflict: 'blocker_id,club_id');
-      } catch (error) {
-        debugPrint('Could not sync club block: $error');
-      }
-    }
-
-    await _submitReport(
-      targetType: 'club',
-      targetId: clubId,
-      reason: reason,
-      source: 'block',
-    );
-  }
-
-  Future<void> unblockClub(String clubId) async {
-    if (!_blockedClubIds.contains(clubId)) return;
-    final actorId = _actorId;
-    _blockedClubIds.remove(clubId);
-    await _persist();
-    notifyListeners();
-
-    final client = _client;
-    if (client == null ||
-        !_uuidPattern.hasMatch(actorId) ||
-        !_uuidPattern.hasMatch(clubId)) {
-      return;
-    }
-    try {
-      await client
-          .from('club_blocks')
-          .delete()
-          .eq('blocker_id', actorId)
-          .eq('club_id', clubId);
-    } catch (error) {
-      _blockedClubIds.add(clubId);
-      await _persist();
-      notifyListeners();
-      rethrow;
-    }
-  }
-
   Future<void> _submitReport({
     required String targetType,
     required String targetId,
@@ -286,10 +184,6 @@ class ModerationService extends ChangeNotifier {
     await Future.wait([
       preferences.setStringList(_hiddenKey(userId), _hiddenPostIds.toList()),
       preferences.setStringList(_blockedKey(userId), _blockedUserIds.toList()),
-      preferences.setStringList(
-        _blockedClubsKey(userId),
-        _blockedClubIds.toList(),
-      ),
     ]);
   }
 }

@@ -8,7 +8,13 @@
       "Read(//Users/hakantuncay/**)",
       "Bash(/Users/hakantuncay/flutter/bin/flutter pub:*)",
       "Bash(export PATH=\"$PATH:/Users/hakantuncay/development/flutter/bin\")",
-      "Bash(/Users/hakantuncay/fvm/versions/stable/bin/flutter analyze:*)"
+      "Bash(/Users/hakantuncay/fvm/versions/stable/bin/flutter analyze:*)",
+      "Bash(dart analyze *)",
+      "Bash(flutter gen-l10n *)",
+      "Bash(grep -vi \"// \")",
+      "Bash(rm lib/services/app_strings.dart)",
+      "Bash(node -e \"const a=require\\('./lib/l10n/app_en.arb'\\); console.log\\(Object.keys\\(a\\).filter\\(k=>!k.startsWith\\('@'\\)\\).join\\(', '\\)\\)\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

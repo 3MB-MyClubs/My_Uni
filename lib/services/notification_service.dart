@@ -1,13 +1,21 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../l10n/app_localizations.dart';
 import '../models/event.dart';
+import 'locale_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   late FlutterLocalNotificationsPlugin _notificationsPlugin;
   bool _initialized = false;
+
+  // No BuildContext is available this deep in the service layer; system
+  // notification text is resolved here via the current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
 
   NotificationService._internal();
 
@@ -70,13 +78,13 @@ class NotificationService {
       event: event,
       reminderId: _eventReminderId(event.id, 'day'),
       before: const Duration(days: 1),
-      label: 'tomorrow',
+      body: _l10n.eventStartsTomorrow(event.title),
     );
     await _scheduleEventReminder(
       event: event,
       reminderId: _eventReminderId(event.id, 'hour'),
       before: const Duration(hours: 1),
-      label: 'in 1 hour',
+      body: _l10n.eventStartsInOneHour(event.title),
     );
   }
 
@@ -90,16 +98,16 @@ class NotificationService {
     required Event event,
     required int reminderId,
     required Duration before,
-    required String label,
+    required String body,
   }) async {
     final reminderAt = event.dateTime.subtract(before);
     if (!reminderAt.isAfter(DateTime.now())) return;
 
-    const AndroidNotificationDetails androidDetails =
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
           'event_reminders',
-          'Event reminders',
-          channelDescription: 'Reminders for events you RSVP to',
+          _l10n.eventReminderChannelName,
+          channelDescription: _l10n.eventReminderChannelDescription,
           importance: Importance.max,
           priority: Priority.high,
           showWhen: true,
@@ -113,15 +121,15 @@ class NotificationService {
       presentSound: true,
     );
 
-    const NotificationDetails details = NotificationDetails(
+    final NotificationDetails details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _notificationsPlugin.zonedSchedule(
       reminderId,
-      'Event reminder',
-      '${event.title} starts $label',
+      _l10n.eventReminderTitle,
+      body,
       tz.TZDateTime.from(reminderAt, tz.local),
       details,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
