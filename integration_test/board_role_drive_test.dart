@@ -13,7 +13,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/onboarding/onboarding_service.dart';
+import 'package:flutter_application_1/services/tutorial_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 
 Future<void> _takeScreenshotIfAvailable(
@@ -38,7 +38,7 @@ void main() {
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await onboardingService.initialize();
+    await tutorialService.initialize();
     contentStore.applyToLists();
     contentStore.loadBoardMemberIds();
     contentStore.loadBoardMemberTitles();

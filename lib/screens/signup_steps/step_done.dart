@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../l10n/app_localizations.dart';
 import 'signup_theme.dart';
 
 class StepDone extends StatefulWidget {
@@ -44,11 +43,9 @@ class _StepDoneState extends State<StepDone>
     super.dispose();
   }
 
-  String _firstName(BuildContext context) {
+  String get _firstName {
     final parts = widget.name.trim().split(' ');
-    return parts.isNotEmpty && parts.first.isNotEmpty
-        ? parts.first
-        : AppLocalizations.of(context)!.fallbackNameGreeting;
+    return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : 'there';
   }
 
   @override
@@ -60,7 +57,7 @@ class _StepDoneState extends State<StepDone>
         child: Stack(
           children: [
             // ── Dark base ───────────────────────────────────────
-            Positioned.fill(child: Container(color: const Color(0xFF0C0608))),
+            Positioned.fill(child: Container(color: const Color(0xFF0B0B0C))),
 
             // ── Radial burgundy wash from top ───────────────────
             Positioned.fill(
@@ -93,7 +90,7 @@ class _StepDoneState extends State<StepDone>
                           const SizedBox(height: 28),
 
                           Text(
-                            AppLocalizations.of(context)!.welcomeToKoc,
+                            'WELCOME TO KOÇ',
                             style: TextStyle(
                               fontSize: 11,
                               letterSpacing: 2.0,
@@ -104,9 +101,7 @@ class _StepDoneState extends State<StepDone>
                           const SizedBox(height: 12),
 
                           Text(
-                            AppLocalizations.of(
-                              context,
-                            )!.youreInName(_firstName(context)),
+                            "You're in,\n$_firstName.",
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 40,
@@ -119,7 +114,7 @@ class _StepDoneState extends State<StepDone>
                           const SizedBox(height: 16),
 
                           Text(
-                            AppLocalizations.of(context)!.accountReadyRedirecting,
+                            'Your account is ready.\nRedirecting you to sign in.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 15,

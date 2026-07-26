@@ -28,8 +28,6 @@ class ContentSafetyService {
     }
     return null;
   }
-
-  bool isRejected(Iterable<String> values) => rejectionMessage(values) != null;
 }
 
 final contentSafetyService = ContentSafetyService();

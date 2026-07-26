@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart' as app;
 import '../../../services/app_colors.dart';
 import '../data/calendar_event_model.dart';
@@ -50,15 +49,15 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
           ..hideCurrentSnackBar()
           ..showSnackBar(
             SnackBar(
-              content: Row(
+              content: const Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.check_circle_rounded,
                     color: Colors.white,
                     size: 18,
                   ),
-                  const SizedBox(width: 8),
-                  Text(AppLocalizations.of(context)!.calendarAddedToCalendarSnackbar),
+                  SizedBox(width: 8),
+                  Text('Event added to calendar'),
                 ],
               ),
               backgroundColor: const Color(0xFF2E7D32),
@@ -136,10 +135,10 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                   const SizedBox(width: 8),
                   Text(
                     isLoading
-                        ? AppLocalizations.of(context)!.addingEllipsis
+                        ? 'Adding…'
                         : isSuccess
-                        ? AppLocalizations.of(context)!.calendarAddedToCalendarButton
-                        : AppLocalizations.of(context)!.addToCalendarButton,
+                        ? '✓ Added to Calendar'
+                        : 'Add to Calendar',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -193,9 +192,7 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
             ),
             const SizedBox(height: 16),
             Text(
-              isPermanent
-                  ? AppLocalizations.of(context)!.calendarAccessDeniedTitle
-                  : AppLocalizations.of(context)!.allowCalendarAccessTitle,
+              isPermanent ? 'Calendar Access Denied' : 'Allow Calendar Access',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -206,8 +203,8 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
             const SizedBox(height: 10),
             Text(
               isPermanent
-                  ? AppLocalizations.of(context)!.calendarAccessDeniedBody
-                  : AppLocalizations.of(context)!.calendarAccessRequestBody,
+                  ? 'Calendar access was denied. To add events, please enable it in:\n\nSettings → Privacy & Security → Calendars'
+                  : 'My Clubs would like to save this event to your Calendar app.\n\nYour calendar is only used to add events you choose.',
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.secondaryText,
@@ -237,9 +234,9 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                   ),
-                  child: Text(
-                    AppLocalizations.of(context)!.notNow,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  child: const Text(
+                    'Not Now',
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -274,9 +271,7 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     elevation: 0,
                   ),
                   child: Text(
-                    isPermanent
-                        ? AppLocalizations.of(context)!.openSettingsButton
-                        : AppLocalizations.of(context)!.allowAccessButton,
+                    isPermanent ? 'Open Settings' : 'Allow Access',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),

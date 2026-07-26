@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
 
@@ -193,7 +192,7 @@ class _AcademicProgramPickerSheetState
                         setState(_selected.clear);
                       },
                       child: Text(
-                        AppLocalizations.of(context)!.clear,
+                        'Clear',
                         style: TextStyle(color: AppColors.secondaryText),
                       ),
                     ),
@@ -202,7 +201,7 @@ class _AcademicProgramPickerSheetState
                       onPressed: () =>
                           Navigator.pop(context, _selected.toList()),
                       child: Text(
-                        AppLocalizations.of(context)!.done,
+                        'Done',
                         style: TextStyle(
                           color: AppColors.primaryRed,
                           fontWeight: FontWeight.w800,
@@ -215,21 +214,18 @@ class _AcademicProgramPickerSheetState
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: TextField(
-                key: const ValueKey('academic-program-picker-search'),
                 controller: _searchController,
                 focusNode: _searchFocus,
                 autocorrect: false,
                 textInputAction: TextInputAction.search,
                 onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
-                  hintText: AppLocalizations.of(context)!.searchMajorsHint,
+                  hintText: 'Search majors',
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: AppLocalizations.of(
-                            context,
-                          )!.clearSearchTooltip,
+                          tooltip: 'Clear search',
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');
@@ -261,7 +257,7 @@ class _AcademicProgramPickerSheetState
               child: matches.isEmpty
                   ? Center(
                       child: Text(
-                        AppLocalizations.of(context)!.noMatchingMajor,
+                        'No matching major',
                         style: TextStyle(color: AppColors.secondaryText),
                       ),
                     )
@@ -279,7 +275,6 @@ class _AcademicProgramPickerSheetState
                         final program = matches[index];
                         final isSelected = _selected.contains(program);
                         return ListTile(
-                          key: ValueKey('academic-program-$program'),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 3,

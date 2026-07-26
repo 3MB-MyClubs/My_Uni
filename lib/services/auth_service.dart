@@ -11,8 +11,6 @@ import 'student_profile_service.dart';
 import 'supabase_interaction_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
-import 'app_presence_service.dart';
-import 'people_service.dart';
 
 // ...existing code...
 
@@ -155,7 +153,6 @@ class AuthService {
           role: rowString('role') ?? 'student',
           subscribedClubIds: const [],
         );
-        unawaited(peopleService.registerLocalUser(_currentUser!));
         _currentAdmin = null;
         if (profileRow != null) {
           studentProfileService.applyCoreToUserState(profileRow);
@@ -207,7 +204,7 @@ class AuthService {
       return false;
     }
     final newUser = User(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
       email: email,
       password: password,
@@ -215,7 +212,6 @@ class AuthService {
       subscribedClubIds: [],
     );
     users.add(newUser);
-    unawaited(peopleService.registerLocalUser(newUser));
     _currentUser = newUser;
     _currentAdmin = null;
     return true;
@@ -314,7 +310,6 @@ class AuthService {
   }
 
   void logout() {
-    unawaited(appPresenceService.stop());
     if (SupabaseConfig.isConfigured) {
       try {
         unawaited(Supabase.instance.client.auth.signOut());

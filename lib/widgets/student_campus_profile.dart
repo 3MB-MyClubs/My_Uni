@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../l10n/app_localizations.dart';
 import '../models/club.dart';
-import '../services/app_colors.dart';
 import '../services/theme_service.dart';
 import 'club_avatar.dart';
 import 'user_avatar.dart';
@@ -11,17 +9,17 @@ import 'user_avatar.dart';
 /// burgundy/white branding in both themes; the surrounding page chrome
 /// (background, buttons, cards, text) follows the app's light/dark setting.
 abstract final class _StudentDark {
-  static const background = DarkColors.background;
-  static const deep = DarkColors.card;
-  static const solid = DarkColors.surfaceAlt;
-  static const card = DarkColors.card;
+  static const background = Color(0xFF080000);
+  static const deep = Color(0xFF100005);
+  static const solid = Color(0xFF160008);
+  static const card = Color(0x0EFFFFFF);
   static const text = Colors.white;
   static const textSoft = Color(0xD1FFFFFF);
-  static const textMuted = DarkColors.secondaryText;
-  static const secondary = DarkColors.secondaryText;
-  static const border = DarkColors.divider;
-  static const borderStrong = DarkColors.divider;
-  static const accent = Color(0xFF9E2045);
+  static const textMuted = Color(0x8CFFFFFF);
+  static const secondary = Color(0xFF8A8A8E);
+  static const border = Color(0x14FFFFFF);
+  static const borderStrong = Color(0x2EFFFFFF);
+  static const accent = Color(0xFFD96A8B);
 }
 
 abstract final class _StudentLight {
@@ -116,7 +114,6 @@ class StudentCampusProfileView extends StatelessWidget {
   final Widget leading;
   final Widget trailing;
   final Widget? primaryAction;
-  final Widget? supplementalContent;
   final List<StudentCampusMembership> memberships;
   final String clubsTitle;
   final String? clubsActionLabel;
@@ -135,7 +132,6 @@ class StudentCampusProfileView extends StatelessWidget {
     required this.memberships,
     required this.clubsTitle,
     this.primaryAction,
-    this.supplementalContent,
     this.clubsActionLabel,
     this.onClubsAction,
     this.onClubTap,
@@ -199,15 +195,12 @@ class StudentCampusProfileView extends StatelessWidget {
                       child: primaryAction,
                     ),
                   ),
-                if (supplementalContent != null)
-                  SliverToBoxAdapter(child: supplementalContent),
-                if (profile.bio.trim().isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _StudentBioCard(bio: profile.bio),
-                    ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _StudentBioCard(bio: profile.bio),
                   ),
+                ),
                 if (memberships.isNotEmpty) ...[
                   SliverToBoxAdapter(
                     child: Padding(
@@ -270,25 +263,23 @@ class StudentCampusIdCard extends StatelessWidget {
     this.onFollowersTap,
   });
 
-  String _majorLine(BuildContext context) {
+  String get _majorLine {
     final programs = <String>[
       if (profile.major.trim().isNotEmpty) profile.major.trim(),
       ...profile.doubleMajors
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty),
     ];
-    return programs.isEmpty
-        ? AppLocalizations.of(context)!.majorNotAdded
-        : programs.join(' & ');
+    return programs.isEmpty ? 'Major not added' : programs.join(' & ');
   }
 
-  String _minorLine(BuildContext context) {
+  String get _minorLine {
     final values = profile.minors
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList();
     if (values.isEmpty) return '';
-    return AppLocalizations.of(context)!.minorIn(values.join(' & '));
+    return 'Minor in ${values.join(' & ')}';
   }
 
   @override
@@ -347,7 +338,7 @@ class StudentCampusIdCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      AppLocalizations.of(context)!.studentIdLabel,
+                      'STUDENT ID',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.65),
                         fontSize: 9,
@@ -404,7 +395,7 @@ class StudentCampusIdCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _majorLine(context),
+                            _majorLine,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -412,10 +403,10 @@ class StudentCampusIdCard extends StatelessWidget {
                               fontSize: 11.5,
                             ),
                           ),
-                          if (_minorLine(context).isNotEmpty) ...[
+                          if (_minorLine.isNotEmpty) ...[
                             const SizedBox(height: 1),
                             Text(
-                              _minorLine(context),
+                              _minorLine,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -459,17 +450,17 @@ class StudentCampusIdCard extends StatelessWidget {
                   children: [
                     _CampusStat(
                       value: profile.clubs,
-                      label: AppLocalizations.of(context)!.clubs,
+                      label: 'Clubs',
                       onTap: onClubsTap,
                     ),
                     _CampusStat(
                       value: profile.following,
-                      label: AppLocalizations.of(context)!.following,
+                      label: 'Following',
                       onTap: onFollowingTap,
                     ),
                     _CampusStat(
                       value: profile.followers,
-                      label: AppLocalizations.of(context)!.followers,
+                      label: 'Followers',
                       onTap: onFollowersTap,
                       showDivider: false,
                     ),
@@ -654,9 +645,7 @@ class _StudentBioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = bio.trim().isEmpty
-        ? AppLocalizations.of(context)!.noBioYet
-        : bio.trim();
+    final text = bio.trim().isEmpty ? 'No bio yet.' : bio.trim();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -668,7 +657,7 @@ class _StudentBioCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StudentProfileSectionLabel(AppLocalizations.of(context)!.bioLabel),
+          const StudentProfileSectionLabel('Bio'),
           const SizedBox(height: 6),
           Text(
             text,
@@ -767,25 +756,15 @@ class StudentClubRoleBadge extends StatelessWidget {
     this.compact = false,
   });
 
-  // Raw (untranslated) label used for state checks below — the role text
-  // itself is data-driven (e.g. "Member", "Founder"), so it must always be
-  // compared in its original form regardless of the display locale.
-  String get _rawLabel {
+  String get _label {
     final value = role.trim();
     return value.isEmpty ? 'Member' : value;
   }
 
-  String _displayLabel(BuildContext context) {
-    final value = role.trim();
-    return value.isEmpty
-        ? AppLocalizations.of(context)!.memberRoleDefault
-        : value;
-  }
-
-  bool get _isMember => _rawLabel.toLowerCase() == 'member';
+  bool get _isMember => _label.toLowerCase() == 'member';
 
   bool get _isFounder {
-    final value = _rawLabel.toLowerCase();
+    final value = _label.toLowerCase();
     return value.contains('founder') || value.contains('co-founder');
   }
 
@@ -799,9 +778,7 @@ class StudentClubRoleBadge extends StatelessWidget {
     final background = _isFounder
         ? const Color(0x26FFC857)
         : _isMember
-        ? (themeService.isDark
-              ? const Color(0x0FFFFFFF)
-              : const Color(0x0A000000))
+        ? (themeService.isDark ? const Color(0x0FFFFFFF) : const Color(0x0A000000))
         : const Color(0x478C1D40);
     final border = _isFounder
         ? const Color(0x66FFC857)
@@ -814,9 +791,8 @@ class StudentClubRoleBadge extends StatelessWidget {
         ? Icons.person_outline_rounded
         : Icons.workspace_premium_rounded;
 
-    final displayLabel = _displayLabel(context);
     return Semantics(
-      label: AppLocalizations.of(context)!.clubRoleSemanticLabel(displayLabel),
+      label: 'Club role: $_label',
       child: Container(
         constraints: BoxConstraints(maxWidth: compact ? 112 : 150),
         padding: EdgeInsets.symmetric(
@@ -835,7 +811,7 @@ class StudentClubRoleBadge extends StatelessWidget {
             const SizedBox(width: 5),
             Flexible(
               child: Text(
-                displayLabel,
+                _label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

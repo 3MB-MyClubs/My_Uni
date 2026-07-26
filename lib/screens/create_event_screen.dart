@@ -17,35 +17,15 @@ import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
-import '../services/photo_upload_quality.dart';
 import '../services/supabase_event_service.dart';
 import '../services/user_state.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/mention_text_field.dart';
-import '../l10n/app_localizations.dart';
 
 bool _isRemoteEventImagePath(String path) =>
     path.startsWith('http://') || path.startsWith('https://');
-
-List<String> _monthLabels(BuildContext context) {
-  final l10n = AppLocalizations.of(context)!;
-  return [
-    l10n.monthJan,
-    l10n.monthFeb,
-    l10n.monthMar,
-    l10n.monthApr,
-    l10n.monthMay,
-    l10n.monthJun,
-    l10n.monthJul,
-    l10n.monthAug,
-    l10n.monthSep,
-    l10n.monthOct,
-    l10n.monthNov,
-    l10n.monthDec,
-  ];
-}
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
@@ -118,15 +98,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final PageController _pageController = PageController();
   int _step = 0;
   static const int _stepCount = 4;
-  List<String> get _stepTitles {
-    final l10n = AppLocalizations.of(context)!;
-    return [
-      l10n.eventStepBasics,
-      l10n.eventStepWhen,
-      l10n.eventStepDetails,
-      l10n.eventStepReview,
-    ];
-  }
+  static const List<String> _stepTitles = [
+    'Basics',
+    'When',
+    'Details',
+    'Review',
+  ];
 
   bool get _isEditing => widget.existing != null;
 
@@ -194,10 +171,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   // Reason shown when a Next is blocked, per step.
   String _blockedReason(int step) {
-    final l10n = AppLocalizations.of(context)!;
-    if (step == 0) return l10n.addTitleLocationToContinue;
-    if (step == 1) return l10n.endTimeAfterStartTime;
-    return l10n.completeRequiredFields;
+    if (step == 0) return 'Add an event title and location to continue.';
+    if (step == 1) return 'End time must be after the start time.';
+    return 'Please complete the required fields.';
   }
 
   void _goToStep(int target) {
@@ -290,14 +266,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
                     child: Text(
-                      AppLocalizations.of(context)!.cancel,
+                      'Cancel',
                       style: TextStyle(color: AppColors.secondaryText),
                     ),
                   ),
                   Text(
-                    isStart
-                        ? AppLocalizations.of(context)!.startsLabel
-                        : AppLocalizations.of(context)!.endsLabel,
+                    isStart ? 'Starts' : 'Ends',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppColors.text,
@@ -305,8 +279,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, temp),
-                    child: Text(
-                      AppLocalizations.of(context)!.done,
+                    child: const Text(
+                      'Done',
                       style: TextStyle(
                         color: AppColors.primaryRed,
                         fontWeight: FontWeight.bold,
@@ -381,12 +355,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
                     child: Text(
-                      AppLocalizations.of(context)!.cancel,
+                      'Cancel',
                       style: TextStyle(color: AppColors.secondaryText),
                     ),
                   ),
                   Text(
-                    AppLocalizations.of(context)!.time,
+                    'Time',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppColors.text,
@@ -395,8 +369,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   TextButton(
                     onPressed: () =>
                         Navigator.pop(ctx, TimeOfDay.fromDateTime(temp)),
-                    child: Text(
-                      AppLocalizations.of(context)!.done,
+                    child: const Text(
+                      'Done',
                       style: TextStyle(
                         color: AppColors.primaryRed,
                         fontWeight: FontWeight.bold,
@@ -533,10 +507,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!.couldNotSaveEventSupabase,
-              ),
+            const SnackBar(
+              content: Text('Could not save event to Supabase.'),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -549,14 +521,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
       if (!mounted) return;
       if (ok) {
+        contentStore.notifyContentChanged();
         widget.onCreated?.call();
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+            const SnackBar(
+              content: Text('Could not save changes.'),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -608,22 +581,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   String _publishErrorMessage(Object error) {
-    final l10n = AppLocalizations.of(context)!;
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||
         text.contains('42501')) {
-      return l10n.publishErrorRlsPolicyEvent;
+      return 'Could not publish event. Check events RLS policies for this club account.';
     }
     if (text.contains('column') ||
         text.contains('schedule') ||
         text.contains('speakers')) {
-      return l10n.publishErrorMigrationEvent;
+      return 'Could not publish event. Run the latest events SQL migration.';
     }
     if (text.contains('event-images') || text.contains('storage')) {
-      return l10n.publishErrorStorageEvent;
+      return 'Could not upload event image. Check the event-images bucket policies.';
     }
-    return l10n.publishErrorGenericEvent;
+    return 'Could not publish event. Check Supabase settings.';
   }
 
   @override
@@ -656,17 +628,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         leading: TextButton(
           onPressed: _back,
           child: Text(
-            _step == 0
-                ? AppLocalizations.of(context)!.cancel
-                : AppLocalizations.of(context)!.back,
+            _step == 0 ? 'Cancel' : 'Back',
             style: TextStyle(color: AppColors.secondaryText),
           ),
         ),
         leadingWidth: 80,
         title: Text(
-          _isEditing
-              ? AppLocalizations.of(context)!.editEventTitle
-              : AppLocalizations.of(context)!.newEventTitle,
+          _isEditing ? 'Edit Event' : 'New Event',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
         centerTitle: true,
@@ -715,22 +683,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               children: [
                 _Field(
                   controller: _titleController,
-                  label: AppLocalizations.of(context)!.eventTitleLabel,
-                  hint: AppLocalizations.of(context)!.eventTitleHint,
+                  label: 'Event Title',
+                  hint: 'e.g. Spring Hackathon',
                   onChanged: (_) => setState(() {}),
                 ),
                 const Divider(height: 1),
                 _Field(
                   controller: _locationController,
-                  label: AppLocalizations.of(context)!.locationLabel,
-                  hint: AppLocalizations.of(context)!.locationHint,
+                  label: 'Location',
+                  hint: 'Write the event location',
                   onChanged: (_) => setState(() {}),
                 ),
                 const Divider(height: 1),
                 _Field(
                   controller: _descController,
-                  label: AppLocalizations.of(context)!.descriptionLabel,
-                  hint: AppLocalizations.of(context)!.eventDescriptionHint,
+                  label: 'Description',
+                  hint: 'Tell people what this event is about...',
                   maxLines: 4,
                   mentionOptions: _mentionOptions,
                   onChanged: (_) => setState(() {}),
@@ -752,8 +720,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         children: [
           _SectionHeader(
             icon: Icons.event_rounded,
-            label: AppLocalizations.of(context)!.eventStepWhen,
-            subtitle: AppLocalizations.of(context)!.whenSectionSubtitle,
+            label: 'When',
+            subtitle: 'Set when your event starts and ends',
           ),
           const SizedBox(height: 8),
           // ── Date & time ──────────────────────────────────────────────────
@@ -761,17 +729,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             child: Column(
               children: [
                 _DateTimeRow(
-                  label: AppLocalizations.of(context)!.startsLabel,
+                  label: 'Starts',
                   dateTime: _startDate,
                   onTap: () => _pickDateTime(true),
                 ),
                 const Divider(height: 1),
                 _DateTimeRow(
-                  label: AppLocalizations.of(context)!.endsLabel,
+                  label: 'Ends',
                   dateTime: _endDate,
                   onTap: () => _pickDateTime(false),
                   error: !_endDate.isAfter(_startDate)
-                      ? AppLocalizations.of(context)!.endMustBeAfterStartShort
+                      ? 'End must be after start'
                       : null,
                 ),
               ],
@@ -792,8 +760,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           // ── Tags ─────────────────────────────────────────────────────────
           _SectionHeader(
             icon: Icons.label_outline_rounded,
-            label: AppLocalizations.of(context)!.tagsLabel,
-            subtitle: AppLocalizations.of(context)!.tagsSectionSubtitle,
+            label: 'Tags',
+            subtitle: 'Create your own tags for discovery',
             badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
@@ -832,9 +800,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           controller: _customTagCtrl,
                           style: TextStyle(fontSize: 13, color: AppColors.text),
                           decoration: InputDecoration(
-                            hintText: AppLocalizations.of(
-                              context,
-                            )!.addCustomTagHint,
+                            hintText: 'Add custom tag…',
                             hintStyle: TextStyle(
                               color: AppColors.secondaryText,
                               fontSize: 13,
@@ -897,8 +863,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             color: AppColors.primaryRed,
                             borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
-                          child: Text(
-                            AppLocalizations.of(context)!.add,
+                          child: const Text(
+                            'Add',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -919,8 +885,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           // ── Speakers ──────────────────────────────────────────────────────
           _SectionHeader(
             icon: Icons.groups_2_rounded,
-            label: AppLocalizations.of(context)!.speakersLabel,
-            subtitle: AppLocalizations.of(context)!.speakersSectionSubtitle,
+            label: 'Speakers',
+            subtitle: 'Optional — add speaker name, role & LinkedIn',
             badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
@@ -944,27 +910,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             children: [
                               _Field(
                                 controller: _speakers[i].nameCtrl,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.speakerNameLabel,
-                                hint: AppLocalizations.of(
-                                  context,
-                                )!.speakerNameHint,
+                                label: 'Speaker name',
+                                hint: 'e.g. Prof. Elif Yıldız',
                               ),
                               _Field(
                                 controller: _speakers[i].roleCtrl,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.roleOrDepartmentLabel,
-                                hint: AppLocalizations.of(
-                                  context,
-                                )!.roleDeptHint,
+                                label: 'Role / department',
+                                hint: 'e.g. History',
                               ),
                               _Field(
                                 controller: _speakers[i].linkedinCtrl,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.linkedinOptionalLabel,
+                                label: 'LinkedIn (optional)',
                                 hint: 'linkedin.com/in/…',
                               ),
                             ],
@@ -997,7 +953,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         color: AppColors.primaryRed,
                       ),
                       label: Text(
-                        AppLocalizations.of(context)!.addSpeaker,
+                        'Add speaker',
                         style: TextStyle(color: AppColors.primaryRed),
                       ),
                       style: OutlinedButton.styleFrom(
@@ -1019,8 +975,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           // ── Registration ──────────────────────────────────────────────────
           _SectionHeader(
             icon: Icons.link_rounded,
-            label: AppLocalizations.of(context)!.registrationLabel,
-            subtitle: AppLocalizations.of(context)!.registrationSectionSubtitle,
+            label: 'Registration',
+            subtitle: 'Send attendees to your own sign-up form',
             badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
@@ -1031,7 +987,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                   activeThumbColor: AppColors.primaryRed,
                   title: Text(
-                    AppLocalizations.of(context)!.externalSignupLinkTitle,
+                    'External sign-up link',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1039,7 +995,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    AppLocalizations.of(context)!.externalSignupLinkSubtitle,
+                    'Attendees register on your form (Google Form, Eventbrite…)',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -1051,7 +1007,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 if (_externalReg)
                   _Field(
                     controller: _regUrlCtrl,
-                    label: AppLocalizations.of(context)!.signupUrlLabel,
+                    label: 'Sign-up URL',
                     hint: 'https://forms.gle/…',
                     onChanged: (_) => setState(() {}),
                   ),
@@ -1064,8 +1020,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           // ── Schedule / Programme ──────────────────────────────────────────
           _SectionHeader(
             icon: Icons.format_list_bulleted_rounded,
-            label: AppLocalizations.of(context)!.programmeLabel,
-            subtitle: AppLocalizations.of(context)!.programmeSectionSubtitle,
+            label: 'Programme',
+            subtitle: 'Add a timetable for your event',
             badge: const _OptionalBadge(),
           ),
           const SizedBox(height: 8),
@@ -1113,7 +1069,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            AppLocalizations.of(context)!.addTimeSlot,
+                            'Add time slot',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -1145,8 +1101,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         children: [
           _SectionHeader(
             icon: Icons.visibility_outlined,
-            label: AppLocalizations.of(context)!.eventStepReview,
-            subtitle: AppLocalizations.of(context)!.reviewSectionSubtitle,
+            label: 'Review',
+            subtitle: 'Here\'s how your event will appear',
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -1155,7 +1111,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               OutlinedButton.icon(
                 onPressed: () => _goToStep(0),
                 icon: const Icon(Icons.edit_outlined, size: 13),
-                label: Text(AppLocalizations.of(context)!.eventStepBasics),
+                label: const Text('Basics'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1177,7 +1133,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               OutlinedButton.icon(
                 onPressed: () => _goToStep(1),
                 icon: const Icon(Icons.schedule_outlined, size: 13),
-                label: Text(AppLocalizations.of(context)!.eventStepWhen),
+                label: const Text('When'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1199,7 +1155,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               OutlinedButton.icon(
                 onPressed: () => _goToStep(2),
                 icon: const Icon(Icons.settings_outlined, size: 13),
-                label: Text(AppLocalizations.of(context)!.eventStepDetails),
+                label: const Text('Details'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1249,9 +1205,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      AppLocalizations.of(
-                        context,
-                      )!.addRequiredFieldsBeforePublish,
+                      'Add a title, a location and a valid time range before publishing.',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: AppColors.text,
@@ -1265,8 +1219,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           else
             Text(
               _isEditing
-                  ? AppLocalizations.of(context)!.tapSaveChangesHint
-                  : AppLocalizations.of(context)!.tapPublishEventHint,
+                  ? 'Tap Save Changes to update this event.'
+                  : 'Tap Publish Event to share this event with your followers.',
               style: TextStyle(fontSize: 12.5, color: AppColors.secondaryText),
             ),
           const SizedBox(height: 24),
@@ -1332,9 +1286,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            AppLocalizations.of(
-              context,
-            )!.stepProgressLabel(_step + 1, _stepCount, _stepTitles[_step]),
+            'Step ${_step + 1} of $_stepCount · ${_stepTitles[_step]}',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -1372,11 +1324,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   borderRadius: BorderRadius.all(Radius.circular(14)),
                 ),
               ),
-              child: Text(
-                _step == 0
-                    ? AppLocalizations.of(context)!.cancel
-                    : AppLocalizations.of(context)!.back,
-              ),
+              child: Text(_step == 0 ? 'Cancel' : 'Back'),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1402,9 +1350,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           borderRadius: BorderRadius.all(Radius.circular(14)),
         ),
       ),
-      child: Text(
-        AppLocalizations.of(context)!.next,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+      child: const Text(
+        'Next',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
       ),
     );
   }
@@ -1434,9 +1382,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               ),
             )
           : Text(
-              _isEditing
-                  ? AppLocalizations.of(context)!.saveChangesButton
-                  : AppLocalizations.of(context)!.publishEventButton,
+              _isEditing ? 'Save Changes' : 'Publish Event',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
     );
@@ -1468,26 +1414,40 @@ class _EventPreviewCard extends StatelessWidget {
     required this.hasRegistration,
   });
 
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
   String _t(DateTime d) =>
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-  String _timeLine(BuildContext context) {
-    final months = _monthLabels(context);
+  String _timeLine() {
     final sameDay =
         startDate.year == endDate.year &&
         startDate.month == endDate.month &&
         startDate.day == endDate.day;
     if (sameDay) {
-      return '${months[startDate.month - 1]} ${startDate.day} · ${_t(startDate)} – ${_t(endDate)}';
+      return '${_months[startDate.month - 1]} ${startDate.day} · ${_t(startDate)} – ${_t(endDate)}';
     }
-    return '${months[startDate.month - 1]} ${startDate.day}, ${_t(startDate)} → '
-        '${months[endDate.month - 1]} ${endDate.day}, ${_t(endDate)}';
+    return '${_months[startDate.month - 1]} ${startDate.day}, ${_t(startDate)} → '
+        '${_months[endDate.month - 1]} ${endDate.day}, ${_t(endDate)}';
   }
 
   @override
   Widget build(BuildContext context) {
     final hasImage = imagePath != null && imagePath!.isNotEmpty;
-    String clubName = AppLocalizations.of(context)!.yourClubFallback;
+    String clubName = 'Your club';
     if (clubId != null && clubId!.isNotEmpty) {
       for (final c in clubs) {
         if (c.id == clubId) {
@@ -1496,8 +1456,7 @@ class _EventPreviewCard extends StatelessWidget {
         }
       }
     }
-    final months = _monthLabels(context);
-    final dateChip = '${months[startDate.month - 1]} ${startDate.day}';
+    final dateChip = '${_months[startDate.month - 1]} ${startDate.day}';
 
     return Container(
       decoration: BoxDecoration(
@@ -1538,9 +1497,7 @@ class _EventPreviewCard extends StatelessWidget {
                     right: 14,
                     bottom: 12,
                     child: Text(
-                      title.isEmpty
-                          ? AppLocalizations.of(context)!.eventTitlePlaceholder
-                          : title,
+                      title.isEmpty ? 'Event title' : title,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -1610,9 +1567,7 @@ class _EventPreviewCard extends StatelessWidget {
                 if (!hasImage) ...[
                   const SizedBox(height: 12),
                   Text(
-                    title.isEmpty
-                        ? AppLocalizations.of(context)!.eventTitlePlaceholder
-                        : title,
+                    title.isEmpty ? 'Event title' : title,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -1636,7 +1591,7 @@ class _EventPreviewCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        _timeLine(context),
+                        _timeLine(),
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppColors.secondaryText,
@@ -1658,9 +1613,7 @@ class _EventPreviewCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        location.isEmpty
-                            ? AppLocalizations.of(context)!.locationLabel
-                            : location,
+                        location.isEmpty ? 'Location' : location,
                         style: TextStyle(
                           fontSize: 12.5,
                           color: location.isEmpty
@@ -1716,7 +1669,7 @@ class _EventPreviewCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        AppLocalizations.of(context)!.externalSignupBadge,
+                        'External sign-up',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1780,7 +1733,7 @@ class _HeroEditor extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        AppLocalizations.of(context)!.noEventImageSelected,
+                        'No event image selected',
                         style: TextStyle(
                           color: AppColors.secondaryText,
                           fontSize: 13,
@@ -1789,7 +1742,7 @@ class _HeroEditor extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        AppLocalizations.of(context)!.addImageOrKeepImageless,
+                        'Add an image or keep this event imageless',
                         style: TextStyle(
                           color: AppColors.secondaryText.withValues(
                             alpha: 0.75,
@@ -1828,11 +1781,7 @@ class _HeroEditor extends StatelessWidget {
                 right: 14,
                 bottom: 14,
                 child: Text(
-                  titleText.isEmpty
-                      ? AppLocalizations.of(
-                          context,
-                        )!.eventTitlePreviewPlaceholder
-                      : titleText,
+                  titleText.isEmpty ? 'Event title preview' : titleText,
                   style: TextStyle(
                     color: titleText.isEmpty
                         ? Colors.white.withValues(alpha: 0.4)
@@ -1903,24 +1852,28 @@ class _PhotoEditButton extends StatelessWidget {
   });
 
   Future<void> _pickFromGallery(BuildContext context) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (picked == null || !context.mounted) return;
 
-    final cropPhotoTitle = AppLocalizations.of(context)!.cropPhotoTitle;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
-      maxWidth: PhotoUploadQuality.contentMaxDimension,
-      maxHeight: PhotoUploadQuality.contentMaxDimension,
+      maxWidth: 1920,
+      maxHeight: 1920,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: PhotoUploadQuality.jpegQuality,
+      compressQuality: 85,
       uiSettings: [
         IOSUiSettings(
-          title: cropPhotoTitle,
+          title: 'Crop Photo',
           resetAspectRatioEnabled: true,
           rotateButtonsHidden: false,
         ),
         AndroidUiSettings(
-          toolbarTitle: cropPhotoTitle,
+          toolbarTitle: 'Crop Photo',
           toolbarColor: AppColors.primaryRed,
           toolbarWidgetColor: Colors.white,
           lockAspectRatio: false,
@@ -1953,9 +1906,7 @@ class _PhotoEditButton extends StatelessWidget {
             ),
             const SizedBox(width: 5),
             Text(
-              hasImage
-                  ? AppLocalizations.of(context)!.changeEventPhoto
-                  : AppLocalizations.of(context)!.addPhoto,
+              hasImage ? 'Change photo' : 'Add photo',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
@@ -2050,7 +2001,7 @@ class _ScheduleSlotEditor extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    '★ ${AppLocalizations.of(context)!.highlight}',
+                    '★ Highlight',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -2079,7 +2030,7 @@ class _ScheduleSlotEditor extends StatelessWidget {
             onChanged: (_) => onChanged(),
             style: TextStyle(fontSize: 13, color: AppColors.text),
             decoration: InputDecoration(
-              hintText: AppLocalizations.of(context)!.sessionTitleRequiredHint,
+              hintText: 'Session title (required)',
               hintStyle: TextStyle(
                 color: AppColors.secondaryText,
                 fontSize: 13,
@@ -2109,9 +2060,7 @@ class _ScheduleSlotEditor extends StatelessWidget {
             onChanged: (_) => onChanged(),
             style: TextStyle(fontSize: 12, color: AppColors.text),
             decoration: InputDecoration(
-              hintText: AppLocalizations.of(
-                context,
-              )!.subtitleSpeakerOptionalHint,
+              hintText: 'Subtitle / speaker (optional)',
               hintStyle: TextStyle(
                 color: AppColors.secondaryText,
                 fontSize: 12,
@@ -2204,7 +2153,7 @@ class _OptionalBadge extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
       ),
       child: Text(
-        AppLocalizations.of(context)!.optional,
+        'Optional',
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w500,
@@ -2294,8 +2243,21 @@ class _DateTimeRow extends StatelessWidget {
     this.error,
   });
 
-  String _fmtDate(BuildContext context, DateTime dt) {
-    final months = _monthLabels(context);
+  String _fmtDate(DateTime dt) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 
@@ -2335,7 +2297,7 @@ class _DateTimeRow extends StatelessWidget {
                     borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
                   child: Text(
-                    _fmtDate(context, dateTime),
+                    _fmtDate(dateTime),
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.primaryRed,
