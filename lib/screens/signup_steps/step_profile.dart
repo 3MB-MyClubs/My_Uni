@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/signup_service.dart';
 import '../../widgets/app_network_image.dart';
 import '../../widgets/loading_skeleton.dart';
+import '../widgets/terms_content.dart';
 import 'signup_theme.dart';
 
 typedef SignupImagePicker = Future<XFile?> Function(ImageSource source);
@@ -19,7 +20,7 @@ class StepProfile extends StatefulWidget {
   final String initialYear;
   final Future<List<SignupLookupItem>> Function() loadMajors;
   final Future<List<SignupLookupItem>> Function() loadAcademicYears;
-  final void Function(
+  final Future<String?> Function(
     String name,
     String majorId,
     String majorName,
@@ -60,6 +61,9 @@ class _StepProfileState extends State<StepProfile> {
   bool _isPickingPhoto = false;
   bool _isLoadingLookups = true;
   String? _lookupError;
+  bool _agreedToTerms = false;
+  bool _isSubmitting = false;
+  String? _submitError;
 
   List<SignupLookupItem> _majors = const [];
   List<SignupLookupItem> _years = const [];
@@ -366,8 +370,52 @@ class _StepProfileState extends State<StepProfile> {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
+  /// Presents the full Community Safety Terms in an in-app bottom sheet
+  /// (rather than handing off to the external browser) so the student can
+  /// review them without leaving the sign-up flow.
+  void _showTermsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: SC.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Drag handle
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 6),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: SC.hair,
+                  borderRadius: const BorderRadius.all(Radius.circular(2)),
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
+                child: const TermsContent(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Submit ─────────────────────────────────────────────────────
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
     final name = _nameController.text.trim();
     final major = _majorController.text.trim();
     bool hasError = false;
@@ -424,16 +472,25 @@ class _StepProfileState extends State<StepProfile> {
       setState(() => _yearError = null);
     }
 
-    if (!hasError) {
-      widget.onNext(
-        name,
-        _selectedMajorId,
-        major,
-        _selectedYearId,
-        _selectedYearName,
-        _imagePath,
-      );
-    }
+    if (hasError) return;
+
+    setState(() {
+      _submitError = null;
+      _isSubmitting = true;
+    });
+    final error = await widget.onNext(
+      name,
+      _selectedMajorId,
+      major,
+      _selectedYearId,
+      _selectedYearName,
+      _imagePath,
+    );
+    if (!mounted) return;
+    setState(() {
+      _submitError = error;
+      _isSubmitting = false;
+    });
   }
 
   @override
@@ -608,27 +665,93 @@ class _StepProfileState extends State<StepProfile> {
           ),
         ),
 
-        // ── Continue — pinned to bottom ─────────────────────────
+        // ── Terms acceptance + Continue — pinned to bottom ──────
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              key: const ValueKey('signup-profile-continue'),
-              onPressed: _isLoadingLookups || _isPickingPhoto ? null : _submit,
-              style: SC.primaryButtonStyle(),
-              child: _isLoadingLookups || _isPickingPhoto
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(AppLocalizations.of(context)!.continueButton),
-            ),
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_submitError != null) ...[
+                Text(
+                  _submitError!,
+                  style: TextStyle(color: SC.burgundy, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Checkbox(
+                    value: _agreedToTerms,
+                    activeColor: SC.burgundy,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onChanged: (value) =>
+                        setState(() => _agreedToTerms = value ?? false),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)!.agreeToSafetyTerms,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: SC.body,
+                            height: 1.35,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: _showTermsSheet,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Text(
+                              AppLocalizations.of(context)!.readFullTerms,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: SC.burgundy,
+                                fontWeight: FontWeight.w600,
+                                height: 1.35,
+                                decoration: TextDecoration.underline,
+                                decorationColor: SC.burgundy,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  key: const ValueKey('signup-profile-continue'),
+                  onPressed:
+                      _isLoadingLookups ||
+                          _isPickingPhoto ||
+                          _isSubmitting ||
+                          !_agreedToTerms
+                      ? null
+                      : _submit,
+                  style: SC.primaryButtonStyle(),
+                  child: _isLoadingLookups || _isPickingPhoto || _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(AppLocalizations.of(context)!.continueButton),
+                ),
+              ),
+            ],
           ),
         ),
       ],

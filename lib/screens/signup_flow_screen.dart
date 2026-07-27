@@ -6,7 +6,6 @@ import 'signup_steps/step_email.dart';
 import 'signup_steps/step_verify.dart';
 import 'signup_steps/step_password.dart';
 import 'signup_steps/step_profile.dart';
-import 'signup_steps/step_interests.dart';
 
 class SignupFlowScreen extends StatefulWidget {
   final void Function(String email) onSignUp;
@@ -31,10 +30,9 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   String _year = '';
   String? _profileImagePath;
   String _password = '';
-  List<String> _interestIds = [];
 
   static const int _totalSteps =
-      5; // email, verify, password, profile, interests
+      4; // email, verify, password, profile
 
   void _goTo(int step) {
     setState(() => _currentStep = step);
@@ -79,32 +77,28 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     _goTo(3);
   }
 
-  void _onProfileNext(
+  Future<String?> _onProfileNext(
     String name,
     String majorId,
     String majorName,
     String academicYearId,
     String academicYearName,
     String? imagePath,
-  ) {
+  ) async {
     _name = name;
     _majorId = majorId;
     _major = majorName;
     _academicYearId = academicYearId;
     _year = academicYearName;
     _profileImagePath = imagePath;
-    _goTo(4);
-  }
 
-  Future<String?> _onInterestsNext(List<String> interestIds) async {
-    _interestIds = interestIds;
     final result = await signupService.completeSignup(
       email: _email,
       password: _password,
       fullName: _name,
       majorId: _majorId,
       academicYearId: _academicYearId,
-      interestIds: _interestIds,
+      interestIds: const [],
       imagePath: _profileImagePath,
     );
     if (!result.success) return result.error;
@@ -116,10 +110,6 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     await termsAcceptanceService.accept();
     widget.onSignUp(_email);
     return null;
-  }
-
-  void _onSkipInterests() {
-    // The backend requires at least 3 interests for signup completion.
   }
 
   @override
@@ -202,7 +192,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                       initialValue: _password,
                       onNext: _onPasswordNext,
                     ),
-                    // 3 — Profile
+                    // 3 — Profile (final step: completes signup + Terms)
                     StepProfile(
                       initialName: _name,
                       initialMajor: _major,
@@ -210,13 +200,6 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                       loadMajors: signupService.fetchMajors,
                       loadAcademicYears: signupService.fetchAcademicYears,
                       onNext: _onProfileNext,
-                    ),
-                    // 4 — Interests
-                    StepInterests(
-                      selected: _interestIds,
-                      loadInterests: signupService.fetchInterests,
-                      onNext: _onInterestsNext,
-                      onSkip: _onSkipInterests,
                     ),
                   ],
                 ),
