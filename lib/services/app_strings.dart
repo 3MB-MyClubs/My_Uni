@@ -47,6 +47,11 @@ class S {
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');
   static String get tomorrow => _t('Tomorrow', 'Yarın');
+  static String likedBy(String name) => _t('Liked by $name', '$name beğendi');
+  static String likedByOthers(String name, int count) => _t(
+    'Liked by $name and $count ${count == 1 ? 'other' : 'others'}',
+    '$name ve $count diğer kişi beğendi',
+  );
 
   // ── Explore
   static String get explore => _t('Explore', 'Keşfet');
@@ -321,6 +326,35 @@ class S {
       _t('Replay the tour', 'Turu yeniden izle');
   static String get replayTutorialSubtitle =>
       _t('Take the campus tour again', 'Kampüs turunu yeniden yap');
+
+  // ── Onboarding intro (first-run carousel)
+  static String get onboardingIntroDiscoverTitle =>
+      _t('Discover campus life', 'Kampüs hayatını keşfet');
+  static String get onboardingIntroDiscoverSubtitle => _t(
+    "See what's happening across campus, all in one feed.",
+    'Kampüste neler olduğunu tek bir akışta gör.',
+  );
+  static String get onboardingIntroCalendarTitle =>
+      _t('RSVP in a tap', 'Tek dokunuşla LCV ver');
+  static String get onboardingIntroCalendarSubtitle => _t(
+    "Say you're going and events land on your calendar automatically.",
+    'Gidiyorum de, etkinlikler takvimine otomatik eklensin.',
+  );
+  static String get onboardingIntroClubsTitle =>
+      _t('Follow your clubs', 'Kulüplerini takip et');
+  static String get onboardingIntroClubsSubtitle => _t(
+    'Never miss an update from the clubs you love.',
+    'Sevdiğin kulüplerden hiçbir güncellemeyi kaçırma.',
+  );
+  static String get onboardingIntroReadyTitle =>
+      _t('Ready to dive in?', 'Başlamaya hazır mısın?');
+  static String get onboardingIntroReadySubtitle => _t(
+    'Join your campus community and make it yours.',
+    'Kampüs topluluğuna katıl ve burayı kendine ait kıl.',
+  );
+  static String get onboardingIntroSkip => _t('Skip', 'Atla');
+  static String get onboardingIntroGetStarted => _t('Get started', 'Başla');
+  static String get onboardingIntroLogIn => _t('Log in', 'Giriş yap');
 
   // ── Onboarding — welcome (Act 1)
   static String get onboardingWelcomeEyebrow =>
@@ -720,6 +754,12 @@ class S {
     'Sohbete başlamak için bir arkadaşına yaz\nveya bir kulübe katıl.',
   );
   static String get typeMessage => _t('Message…', 'Mesaj…');
+  static String get startConversation =>
+      _t('Start the conversation', 'Sohbeti başlat');
+  static String get privateConversationHint => _t(
+    'Messages stay between the people in this conversation.',
+    'Mesajlar yalnızca bu sohbetteki kişiler arasında kalır.',
+  );
   static String get joinToChat =>
       _t('Join the club to chat', 'Sohbet için kulübe katıl');
   static String get joinToChatHint => _t(

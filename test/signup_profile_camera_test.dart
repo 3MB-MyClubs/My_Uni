@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/screens/signup_steps/step_profile.dart';
 import 'package:flutter_application_1/services/signup_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,9 +19,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
-    final tempDir = Directory.systemTemp.createTempSync(
-      'signup-camera-test-',
-    );
+    final tempDir = Directory.systemTemp.createTempSync('signup-camera-test-');
     addTearDown(() => tempDir.deleteSync(recursive: true));
     final imageFile = File('${tempDir.path}/camera.png');
     imageFile.writeAsBytesSync(
@@ -36,6 +35,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: StepProfile(
             initialName: 'Alice Yılmaz',
@@ -52,8 +53,9 @@ void main() {
               return cameraResult.future;
             },
             imageCropperOverride: (sourcePath) async => CroppedFile(sourcePath),
-            onNext: (_, _, _, _, _, imagePath) {
+            onNext: (_, _, _, _, _, imagePath) async {
               submittedImagePath = imagePath;
+              return null;
             },
           ),
         ),
@@ -78,6 +80,17 @@ void main() {
     await tester.pump();
 
     expect(find.byType(Image), findsOneWidget);
+
+    // Continue stays disabled until the student accepts the Terms, which now
+    // live on this (final) sign-up step.
+    final beforeTermsButton = tester.widget<ElevatedButton>(
+      find.byKey(const ValueKey('signup-profile-continue')),
+    );
+    expect(beforeTermsButton.onPressed, isNull);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+
     final enabledContinueButton = tester.widget<ElevatedButton>(
       find.byKey(const ValueKey('signup-profile-continue')),
     );

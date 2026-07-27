@@ -279,38 +279,54 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ListenableBuilder(
-        listenable: Listenable.merge([
-          chatStore,
-          userState,
-          appPresenceService,
-          ?_communityInfo,
-        ]),
-        builder: (context, _) {
-          final canAccess = chatStore.canAccessThread(widget.threadId, _myId);
-          final canOfferStudentJoin =
-              _isClub && !canAccess && authService.isStudentSession;
-          if (!canAccess && !canOfferStudentJoin) {
-            return SafeArea(
-              bottom: false,
-              child: _buildUnavailableConversation(),
-            );
-          }
-          return SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                _buildHeader(),
-                if (canOfferStudentJoin)
-                  Expanded(child: _buildJoinPrompt())
-                else ...[
-                  Expanded(child: _buildMessageList()),
-                  _buildInputBar(enabled: canAccess),
-                ],
-              ],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: _ConversationBackdrop(
+              isDark: themeService.isDark,
+              accent: _club == null
+                  ? AppColors.primaryRed
+                  : _colorForClub(_club!.id),
+              isCommunity: _isClub || _isGroup,
             ),
-          );
-        },
+          ),
+          ListenableBuilder(
+            listenable: Listenable.merge([
+              chatStore,
+              userState,
+              appPresenceService,
+              ?_communityInfo,
+            ]),
+            builder: (context, _) {
+              final canAccess = chatStore.canAccessThread(
+                widget.threadId,
+                _myId,
+              );
+              final canOfferStudentJoin =
+                  _isClub && !canAccess && authService.isStudentSession;
+              if (!canAccess && !canOfferStudentJoin) {
+                return SafeArea(
+                  bottom: false,
+                  child: _buildUnavailableConversation(),
+                );
+              }
+              return SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    if (canOfferStudentJoin)
+                      Expanded(child: _buildJoinPrompt())
+                    else ...[
+                      Expanded(child: _buildMessageList()),
+                      _buildInputBar(enabled: canAccess),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -349,7 +365,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(
+        color: AppColors.card.withValues(
+          alpha: themeService.isDark ? 0.94 : 0.97,
+        ),
         border: Border(bottom: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -434,7 +460,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
       decoration: BoxDecoration(
+        color: AppColors.card.withValues(
+          alpha: themeService.isDark ? 0.94 : 0.97,
+        ),
         border: Border(bottom: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -619,14 +655,79 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _buildMessageList() {
     final messages = chatStore.messagesFor(widget.threadId, viewerId: _myId);
     if (messages.isEmpty) {
-      if (_isDirect) return const SizedBox.shrink();
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Text(
-            S.sayHello,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, color: AppColors.secondaryText),
+          padding: const EdgeInsets.symmetric(horizontal: 34),
+          child: Container(
+            key: const ValueKey('chat-empty-conversation-card'),
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+            decoration: BoxDecoration(
+              color: AppColors.card.withValues(
+                alpha: themeService.isDark ? 0.90 : 0.94,
+              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.glassEdge),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightRed,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    color: AppColors.primaryRed,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 13),
+                Text(
+                  _isDirect ? S.startConversation : S.sayHello,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.text,
+                  ),
+                ),
+                if (_isDirect) ...[
+                  const SizedBox(height: 7),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 13,
+                        color: AppColors.secondaryText,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          S.privateConversationHint,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.35,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       );
@@ -675,7 +776,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final club = _club;
     final isMultiParticipant = _isClub || _isGroup;
     final showHeader = isMultiParticipant && !mine && firstOfRun;
-    final showAvatar = isMultiParticipant && !mine;
+    final showAvatar = isMultiParticipant;
+    final senderAvatar = Container(
+      key: _isGroup ? ValueKey('group-message-avatar-${m.id}') : null,
+      width: 32,
+      height: 32,
+      padding: const EdgeInsets.all(1.5),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.glassEdge),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 7,
+            spreadRadius: -2,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: senderIsAdmin && club != null
+          ? ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _colorForClub(club.id),
+              imageUrl: club.logoUrl,
+              size: 28,
+              fontSize: 11,
+              shape: 'circle',
+            )
+          : UserAvatar(
+              userId: m.senderId,
+              name: senderName,
+              size: 28,
+              fontSize: 11,
+            ),
+    );
 
     final bubble = Container(
       constraints: BoxConstraints(
@@ -683,13 +819,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
       decoration: BoxDecoration(
-        color: mine ? AppColors.primaryRed : AppColors.surfaceAlt,
+        color: mine
+            ? null
+            : AppColors.card.withValues(
+                alpha: themeService.isDark ? 0.96 : 0.98,
+              ),
+        gradient: mine
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.darkRed, AppColors.primaryRed],
+              )
+            : null,
         borderRadius: BorderRadius.only(
           topLeft: const Radius.circular(16),
           topRight: const Radius.circular(16),
           bottomLeft: Radius.circular(mine ? 16 : 4),
           bottomRight: Radius.circular(mine ? 4 : 16),
         ),
+        border: mine ? null : Border.all(color: AppColors.glassEdge),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: mine ? 0.14 : 0.08),
+            blurRadius: 10,
+            spreadRadius: -4,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Text(
         m.content,
@@ -709,29 +865,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
         children: [
-          if (showAvatar)
+          if (showAvatar && !mine)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              // Lift the photo above the timestamp so it rests against the
+              // bottom edge of the final bubble, as in WhatsApp group chats.
+              padding: const EdgeInsets.only(right: 8, bottom: 15),
               // Avatar only on the last bubble of a run; a spacer keeps the
               // earlier bubbles of the run aligned.
               child: lastOfRun
-                  ? senderIsAdmin && club != null
-                        ? ClubAvatar(
-                            clubId: club.id,
-                            clubName: club.name,
-                            color: _colorForClub(club.id),
-                            imageUrl: club.logoUrl,
-                            size: 26,
-                            fontSize: 11,
-                            shape: 'circle',
-                          )
-                        : UserAvatar(
-                            userId: m.senderId,
-                            name: senderName,
-                            size: 26,
-                            fontSize: 11,
-                          )
-                  : const SizedBox(width: 26),
+                  ? senderAvatar
+                  : const SizedBox(width: 32, height: 32),
             ),
           Flexible(
             child: Column(
@@ -846,6 +989,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ],
             ),
           ),
+          if (showAvatar && mine)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, bottom: 15),
+              child: lastOfRun
+                  ? senderAvatar
+                  : const SizedBox(width: 32, height: 32),
+            ),
         ],
       ),
     );
@@ -856,8 +1006,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _buildInputBar({required bool enabled}) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: AppColors.card.withValues(
+          alpha: themeService.isDark ? 0.96 : 0.98,
+        ),
         border: Border(top: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: SafeArea(
@@ -977,8 +1136,18 @@ class _DateChip extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 10),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
+          color: AppColors.card.withValues(
+            alpha: themeService.isDark ? 0.88 : 0.94,
+          ),
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.glassEdge),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Text(
           label,
@@ -990,5 +1159,123 @@ class _DateChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ConversationBackdrop extends StatelessWidget {
+  final bool isDark;
+  final Color accent;
+  final bool isCommunity;
+
+  const _ConversationBackdrop({
+    required this.isDark,
+    required this.accent,
+    required this.isCommunity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final middle = Color.lerp(
+      isDark ? const Color(0xFF180B10) : const Color(0xFFF7EFEC),
+      accent,
+      isDark ? 0.12 : 0.055,
+    )!;
+    return IgnorePointer(
+      child: Container(
+        key: const ValueKey('chat-conversation-backdrop'),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [const Color(0xFF13090D), middle, const Color(0xFF10070A)]
+                : [const Color(0xFFFBF7F5), middle, const Color(0xFFF8F1EE)],
+            stops: const [0, 0.52, 1],
+          ),
+        ),
+        child: CustomPaint(
+          painter: _ConversationPatternPainter(
+            accent: accent,
+            isDark: isDark,
+            isCommunity: isCommunity,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationPatternPainter extends CustomPainter {
+  final Color accent;
+  final bool isDark;
+  final bool isCommunity;
+
+  const _ConversationPatternPainter({
+    required this.accent,
+    required this.isDark,
+    required this.isCommunity,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..color = accent.withValues(alpha: isDark ? 0.14 : 0.075)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.05
+      ..strokeCap = StrokeCap.round;
+    final softPaint = Paint()
+      ..color = (isDark ? Colors.white : accent).withValues(
+        alpha: isDark ? 0.045 : 0.035,
+      )
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9;
+
+    const cellWidth = 112.0;
+    const cellHeight = 98.0;
+    for (var row = -1; row * cellHeight < size.height + cellHeight; row++) {
+      final horizontalOffset = row.isEven ? -32.0 : 24.0;
+      for (
+        var column = -1;
+        column * cellWidth < size.width + cellWidth;
+        column++
+      ) {
+        final x = horizontalOffset + column * cellWidth;
+        final y = row * cellHeight + (isCommunity ? 16 : 0);
+        final alternate = (row + column).isEven;
+
+        if (alternate) {
+          final bubble = RRect.fromRectAndRadius(
+            Rect.fromLTWH(x + 18, y + 22, 34, 24),
+            const Radius.circular(8),
+          );
+          canvas.drawRRect(bubble, linePaint);
+          final tail = Path()
+            ..moveTo(x + 26, y + 46)
+            ..lineTo(x + 22, y + 52)
+            ..lineTo(x + 34, y + 46);
+          canvas.drawPath(tail, linePaint);
+          canvas.drawCircle(Offset(x + 29, y + 34), 1.2, softPaint);
+          canvas.drawCircle(Offset(x + 35, y + 34), 1.2, softPaint);
+          canvas.drawCircle(Offset(x + 41, y + 34), 1.2, softPaint);
+        } else {
+          canvas.drawCircle(Offset(x + 36, y + 34), 15, softPaint);
+          canvas.drawArc(
+            Rect.fromCircle(center: Offset(x + 36, y + 34), radius: 10),
+            0.35,
+            2.1,
+            false,
+            linePaint,
+          );
+          canvas.drawCircle(Offset(x + 58, y + 57), 2.2, linePaint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConversationPatternPainter oldDelegate) {
+    return accent != oldDelegate.accent ||
+        isDark != oldDelegate.isDark ||
+        isCommunity != oldDelegate.isCommunity;
   }
 }

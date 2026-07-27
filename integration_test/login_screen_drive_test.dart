@@ -12,6 +12,7 @@ import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/terms_acceptance_service.dart';
+import 'package:flutter_application_1/services/onboarding_intro_service.dart';
 
 /// Drives the entry experience ("Login Screen v2" design handoff):
 ///  A) App opens directly on the Login Screen — crest, wordmark, fields.
@@ -29,6 +30,8 @@ void main() {
     await themeService.initialize();
     await onboardingService.initialize();
     await termsAcceptanceService.initialize();
+    await onboardingIntroService.initialize();
+    await onboardingIntroService.markCompletedOnDevice();
     contentStore.applyToLists();
     await themeService.setDark(false);
   }
@@ -36,7 +39,7 @@ void main() {
   testWidgets('App opens on Login Screen v2, Sign up → flow', (tester) async {
     await boot();
 
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
     await tester.pump(const Duration(milliseconds: 700));
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();

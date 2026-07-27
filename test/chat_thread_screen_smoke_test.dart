@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
+import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
@@ -16,9 +19,18 @@ import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
 import 'package:flutter_application_1/widgets/presence_avatar.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
+import 'package:hive/hive.dart';
 
 void main() {
-  setUpAll(() {
+  late Directory tempDir;
+
+  setUpAll(() async {
+    tempDir = await Directory.systemTemp.createTemp(
+      'chat_thread_screen_smoke_test_',
+    );
+    Hive.init(tempDir.path);
+    await contentStore.initialize();
+    await chatStore.initialize();
     const names = {
       'u2': 'Can Serbester',
       'u3': 'Emir Karaarslan',
@@ -38,6 +50,12 @@ void main() {
         ),
       );
     }
+  });
+
+  tearDownAll(() async {
+    await chatStore.saveAll();
+    await Hive.close();
+    if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
   setUp(() async {
@@ -70,6 +88,10 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ChatThreadScreen), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chat-conversation-backdrop')),
+      findsOneWidget,
+    );
     expect(find.byType(TextField), findsOneWidget);
     expect(
       find.descendant(
@@ -80,6 +102,44 @@ void main() {
     );
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
     expect(find.text('Computer Engineering · 3rd Year'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty DM uses the warm patterned conversation canvas', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+    final recipient = User(
+      id: 'empty-canvas-recipient',
+      name: 'Empty Canvas Test',
+      email: 'empty.canvas@ku.edu.tr',
+      password: '',
+      role: 'student',
+      subscribedClubIds: const [],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ChatThreadScreen(
+            threadId: ChatStore.dmThreadId('u1', recipient.id),
+            recipient: recipient,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('chat-conversation-backdrop')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-empty-conversation-card')),
+      findsOneWidget,
+    );
+    expect(find.text(S.startConversation), findsOneWidget);
+    expect(find.text(S.privateConversationHint), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -109,6 +169,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Can Serbester'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chat-empty-conversation-card')),
+      findsOneWidget,
+    );
     final avatar = tester.widget<UserAvatar>(find.byType(UserAvatar));
     expect(avatar.userId, recipient.id);
     expect(find.text('Student profile'), findsNothing);
@@ -185,6 +249,66 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'group message runs show sender avatars beside final bubbles on both sides',
+    (tester) async {
+      authService.login('alice@ku.edu.tr', '111111');
+      final threadId = chatStore.createGroupThread(
+        creatorId: 'u1',
+        recipientIds: ['u2', 'u3'],
+      )!;
+      final first = chatStore.sendMessage(
+        threadId: threadId,
+        senderId: 'u2',
+        content: 'First message in the run',
+      )!;
+      final last = chatStore.sendMessage(
+        threadId: threadId,
+        senderId: 'u2',
+        content: 'Last message in the run',
+      )!;
+      final mine = chatStore.sendMessage(
+        threadId: threadId,
+        senderId: 'u1',
+        content: 'My message',
+      )!;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(ValueKey('group-message-avatar-${first.id}')),
+        findsNothing,
+      );
+      final avatar = find.byKey(ValueKey('group-message-avatar-${last.id}'));
+      expect(avatar, findsOneWidget);
+      expect(
+        tester
+            .widget<UserAvatar>(
+              find.descendant(of: avatar, matching: find.byType(UserAvatar)),
+            )
+            .userId,
+        'u2',
+      );
+      final myAvatar = find.byKey(ValueKey('group-message-avatar-${mine.id}'));
+      expect(myAvatar, findsOneWidget);
+      expect(
+        tester
+            .widget<UserAvatar>(
+              find.descendant(of: myAvatar, matching: find.byType(UserAvatar)),
+            )
+            .userId,
+        'u1',
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('club thread shows the join prompt for non-members', (
     tester,

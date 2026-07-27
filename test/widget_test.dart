@@ -4,31 +4,79 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/screens/login_screen.dart';
+import 'package:flutter_application_1/screens/onboarding_carousel_screen.dart';
 import 'package:flutter_application_1/screens/terms_acceptance_screen.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
+import 'package:flutter_application_1/services/onboarding_intro_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('app requires terms before opening the login screen', (
+  testWidgets('fresh install is not gated by the full-screen terms screen', (
+    WidgetTester tester,
+  ) async {
+    // A brand-new device has never reached an authenticated state, so the
+    // full-screen gate must yield to the first-run experience — new users
+    // accept the Terms via the checkbox on the sign-up flow's last step.
+    SharedPreferences.setMockInitialValues({});
+    await onboardingIntroService.initialize();
+    await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
+    await tester.pump();
+
+    expect(find.text('COMMUNITY SAFETY TERMS'), findsNothing);
+    expect(find.text('Agree and continue'), findsNothing);
+  });
+
+  testWidgets(
+    'returning user with unaccepted terms still sees the re-accept gate',
+    (WidgetTester tester) async {
+      // A device that has completed onboarding (i.e. reached an authenticated
+      // state before) is a returning user; when the Terms version is bumped,
+      // the full-screen gate must re-appear and block until accepted.
+      SharedPreferences.setMockInitialValues({
+        'has_completed_onboarding_intro_v2': true,
+      });
+      await onboardingIntroService.initialize();
+      await tester.pumpWidget(
+        const MyApp(minimumLaunchDuration: Duration.zero),
+      );
+      await tester.pump();
+
+      expect(find.text('COMMUNITY SAFETY TERMS'), findsOneWidget);
+      expect(find.text('Agree and continue'), findsOneWidget);
+      expect(find.text('Log in'), findsNothing);
+    },
+  );
+
+  testWidgets('app shows branded launch UI before its first destination', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const MyApp());
+    await onboardingIntroService.initialize();
+    await tester.pumpWidget(
+      const MyApp(minimumLaunchDuration: Duration(milliseconds: 2000)),
+    );
+
+    expect(find.byKey(const Key('app_launch_logo')), findsOneWidget);
+    expect(find.byKey(const Key('app_launch_progress')), findsOneWidget);
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+      const Color(0xFF4A0F24),
+    );
+    expect(find.text('COMMUNITY SAFETY TERMS'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 2000));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 325));
+
+    // The outgoing launch screen and incoming destination overlap mid-flight.
+    expect(find.byKey(const Key('app_launch_logo')), findsOneWidget);
+    expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 326));
     await tester.pump();
 
-    expect(find.text('COMMUNITY SAFETY TERMS'), findsOneWidget);
-    expect(find.text('Agree and continue'), findsOneWidget);
-    expect(find.text('Log in'), findsNothing);
-
-    await tester.tap(find.byType(Checkbox));
-    await tester.pump();
-    await tester.tap(find.text('Agree and continue'));
-    await tester.pumpAndSettle();
-
-    // Authentication is inaccessible until the agreement is accepted.
-    expect(find.text('KOÇ UNIVERSITY'), findsOneWidget);
-    expect(find.text('Log in'), findsOneWidget);
-    expect(find.text('Sign up'), findsOneWidget);
+    expect(find.byKey(const Key('app_launch_logo')), findsNothing);
+    expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
   });
 
   testWidgets('login screen "Sign up" hands off to the sign-up flow', (

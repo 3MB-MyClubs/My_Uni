@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/screens/signup_steps/step_profile.dart';
 import 'package:flutter_application_1/services/academic_year_options.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
@@ -49,6 +50,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: StepProfile(
             initialMajor: 'Computer Engineering',
@@ -66,7 +69,7 @@ void main() {
                   name: fallbackAcademicYearNames[index],
                 ),
             ],
-            onNext: (_, _, _, _, _, _) {},
+            onNext: (_, _, _, _, _, _) async => null,
           ),
         ),
       ),
