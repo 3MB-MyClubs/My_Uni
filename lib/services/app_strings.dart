@@ -322,6 +322,35 @@ class S {
   static String get replayTutorialSubtitle =>
       _t('Take the campus tour again', 'Kampüs turunu yeniden yap');
 
+  // ── Onboarding intro (first-run carousel)
+  static String get onboardingIntroDiscoverTitle =>
+      _t('Discover campus life', 'Kampüs hayatını keşfet');
+  static String get onboardingIntroDiscoverSubtitle => _t(
+    "See what's happening across campus, all in one feed.",
+    'Kampüste neler olduğunu tek bir akışta gör.',
+  );
+  static String get onboardingIntroCalendarTitle =>
+      _t('RSVP in a tap', 'Tek dokunuşla LCV ver');
+  static String get onboardingIntroCalendarSubtitle => _t(
+    "Say you're going and events land on your calendar automatically.",
+    'Gidiyorum de, etkinlikler takvimine otomatik eklensin.',
+  );
+  static String get onboardingIntroClubsTitle =>
+      _t('Follow your clubs', 'Kulüplerini takip et');
+  static String get onboardingIntroClubsSubtitle => _t(
+    'Never miss an update from the clubs you love.',
+    'Sevdiğin kulüplerden hiçbir güncellemeyi kaçırma.',
+  );
+  static String get onboardingIntroReadyTitle =>
+      _t('Ready to dive in?', 'Başlamaya hazır mısın?');
+  static String get onboardingIntroReadySubtitle => _t(
+    'Join your campus community and make it yours.',
+    'Kampüs topluluğuna katıl ve burayı kendine ait kıl.',
+  );
+  static String get onboardingIntroSkip => _t('Skip', 'Atla');
+  static String get onboardingIntroGetStarted => _t('Get started', 'Başla');
+  static String get onboardingIntroLogIn => _t('Log in', 'Giriş yap');
+
   // ── Onboarding — welcome (Act 1)
   static String get onboardingWelcomeEyebrow =>
       _t('YOUR CAMPUS, YOUR PEOPLE', 'KAMPÜSÜN, İNSANLARIN');
