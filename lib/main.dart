@@ -380,7 +380,22 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         final isDark = themeService.isDark;
         Widget homeWidget;
         String destinationKey;
-        if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
+        if (!_dismissedIntro &&
+            !_showSignUp &&
+            !_loggedIn &&
+            authService.currentUser == null &&
+            authService.currentAdmin == null) {
+          // Show the intro once per cold app launch. It remains dismissed for
+          // the current session after Get started, Skip, or Log in.
+          homeWidget = OnboardingCarouselScreen(
+            onGetStarted: () => setState(() {
+              _dismissedIntro = true;
+              _showSignUp = true;
+            }),
+            onLogIn: () => setState(() => _dismissedIntro = true),
+          );
+          destinationKey = 'onboarding';
+        } else if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
             !_showSignUp &&
             onboardingIntroService.hasCompletedOnceOnDevice) {
           // New sign-ups accept the Terms via the checkbox on the sign-up
@@ -433,19 +448,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             );
             destinationKey = 'main-navigation';
           }
-        } else if (!onboardingIntroService.hasCompletedOnceOnDevice &&
-            !_dismissedIntro &&
-            !_showSignUp) {
-          // First-run intro carousel, shown once per device before any
-          // account exists. Get started → sign-up; Skip/Log in → login.
-          homeWidget = OnboardingCarouselScreen(
-            onGetStarted: () => setState(() {
-              _dismissedIntro = true;
-              _showSignUp = true;
-            }),
-            onLogIn: () => setState(() => _dismissedIntro = true),
-          );
-          destinationKey = 'onboarding';
         } else if (_showSignUp) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),

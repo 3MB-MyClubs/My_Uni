@@ -26,26 +26,31 @@ void main() {
     expect(find.text('Agree and continue'), findsNothing);
   });
 
-  testWidgets(
-    'returning user with unaccepted terms still sees the re-accept gate',
-    (WidgetTester tester) async {
-      // A device that has completed onboarding (i.e. reached an authenticated
-      // state before) is a returning user; when the Terms version is bumped,
-      // the full-screen gate must re-appear and block until accepted.
-      SharedPreferences.setMockInitialValues({
-        'has_completed_onboarding_intro_v2': true,
-      });
-      await onboardingIntroService.initialize();
-      await tester.pumpWidget(
-        const MyApp(minimumLaunchDuration: Duration.zero),
-      );
-      await tester.pump();
+  testWidgets('returning user sees intro before the re-accept gate', (
+    WidgetTester tester,
+  ) async {
+    // The intro appears once per launch. Dismissing it still reveals the
+    // mandatory Terms re-acceptance gate for returning users.
+    SharedPreferences.setMockInitialValues({
+      'has_completed_onboarding_intro_v2': true,
+    });
+    await onboardingIntroService.initialize();
+    await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
+    await tester.pump();
 
-      expect(find.text('COMMUNITY SAFETY TERMS'), findsOneWidget);
-      expect(find.text('Agree and continue'), findsOneWidget);
-      expect(find.text('Log in'), findsNothing);
-    },
-  );
+    expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
+    expect(find.text('COMMUNITY SAFETY TERMS'), findsNothing);
+
+    await tester.tap(find.text('Skip'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 361));
+    await tester.pump();
+
+    expect(find.byType(OnboardingCarouselScreen), findsNothing);
+    expect(find.text('COMMUNITY SAFETY TERMS'), findsOneWidget);
+    expect(find.text('Agree and continue'), findsOneWidget);
+    expect(find.text('Log in'), findsNothing);
+  });
 
   testWidgets('app shows branded launch UI before its first destination', (
     WidgetTester tester,
