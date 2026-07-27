@@ -33,12 +33,18 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   late final TextEditingController _emailController;
+  late final AnimationController _entranceController;
+  late final Animation<double> _brandEntrance;
+  late final Animation<double> _formEntrance;
+  late final Animation<double> _actionsEntrance;
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   String? _error;
+  bool _entranceConfigured = false;
 
   bool get _canSubmit =>
       _emailController.text.trim().isNotEmpty &&
@@ -58,12 +64,43 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController = TextEditingController(
       text: _localPart(widget.initialEmail),
     );
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _brandEntrance = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0, 0.55, curve: Curves.easeOutCubic),
+    );
+    _formEntrance = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.18, 0.78, curve: Curves.easeOutCubic),
+    );
+    _actionsEntrance = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.42, 1, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_entranceConfigured) return;
+    _entranceConfigured = true;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _entranceController.value = 1;
+    } else {
+      _entranceController.forward();
+    }
   }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -175,53 +212,59 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
 
                       // ── Brand header: crest + university + wordmark ───────
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          24,
-                          widget.onBack != null ? 12 : 40,
-                          24,
-                          0,
-                        ),
-                        child: Column(
-                          children: [
-                            const _Crest(size: 60),
-                            const SizedBox(height: 18),
-                            Text(
-                              'KOÇ UNIVERSITY',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Menlo',
-                                color: AppColors.secondaryText,
+                      _MotionEntrance(
+                        animation: _brandEntrance,
+                        begin: const Offset(0, -0.035),
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            24,
+                            widget.onBack != null ? 12 : 40,
+                            24,
+                            0,
+                          ),
+                          child: Column(
+                            children: [
+                              const _Crest(size: 60),
+                              const SizedBox(height: 18),
+                              Text(
+                                'KOÇ UNIVERSITY',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  letterSpacing: 2,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Menlo',
+                                  color: AppColors.secondaryText,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'ClubUp',
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -1,
-                                color: AppColors.text,
+                              const SizedBox(height: 6),
+                              Text(
+                                'ClubUp',
+                                style: TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -1,
+                                  color: AppColors.text,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Sign in to pick up where you left off.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.text.withValues(alpha: 0.76),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Sign in to pick up where you left off.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.text.withValues(alpha: 0.76),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
 
                       // ── Form ─────────────────────────────────────────────
                       Padding(
                         padding: const EdgeInsets.fromLTRB(22, 30, 22, 0),
-                        child: _EntrySlide(
+                        child: _MotionEntrance(
+                          animation: _formEntrance,
+                          begin: const Offset(0, 0.045),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -321,98 +364,102 @@ class _LoginScreenState extends State<LoginScreen> {
                       const Spacer(),
 
                       // ── Bottom action area ───────────────────────────────
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _SubmitButton(
-                              enabled: _canSubmit,
-                              submitting: _isSubmitting,
-                              onTap: _handleLogin,
-                            ),
-                            Container(
-                              height: 1,
-                              color: AppColors.divider,
-                              margin: const EdgeInsets.only(
-                                top: 22,
-                                bottom: 16,
+                      _MotionEntrance(
+                        animation: _actionsEntrance,
+                        begin: const Offset(0, 0.06),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _SubmitButton(
+                                enabled: _canSubmit,
+                                submitting: _isSubmitting,
+                                onTap: _handleLogin,
                               ),
-                            ),
-                            Text(
-                              'New to Koç University?',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                color: AppColors.text.withValues(alpha: 0.76),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            OutlinedButton(
-                              onPressed: widget.onSignUp,
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(50),
-                                side: BorderSide(
-                                  color: AppColors.divider,
-                                  width: 1.5,
+                              Container(
+                                height: 1,
+                                color: AppColors.divider,
+                                margin: const EdgeInsets.only(
+                                  top: 22,
+                                  bottom: 16,
                                 ),
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(15),
+                              ),
+                              Text(
+                                'New to Koç University?',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: AppColors.text.withValues(alpha: 0.76),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              OutlinedButton(
+                                onPressed: widget.onSignUp,
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(50),
+                                  side: BorderSide(
+                                    color: AppColors.divider,
+                                    width: 1.5,
                                   ),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Sign up',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.2,
-                                      color: AppColors.text,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(15),
                                     ),
                                   ),
-                                  const SizedBox(width: 7),
-                                  Icon(
-                                    Icons.arrow_forward_rounded,
-                                    size: 17,
-                                    color: AppColors.text,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Sign up',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.2,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 17,
+                                      color: AppColors.text,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Running a club? ',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: _openClubAdmin,
+                                    child: Text(
+                                      'Club admin sign in',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.text.withValues(
+                                          alpha: 0.76,
+                                        ),
+                                        decoration: TextDecoration.underline,
+                                        decorationColor: AppColors.text
+                                            .withValues(alpha: 0.4),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: 14),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Running a club? ',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: AppColors.secondaryText,
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: _openClubAdmin,
-                                  child: Text(
-                                    'Club admin sign in',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.text.withValues(
-                                        alpha: 0.76,
-                                      ),
-                                      decoration: TextDecoration.underline,
-                                      decorationColor: AppColors.text
-                                          .withValues(alpha: 0.4),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -467,46 +514,36 @@ class _Crest extends StatelessWidget {
   }
 }
 
-// ─── One-shot entry slide (design's .au-sheet / fadeUp keyframes) ──────────────
-class _EntrySlide extends StatefulWidget {
+// ─── Coordinated entrance motion for the screen's visual hierarchy ───────────
+class _MotionEntrance extends StatelessWidget {
+  final Animation<double> animation;
+  final Offset begin;
   final Widget child;
-  const _EntrySlide({required this.child});
 
-  @override
-  State<_EntrySlide> createState() => _EntrySlideState();
-}
-
-class _EntrySlideState extends State<_EntrySlide> {
-  bool _in = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _in = true);
-    });
-  }
+  const _MotionEntrance({
+    required this.animation,
+    required this.begin,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSlide(
-      offset: _in ? Offset.zero : const Offset(0, 0.05),
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
-      child: AnimatedOpacity(
-        opacity: _in ? 1 : 0,
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOut,
-        child: widget.child,
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: begin,
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
       ),
     );
   }
 }
 
-// ─── Neutral text field (label + rounded box + leading icon) ──────────────────
-// The surface, border, label and icon deliberately have no focused/hovered
-// visual state. Only the entered text and neutral cursor change while editing.
-class _AuthField extends StatelessWidget {
+// ─── Responsive text field (label + animated surface + leading icon) ──────────
+// Focus gently lifts and highlights the active input without shifting layout.
+class _AuthField extends StatefulWidget {
   final String label;
   final TextEditingController controller;
   final String hint;
@@ -534,7 +571,44 @@ class _AuthField extends StatelessWidget {
   });
 
   @override
+  State<_AuthField> createState() => _AuthFieldState();
+}
+
+class _AuthFieldState extends State<_AuthField> {
+  late final FocusNode _focusNode;
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode()..addListener(_handleFocusChange);
+  }
+
+  void _handleFocusChange() {
+    if (mounted) setState(() => _focused = _focusNode.hasFocus);
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final label = widget.label;
+    final controller = widget.controller;
+    final hint = widget.hint;
+    final icon = widget.icon;
+    final obscureText = widget.obscureText;
+    final trailing = widget.trailing;
+    final keyboardType = widget.keyboardType;
+    final suffixText = widget.suffixText;
+    final inputFormatters = widget.inputFormatters;
+    final onChanged = widget.onChanged;
+    final onSubmitted = widget.onSubmitted;
     final isDark = themeService.isDark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,83 +623,116 @@ class _AuthField extends StatelessWidget {
           child: Text(label.toUpperCase()),
         ),
         const SizedBox(height: 7),
-        Container(
-          key: ValueKey<String>('login-field-$label'),
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.transparent,
-            borderRadius: const BorderRadius.all(Radius.circular(14)),
-            border: Border.all(color: AppColors.divider, width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 19, color: AppColors.secondaryText),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    textSelectionTheme: TextSelectionThemeData(
-                      cursorColor: AppColors.text,
-                      selectionColor: Colors.transparent,
-                      selectionHandleColor: Colors.transparent,
-                    ),
+        AnimatedScale(
+          scale: _focused ? 1.012 : 1,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            key: ValueKey<String>('login-field-$label'),
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            decoration: BoxDecoration(
+              color: _focused
+                  ? AppColors.primaryRed.withValues(
+                      alpha: isDark ? 0.10 : 0.045,
+                    )
+                  : isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.transparent,
+              borderRadius: const BorderRadius.all(Radius.circular(14)),
+              border: Border.all(
+                color: _focused ? AppColors.primaryRed : AppColors.divider,
+                width: _focused ? 1.8 : 1.5,
+              ),
+              boxShadow: _focused
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryRed.withValues(alpha: 0.13),
+                        blurRadius: 16,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(
+                    end: _focused
+                        ? AppColors.primaryRed
+                        : AppColors.secondaryText,
                   ),
-                  child: TextField(
-                    controller: controller,
-                    obscureText: obscureText,
-                    keyboardType: keyboardType,
-                    inputFormatters: inputFormatters,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onChanged: onChanged,
-                    onSubmitted: onSubmitted,
-                    cursorColor: AppColors.text,
-                    cursorErrorColor: AppColors.text,
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      color: AppColors.text,
-                      letterSpacing: -0.2,
-                    ),
-                    decoration: InputDecoration(
-                      isCollapsed: true,
-                      filled: false,
-                      fillColor: Colors.transparent,
+                  duration: const Duration(milliseconds: 180),
+                  builder: (context, color, _) =>
+                      Icon(icon, size: 19, color: color),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
                       focusColor: Colors.transparent,
                       hoverColor: Colors.transparent,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      hintText: hint,
-                      hintStyle: TextStyle(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      textSelectionTheme: TextSelectionThemeData(
+                        cursorColor: AppColors.text,
+                        selectionColor: Colors.transparent,
+                        selectionHandleColor: Colors.transparent,
+                      ),
+                    ),
+                    child: TextField(
+                      focusNode: _focusNode,
+                      controller: controller,
+                      obscureText: obscureText,
+                      keyboardType: keyboardType,
+                      inputFormatters: inputFormatters,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      onChanged: onChanged,
+                      onSubmitted: onSubmitted,
+                      cursorColor: AppColors.text,
+                      cursorErrorColor: AppColors.text,
+                      style: TextStyle(
                         fontSize: 15.5,
-                        color: AppColors.secondaryText,
+                        color: AppColors.text,
                         letterSpacing: -0.2,
+                      ),
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        hintText: hint,
+                        hintStyle: TextStyle(
+                          fontSize: 15.5,
+                          color: AppColors.secondaryText,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              if (suffixText != null)
-                Text(
-                  suffixText!,
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    color: AppColors.secondaryText,
-                    letterSpacing: -0.2,
+                if (suffixText != null)
+                  Text(
+                    suffixText,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      color: AppColors.secondaryText,
+                      letterSpacing: -0.2,
+                    ),
                   ),
-                ),
-              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-            ],
+                if (trailing != null) ...[const SizedBox(width: 8), trailing],
+              ],
+            ),
           ),
         ),
       ],
@@ -651,7 +758,7 @@ class _NoDomainFormatter extends TextInputFormatter {
 }
 
 // ─── Gradient submit button (enabled / disabled / submitting) ─────────────────
-class _SubmitButton extends StatelessWidget {
+class _SubmitButton extends StatefulWidget {
   final bool enabled;
   final bool submitting;
   final VoidCallback onTap;
@@ -663,70 +770,104 @@ class _SubmitButton extends StatelessWidget {
   });
 
   @override
+  State<_SubmitButton> createState() => _SubmitButtonState();
+}
+
+class _SubmitButtonState extends State<_SubmitButton> {
+  bool _pressed = false;
+
+  void _release() {
+    if (_pressed) setState(() => _pressed = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final active = enabled || submitting;
+    final active = widget.enabled || widget.submitting;
+    final interactive = widget.enabled && !widget.submitting;
     return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        width: double.infinity,
-        height: 54,
-        decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(15)),
-          gradient: active
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.darkRed, AppColors.primaryRed],
-                )
-              : null,
-          color: active ? null : AppColors.surfaceAlt,
-          border: Border.all(
-            color: active ? Colors.transparent : AppColors.divider,
-            width: 1.5,
+      onTapDown: interactive ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: interactive ? (_) => _release() : null,
+      onTapCancel: interactive ? _release : null,
+      onTap: interactive
+          ? () {
+              HapticFeedback.lightImpact();
+              widget.onTap();
+            }
+          : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.975 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          width: double.infinity,
+          height: 54,
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radius.circular(15)),
+            gradient: active
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.darkRed, AppColors.primaryRed],
+                  )
+                : null,
+            color: active ? null : AppColors.surfaceAlt,
+            border: Border.all(
+              color: active ? Colors.transparent : AppColors.divider,
+              width: 1.5,
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryRed.withValues(alpha: 0.30),
+                      blurRadius: _pressed ? 10 : 20,
+                      offset: Offset(0, _pressed ? 3 : 6),
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: AppColors.primaryRed.withValues(alpha: 0.30),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: submitting
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: Colors.white,
-                ),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (enabled) ...[
-                    const Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 18,
+          alignment: Alignment.center,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: widget.submitting
+                ? const SizedBox(
+                    key: ValueKey('login-progress'),
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
                       color: Colors.white,
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    AppLocalizations.of(context)!.logIn,
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
-                      color: active ? Colors.white : AppColors.secondaryText,
-                    ),
+                  )
+                : Row(
+                    key: const ValueKey('login-label'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.enabled) ...[
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        AppLocalizations.of(context)!.logIn,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                          color: active
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+          ),
+        ),
       ),
     );
   }

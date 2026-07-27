@@ -288,7 +288,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
               .toList();
           return Stack(
             children: [
-              _buildGlow(),
+              _buildInboxBackdrop(showingClubs),
               SafeArea(
                 bottom: false,
                 child: Column(
@@ -307,15 +307,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           : threads.isEmpty
                           ? _buildEmptyState()
                           : ListView.builder(
-                              padding: const EdgeInsets.only(bottom: 120),
+                              padding: const EdgeInsets.fromLTRB(
+                                12,
+                                0,
+                                12,
+                                120,
+                              ),
                               itemCount: threads.length + 1,
                               itemBuilder: (context, i) => i == 0
                                   ? Padding(
                                       padding: const EdgeInsets.fromLTRB(
-                                        16,
+                                        4,
                                         0,
-                                        16,
-                                        6,
+                                        4,
+                                        9,
                                       ),
                                       child: _sectionLabel(
                                         showingClubs
@@ -380,26 +385,48 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  /// Soft radial glow bleeding from the top center, per the v5 design.
-  Widget _buildGlow() {
-    return Positioned(
-      top: -80,
-      left: 0,
-      right: 0,
+  /// A KU-inspired ambient layer: People uses linked campus paths, while Clubs
+  /// gets a more architectural burgundy-and-gold community pattern.
+  Widget _buildInboxBackdrop(bool showingClubs) {
+    final darkBase = const Color(0xFF13090D);
+    final darkWash = showingClubs
+        ? const Color(0xFF29101A)
+        : const Color(0xFF211018);
+    return Positioned.fill(
       child: IgnorePointer(
-        child: Center(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
           child: Container(
-            width: 300,
-            height: 240,
+            key: ValueKey('chat-backdrop-${showingClubs ? 'clubs' : 'people'}'),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.primaryRed.withValues(
-                    alpha: themeService.isDark ? 0.22 : 0.08,
-                  ),
-                  Colors.transparent,
-                ],
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: showingClubs
+                    ? [
+                        themeService.isDark ? darkBase : AppColors.background,
+                        themeService.isDark
+                            ? darkWash
+                            : AppColors.primaryRed.withValues(alpha: 0.055),
+                        themeService.isDark ? darkBase : AppColors.background,
+                      ]
+                    : [
+                        themeService.isDark ? darkBase : AppColors.background,
+                        themeService.isDark
+                            ? darkWash
+                            : AppColors.card.withValues(alpha: 0.72),
+                        themeService.isDark
+                            ? const Color(0xFF180B11)
+                            : AppColors.primaryRed.withValues(alpha: 0.025),
+                      ],
+              ),
+            ),
+            child: CustomPaint(
+              painter: _ChatBackdropPainter(
+                clubs: showingClubs,
+                burgundy: AppColors.primaryRed,
+                gold: AppColors.accentGold,
+                isDark: themeService.isDark,
               ),
             ),
           ),
@@ -932,135 +959,164 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .where((id) => id != _myId)
         .toList();
     final title = _titleFor(t);
-    return InkWell(
-      onTap: () => _openThread(
-        t.threadId,
-        recipient: t.peerId == null ? null : _userForId(t.peerId!),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: unread > 0 ? AppColors.card : Colors.transparent,
-          border: Border(bottom: BorderSide(color: AppColors.divider)),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-        child: Row(
-          children: [
-            if (club != null)
-              ClubAvatar(
-                clubId: club.id,
-                clubName: club.name,
-                color: _colorForClub(club.id),
-                imageUrl: club.logoUrl,
-                size: 48,
-                fontSize: 18,
-                borderRadius: 15,
-              )
-            else if (t.isGroup)
-              GroupAvatarStack(
-                memberIds: visibleGroupMembers,
-                nameForUser: _nameForUser,
-                photoPath: chatStore.groupForThread(t.threadId)?.photoUrl,
-                size: 48,
-              )
-            else
-              PresenceAvatar(
-                userId: t.peerId ?? '',
-                name: title,
-                size: 48,
-                fontSize: 18,
-                online: appPresenceService.onlineUserIds.contains(
-                  t.peerId ?? '',
+    final clubColor = club == null
+        ? AppColors.primaryRed
+        : _colorForClub(club.id);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: unread > 0
+            ? AppColors.card
+            : AppColors.card.withValues(
+                alpha: themeService.isDark ? 0.74 : 0.88,
+              ),
+        borderRadius: const BorderRadius.all(Radius.circular(18)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _openThread(
+            t.threadId,
+            recipient: t.peerId == null ? null : _userForId(t.peerId!),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: unread > 0
+                    ? clubColor.withValues(alpha: 0.34)
+                    : AppColors.glassEdge,
+              ),
+              borderRadius: const BorderRadius.all(Radius.circular(18)),
+              boxShadow: [
+                BoxShadow(
+                  color: clubColor.withValues(alpha: unread > 0 ? 0.09 : 0.035),
+                  blurRadius: 18,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 7),
                 ),
-              ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: unread > 0
-                                ? FontWeight.w800
-                                : FontWeight.w700,
-                            letterSpacing: -0.2,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        t.lastMessage == null
-                            ? ''
-                            : _rowTime(t.lastMessage!.createdAt),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: unread > 0
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: unread > 0
-                              ? AppColors.primaryRed
-                              : AppColors.secondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _preview(t),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: unread > 0
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: unread > 0
-                                ? AppColors.text
-                                : AppColors.secondaryText,
-                          ),
-                        ),
-                      ),
-                      if (unread > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          constraints: const BoxConstraints(minWidth: 18),
-                          height: 18,
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed,
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(9),
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            unread > 9 ? '9+' : '$unread',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+              ],
             ),
-          ],
+            padding: const EdgeInsets.fromLTRB(12, 11, 13, 11),
+            child: Row(
+              children: [
+                if (club != null)
+                  ClubAvatar(
+                    clubId: club.id,
+                    clubName: club.name,
+                    color: _colorForClub(club.id),
+                    imageUrl: club.logoUrl,
+                    size: 48,
+                    fontSize: 18,
+                    borderRadius: 15,
+                  )
+                else if (t.isGroup)
+                  GroupAvatarStack(
+                    memberIds: visibleGroupMembers,
+                    nameForUser: _nameForUser,
+                    photoPath: chatStore.groupForThread(t.threadId)?.photoUrl,
+                    size: 48,
+                  )
+                else
+                  PresenceAvatar(
+                    userId: t.peerId ?? '',
+                    name: title,
+                    size: 48,
+                    fontSize: 18,
+                    online: appPresenceService.onlineUserIds.contains(
+                      t.peerId ?? '',
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: unread > 0
+                                    ? FontWeight.w800
+                                    : FontWeight.w700,
+                                letterSpacing: -0.2,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            t.lastMessage == null
+                                ? ''
+                                : _rowTime(t.lastMessage!.createdAt),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: unread > 0
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: unread > 0
+                                  ? AppColors.primaryRed
+                                  : AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _preview(t),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: unread > 0
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: unread > 0
+                                    ? AppColors.text
+                                    : AppColors.secondaryText,
+                              ),
+                            ),
+                          ),
+                          if (unread > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 18),
+                              height: 18,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryRed,
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(9),
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                unread > 9 ? '9+' : '$unread',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1188,6 +1244,96 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ],
       ),
     );
+  }
+}
+
+class _ChatBackdropPainter extends CustomPainter {
+  final bool clubs;
+  final Color burgundy;
+  final Color gold;
+  final bool isDark;
+
+  const _ChatBackdropPainter({
+    required this.clubs,
+    required this.burgundy,
+    required this.gold,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final burgundyPaint = Paint()
+      ..color = burgundy.withValues(alpha: isDark ? 0.11 : 0.07)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1;
+    final goldPaint = Paint()
+      ..color = gold.withValues(alpha: isDark ? 0.12 : 0.09)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    if (clubs) {
+      // Interlocking arches echo campus colonnades and club communities.
+      for (var row = 0; row < 6; row++) {
+        final y = 205.0 + (row * 116);
+        final offset = row.isEven ? -34.0 : 24.0;
+        for (var column = 0; column < 4; column++) {
+          final x = offset + (column * 126);
+          canvas.drawArc(
+            Rect.fromLTWH(x, y, 92, 92),
+            3.14,
+            3.14,
+            false,
+            burgundyPaint,
+          );
+          canvas.drawCircle(Offset(x + 46, y + 47), 3.2, goldPaint);
+        }
+      }
+      final ribbon = Path()
+        ..moveTo(size.width * .68, 0)
+        ..quadraticBezierTo(size.width * .94, 150, size.width * .74, 310)
+        ..quadraticBezierTo(size.width * .56, 450, size.width, 590);
+      canvas.drawPath(ribbon, goldPaint..strokeWidth = 1.4);
+    } else {
+      // A sparse network of paths and meeting points for direct conversations.
+      final points = <Offset>[
+        Offset(-18, size.height * .28),
+        Offset(size.width * .22, size.height * .35),
+        Offset(size.width * .72, size.height * .27),
+        Offset(size.width + 18, size.height * .38),
+        Offset(size.width * .12, size.height * .68),
+        Offset(size.width * .55, size.height * .60),
+        Offset(size.width * .91, size.height * .76),
+      ];
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (var i = 1; i < points.length; i++) {
+        final previous = points[i - 1];
+        final point = points[i];
+        path.quadraticBezierTo(
+          (previous.dx + point.dx) / 2,
+          previous.dy - 34,
+          point.dx,
+          point.dy,
+        );
+      }
+      canvas.drawPath(path, burgundyPaint);
+      for (var i = 1; i < points.length - 1; i++) {
+        canvas.drawCircle(points[i], i.isEven ? 5 : 3.5, goldPaint);
+        canvas.drawCircle(
+          points[i],
+          1.4,
+          burgundyPaint..style = PaintingStyle.fill,
+        );
+        burgundyPaint.style = PaintingStyle.stroke;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChatBackdropPainter oldDelegate) {
+    return clubs != oldDelegate.clubs ||
+        burgundy != oldDelegate.burgundy ||
+        gold != oldDelegate.gold ||
+        isDark != oldDelegate.isDark;
   }
 }
 

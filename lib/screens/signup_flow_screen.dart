@@ -31,8 +31,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   String? _profileImagePath;
   String _password = '';
 
-  static const int _totalSteps =
-      4; // email, verify, password, profile
+  static const int _totalSteps = 4; // email, verify, password, profile
 
   void _goTo(int step) {
     setState(() => _currentStep = step);

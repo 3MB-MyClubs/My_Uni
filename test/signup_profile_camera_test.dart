@@ -19,9 +19,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
-    final tempDir = Directory.systemTemp.createTempSync(
-      'signup-camera-test-',
-    );
+    final tempDir = Directory.systemTemp.createTempSync('signup-camera-test-');
     addTearDown(() => tempDir.deleteSync(recursive: true));
     final imageFile = File('${tempDir.path}/camera.png');
     imageFile.writeAsBytesSync(

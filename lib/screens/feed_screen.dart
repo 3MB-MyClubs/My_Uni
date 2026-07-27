@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2250,6 +2251,173 @@ class _ViewersSheetState extends State<_ViewersSheet> {
   }
 }
 
+List<User> _localPostLikers(String postId) {
+  final likerIds = likes
+      .where((like) => like.postId == postId)
+      .map((like) => like.userId)
+      .toSet();
+  return users.where((user) => likerIds.contains(user.id)).toList();
+}
+
+final Map<String, List<User>> _likerPreviewCache = {};
+
+class _LikedByRow extends StatefulWidget {
+  final String postId;
+  final int likeCount;
+  final VoidCallback onTap;
+
+  const _LikedByRow({
+    required this.postId,
+    required this.likeCount,
+    required this.onTap,
+  });
+
+  @override
+  State<_LikedByRow> createState() => _LikedByRowState();
+}
+
+class _LikedByRowState extends State<_LikedByRow> {
+  List<User> _likers = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshPreview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LikedByRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.likeCount != widget.likeCount) {
+      _refreshPreview();
+    }
+  }
+
+  void _refreshPreview() {
+    final local = _localPostLikers(widget.postId);
+    if (local.isNotEmpty) {
+      _likers = local;
+      return;
+    }
+
+    final cached = _likerPreviewCache[widget.postId];
+    if (cached != null) {
+      _likers = cached;
+      return;
+    }
+
+    unawaited(_loadRemotePreview());
+  }
+
+  Future<void> _loadRemotePreview() async {
+    try {
+      final remote = await supabaseInteractionService.fetchPostLikers(
+        widget.postId,
+      );
+      _likerPreviewCache[widget.postId] = remote;
+      if (mounted && remote.isNotEmpty) setState(() => _likers = remote);
+    } catch (_) {
+      // A count-only fallback remains available while offline.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.likeCount <= 0) return const SizedBox.shrink();
+
+    final liker = _likers.isEmpty ? null : _likers.first;
+    final displayName = liker == null
+        ? null
+        : userState.displayNameFor(liker.id, liker.name);
+    final remaining = math.max(0, widget.likeCount - 1);
+
+    return Semantics(
+      button: true,
+      label: AppLocalizations.of(context)!.likesCount(widget.likeCount),
+      child: GestureDetector(
+        key: ValueKey('post-liked-by-${widget.postId}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.divider),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: liker == null
+                      ? ColoredBox(
+                          color: AppColors.lightRed,
+                          child: Icon(
+                            Icons.favorite_rounded,
+                            size: 14,
+                            color: AppColors.primaryRed,
+                          ),
+                        )
+                      : IgnorePointer(
+                          child: UserAvatar(
+                            userId: liker.id,
+                            name: displayName!,
+                            size: 24,
+                            fontSize: 10,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: Text(
+                    key: ValueKey('${liker?.id}-${widget.likeCount}'),
+                    displayName == null
+                        ? AppLocalizations.of(
+                            context,
+                          )!.likesCount(widget.likeCount)
+                        : remaining > 0
+                        ? S.likedByOthers(displayName, remaining)
+                        : S.likedBy(displayName),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LikersSheet extends StatefulWidget {
   final String postId;
 
@@ -2266,18 +2434,13 @@ class _LikersSheetState extends State<_LikersSheet> {
   @override
   void initState() {
     super.initState();
-    _loadLikers();
+    _likers = _localPostLikers(widget.postId);
+    _loading = _likers.isEmpty;
+    unawaited(_loadLikers());
   }
 
   Future<void> _loadLikers() async {
-    var likers = users
-        .where((user) {
-          return likes.any(
-            (like) => like.postId == widget.postId && like.userId == user.id,
-          );
-        })
-        .toList()
-        .cast<User>();
+    var likers = _localPostLikers(widget.postId);
 
     try {
       final remote = await supabaseInteractionService.fetchPostLikers(
@@ -2302,9 +2465,17 @@ class _LikersSheetState extends State<_LikersSheet> {
       minChildSize: 0.3,
       maxChildSize: 0.9,
       builder: (_, scrollController) => Container(
+        key: ValueKey('post-likers-sheet-${widget.postId}'),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 28,
+              offset: Offset(0, -8),
+            ),
+          ],
         ),
         child: _loading
             ? _PeopleEngagementSkeleton(
@@ -2463,6 +2634,20 @@ class _PostCardState extends State<_PostCard>
     if (!authService.isStudentSession) return;
     togglePostLike(widget.post.id);
     setState(() {});
+  }
+
+  void _showLikersSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useSafeArea: true,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 420),
+        reverseDuration: Duration(milliseconds: 260),
+      ),
+      builder: (_) => _LikersSheet(postId: widget.post.id),
+    );
   }
 
   void _showPostOptions() {
@@ -2840,12 +3025,7 @@ class _PostCardState extends State<_PostCard>
                     title: 'Post Viewers',
                   ),
                 ),
-                onLikeTap: () => showModalBottomSheet<void>(
-                  context: context,
-                  backgroundColor: Colors.transparent,
-                  isScrollControlled: true,
-                  builder: (_) => _LikersSheet(postId: widget.post.id),
-                ),
+                onLikeTap: _showLikersSheet,
               ),
             ),
           ],
@@ -2865,6 +3045,12 @@ class _PostCardState extends State<_PostCard>
                   onTap: _toggleLike,
                 ),
               ],
+            ),
+          if (likeCount > 0)
+            _LikedByRow(
+              postId: widget.post.id,
+              likeCount: likeCount,
+              onTap: _showLikersSheet,
             ),
         ],
       ),

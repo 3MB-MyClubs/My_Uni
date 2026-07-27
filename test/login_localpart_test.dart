@@ -39,13 +39,15 @@ void main() {
   });
 
   for (final darkMode in [true, false]) {
-    testWidgets('login fields keep identical neutral styling while focused in '
+    testWidgets('login fields animate a clear focus state in '
         '${darkMode ? 'dark' : 'light'} mode', (tester) async {
       await themeService.setDark(darkMode);
       addTearDown(() => themeService.setDark(true));
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: LoginScreen(
             onLogin: () {},
             onSignUp: () {},
@@ -64,21 +66,23 @@ void main() {
       for (var index = 0; index < surfaceKeys.length; index++) {
         final surface = find.byKey(surfaceKeys[index]);
         final before =
-            tester.widget<Container>(surface).decoration! as BoxDecoration;
+            tester.widget<AnimatedContainer>(surface).decoration!
+                as BoxDecoration;
 
         await tester.tap(fields.at(index));
-        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
         await tester.enterText(
           fields.at(index),
           index == 0 ? 'student' : '123456',
         );
-        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
 
         final after =
-            tester.widget<Container>(surface).decoration! as BoxDecoration;
-        expect(after.color, before.color);
-        expect(after.border, before.border);
-        expect(after.boxShadow, before.boxShadow);
+            tester.widget<AnimatedContainer>(surface).decoration!
+                as BoxDecoration;
+        expect(after.color, isNot(before.color));
+        expect((after.border! as Border).top.color, AppColors.primaryRed);
+        expect(after.boxShadow, isNotEmpty);
 
         final textField = tester.widget<TextField>(fields.at(index));
         expect(textField.cursorColor, AppColors.text);

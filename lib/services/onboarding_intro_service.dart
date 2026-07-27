@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// (a completed sign-up followed by login, or a plain login). Once true, the
 /// intro carousel is never shown again on this device.
 class OnboardingIntroService {
-  static const _preferenceKey = 'has_completed_onboarding_intro';
+  // Version the flag whenever a newly shipped intro must be presented once
+  // to devices that may have completed an older onboarding experience.
+  static const _preferenceKey = 'has_completed_onboarding_intro_v2';
 
   bool _completed = false;
 

@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'l10n/app_localizations.dart';
+import 'screens/app_launch_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
@@ -13,7 +14,6 @@ import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
 import 'screens/onboarding_carousel_screen.dart';
 import 'screens/terms_acceptance_screen.dart';
-import 'screens/boot_splash_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart';
@@ -55,9 +55,9 @@ void main() async {
     hiveBootstrap.initialize(),
   ]);
 
-  // The first screen is always Login, which needs only the theme + locale
-  // boxes to build the MaterialApp. The other boxes don't depend on each
-  // other and nothing before login reads them, so they open in the
+  // The branded launch screen needs only the theme + locale boxes before the
+  // first destination builds. The other boxes don't depend on each other and
+  // nothing before login reads them, so they open in the
   // background; readers await appBootstrap.ready (the post-frame hydration
   // below and the login/club-admin submit handlers — a login's network
   // round-trip dwarfs that wait).
@@ -83,8 +83,8 @@ void main() async {
 
   runApp(const ProviderScope(child: MyApp()));
 
-  // The app always opens on the login screen (there's no session restore on
-  // launch), so none of this needs to finish before first paint: the
+  // The app opens on the lightweight launch screen, so none of this needs to
+  // finish before first paint: the
   // notification permission prompt, materializing mock_data.dart's seed
   // lists, and the network cleanup call are all deferred to right after.
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -140,22 +140,23 @@ void main() async {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  const MyApp({
+    super.key,
+    this.minimumLaunchDuration = const Duration(milliseconds: 2000),
+  });
+
+  final Duration minimumLaunchDuration;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  bool _isLaunching = true;
+  Timer? _launchTimer;
   bool _showSignUp = false;
   bool _loggedIn = false;
   String _signupEmail = '';
-
-  // One-shot guard for the cold-start boot animation. build() recomputes
-  // homeWidget on every rebuild (theme/locale toggles, login/logout, etc.), so
-  // this flag ensures the branding splash wraps only the very first frame and
-  // never replays afterwards.
-  bool _bootAnimationDone = false;
 
   // Set when the user leaves the first-run intro carousel (Get started or
   // Log in/Skip) so it isn't rebuilt this session before the device flag lands.
@@ -176,11 +177,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.minimumLaunchDuration == Duration.zero) {
+      _isLaunching = false;
+    } else {
+      _launchTimer = Timer(widget.minimumLaunchDuration, () {
+        if (mounted) setState(() => _isLaunching = false);
+      });
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _launchTimer?.cancel();
     unawaited(appPresenceService.stop());
     super.dispose();
   }
@@ -370,7 +379,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
-        if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
+        String destinationKey;
+        if (!_dismissedIntro &&
+            !_showSignUp &&
+            !_loggedIn &&
+            authService.currentUser == null &&
+            authService.currentAdmin == null) {
+          // Show the intro once per cold app launch. It remains dismissed for
+          // the current session after Get started, Skip, or Log in.
+          homeWidget = OnboardingCarouselScreen(
+            onGetStarted: () => setState(() {
+              _dismissedIntro = true;
+              _showSignUp = true;
+            }),
+            onLogIn: () => setState(() => _dismissedIntro = true),
+          );
+          destinationKey = 'onboarding';
+        } else if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
             !_showSignUp &&
             onboardingIntroService.hasCompletedOnceOnDevice) {
           // New sign-ups accept the Terms via the checkbox on the sign-up
@@ -387,6 +412,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               if (mounted) setState(() {});
             },
           );
+          destinationKey = 'terms';
         } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
@@ -405,6 +431,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onChoose: (dark) =>
                   themeService.markThemeChosen(currentUserId, dark),
             );
+            destinationKey = 'theme-choice';
           } else {
             homeWidget = MainNavScreen(
               isAdmin: isAdmin,
@@ -419,19 +446,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 });
               },
             );
+            destinationKey = 'main-navigation';
           }
-        } else if (!onboardingIntroService.hasCompletedOnceOnDevice &&
-            !_dismissedIntro &&
-            !_showSignUp) {
-          // First-run intro carousel, shown once per device before any
-          // account exists. Get started → sign-up; Skip/Log in → login.
-          homeWidget = OnboardingCarouselScreen(
-            onGetStarted: () => setState(() {
-              _dismissedIntro = true;
-              _showSignUp = true;
-            }),
-            onLogIn: () => setState(() => _dismissedIntro = true),
-          );
         } else if (_showSignUp) {
           homeWidget = AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
@@ -444,6 +460,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               child: child,
             ),
           );
+          destinationKey = 'sign-up';
         } else {
           // Root entry: the Login Screen. "Sign up" hands off to the
           // multi-step sign-up flow; club-admin sign-in is reached from its
@@ -459,7 +476,73 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             transitionBuilder: (child, animation) =>
                 FadeTransition(opacity: animation, child: child),
           );
+          destinationKey = 'login';
         }
+        final visibleHome = AnimatedSwitcher(
+          duration: widget.minimumLaunchDuration == Duration.zero
+              ? Duration.zero
+              : destinationKey == 'sign-up'
+              ? const Duration(milliseconds: 1100)
+              : const Duration(milliseconds: 650),
+          switchInCurve: Curves.easeOutQuint,
+          switchOutCurve: Curves.easeInOutCubic,
+          transitionBuilder: (child, animation) {
+            final isLaunchScreen =
+                child.key == const ValueKey<String>('app-launch');
+            if (isLaunchScreen) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 1.035, end: 1).animate(animation),
+                  child: child,
+                ),
+              );
+            }
+
+            if (child.key ==
+                const ValueKey<String>('app-destination-sign-up')) {
+              return FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: const Interval(0.08, 1, curve: Curves.easeInOutCubic),
+                ),
+                child: SlideTransition(
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0.045, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                  child: child,
+                ),
+              );
+            }
+
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.035),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.99, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: _isLaunching
+              ? const AppLaunchScreen(key: ValueKey('app-launch'))
+              : KeyedSubtree(
+                  key: ValueKey('app-destination-$destinationKey'),
+                  child: homeWidget,
+                ),
+        );
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'ClubUp',
@@ -474,12 +557,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
-          home: _bootAnimationDone
-              ? homeWidget
-              : BootSplashScreen(
-                  onFinished: () => setState(() => _bootAnimationDone = true),
-                  child: homeWidget,
-                ),
+          home: visibleHome,
         );
       },
     );

@@ -47,6 +47,11 @@ class S {
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');
   static String get tomorrow => _t('Tomorrow', 'Yarın');
+  static String likedBy(String name) => _t('Liked by $name', '$name beğendi');
+  static String likedByOthers(String name, int count) => _t(
+    'Liked by $name and $count ${count == 1 ? 'other' : 'others'}',
+    '$name ve $count diğer kişi beğendi',
+  );
 
   // ── Explore
   static String get explore => _t('Explore', 'Keşfet');
@@ -749,6 +754,12 @@ class S {
     'Sohbete başlamak için bir arkadaşına yaz\nveya bir kulübe katıl.',
   );
   static String get typeMessage => _t('Message…', 'Mesaj…');
+  static String get startConversation =>
+      _t('Start the conversation', 'Sohbeti başlat');
+  static String get privateConversationHint => _t(
+    'Messages stay between the people in this conversation.',
+    'Mesajlar yalnızca bu sohbetteki kişiler arasında kalır.',
+  );
   static String get joinToChat =>
       _t('Join the club to chat', 'Sohbet için kulübe katıl');
   static String get joinToChatHint => _t(

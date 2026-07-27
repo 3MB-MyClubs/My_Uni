@@ -26,9 +26,22 @@ class OnboardingCarouselScreen extends StatefulWidget {
       _OnboardingCarouselScreenState();
 }
 
-class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
+class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen>
+    with SingleTickerProviderStateMixin {
   final PageController _controller = PageController();
+  late final AnimationController _exitController;
   int _page = 0;
+  bool _isLeaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _exitController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+      value: 1,
+    );
+  }
 
   // Rebuilt each build() so titles/subtitles re-read S.* after a language flip.
   // Every slide's hero sits in the same [_HeroBadge] frame; only the content
@@ -87,7 +100,15 @@ class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _exitController.dispose();
     super.dispose();
+  }
+
+  Future<void> _leave(VoidCallback destination) async {
+    if (_isLeaving) return;
+    setState(() => _isLeaving = true);
+    await _exitController.reverse();
+    if (mounted) destination();
   }
 
   void _openLanguageSheet() {
@@ -142,43 +163,61 @@ class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
     final slides = _slides;
     final isLast = _page == slides.length - 1;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
+    return FadeTransition(
+      opacity: CurvedAnimation(
+        parent: _exitController,
+        curve: Curves.easeOutCubic,
+      ),
+      child: SlideTransition(
+        position:
+            Tween<Offset>(
+              begin: const Offset(-0.025, 0),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: _exitController,
+                curve: Curves.easeOutCubic,
+              ),
+            ),
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: SafeArea(
+            child: Stack(
               children: [
-                Expanded(
-                  child: PageView.builder(
-                    controller: _controller,
-                    onPageChanged: (i) => setState(() => _page = i),
-                    itemCount: slides.length,
-                    itemBuilder: (_, i) => _Slide(slide: slides[i]),
-                  ),
+                Column(
+                  children: [
+                    Expanded(
+                      child: PageView.builder(
+                        controller: _controller,
+                        onPageChanged: (i) => setState(() => _page = i),
+                        itemCount: slides.length,
+                        itemBuilder: (_, i) => _Slide(slide: slides[i]),
+                      ),
+                    ),
+                    _buildDots(slides.length),
+                    const SizedBox(height: 28),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                      child: _buildActions(isLast),
+                    ),
+                  ],
                 ),
-                _buildDots(slides.length),
-                const SizedBox(height: 28),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                  child: _buildActions(isLast),
+                // Globe language switcher — fixed top-right on every slide.
+                Positioned(
+                  top: 4,
+                  right: 8,
+                  child: IconButton(
+                    onPressed: _openLanguageSheet,
+                    icon: Icon(
+                      Icons.language_rounded,
+                      color: AppColors.secondaryText,
+                    ),
+                    tooltip: S.language,
+                  ),
                 ),
               ],
             ),
-            // Globe language switcher — fixed top-right on every slide.
-            Positioned(
-              top: 4,
-              right: 8,
-              child: IconButton(
-                onPressed: _openLanguageSheet,
-                icon: Icon(
-                  Icons.language_rounded,
-                  color: AppColors.secondaryText,
-                ),
-                tooltip: S.language,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -216,7 +255,9 @@ class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: widget.onGetStarted,
+                    onPressed: _isLeaving
+                        ? null
+                        : () => _leave(widget.onGetStarted),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryRed,
                       foregroundColor: Colors.white,
@@ -242,7 +283,7 @@ class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
                 ),
                 const SizedBox(height: 4),
                 TextButton(
-                  onPressed: widget.onLogIn,
+                  onPressed: _isLeaving ? null : () => _leave(widget.onLogIn),
                   child: Text(
                     S.onboardingIntroLogIn,
                     style: TextStyle(
@@ -256,7 +297,7 @@ class _OnboardingCarouselScreenState extends State<OnboardingCarouselScreen> {
             )
           : Center(
               child: TextButton(
-                onPressed: widget.onLogIn,
+                onPressed: _isLeaving ? null : () => _leave(widget.onLogIn),
                 child: Text(
                   S.onboardingIntroSkip,
                   style: TextStyle(
