@@ -366,7 +366,7 @@ class _FeedScreenState extends State<FeedScreen> {
       await lazyContentLoader.ensureContentLoaded();
       _hydrateVisiblePostViews();
     } catch (_) {
-      // Keep local seed data visible if Supabase content is unreachable.
+      // Keep currently visible data if Supabase is temporarily unreachable.
     } finally {
       if (mounted) setState(() => _loadingFeedContent = false);
     }

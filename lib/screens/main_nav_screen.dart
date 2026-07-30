@@ -13,6 +13,7 @@ import '../services/mock_data.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
+import '../services/push_notification_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../onboarding/onboarding_service.dart';
@@ -193,10 +194,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
     onboardingService.replayRequests.addListener(_onOnboardingReplayRequested);
     onboardingService.tabRequests.addListener(_onTabRequested);
+    pushNotificationService.addListener(_onPushNotificationOpened);
     themeService.addListener(_onThemeOrLocaleChanged);
     localeService.addListener(_onThemeOrLocaleChanged);
-    // Keeps the Chats badge live when a message arrives on another screen.
-    chatStore.addListener(_onThemeOrLocaleChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startInitialExperience();
       unawaited(
@@ -208,6 +208,20 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         }),
       );
     });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _onPushNotificationOpened(),
+    );
+  }
+
+  void _onPushNotificationOpened() {
+    final target = pushNotificationService.takePendingTarget();
+    if (!mounted || target == null) return;
+    final selectedIndex = target.type == 'message' || target.type == 'chat'
+        ? 3
+        : 0;
+    if (_selectedIndex != selectedIndex) {
+      setState(() => _selectedIndex = selectedIndex);
+    }
   }
 
   void _onThemeOrLocaleChanged() {
@@ -295,9 +309,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       _onOnboardingReplayRequested,
     );
     onboardingService.tabRequests.removeListener(_onTabRequested);
+    pushNotificationService.removeListener(_onPushNotificationOpened);
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
-    chatStore.removeListener(_onThemeOrLocaleChanged);
     _chatsController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
@@ -394,7 +408,14 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                 );
               },
             ),
-            bottomNavigationBar: _buildBottomNav(context),
+            // ChatStore can notify for message delivery, read receipts,
+            // typing state, and sync progress. Only the unread badge depends
+            // on those updates, so keep them from rebuilding the mounted tab
+            // stack and the rest of this scaffold.
+            bottomNavigationBar: ListenableBuilder(
+              listenable: chatStore,
+              builder: (context, _) => _buildBottomNav(context),
+            ),
           ),
           if (_showOnboarding)
             Positioned.fill(

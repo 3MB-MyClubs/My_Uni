@@ -44,8 +44,7 @@ class NewsPost {
   /// the club's feed section (distinct from per-user pinning).
   final bool isAnnouncement;
 
-  // Legacy — kept only so existing mock data compiles without changes.
-  // Not displayed anywhere in the UI.
+  // Legacy persisted field. Not displayed anywhere in the UI.
   final String title;
 
   NewsPost({

@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../models/app_admin.dart';
 import 'locale_service.dart';
 import 'mock_data.dart';
+import 'auth_session_store.dart';
 import 'supabase_config.dart';
 
 // No BuildContext is available this deep in the service layer, so failures
@@ -127,6 +128,7 @@ class ClubPasscodeAuthService {
               Locale(localeService.languageCode),
             ).clubFallbackName;
         final clubEmail = club['email']?.toString() ?? normalizedEmail;
+        await authSessionStore.startNewSession();
         return ClubPasscodeAuthResult.success(
           AppAdmin(id: clubId, name: clubName, email: clubEmail, password: ''),
         );

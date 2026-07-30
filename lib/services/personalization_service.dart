@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
+import 'mock_data.dart';
+
 // ── Interest & time labels ────────────────────────────────────────────────────
 
 const List<String> kInterests = [
@@ -120,50 +122,6 @@ const List<Map<String, dynamic>> kFaculties = [
   {'name': 'Undecided', 'departments': 'Not sure yet'},
 ];
 
-// ── Club → interest category mapping ─────────────────────────────────────────
-
-const Map<String, List<String>> kClubInterestMap = {
-  'c3': ['Academic'],
-  'c4': ['Tech', 'Career'],
-  'c5': ['Sports'],
-  'c6': ['Arts', 'Social Impact'],
-  'c7': ['Academic', 'Career'],
-  'c8': ['Academic'],
-  'c9': ['Arts'],
-  'c10': ['Academic'],
-  'c11': ['Sports'],
-  'c12': ['Arts'],
-  'c13': ['Arts'],
-  'c14': ['Academic'],
-  'c15': ['Career', 'Tech'],
-  'c16': ['Wellness'],
-  'c17': ['Academic', 'Career'],
-  'c18': ['Career'],
-  'c19': ['Social Impact', 'Wellness'],
-  'c20': ['Tech', 'Career', 'Social Impact'],
-  'c21': ['Tech', 'Academic'],
-  'c22': ['Social Impact'],
-  'c23': ['Sports'],
-  'c24': ['Social Impact'],
-  'c25': ['Arts', 'Academic'],
-  'c26': ['Tech'],
-  'c27': ['Academic'],
-  'c28': ['Music'],
-  'c29': ['Music', 'Arts'],
-  'c30': ['Academic', 'Wellness'],
-  'c31': ['Music'],
-  'c32': ['Career'],
-  'c33': ['Arts', 'Music'],
-  'c34': ['Arts'],
-  'c35': ['Arts'],
-  'c36': ['Social Impact'],
-  'c37': ['Academic'],
-  'c38': ['Wellness', 'Academic'],
-  'c39': ['Arts'],
-  'c40': ['Academic'],
-  'c41': ['Music', 'Arts'],
-};
-
 // ── Service ───────────────────────────────────────────────────────────────────
 
 class PersonalizationService extends ChangeNotifier {
@@ -262,8 +220,11 @@ class PersonalizationService extends ChangeNotifier {
   bool isReminded(String id) => remindedEventIds.contains(id);
 
   /// Returns interest tags for the given club ID.
-  List<String> interestsForClub(String clubId) =>
-      kClubInterestMap[clubId] ?? [];
+  List<String> interestsForClub(String clubId) {
+    final category = clubForId(clubId)?.categoryName?.trim();
+    if (category == null || category.isEmpty) return const [];
+    return [category];
+  }
 
   /// How many of the user's selected interests match a given club.
   int interestMatchCount(String clubId) =>

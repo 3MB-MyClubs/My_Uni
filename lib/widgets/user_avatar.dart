@@ -38,14 +38,14 @@ class UserAvatar extends ConsumerWidget {
       userStateProvider.select(
         (s) => (
           s.profilePhotoPaths[userId],
-          s.mockPhotoUrls[userId],
+          s.remotePhotoUrls[userId],
           s.displayNameFor(userId, name),
           s.profilePhotoRevisionFor(userId),
         ),
       ),
     );
     final photoPath = avatarState.$1;
-    final mockUrl = avatarState.$2;
+    final remoteUrl = avatarState.$2;
     final displayName = avatarState.$3;
     final bg = backgroundColor ?? AppColors.lightRed;
     final fg = textColor ?? AppColors.primaryRed;
@@ -88,9 +88,8 @@ class UserAvatar extends ConsumerWidget {
       }
     }
 
-    // Fall back to mock network photo for demo users
-    if (mockUrl != null) {
-      final imageProvider = CachedNetworkImageProvider(mockUrl);
+    if (remoteUrl != null) {
+      final imageProvider = CachedNetworkImageProvider(remoteUrl);
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => showProfilePhotoViewer(
