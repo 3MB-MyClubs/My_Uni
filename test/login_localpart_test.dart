@@ -10,6 +10,26 @@ import 'package:flutter_application_1/services/theme_service.dart';
 /// "@ku.edu.tr" domain is shown as a fixed suffix and never typed. Pasting a
 /// full email is normalised back down to the local part.
 void main() {
+  testWidgets('login copy is translated to Turkish', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('tr'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: LoginScreen(onLogin: () {}, onSignUp: () {}, onAdminLogin: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('KOÇ ÜNİVERSİTESİ'), findsOneWidget);
+    expect(find.text('KAMPÜS E-POSTASI'), findsOneWidget);
+    expect(find.text('adınız'), findsOneWidget);
+    expect(find.text('6 haneli PIN'), findsOneWidget);
+    expect(find.text('Şifreni mi unuttun?'), findsOneWidget);
+    expect(find.text('Kayıt ol'), findsOneWidget);
+    expect(find.text('Kulüp yöneticisi girişi'), findsOneWidget);
+  });
+
   testWidgets('Email field only needs the username, not @ku.edu.tr', (
     tester,
   ) async {

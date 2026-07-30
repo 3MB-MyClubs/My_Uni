@@ -1827,6 +1827,13 @@
   "yourEmailFallback": "your email",
   "yourKuDay": "Your KU Day",
   "youreGoing": "You're going",
+  "signInToContinueSubtitle": "Sign in to pick up where you left off.",
+  "kocUniversityWordmark": "KOÇ UNIVERSITY",
+  "usernameHint": "yourname",
+  "newToKocUniversity": "New to Koç University?",
+  "runningAClub": "Running a club?",
+  "fullNameExampleHint": "e.g. Ali Yılmaz",
+  "couldNotUseCamera": "Could not use the camera. Check camera access and try again.",
   "youreInName": "You're in,\n{name}.",
   "@youreInName": {
     "placeholders": {

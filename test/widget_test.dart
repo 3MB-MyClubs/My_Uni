@@ -22,8 +22,8 @@ void main() {
     await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
     await tester.pump();
 
-    expect(find.text('COMMUNITY SAFETY TERMS'), findsNothing);
-    expect(find.text('Agree and continue'), findsNothing);
+    expect(find.text('Atla'), findsOneWidget);
+    expect(find.byType(TermsAcceptanceScreen), findsNothing);
   });
 
   testWidgets('returning user sees intro before the re-accept gate', (
@@ -39,17 +39,19 @@ void main() {
     await tester.pump();
 
     expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
-    expect(find.text('COMMUNITY SAFETY TERMS'), findsNothing);
+    expect(find.text('Atla'), findsOneWidget);
+    expect(find.byType(TermsAcceptanceScreen), findsNothing);
 
-    await tester.tap(find.text('Skip'));
+    await tester.tap(find.text('Atla'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 361));
     await tester.pump();
 
     expect(find.byType(OnboardingCarouselScreen), findsNothing);
-    expect(find.text('COMMUNITY SAFETY TERMS'), findsOneWidget);
-    expect(find.text('Agree and continue'), findsOneWidget);
-    expect(find.text('Log in'), findsNothing);
+    expect(find.byType(TermsAcceptanceScreen), findsOneWidget);
+    expect(find.text('TOPLULUK GÜVENLİĞİ KOŞULLARI'), findsOneWidget);
+    expect(find.text('Kabul et ve devam et'), findsOneWidget);
+    expect(find.text('Giriş yap'), findsNothing);
   });
 
   testWidgets('app shows branded launch UI before its first destination', (
@@ -67,7 +69,7 @@ void main() {
       tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
       const Color(0xFF4A0F24),
     );
-    expect(find.text('COMMUNITY SAFETY TERMS'), findsNothing);
+    expect(find.byType(TermsAcceptanceScreen), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 2000));
     await tester.pump();

@@ -1,61 +1,47 @@
-# Student Profile Design QA
+# Design QA
 
-- Source visual truth: `/Users/hakantuncay/Desktop/Student Profile (Standalone) (1).html`
-- Source render: `/tmp/student-profile-reference.png`
-- Implementation render: `/tmp/student-profile-implementation-normalized.png`
-- Viewport: source student-profile region normalized to 402 × 548; implementation captured at 402 × 548. Responsive coverage also ran at 390 × 844.
-- State: signed-in student profile, dark appearance, Hakan Tuncay, Computer Engineering, Physics minor, bio, four club memberships.
+- Source visual truth: user-provided Instagram mobile-feed screenshot in the conversation (600 x 1324 px).
+- Implementation screenshot: `/tmp/clubup-feed-edge-to-edge.png` (1290 x 2796 px).
+- Intended viewport: iPhone mobile feed, portrait.
+- State: Home feed with a photo post.
+- Density normalization: not possible; the implementation capture showed the iOS Home Screen rather than ClubUp's authenticated Home feed.
 
-**Findings**
+## Full-view comparison evidence
 
-- No actionable P0, P1, or P2 differences remain.
-- P3, intentional product adaptation: the root profile tab keeps the existing working Share action in the leading slot instead of adding a Back control with nowhere to navigate.
-- P3, intentional data adaptation: membership cards show each club's live member count instead of a fabricated “since” date because the production model does not store join dates.
-- Expected integration boundary: the source mock includes its own bottom navigation, while the implemented student screen uses the app's existing `MainNavScreen` navigation outside the profile widget. Club-account and club-profile navigation were not restyled.
+The source clearly establishes an edge-to-edge, square-corner post image with padded controls above and below. The implementation could not be visually compared in the same authenticated feed state because the running simulator was on the iOS Home Screen.
 
-**Required Fidelity Surfaces**
+## Focused region comparison evidence
 
-- Fonts and typography: both targets use the platform system font. Card hierarchy, sizes, weights, line limits, letter spacing, and truncation follow the reference. Flutter's widget-test capture substitutes block glyphs, so glyph shape is not representative; runtime font selection remains the native system family.
-- Spacing and layout rhythm: 16 px page gutters, 12/8 px top-bar spacing, 20/14 px Campus ID radius/spacing, 14 px bio radius, 18 px section gap, 8 px grid gaps, and 80 px membership-card height match the rendered reference proportions.
-- Colors and visual tokens: near-black `#080000` background, `#100005` deep surface, `#8C1D40` / `#6A1530` burgundy card treatment, translucent white cards and borders, muted `#8A8A8E`, and pink `#D96A8B` actions match the source palette.
-- Image quality and asset fidelity: production `UserAvatar` and `ClubAvatar` widgets supply real uploaded/network imagery when available and initials otherwise. Standard controls use Flutter's Material icon library; no placeholder or handcrafted image assets were introduced.
-- Copy and content: “My Profile,” “Student ID,” “Bio,” “My Clubs,” profile identity, academic details, statistics, and club roles are mapped to live production data.
+Blocked for the same reason. Code inspection confirms that the post media now expands from the card's padded width to `MediaQuery.sizeOf(context).width`, is centered in an `OverflowBox`, and no longer has the previous 16 px clipping radius.
 
-**Interaction Verification**
+## Findings
 
-- Share and Settings controls invoke their callbacks.
-- Clubs, Following, and Followers statistics open their existing lists.
-- Find clubs routes to Explore; membership cards open the existing club profile route.
-- Visited student profiles retain Follow/Following/Requested behavior, back navigation, connection lists, and long-major truncation without overflow.
-- Club profile screens and club-account profile routing remain separate and unchanged.
+- [P2] Rendered authenticated feed evidence is unavailable.
+  - Location: Home feed photo post.
+  - Evidence: source shows viewport-flush media; simulator capture did not show the app.
+  - Impact: exact safe-area/device rendering cannot be visually signed off.
+  - Fix: cold-launch ClubUp, enter the Home feed, capture a photo post at the same viewport, and compare it with the reference.
 
-**Full-view Comparison Evidence**
+## Fidelity surfaces
 
-- The supplied HTML was rendered in headless Chrome and compared in the same review input with the Flutter implementation capture.
-- Overall hierarchy, card proportions, color balance, bio placement, two-column club grid, and visible information density align after normalization.
+- Fonts and typography: intentionally unchanged; the request concerns media alignment only.
+- Spacing and layout rhythm: code now uses full viewport width for post media and retains padded header/actions/caption.
+- Colors and visual tokens: intentionally unchanged.
+- Image quality and asset fidelity: existing uploaded media and `BoxFit.cover` behavior are preserved.
+- Copy and content: intentionally unchanged.
 
-**Focused-region Comparison Evidence**
+## Comparison history
 
-- The Campus ID card and the two-row membership grid were legible in the full-view comparison, so no additional crop was needed.
-- The first comparison found membership cards approximately 8 px taller than the source. Their `mainAxisExtent` was changed from 88 px to 80 px, then the implementation was recaptured and compared again.
+- Initial finding: post media had 14 px horizontal card insets and 16 px rounded corners.
+- Fix made: media now overflows the padded card to the full viewport width with square corners.
+- Post-fix visual evidence: blocked because the simulator was not displaying the authenticated feed.
 
-**Comparison History**
+## Implementation checklist
 
-1. Initial implementation capture: `/tmp/student-profile-implementation.png` at 390 × 844. Finding: P2 membership-grid density was looser than the source.
-2. Fix: reduced membership-card extent to 80 px while retaining two-line title safety.
-3. Post-fix evidence: `/tmp/student-profile-implementation-normalized.png` at 402 × 548. No actionable P0/P1/P2 mismatches remained.
+- [x] Remove horizontal media inset.
+- [x] Remove rounded media corners.
+- [x] Preserve padded surrounding controls and caption.
+- [x] Pass static analysis.
+- [ ] Capture the authenticated feed for final visual comparison.
 
-**Implementation Checklist**
-
-- [x] Campus ID profile surface shared by own and visited student profiles.
-- [x] Live academic, bio, social, and membership data preserved.
-- [x] Student actions remain functional.
-- [x] Club profiles remain outside the redesign scope.
-- [x] 390 × 844 overflow coverage added for own and visited profiles.
-- [x] Analyzer and focused tests pass.
-
-**Follow-up Polish**
-
-- Add real club-join dates later if the production data model gains them.
-
-final result: passed
+final result: blocked

@@ -89,10 +89,44 @@ class _FeedCache {
   List<Event>? railShown;
 }
 
+/// Controls actions on the already-mounted Home feed from the main nav.
+class FeedController extends ChangeNotifier {
+  void scrollToTop() => notifyListeners();
+}
+
+/// A restrained iOS-style edge bounce for both ends of the Home feed.
+///
+/// It keeps the same ballistic behavior as [BouncingScrollPhysics], including
+/// recovery after slow drags and fast flings, but applies more resistance once
+/// the content is out of range. The lightly elastic spring always settles back
+/// on the real content extent, so overscroll can never become a resting state.
+class _FeedBouncePhysics extends BouncingScrollPhysics {
+  const _FeedBouncePhysics({super.parent});
+
+  @override
+  _FeedBouncePhysics applyTo(ScrollPhysics? ancestor) {
+    return _FeedBouncePhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double frictionFactor(double overscrollFraction) {
+    return super.frictionFactor(overscrollFraction) * 0.62;
+  }
+
+  @override
+  SpringDescription get spring => SpringDescription.withDampingRatio(
+    mass: 0.45,
+    stiffness: 110,
+    ratio: 0.92,
+  );
+}
+
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  final FeedController? controller;
+
+  const FeedScreen({super.key, this.controller});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -107,6 +141,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // Only render the blur once content has actually scrolled under the bar —
   // pixel-identical in both states (the translucent fill is the same).
   bool _scrolledUnder = false;
+  final ScrollController _scrollController = ScrollController();
 
   _FeedCache? _feedCache;
 
@@ -121,8 +156,11 @@ class _FeedScreenState extends State<FeedScreen> {
   int _feedSignature() {
     return Object.hash(
       newsPosts.length,
-      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.first),
-      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.last),
+      Object.hashAll(
+        newsPosts.map(
+          (post) => Object.hash(post.id, post.clubId, post.createdAt),
+        ),
+      ),
       events.length,
       events.isEmpty ? 0 : identityHashCode(events.first),
       clubs.length,
@@ -277,33 +315,33 @@ class _FeedScreenState extends State<FeedScreen> {
     return eligible.first;
   }
 
-  // Builds the mixed feed:
-  //   every 10 posts → People You Might Know (friend suggestions)
-  //   every 15 posts → a trending event suggestion
-  //   every 20 posts → a "club you should follow" suggestion (interest-ranked,
-  //                    cycling through candidates so it isn't always the same)
+  // Builds the mixed feed. Each recommendation type is inserted at most once;
+  // repeating tall rails buried club posts and caused large scroll corrections
+  // when several copies disappeared after one follow action.
   // Tapping any suggestion opens that person, event, or club.
   List<dynamic> _buildMixedFeed(List<_FeedItem> posts) {
     final result = <dynamic>[];
     final peopleSuggestions = _suggestedUsers();
     final clubSuggestions = _suggestedClubs();
     final trendingEv = _trendingEvent();
-    int clubIdx = 0;
+    var addedPeople = false;
+    var addedEvent = false;
+    var addedClub = false;
 
     for (int i = 0; i < posts.length; i++) {
       result.add(posts[i]);
       final n = i + 1;
-      if (n % 10 == 0 && peopleSuggestions.isNotEmpty) {
+      if (!addedPeople && n >= 10 && peopleSuggestions.isNotEmpty) {
         result.add(peopleSuggestions);
+        addedPeople = true;
       }
-      if (n % 15 == 0 && trendingEv != null) {
+      if (!addedEvent && n >= 15 && trendingEv != null) {
         result.add(_EventSuggestion(trendingEv));
+        addedEvent = true;
       }
-      if (n % 20 == 0 && clubSuggestions.isNotEmpty) {
-        result.add(
-          _ClubSuggestion(clubSuggestions[clubIdx % clubSuggestions.length]),
-        );
-        clubIdx++;
+      if (!addedClub && n >= 20 && clubSuggestions.isNotEmpty) {
+        result.add(_ClubSuggestion(clubSuggestions.first));
+        addedClub = true;
       }
     }
     return result;
@@ -312,6 +350,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    widget.controller?.addListener(_scrollToTop);
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
     contentStore.addListener(_onContentChanged);
@@ -322,11 +361,22 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   void dispose() {
+    widget.controller?.removeListener(_scrollToTop);
+    _scrollController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     contentStore.removeListener(_onContentChanged);
     moderationService.removeListener(_onContentChanged);
     super.dispose();
+  }
+
+  void _scrollToTop() {
+    if (!_scrollController.hasClients || _scrollController.offset <= 0) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   void _onLocaleChanged() {
@@ -411,7 +461,10 @@ class _FeedScreenState extends State<FeedScreen> {
             return false;
           },
           child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            controller: _scrollController,
+            physics: const _FeedBouncePhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             slivers: [
               _buildTopBar(),
               _buildGreeting(),
@@ -503,43 +556,61 @@ class _FeedScreenState extends State<FeedScreen> {
                     final item = mixed[i];
                     if (item is List<User>) {
                       return _PeopleSuggestionCard(
+                        key: const ValueKey('home-people-suggestions'),
                         suggestions: item,
                         onFollowed: () => setState(() {}),
                       );
                     }
                     if (item is _EventSuggestion) {
                       return _TrendingEventCard(
+                        key: ValueKey('home-event-suggestion-${item.event.id}'),
                         event: item.event,
                         onUpdate: () => setState(() {}),
                       );
                     }
                     if (item is _ClubSuggestion) {
                       return _ClubSuggestionCard(
+                        key: ValueKey('home-club-suggestion-${item.club.id}'),
                         club: item.club,
                         onUpdate: () => setState(() {}),
                       );
                     }
-                    return _buildFeedCard(item as _FeedItem, i);
+                    final feedItem = item as _FeedItem;
+                    return KeyedSubtree(
+                      key: ValueKey('home-feed-item-${feedItem.id}'),
+                      child: _buildFeedCard(feedItem, i),
+                    );
                   }, childCount: mixed.length),
                 ),
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Center(
-                      child: Text(
-                        AppLocalizations.of(context)!.endOfFeed,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText,
+                  child: Semantics(
+                    key: const ValueKey('home-feed-end'),
+                    container: true,
+                    child: SizedBox(
+                      height: 56,
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: AppColors.primaryRed,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              AppLocalizations.of(context)!.endOfFeed,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: MediaQuery.paddingOf(context).bottom + 112,
                   ),
                 ),
               ],
@@ -1260,6 +1331,7 @@ class _PeopleSuggestionCard extends StatefulWidget {
   final List<User> suggestions;
   final VoidCallback onFollowed;
   const _PeopleSuggestionCard({
+    super.key,
     required this.suggestions,
     required this.onFollowed,
   });
@@ -1280,6 +1352,21 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
 
   final Set<String> _dismissedIds = {};
   final Set<String> _followingTransitionIds = {};
+  bool _isClosing = false;
+
+  bool _hasAnotherSuggestion(String removedId) => widget.suggestions.any(
+    (user) =>
+        user.id != removedId &&
+        !userState.isFollowingUser(user.id) &&
+        !_dismissedIds.contains(user.id),
+  );
+
+  Future<void> _closeSection() async {
+    if (_isClosing) return;
+    setState(() => _isClosing = true);
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    if (mounted) widget.onFollowed();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1297,7 +1384,8 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
 
     if (shown.isEmpty) return const SizedBox.shrink();
 
-    return Container(
+    final content = Container(
+      key: const ValueKey('people-suggestion-content'),
       margin: const EdgeInsets.symmetric(vertical: 6),
       color: AppColors.card,
       child: Column(
@@ -1582,11 +1670,15 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                             const Duration(milliseconds: 260),
                                           );
                                           if (mounted) {
-                                            setState(
-                                              () => _followingTransitionIds
-                                                  .remove(u.id),
-                                            );
-                                            widget.onFollowed();
+                                            if (_hasAnotherSuggestion(u.id)) {
+                                              setState(
+                                                () => _followingTransitionIds
+                                                    .remove(u.id),
+                                              );
+                                              widget.onFollowed();
+                                            } else {
+                                              await _closeSection();
+                                            }
                                           }
                                         } else {
                                           widget.onFollowed();
@@ -1619,8 +1711,13 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                 top: -2,
                                 right: -2,
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _dismissedIds.add(u.id)),
+                                  onTap: () {
+                                    if (_hasAnotherSuggestion(u.id)) {
+                                      setState(() => _dismissedIds.add(u.id));
+                                    } else {
+                                      _closeSection();
+                                    }
+                                  },
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
@@ -1652,6 +1749,27 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
         ],
       ),
     );
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1,
+            child: child,
+          ),
+        ),
+        child: _isClosing
+            ? const SizedBox(key: ValueKey('people-suggestion-closed'))
+            : content,
+      ),
+    );
   }
 }
 
@@ -1670,7 +1788,11 @@ class _TrendingEventCard extends StatelessWidget {
     Color(0xFF00838F),
   ];
 
-  const _TrendingEventCard({required this.event, required this.onUpdate});
+  const _TrendingEventCard({
+    super.key,
+    required this.event,
+    required this.onUpdate,
+  });
 
   void _showDetail(BuildContext context, Color color) {
     Navigator.push(
@@ -1817,7 +1939,11 @@ class _ClubSuggestionCard extends StatefulWidget {
   final dynamic club;
   final VoidCallback onUpdate;
 
-  const _ClubSuggestionCard({required this.club, required this.onUpdate});
+  const _ClubSuggestionCard({
+    super.key,
+    required this.club,
+    required this.onUpdate,
+  });
 
   @override
   State<_ClubSuggestionCard> createState() => _ClubSuggestionCardState();
@@ -2611,10 +2737,16 @@ class _PostCardState extends State<_PostCard>
             _heartController.reset();
           }
         });
-    // Record this user as having seen the post
-    final userId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    viewTracker.recordView(widget.post.id, userId, syncRemote: true);
+    // Recording a view notifies the engagement bars that are already mounted.
+    // Defer that notification until this sliver's first frame is complete;
+    // notifying synchronously while sibling cards are still mounting causes
+    // Flutter's "setState() or markNeedsBuild() called during build" failure.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final userId =
+          authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+      viewTracker.recordView(widget.post.id, userId, syncRemote: true);
+    });
   }
 
   @override
@@ -2969,35 +3101,45 @@ class _PostCardState extends State<_PostCard>
           // ── Media (full-card width on Home) ──
           if (hasImage) ...[
             const SizedBox(height: 12),
-            GestureDetector(
-              key: ValueKey('home-feed-photo-${widget.post.id}'),
-              onDoubleTap: isStudent ? _doubleTapLike : null,
-              child: ClipRRect(
-                borderRadius: BorderRadius.all(Radius.circular(16)),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    buildPostBanner(
-                      imagePath: widget.post.imagePath,
-                      fallbackColor: clubColor,
-                      fallbackLetter: club.name[0],
-                      height: mediaHeight,
-                    ),
-                    if (_showHeart)
-                      ScaleTransition(
-                        scale: Tween(begin: 0.5, end: 1.4).animate(
-                          CurvedAnimation(
-                            parent: _heartController,
-                            curve: Curves.elasticOut,
+            SizedBox(
+              height: mediaHeight,
+              child: OverflowBox(
+                alignment: Alignment.center,
+                minWidth: MediaQuery.sizeOf(context).width,
+                maxWidth: MediaQuery.sizeOf(context).width,
+                child: GestureDetector(
+                  key: ValueKey('home-feed-photo-${widget.post.id}'),
+                  onDoubleTap: isStudent ? _doubleTapLike : null,
+                  child: SizedBox(
+                    width: MediaQuery.sizeOf(context).width,
+                    height: mediaHeight,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      alignment: Alignment.center,
+                      children: [
+                        buildPostBanner(
+                          imagePath: widget.post.imagePath,
+                          fallbackColor: clubColor,
+                          fallbackLetter: club.name[0],
+                          height: mediaHeight,
+                        ),
+                        if (_showHeart)
+                          ScaleTransition(
+                            scale: Tween(begin: 0.5, end: 1.4).animate(
+                              CurvedAnimation(
+                                parent: _heartController,
+                                curve: Curves.elasticOut,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.favorite,
+                              color: Colors.white,
+                              size: 72,
+                            ),
                           ),
-                        ),
-                        child: Icon(
-                          Icons.favorite,
-                          color: Colors.white,
-                          size: 72,
-                        ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -3125,7 +3267,10 @@ class _EventCardState extends State<_EventCard> {
     );
     _lastAttending = rsvpStore.isAttending(widget.event.id);
     rsvpStore.addListener(_onRsvpChanged);
-    viewTracker.recordView(widget.event.id, userId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      viewTracker.recordView(widget.event.id, userId);
+    });
   }
 
   @override

@@ -22,6 +22,7 @@ import '../l10n/app_localizations.dart';
 import '../services/photo_upload_quality.dart';
 import '../onboarding/onboarding_service.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/language_toggle.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'blocked_accounts_screen.dart';
 import 'edit_profile_screen.dart';
@@ -1180,7 +1181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: AppColors.text,
                         ),
                       ),
-                      trailing: _LanguageToggle(),
+                      trailing: const LanguageToggle(),
                     ),
                   ],
                 ),
@@ -1648,51 +1649,6 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LanguageToggle extends StatelessWidget {
-  const _LanguageToggle();
-
-  @override
-  Widget build(BuildContext context) {
-    final current = localeService.languageCode;
-    return Container(
-      height: 34,
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.divider),
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _seg('EN', current == 'en', () => localeService.setLanguage('en')),
-          _seg('TR', current == 'tr', () => localeService.setLanguage('tr')),
-        ],
-      ),
-    );
-  }
-
-  Widget _seg(String label, bool active, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? AppColors.primaryRed : Colors.transparent,
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: active ? FontWeight.bold : FontWeight.normal,
-            color: active ? Colors.white : AppColors.secondaryText,
-          ),
         ),
       ),
     );

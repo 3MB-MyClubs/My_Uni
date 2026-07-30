@@ -22,6 +22,7 @@ import 'services/hive_bootstrap.dart';
 import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
 import 'services/chat_store.dart';
+import 'services/club_chat_prefs.dart';
 import 'services/checkin_store.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
@@ -72,6 +73,7 @@ void main() async {
     peopleService.initialize(),
     contentStore.initialize(),
     chatStore.initialize(),
+    clubChatPrefs.initialize(),
     checkinStore.initialize(),
     pollStore.initialize(),
     viewTracker.initialize(),
@@ -368,6 +370,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           (s) => s.contains(WidgetState.selected) ? AppColors.darkRed : lGray,
         ),
       ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.iOS: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.macOS: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.windows: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.linux: _SmoothPageTransitionsBuilder(),
+        },
+      ),
       useMaterial3: true,
     );
   }
@@ -560,6 +571,37 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           home: visibleHome,
         );
       },
+    );
+  }
+}
+
+class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (route.isFirst) return child;
+
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.045, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
+      ),
     );
   }
 }

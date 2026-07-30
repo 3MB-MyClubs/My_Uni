@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/features/calendar/providers/calendar_provider.dart';
 import 'package:flutter_application_1/features/calendar/providers/calendar_state.dart';
 import 'package:flutter_application_1/features/calendar/services/calendar_service.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/onboarding/onboarding_anchors.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/onboarding/starter_checklist_service.dart';
@@ -19,7 +20,6 @@ import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
-import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
@@ -94,11 +94,6 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove('onboarding_checklist_$userId');
 
-    // Avoid the feed's unrelated synchronous view-tracking notification in
-    // the integration binding; all onboarding anchors still mount without
-    // feed posts.
-    newsPosts.clear();
-
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -106,6 +101,8 @@ void main() {
         ],
         child: const MaterialApp(
           debugShowCheckedModeBanner: false,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: MainNavScreen(isAdmin: false),
         ),
       ),

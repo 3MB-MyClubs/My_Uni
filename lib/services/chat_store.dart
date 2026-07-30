@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
 import '../models/chat_group.dart';
 import '../models/notification.dart';
+import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
@@ -113,7 +114,10 @@ class ChatStore extends ChangeNotifier {
     final cached = peopleService.cachedPeople.where(
       (user) => user.id == userId,
     );
-    final fallback = cached.isEmpty ? userId : cached.first.name;
+    final known = users.where((user) => user.id == userId);
+    final fallback = cached.isNotEmpty
+        ? cached.first.name
+        : (known.isNotEmpty ? known.first.name : '');
     return userState.displayNameFor(userId, fallback);
   }
 
@@ -306,7 +310,7 @@ class ChatStore extends ChangeNotifier {
             column: 'sender_id',
             value: userId,
           ),
-          callback: _handleDirectMessageChange,
+          callback: (payload) => unawaited(_handleDirectMessageChange(payload)),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -317,7 +321,7 @@ class ChatStore extends ChangeNotifier {
             column: 'receiver_id',
             value: userId,
           ),
-          callback: _handleDirectMessageChange,
+          callback: (payload) => unawaited(_handleDirectMessageChange(payload)),
         );
     _directMessageChannel = channel;
     channel.subscribe((status, error) {
@@ -359,10 +363,8 @@ class ChatStore extends ChangeNotifier {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'group_messages',
-          callback: (payload) {
-            final record = payload.newRecord;
-            if (record.isNotEmpty) _mergeRemoteGroupMessage(record, userId);
-          },
+          callback: (payload) =>
+              unawaited(_handleGroupMessageChange(payload, userId)),
         );
     _groupMessageChannel = channel;
     channel.subscribe((status, error) {
@@ -444,6 +446,12 @@ class ChatStore extends ChangeNotifier {
           (membersByGroup[groupId] ??= []).add(memberId);
         }
       }
+      // Do not expose a group message until its sender's real profile name and
+      // avatar have been resolved. This also preloads identities used by the
+      // automatic group title and avatar stack.
+      await peopleService.hydrateProfilesByIds(
+        membersByGroup.values.expand((memberIds) => memberIds),
+      );
       for (final raw in results[0]) {
         final row = Map<String, dynamic>.from(raw as Map);
         final id = row['id']?.toString() ?? '';
@@ -534,6 +542,19 @@ class ChatStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _handleGroupMessageChange(
+    PostgresChangePayload payload,
+    String viewerId,
+  ) async {
+    final record = payload.newRecord;
+    if (record.isEmpty) return;
+    final senderId = record['sender_id']?.toString() ?? '';
+    if (senderId.isNotEmpty) {
+      await peopleService.hydrateProfilesByIds([senderId]);
+    }
+    _mergeRemoteGroupMessage(record, viewerId);
+  }
+
   Future<void> _reconcileRemoteMessages(
     SupabaseClient client,
     String userId,
@@ -546,6 +567,14 @@ class ChatStore extends ChangeNotifier {
           )
           .or('sender_id.eq.$userId,receiver_id.eq.$userId')
           .order('created_at');
+      await peopleService.hydrateProfilesByIds(
+        rows.expand(
+          (row) => [
+            row['sender_id']?.toString() ?? '',
+            row['receiver_id']?.toString() ?? '',
+          ],
+        ),
+      );
       _mergeRemoteRows(rows);
       await _flushRemoteChanges();
     } catch (_) {
@@ -553,11 +582,15 @@ class ChatStore extends ChangeNotifier {
     }
   }
 
-  void _handleDirectMessageChange(PostgresChangePayload payload) {
+  Future<void> _handleDirectMessageChange(PostgresChangePayload payload) async {
     final record = payload.newRecord;
     if (record.isEmpty) return;
     final message = _messageFromRemoteRow(record);
     if (message == null) return;
+    await peopleService.hydrateProfilesByIds([
+      record['sender_id']?.toString() ?? '',
+      record['receiver_id']?.toString() ?? '',
+    ]);
     _mergeRemoteMessages([message]);
   }
 
@@ -861,8 +894,17 @@ class ChatStore extends ChangeNotifier {
 
   /// Role lookup shared by every messaging entry point. UI visibility is not
   /// treated as authorization.
-  static bool isAdminAccountId(String userId) =>
-      userId == appAdmin.id || clubAdmins.any((a) => a.id == userId);
+  static bool isAdminAccountId(String userId) {
+    if (userId.isEmpty) return false;
+
+    // Supabase club sessions use the linked club id as their in-app admin id,
+    // so production admins are not necessarily present in the local demo
+    // [clubAdmins] list. Include the authenticated admin session here so the
+    // same own-community-only rule applies to both real and mock accounts.
+    return userId == authService.currentAdmin?.id ||
+        userId == appAdmin.id ||
+        clubAdmins.any((admin) => admin.id == userId);
+  }
 
   /// The sole messaging destination for a club admin. Returns null for the
   /// super admin and for club admins without an assigned club.
@@ -1143,10 +1185,29 @@ class ChatStore extends ChangeNotifier {
     required String threadId,
     required String senderId,
     required String content,
+    ChatMessageKind kind = ChatMessageKind.text,
+    String? title,
+    Iterable<String> mentions = const [],
+    String? attachmentPath,
+    String? attachmentName,
+    int? attachmentSize,
+    List<String> pollOptions = const [],
+    DateTime? pollClosesAt,
+    String? eventId,
+    bool pinned = false,
   }) {
     if (_box == null) return null;
     final text = content.trim();
-    if (text.isEmpty) return null;
+    // Structured community messages (a poll, an event card, an attachment)
+    // carry their payload outside `content`, so only plain text must be
+    // non-empty.
+    final carriesPayload =
+        kind != ChatMessageKind.text &&
+        (title != null ||
+            attachmentPath != null ||
+            eventId != null ||
+            pollOptions.isNotEmpty);
+    if (text.isEmpty && !carriesPayload) return null;
     if (!canAccessThread(threadId, senderId)) return null;
 
     if (isDirectThread(threadId)) _directThreadIds.add(threadId);
@@ -1159,7 +1220,19 @@ class ChatStore extends ChangeNotifier {
       content: text,
       createdAt: now,
       deliveredAt: now,
+      kind: kind,
+      title: title,
+      mentions: mentions.where((id) => id.isNotEmpty).toSet().toList(),
+      attachmentPath: attachmentPath,
+      attachmentName: attachmentName,
+      attachmentSize: attachmentSize,
+      pollOptions: pollOptions,
+      pollClosesAt: pollClosesAt,
+      eventId: eventId,
+      pinned: pinned,
     );
+    if (pinned) _unpinAllIn(threadId);
+    clearTyping(threadId, senderId);
     _messages.add(message);
     if (isDirectThread(threadId)) {
       _pendingRemoteMessageIds.add(message.id);
@@ -1173,6 +1246,199 @@ class ChatStore extends ChangeNotifier {
     }
     if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;
+  }
+
+  // ── Community stream (announcements, polls, reactions, pins, typing) ─────────
+
+  ChatMessage? messageById(String messageId) {
+    final index = _messages.indexWhere((message) => message.id == messageId);
+    return index == -1 ? null : _messages[index];
+  }
+
+  bool _replaceMessage(String messageId, ChatMessage Function(ChatMessage) f) {
+    final index = _messages.indexWhere((message) => message.id == messageId);
+    if (index == -1) return false;
+    _messages[index] = f(_messages[index]);
+    scheduleSave();
+    notifyListeners();
+    return true;
+  }
+
+  /// Adds or removes [emoji] for [userId] on one message.
+  bool toggleReaction({
+    required String messageId,
+    required String userId,
+    required String emoji,
+  }) {
+    if (userId.isEmpty || emoji.isEmpty) return false;
+    final current = messageById(messageId);
+    if (current == null) return false;
+    if (!canAccessThread(current.threadId, userId)) return false;
+    final reactions = {
+      for (final entry in current.reactions.entries)
+        entry.key: List<String>.from(entry.value),
+    };
+    final users = reactions.putIfAbsent(emoji, () => <String>[]);
+    if (!users.remove(userId)) users.add(userId);
+    if (users.isEmpty) reactions.remove(emoji);
+    return _replaceMessage(
+      messageId,
+      (message) => ChatMessage(
+        id: message.id,
+        threadId: message.threadId,
+        senderId: message.senderId,
+        content: message.content,
+        createdAt: message.createdAt,
+        deliveredAt: message.deliveredAt,
+        seenAt: message.seenAt,
+        kind: message.kind,
+        title: message.title,
+        mentions: message.mentions,
+        reactions: reactions,
+        attachmentPath: message.attachmentPath,
+        attachmentName: message.attachmentName,
+        attachmentSize: message.attachmentSize,
+        pollOptions: message.pollOptions,
+        pollVotes: message.pollVotes,
+        pollClosesAt: message.pollClosesAt,
+        eventId: message.eventId,
+        pinned: message.pinned,
+      ),
+    );
+  }
+
+  /// Casts (or retracts, when re-selecting the same option) a poll vote.
+  bool votePoll({
+    required String messageId,
+    required String userId,
+    required int optionIndex,
+  }) {
+    if (userId.isEmpty) return false;
+    final current = messageById(messageId);
+    if (current == null || current.kind != ChatMessageKind.poll) return false;
+    if (!canAccessThread(current.threadId, userId)) return false;
+    if (current.pollIsClosed) return false;
+    if (optionIndex < 0 || optionIndex >= current.pollOptions.length) {
+      return false;
+    }
+    final votes = Map<String, int>.from(current.pollVotes);
+    if (votes[userId] == optionIndex) {
+      votes.remove(userId);
+    } else {
+      votes[userId] = optionIndex;
+    }
+    return _replaceMessage(
+      messageId,
+      (message) => message.copyWith(pollVotes: votes),
+    );
+  }
+
+  void _unpinAllIn(String threadId) {
+    for (var i = 0; i < _messages.length; i++) {
+      final message = _messages[i];
+      if (message.threadId == threadId && message.pinned) {
+        _messages[i] = message.copyWith(pinned: false);
+      }
+    }
+  }
+
+  /// Pins one message to the top of its thread; only one pin per thread.
+  bool setPinned(String messageId, bool pinned) {
+    final current = messageById(messageId);
+    if (current == null || current.pinned == pinned) return false;
+    if (pinned) _unpinAllIn(current.threadId);
+    return _replaceMessage(
+      messageId,
+      (message) => message.copyWith(pinned: pinned),
+    );
+  }
+
+  ChatMessage? pinnedMessageIn(String threadId) {
+    for (final message in _messages.reversed) {
+      if (message.threadId == threadId && message.pinned) return message;
+    }
+    return null;
+  }
+
+  /// Announcements in [threadId], newest first — the "Notices" archive.
+  List<ChatMessage> announcementsIn(String threadId) {
+    final list =
+        _messages
+            .where(
+              (message) =>
+                  message.threadId == threadId &&
+                  message.kind == ChatMessageKind.announcement,
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return List.unmodifiable(list);
+  }
+
+  /// How many people have opened the thread since [message] was posted — the
+  /// "N seen" figure on an announcement. The author always counts.
+  int seenCountFor(ChatMessage message) {
+    var count = 1;
+    for (final entry in _lastRead.entries) {
+      if (entry.key == message.senderId) continue;
+      final lastRead = entry.value[message.threadId];
+      if (lastRead != null && !lastRead.isBefore(message.createdAt)) count++;
+    }
+    return count;
+  }
+
+  // ── Typing ───────────────────────────────────────────────────────────────────
+
+  /// threadId → userId → the moment their typing signal expires.
+  final Map<String, Map<String, DateTime>> _typing = {};
+  static const Duration _typingWindow = Duration(seconds: 5);
+  Timer? _typingSweep;
+
+  /// Marks [userId] as composing in [threadId]. The signal lapses on its own
+  /// a few seconds later, so a dropped "stopped typing" never sticks.
+  void setTyping(String threadId, String userId) {
+    if (userId.isEmpty || !canAccessThread(threadId, userId)) return;
+    final wasTyping = typingUserIds(threadId).contains(userId);
+    (_typing[threadId] ??= {})[userId] = DateTime.now().add(_typingWindow);
+    _typingSweep ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_pruneTyping()) notifyListeners();
+    });
+    if (!wasTyping) notifyListeners();
+  }
+
+  void clearTyping(String threadId, String userId) {
+    final removed = _typing[threadId]?.remove(userId) != null;
+    if (_typing[threadId]?.isEmpty ?? false) _typing.remove(threadId);
+    if (removed) notifyListeners();
+  }
+
+  bool _pruneTyping() {
+    final now = DateTime.now();
+    var changed = false;
+    _typing.removeWhere((threadId, users) {
+      users.removeWhere((userId, expiry) {
+        final expired = expiry.isBefore(now);
+        if (expired) changed = true;
+        return expired;
+      });
+      return users.isEmpty;
+    });
+    if (_typing.isEmpty) {
+      _typingSweep?.cancel();
+      _typingSweep = null;
+    }
+    return changed;
+  }
+
+  List<String> typingUserIds(String threadId, {String? excluding}) {
+    final now = DateTime.now();
+    final users = _typing[threadId];
+    if (users == null) return const [];
+    return users.entries
+        .where(
+          (entry) => entry.value.isAfter(now) && entry.key != (excluding ?? ''),
+        )
+        .map((entry) => entry.key)
+        .toList(growable: false);
   }
 
   /// Records that [userId] has seen [threadId] up to now. Only saves and

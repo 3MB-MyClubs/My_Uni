@@ -80,12 +80,25 @@ class UserFollowButton extends ConsumerWidget {
                 : AppColors.secondaryText.withValues(alpha: 0.4),
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-            color: filled ? Colors.white : AppColors.secondaryText,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            label,
+            key: ValueKey(label),
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: filled ? Colors.white : AppColors.secondaryText,
+            ),
           ),
         ),
       ),

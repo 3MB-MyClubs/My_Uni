@@ -279,7 +279,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                           ),
                         )
                       : Text(
-                          AppLocalizations.of(context)!.signInAsAdmin,
+                          AppLocalizations.of(context)!.logIn,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

@@ -50,6 +50,7 @@ class ChatsScreen extends StatefulWidget {
 class _ChatsScreenState extends State<ChatsScreen> {
   String _query = '';
   _ChatInboxFilter _filter = _ChatInboxFilter.students;
+  final Set<String> _requestedProfileIds = {};
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -73,6 +74,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     super.initState();
     localeService.addListener(_onEnvChanged);
     themeService.addListener(_onEnvChanged);
+    chatStore.addListener(_onChatStoreChanged);
     widget.controller?.addListener(_showStudentChats);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (authService.isStudentSession) {
@@ -87,12 +89,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void dispose() {
     localeService.removeListener(_onEnvChanged);
     themeService.removeListener(_onEnvChanged);
+    chatStore.removeListener(_onChatStoreChanged);
     widget.controller?.removeListener(_showStudentChats);
     super.dispose();
   }
 
   void _onEnvChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onChatStoreChanged() {
+    if (!mounted || !authService.isStudentSession) return;
+    unawaited(_hydrateDmProfiles());
   }
 
   void _showStudentChats() {
@@ -123,7 +131,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
         );
       }
     }
+    memberIds
+      ..removeWhere((id) => _userForId(id) != null)
+      ..removeAll(_requestedProfileIds);
+    if (memberIds.isEmpty) return;
+    _requestedProfileIds.addAll(memberIds);
     await peopleService.hydrateProfilesByIds(memberIds);
+    _requestedProfileIds.removeAll(memberIds);
     if (mounted) setState(() {});
   }
 
@@ -155,11 +169,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
       (user) => user.id == userId,
     );
     if (cachedIndex != -1) return peopleService.cachedPeople[cachedIndex];
+    final knownIndex = users.indexWhere((user) => user.id == userId);
+    if (knownIndex != -1) return users[knownIndex];
     return null;
   }
 
   String _nameForUser(String userId) {
-    return userState.displayNameFor(userId, _userForId(userId)?.name ?? userId);
+    return userState.displayNameFor(userId, _userForId(userId)?.name ?? '');
   }
 
   String _preview(ChatThreadSummary t) {

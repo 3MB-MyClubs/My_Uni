@@ -121,6 +121,7 @@ class UserAvatar extends ConsumerWidget {
   }
 
   Widget _initial(Color bg, Color fg, bool isCircle, String displayName) {
+    if (displayName.trim().isEmpty) return _skeleton(isCircle);
     return Container(
       width: size,
       height: size,

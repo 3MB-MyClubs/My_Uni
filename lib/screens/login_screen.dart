@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/language_toggle.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -45,6 +47,8 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isSubmitting = false;
   String? _error;
   bool _entranceConfigured = false;
+  double _languageContentOpacity = 1;
+  bool _isSwitchingLanguage = false;
 
   bool get _canSubmit =>
       _emailController.text.trim().isNotEmpty &&
@@ -170,6 +174,32 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Future<void> _switchLanguage(String code) async {
+    if (_isSwitchingLanguage || code == localeService.languageCode) return;
+    _isSwitchingLanguage = true;
+    setState(() => _languageContentOpacity = 0);
+    await Future<void>.delayed(const Duration(milliseconds: 140));
+    if (!mounted) return;
+    await localeService.setLanguage(code);
+    if (!mounted) return;
+    setState(() => _languageContentOpacity = 1);
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+    _isSwitchingLanguage = false;
+  }
+
+  Widget _languageTransition({required Widget child}) {
+    return AnimatedOpacity(
+      opacity: _languageContentOpacity,
+      duration: Duration(
+        milliseconds: _languageContentOpacity == 0 ? 140 : 260,
+      ),
+      curve: _languageContentOpacity == 0
+          ? Curves.easeInCubic
+          : Curves.easeOutCubic,
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = themeService.isDark;
@@ -199,164 +229,185 @@ class _LoginScreenState extends State<LoginScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (widget.onBack != null)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 4),
-                            child: BackButton(
-                              color: AppColors.text,
-                              onPressed: widget.onBack,
-                            ),
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+                        child: Row(
+                          children: [
+                            if (widget.onBack != null)
+                              BackButton(
+                                color: AppColors.text,
+                                onPressed: widget.onBack,
+                              ),
+                            const Spacer(),
+                            LanguageToggle(onLanguageSelected: _switchLanguage),
+                          ],
                         ),
+                      ),
 
                       // ── Brand header: crest + university + wordmark ───────
-                      _MotionEntrance(
-                        animation: _brandEntrance,
-                        begin: const Offset(0, -0.035),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            24,
-                            widget.onBack != null ? 12 : 40,
-                            24,
-                            0,
-                          ),
-                          child: Column(
-                            children: [
-                              const _Crest(size: 60),
-                              const SizedBox(height: 18),
-                              Text(
-                                'KOÇ UNIVERSITY',
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  letterSpacing: 2,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Menlo',
-                                  color: AppColors.secondaryText,
+                      _languageTransition(
+                        child: _MotionEntrance(
+                          animation: _brandEntrance,
+                          begin: const Offset(0, -0.035),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(24, 18, 24, 0),
+                            child: Column(
+                              children: [
+                                const _Crest(size: 60),
+                                const SizedBox(height: 18),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.kocUniversityWordmark,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    letterSpacing: 2,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Menlo',
+                                    color: AppColors.secondaryText,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'ClubUp',
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -1,
-                                  color: AppColors.text,
+                                const SizedBox(height: 6),
+                                Text(
+                                  'ClubUp',
+                                  style: TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -1,
+                                    color: AppColors.text,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Sign in to pick up where you left off.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.text.withValues(alpha: 0.76),
+                                const SizedBox(height: 10),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.signInToContinueSubtitle,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.text.withValues(
+                                      alpha: 0.76,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
 
                       // ── Form ─────────────────────────────────────────────
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 30, 22, 0),
-                        child: _MotionEntrance(
-                          animation: _formEntrance,
-                          begin: const Offset(0, 0.045),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _AuthField(
-                                label: 'Campus email',
-                                controller: _emailController,
-                                hint: 'yourname',
-                                icon: Icons.mail_outline_rounded,
-                                keyboardType: TextInputType.text,
-                                suffixText: '@ku.edu.tr',
-                                inputFormatters: [_NoDomainFormatter()],
-                                onChanged: (_) => setState(() => _error = null),
-                                onSubmitted: (_) => _handleLogin(),
-                              ),
-                              const SizedBox(height: 14),
-                              _AuthField(
-                                label: 'Password',
-                                controller: _passwordController,
-                                hint: '6-digit PIN',
-                                icon: Icons.lock_outline_rounded,
-                                obscureText: _obscurePassword,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(6),
-                                ],
-                                onChanged: (_) => setState(() => _error = null),
-                                onSubmitted: (_) => _handleLogin(),
-                                trailing: GestureDetector(
-                                  onTap: () => setState(
-                                    () => _obscurePassword = !_obscurePassword,
-                                  ),
-                                  child: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                    size: 19,
-                                    color: AppColors.secondaryText,
-                                  ),
+                      _languageTransition(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 30, 22, 0),
+                          child: _MotionEntrance(
+                            animation: _formEntrance,
+                            begin: const Offset(0, 0.045),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _AuthField(
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.campusEmailLabel,
+                                  controller: _emailController,
+                                  hint: AppLocalizations.of(
+                                    context,
+                                  )!.usernameHint,
+                                  icon: Icons.mail_outline_rounded,
+                                  keyboardType: TextInputType.text,
+                                  suffixText: '@ku.edu.tr',
+                                  inputFormatters: [_NoDomainFormatter()],
+                                  onChanged: (_) =>
+                                      setState(() => _error = null),
+                                  onSubmitted: (_) => _handleLogin(),
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: _openForgotPassword,
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 4,
+                                const SizedBox(height: 14),
+                                _AuthField(
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.passwordFieldLabel,
+                                  controller: _passwordController,
+                                  hint: AppLocalizations.of(
+                                    context,
+                                  )!.digitPinHint(6),
+                                  icon: Icons.lock_outline_rounded,
+                                  obscureText: _obscurePassword,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(6),
+                                  ],
+                                  onChanged: (_) =>
+                                      setState(() => _error = null),
+                                  onSubmitted: (_) => _handleLogin(),
+                                  trailing: GestureDetector(
+                                    onTap: () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
                                     ),
-                                    minimumSize: const Size(0, 0),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text(
-                                    'Forgot password?',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primaryRed,
+                                    child: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                      size: 19,
+                                      color: AppColors.secondaryText,
                                     ),
                                   ),
                                 ),
-                              ),
-
-                              // Inline error (kept from the previous screen —
-                              // the design has no failure state of its own).
-                              if (_error != null) ...[
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.error_outline_rounded,
-                                      size: 15,
-                                      color: AppColors.primaryRed,
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _openForgotPassword,
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 4,
+                                      ),
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        _error!,
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          color: AppColors.primaryRed,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                    child: Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.forgotPassword,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primaryRed,
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
+
+                                // Inline error (kept from the previous screen —
+                                // the design has no failure state of its own).
+                                if (_error != null) ...[
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline_rounded,
+                                        size: 15,
+                                        color: AppColors.primaryRed,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          _error!,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: AppColors.primaryRed,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -364,101 +415,109 @@ class _LoginScreenState extends State<LoginScreen>
                       const Spacer(),
 
                       // ── Bottom action area ───────────────────────────────
-                      _MotionEntrance(
-                        animation: _actionsEntrance,
-                        begin: const Offset(0, 0.06),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _SubmitButton(
-                                enabled: _canSubmit,
-                                submitting: _isSubmitting,
-                                onTap: _handleLogin,
-                              ),
-                              Container(
-                                height: 1,
-                                color: AppColors.divider,
-                                margin: const EdgeInsets.only(
-                                  top: 22,
-                                  bottom: 16,
+                      _languageTransition(
+                        child: _MotionEntrance(
+                          animation: _actionsEntrance,
+                          begin: const Offset(0, 0.06),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _SubmitButton(
+                                  enabled: _canSubmit,
+                                  submitting: _isSubmitting,
+                                  onTap: _handleLogin,
                                 ),
-                              ),
-                              Text(
-                                'New to Koç University?',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  color: AppColors.text.withValues(alpha: 0.76),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              OutlinedButton(
-                                onPressed: widget.onSignUp,
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(50),
-                                  side: BorderSide(
-                                    color: AppColors.divider,
-                                    width: 1.5,
+                                Container(
+                                  height: 1,
+                                  color: AppColors.divider,
+                                  margin: const EdgeInsets.only(
+                                    top: 22,
+                                    bottom: 16,
                                   ),
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(15),
+                                ),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.newToKocUniversity,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    color: AppColors.text.withValues(
+                                      alpha: 0.76,
                                     ),
                                   ),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Sign up',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.2,
-                                        color: AppColors.text,
+                                const SizedBox(height: 10),
+                                OutlinedButton(
+                                  onPressed: widget.onSignUp,
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(50),
+                                    side: BorderSide(
+                                      color: AppColors.divider,
+                                      width: 1.5,
+                                    ),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.all(
+                                        Radius.circular(15),
                                       ),
                                     ),
-                                    const SizedBox(width: 7),
-                                    Icon(
-                                      Icons.arrow_forward_rounded,
-                                      size: 17,
-                                      color: AppColors.text,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        AppLocalizations.of(context)!.signUp,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.2,
+                                          color: AppColors.text,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 7),
+                                      Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 17,
+                                        color: AppColors.text,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Wrap(
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    Text(
+                                      '${AppLocalizations.of(context)!.runningAClub} ',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: AppColors.secondaryText,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: _openClubAdmin,
+                                      child: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.clubAdminSignIn,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.text.withValues(
+                                            alpha: 0.76,
+                                          ),
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: AppColors.text
+                                              .withValues(alpha: 0.4),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(height: 14),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Running a club? ',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: AppColors.secondaryText,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: _openClubAdmin,
-                                    child: Text(
-                                      'Club admin sign in',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.text.withValues(
-                                          alpha: 0.76,
-                                        ),
-                                        decoration: TextDecoration.underline,
-                                        decorationColor: AppColors.text
-                                            .withValues(alpha: 0.4),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

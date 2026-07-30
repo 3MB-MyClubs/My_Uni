@@ -805,4 +805,123 @@ class S {
   );
   static String get messagesLabel => _t('Messages', 'Mesajlar');
   static String get viewProfile => _t('View profile', 'Profili gör');
+
+  // ── Club community
+  static String communityActiveNow(int n) =>
+      _t('$n active now', '$n şu an aktif');
+  static String get communityMembersButton => _t('Members', 'Üyeler');
+  static String communityEventsButton(int n) =>
+      _t('Events · $n', 'Etkinlikler · $n');
+  static String get communityNotices => _t('Notices', 'Duyurular');
+  static String get announcementLabel => _t('ANNOUNCEMENT', 'DUYURU');
+  static String get pinnedLabel => _t('Pinned', 'Sabitlendi');
+  static String get pinToTop => _t('Pin to top', 'Yukarı sabitle');
+  static String get unpin => _t('Unpin', 'Sabitlemeyi kaldır');
+  static String get pollLabel => _t('POLL', 'ANKET');
+  static String pollCloses(String when) =>
+      _t('closes $when', '$when kapanıyor');
+  static String get pollClosed => _t('closed', 'kapandı');
+  static String get pollVoted => _t('voted', 'oy verdin');
+  static String goingCount(int n) => _t('$n going', '$n kişi gidiyor');
+  static String leftOffHere(int n) =>
+      _t('You left off here · $n new', 'Buradan devam · $n yeni');
+  static String typingOne(String name) =>
+      _t('$name is typing', '$name yazıyor');
+  static String typingMany(String names) =>
+      _t('$names are typing', '$names yazıyor');
+  static String get jumpToLatest => _t('Jump to latest', 'En sona git');
+  static String activeNowGroup(int n) => _t('Active now · $n', 'Aktif · $n');
+  static String offlineGroup(int n) => _t('Offline · $n', 'Çevrimdışı · $n');
+  static String get activeNowLabel => _t('Active now', 'Şu an aktif');
+  static String get offlineLabel => _t('Offline', 'Çevrimdışı');
+  static String seenCount(int n) => _t('$n seen', '$n görüntüleme');
+  static String get attachPhoto => _t('Photo', 'Fotoğraf');
+  static String get attachFile => _t('File', 'Dosya');
+  static String get attachPoll => _t('Poll', 'Anket');
+  static String get attachEvent => _t('Event', 'Etkinlik');
+  static String get mentionEveryone => _t('everyone', 'herkes');
+  static String get allMembers => _t('All members', 'Tüm üyeler');
+  static String get memberRole => _t('Member', 'Üye');
+  static String get retryMembers => _t(
+    'Could not load members. Try again',
+    'Üyeler yüklenemedi. Tekrar dene',
+  );
+  static String get communityComposerHint => _t("What's up?", 'Neler oluyor?');
+  static String get newPollTitle => _t('New poll', 'Yeni anket');
+  static String get pollQuestion => _t('Question', 'Soru');
+  static String pollOptionLabel(int n) => _t('Option $n', '$n. seçenek');
+  static String get addOption => _t('Add option', 'Seçenek ekle');
+  static String get pollClosesIn => _t('Closes in', 'Kapanış');
+  static String pollHours(int n) => _t('${n}h', '$n sa');
+  static String pollDays(int n) => _t('${n}d', '$n gün');
+  static String get shareEvent => _t('Share an event', 'Etkinlik paylaş');
+  static String get noUpcomingEvents =>
+      _t('No upcoming events', 'Yaklaşan etkinlik yok');
+  static String get postAsAnnouncement =>
+      _t('Post as announcement', 'Duyuru olarak paylaş');
+  static String get announcementTitleHint =>
+      _t('Announcement headline', 'Duyuru başlığı');
+  static String get chatDisplay => _t('Chat display', 'Sohbet görünümü');
+  static String get messageStyle => _t('Message style', 'Mesaj biçimi');
+  static String get styleRows => _t('Rows', 'Satır');
+  static String get styleBubbles => _t('Bubbles', 'Balon');
+  static String get styleCards => _t('Cards', 'Kart');
+  static String get announcementsStyle => _t('Announcements', 'Duyurular');
+  static String get emphasisSubtle => _t('Subtle', 'Sade');
+  static String get emphasisTinted => _t('Tinted', 'Renkli');
+  static String get emphasisBold => _t('Bold', 'Belirgin');
+  static String get showRolesBadges =>
+      _t('Show roles & badges', 'Rolleri ve rozetleri göster');
+  static String get muteCommunity =>
+      _t('Mute notifications', 'Bildirimleri sustur');
+  static String get unmuteCommunity =>
+      _t('Unmute notifications', 'Bildirimleri aç');
+  static String get muted => _t('Muted', 'Susturuldu');
+  static String get react => _t('React', 'Tepki ver');
+  static String get copyText => _t('Copy text', 'Metni kopyala');
+  static String get copied => _t('Copied', 'Kopyalandı');
+  static String get clubSettings => _t('Club settings', 'Kulüp ayarları');
+  static String get openClubProfile =>
+      _t('Open club profile', 'Kulüp profilini aç');
+  static String get downloadAttachment => _t('Open', 'Aç');
+  static String activeAgo(String ago) =>
+      _t('Active $ago ago', '$ago önce aktif');
+
+  static const _weekdaysEn = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _weekdaysTr = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  static const _monthsEn = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  static const _monthsTr = [
+    'Oca',
+    'Şub',
+    'Mar',
+    'Nis',
+    'May',
+    'Haz',
+    'Tem',
+    'Ağu',
+    'Eyl',
+    'Eki',
+    'Kas',
+    'Ara',
+  ];
+
+  /// [weekday] follows [DateTime.weekday] (1 = Monday).
+  static String weekdayShort(int weekday) =>
+      _t(_weekdaysEn[(weekday - 1) % 7], _weekdaysTr[(weekday - 1) % 7]);
+
+  static String monthShort(int month) =>
+      _t(_monthsEn[(month - 1) % 12], _monthsTr[(month - 1) % 12]);
 }

@@ -5576,6 +5576,48 @@ abstract class AppLocalizations {
   /// **'You\'re going'**
   String get youreGoing;
 
+  /// No description provided for @signInToContinueSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to pick up where you left off.'**
+  String get signInToContinueSubtitle;
+
+  /// No description provided for @kocUniversityWordmark.
+  ///
+  /// In en, this message translates to:
+  /// **'KOÇ UNIVERSITY'**
+  String get kocUniversityWordmark;
+
+  /// No description provided for @usernameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'yourname'**
+  String get usernameHint;
+
+  /// No description provided for @newToKocUniversity.
+  ///
+  /// In en, this message translates to:
+  /// **'New to Koç University?'**
+  String get newToKocUniversity;
+
+  /// No description provided for @runningAClub.
+  ///
+  /// In en, this message translates to:
+  /// **'Running a club?'**
+  String get runningAClub;
+
+  /// No description provided for @fullNameExampleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Ali Yılmaz'**
+  String get fullNameExampleHint;
+
+  /// No description provided for @couldNotUseCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not use the camera. Check camera access and try again.'**
+  String get couldNotUseCamera;
+
   /// No description provided for @youreInName.
   ///
   /// In en, this message translates to:
