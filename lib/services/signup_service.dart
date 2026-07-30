@@ -9,6 +9,7 @@ import 'auth_service.dart';
 import 'locale_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
+import 'terms_acceptance_service.dart';
 
 class SignupResult {
   final bool success;
@@ -110,9 +111,7 @@ class SignupService {
       'academic_year_id': academicYearId,
       'interest_ids': interestIds,
     });
-    if (!result.success || imagePath == null || imagePath.isEmpty) {
-      return result;
-    }
+    if (!result.success) return result;
 
     try {
       final client = _client;
@@ -123,17 +122,36 @@ class SignupService {
       );
       try {
         final userId = authResponse.user?.id;
-        if (userId == null || userId.isEmpty) return result;
-        await studentProfileService.uploadAvatar(
-          userId: userId,
-          bytes: await File(imagePath).readAsBytes(),
-        );
+        if (userId == null || userId.isEmpty) {
+          return SignupResult.failure(_l10n.signupRequestFailed);
+        }
+
+        // The final signup button is disabled until the Terms checkbox is
+        // selected. Persist that acceptance while this new account is
+        // authenticated, even when the student did not choose an avatar.
+        await termsAcceptanceService.accept(requireAuthenticatedRecord: true);
+
+        if (imagePath != null && imagePath.isNotEmpty) {
+          try {
+            await studentProfileService.uploadAvatar(
+              userId: userId,
+              bytes: await File(imagePath).readAsBytes(),
+            );
+          } catch (_) {
+            // The account and its Terms acceptance are already durable. The
+            // optional avatar can be added later from Edit Profile.
+          }
+        }
       } finally {
-        await client.auth.signOut();
+        try {
+          await client.auth.signOut();
+        } catch (_) {
+          // Do not turn a completed signup into a failure solely because the
+          // temporary upload/acceptance session could not be cleared.
+        }
       }
     } catch (_) {
-      // The account is already created. Do not block signup if the optional
-      // avatar upload fails; the user can add it later from Edit Profile.
+      return SignupResult.failure(_l10n.signupRequestFailed);
     }
     return result;
   }

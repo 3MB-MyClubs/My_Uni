@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/signup_service.dart';
-import '../services/terms_acceptance_service.dart';
 import 'signup_steps/signup_theme.dart';
 import 'signup_steps/step_email.dart';
 import 'signup_steps/step_verify.dart';
@@ -101,12 +100,6 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
       imagePath: _profileImagePath,
     );
     if (!result.success) return result.error;
-    // The account now exists and the student ticked the Terms checkbox on this
-    // step, so record acceptance of the current Terms version. This mirrors
-    // what the old full-screen TermsAcceptanceScreen did on "Agree and
-    // continue", keeping the returning-user re-accept gate working when the
-    // version is bumped.
-    await termsAcceptanceService.accept();
     widget.onSignUp(_email);
     return null;
   }

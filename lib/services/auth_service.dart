@@ -14,6 +14,7 @@ import 'user_state.dart';
 import 'app_presence_service.dart';
 import 'lazy_content_loader.dart';
 import 'people_service.dart';
+import 'terms_acceptance_service.dart';
 
 // ...existing code...
 
@@ -33,6 +34,16 @@ class AuthService {
     lazyContentLoader.invalidate();
     _currentAdmin = admin;
     _currentUser = null;
+    _syncTermsAcceptance();
+  }
+
+  void _syncTermsAcceptance() {
+    unawaited(
+      termsAcceptanceService.syncForCurrentUser().catchError((_) {
+        // Retry on the next login. Terms synchronization should not turn a
+        // valid authenticated session into a failed login.
+      }),
+    );
   }
 
   static final RegExp _digitsOnly = RegExp(r'^[0-9]+$');
@@ -172,6 +183,7 @@ class AuthService {
           unawaited(studentProfileService.hydrateDetails(profileRow));
         }
         unawaited(_hydrateStudentState(authUser.id));
+        _syncTermsAcceptance();
         return true;
       } on AuthException {
         return false;
