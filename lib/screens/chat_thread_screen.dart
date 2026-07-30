@@ -20,6 +20,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/shared_post_message_card.dart';
 import 'club_community_screen.dart';
 import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
@@ -53,13 +54,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   bool get _isClub => ChatStore.isClubThread(widget.threadId);
+  bool get _isClubInbox => ChatStore.isClubInboxThread(widget.threadId);
   bool get _isGroup => ChatStore.isGroupThread(widget.threadId);
   bool get _isDirect => ChatStore.isDirectThread(widget.threadId);
 
   Club? get _club {
-    final clubId = ChatStore.clubIdOf(widget.threadId);
+    final clubId =
+        ChatStore.clubIdOf(widget.threadId) ??
+        chatStore.clubInboxForThread(widget.threadId)?.clubId;
     return clubId == null ? null : clubForId(clubId);
   }
+
+  ClubInboxConversation? get _clubInbox =>
+      chatStore.clubInboxForThread(widget.threadId);
 
   User? _userForId(String userId) {
     final passedRecipient = widget.recipient;
@@ -122,13 +129,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (_isDirect || _isGroup) {
         unawaited(chatStore.startDirectMessageSync(_myId));
       }
+      if (_isClub || _isClubInbox) {
+        unawaited(chatStore.startClubMessageSync(_myId));
+      }
       if (_isDirect) {
         final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
         if (peerId != null) {
           chatStore.ensureDirectThread(_myId, peerId);
           unawaited(_hydratePeerProfile(peerId));
         }
-      } else if (_isClub || _isGroup) {
+      } else if (_isClub || _isGroup || _isClubInbox) {
         _hydrateVisibleParticipants();
       }
       // Only a visible, foreground conversation may create Seen receipts.
@@ -189,13 +199,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _hydrateVisibleParticipants() {
-    if ((!_isClub && !_isGroup) ||
+    if ((!_isClub && !_isGroup && !_isClubInbox) ||
         !chatStore.canAccessThread(widget.threadId, _myId)) {
       return;
     }
     final participantIds =
         <String>{
             if (_isGroup) ...chatStore.groupParticipants(widget.threadId),
+            if (_clubInbox case final inbox?) inbox.profileId,
             ...chatStore
                 .messagesFor(widget.threadId, viewerId: _myId)
                 .map((message) => message.senderId),
@@ -247,6 +258,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   /// Display name + whether the sender is a club-admin account.
   (String, bool) _senderInfo(String senderId) {
+    final club = _club;
+    if (_isClubInbox && club != null && senderId == club.id) {
+      return (club.name, true);
+    }
     final user = _userForId(senderId);
     if (user != null) {
       return (userState.displayNameFor(senderId, user.name), false);
@@ -337,7 +352,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   children: [
                     _buildHeader(),
                     Expanded(child: _buildMessageList()),
-                    _buildInputBar(enabled: canAccess),
+                    _buildInputBar(
+                      enabled: chatStore.canWriteThread(widget.threadId, _myId),
+                    ),
                   ],
                 ),
               );
@@ -352,6 +369,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Widget _buildHeader() {
     if (_isGroup) return _buildGroupHeader();
+    if (_isClubInbox) return _buildClubInboxHeader();
     final peer = _peer;
     final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
     final name = peer != null
@@ -361,7 +379,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final academicSummary = userState.academicSummaryFor(peerId ?? '');
     final status = [
       academicSummary,
-      if (online) S.onlineNow,
+      online ? S.onlineNow : S.offlineLabel,
     ].where((value) => value.isNotEmpty).join(' · ');
 
     return Container(
@@ -450,6 +468,86 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClubInboxHeader() {
+    final conversation = _clubInbox;
+    final club = _club;
+    final showingStudent =
+        conversation != null && conversation.profileId != _myId;
+    final student = showingStudent ? _userForId(conversation.profileId) : null;
+    final title = showingStudent
+        ? userState.displayNameFor(conversation.profileId, student?.name ?? '')
+        : club?.name ?? '';
+    final subtitle = showingStudent ? S.clubInbox : S.privateClubMessage;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: AppColors.card.withValues(
+          alpha: themeService.isDark ? 0.94 : 0.97,
+        ),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: Row(
+        children: [
+          if (!widget.embedded) ...[
+            IconButton(
+              onPressed: () => Navigator.maybePop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 17),
+              color: AppColors.secondaryText,
+            ),
+            const SizedBox(width: 4),
+          ],
+          if (showingStudent)
+            PresenceAvatar(
+              userId: conversation.profileId,
+              name: title,
+              size: 40,
+              fontSize: 15,
+              online: appPresenceService.onlineUserIds.contains(
+                conversation.profileId,
+              ),
+            )
+          else if (club != null)
+            ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _colorForClub(club.id),
+              imageUrl: club.logoUrl,
+              size: 40,
+              fontSize: 15,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.lock_rounded, size: 17, color: AppColors.secondaryText),
         ],
       ),
     );
@@ -794,14 +892,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ],
       ),
-      child: Text(
-        m.content,
-        style: TextStyle(
-          fontSize: 14.5,
-          height: 1.35,
-          color: mine ? Colors.white : AppColors.text,
-        ),
-      ),
+      child: m.kind == ChatMessageKind.postShare && m.sharedPostId != null
+          ? SharedPostMessageCard(
+              postId: m.sharedPostId!,
+              onDarkBackground: mine,
+            )
+          : Text(
+              m.content,
+              style: TextStyle(
+                fontSize: 14.5,
+                height: 1.35,
+                color: mine ? Colors.white : AppColors.text,
+              ),
+            ),
     );
 
     return Padding(

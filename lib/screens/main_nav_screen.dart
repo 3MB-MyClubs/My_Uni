@@ -235,9 +235,27 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     switch (target.type) {
       case 'message':
       case 'chat':
-        if (ChatStore.isAdminAccountId(_currentUserId)) return;
         _selectNavIndex(3);
         if (id == null) return;
+        if (target.notificationType == 'club_channel_message') {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  ChatThreadScreen(threadId: ChatStore.clubThreadId(id)),
+            ),
+          );
+          return;
+        }
+        if (target.notificationType == 'club_inbox_message') {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  ChatThreadScreen(threadId: ChatStore.clubInboxThreadId(id)),
+            ),
+          );
+          return;
+        }
+        if (ChatStore.isAdminAccountId(_currentUserId)) return;
         final isGroup =
             target.notificationType == 'group_message' ||
             ChatStore.isGroupThread(id);

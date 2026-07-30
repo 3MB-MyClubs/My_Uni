@@ -42,6 +42,14 @@ PushNotificationCopy localizedPushNotificationCopy({
         title: group,
         body: '$actor: $content',
       ),
+      'club_channel_message' => PushNotificationCopy(
+        title: club,
+        body: '$club: $content',
+      ),
+      'club_inbox_message' => PushNotificationCopy(
+        title: actor,
+        body: '$actor: $content',
+      ),
       'club_post' => PushNotificationCopy(
         title: '$club yeni bir gönderi paylaştı',
         body:
@@ -83,6 +91,14 @@ PushNotificationCopy localizedPushNotificationCopy({
     ),
     'group_message' => PushNotificationCopy(
       title: group,
+      body: '$actor: $content',
+    ),
+    'club_channel_message' => PushNotificationCopy(
+      title: club,
+      body: '$club: $content',
+    ),
+    'club_inbox_message' => PushNotificationCopy(
+      title: actor,
       body: '$actor: $content',
     ),
     'club_post' => PushNotificationCopy(

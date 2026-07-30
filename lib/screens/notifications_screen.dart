@@ -46,7 +46,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ].where((n) {
           if (n.userId != _myId || n.targetType == 'story') return false;
           return !(ChatStore.isAdminAccountId(_myId) &&
-              n.targetType == 'message');
+              n.targetType == 'message' &&
+              n.notificationType != 'club_channel_message' &&
+              n.notificationType != 'club_inbox_message');
         }).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -293,8 +295,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
         );
       case 'message':
-        // Admin accounts never enter direct-message routes, including from
-        // stale notifications created by older app versions.
+        if (n.notificationType == 'club_channel_message') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ChatThreadScreen(threadId: ChatStore.clubThreadId(id)),
+            ),
+          );
+          return;
+        }
+        if (n.notificationType == 'club_inbox_message') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ChatThreadScreen(threadId: ChatStore.clubInboxThreadId(id)),
+            ),
+          );
+          return;
+        }
+        // Admin accounts never enter student direct-message routes, including
+        // from stale notifications created by older app versions.
         if (ChatStore.isAdminAccountId(_myId)) return;
         if (n.notificationType == 'group_message' ||
             ChatStore.isGroupThread(id)) {

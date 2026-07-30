@@ -70,4 +70,16 @@ void main() {
     expect(copy.title, 'Ece gönderine yorum yaptı');
     expect(copy.body, 'Ece: “Harika!” Yanıtlamak için dokun.');
   });
+
+  test('message notifications include the stored message preview', () {
+    final copy = localizedPushNotificationCopy(
+      type: 'direct_message',
+      args: {'actorName': 'Ece', 'content': 'See you at the library'},
+      languageCode: 'en',
+      fallbackTitle: '',
+      fallbackBody: '',
+    );
+
+    expect(copy.body, 'Ece: See you at the library');
+  });
 }

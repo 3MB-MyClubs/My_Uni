@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 
+import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -72,6 +73,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
   @override
   void initState() {
     super.initState();
+    if (authService.currentAdmin != null) {
+      _filter = _ChatInboxFilter.clubs;
+    }
     localeService.addListener(_onEnvChanged);
     themeService.addListener(_onEnvChanged);
     chatStore.addListener(_onChatStoreChanged);
@@ -82,6 +86,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         unawaited(_hydrateDmProfiles());
         unawaited(_hydratePeopleDirectory());
       }
+      unawaited(chatStore.startClubMessageSync(_myId));
     });
   }
 
@@ -106,7 +111,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _showStudentChats() {
     if (!mounted) return;
     setState(() {
-      _filter = _ChatInboxFilter.students;
+      _filter = authService.currentAdmin == null
+          ? _ChatInboxFilter.students
+          : _ChatInboxFilter.clubs;
       _query = '';
     });
   }
@@ -181,11 +188,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
   String _preview(ChatThreadSummary t) {
     final last = t.lastMessage;
     if (last == null) return '';
-    if (last.senderId == _myId) return '${S.you}: ${last.content}';
+    final body = last.kind == ChatMessageKind.postShare
+        ? S.sharedPost
+        : last.content;
+    if (last.senderId == _myId) return '${S.you}: $body';
     if (t.isClub || t.isGroup) {
-      return '${_nameForUser(last.senderId)}: ${last.content}';
+      final conversation = chatStore.clubInboxForThread(t.threadId);
+      final senderName =
+          conversation != null && last.senderId == conversation.clubId
+          ? clubForId(conversation.clubId)?.name ?? ''
+          : _nameForUser(last.senderId);
+      return '$senderName: $body';
     }
-    return last.content;
+    return body;
   }
 
   void _openThread(String threadId, {User? recipient}) {
@@ -230,6 +245,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   String _titleFor(ChatThreadSummary t) {
     if (t.isGroup) return chatStore.groupDisplayName(t.threadId, _myId);
+    if (t.isClubInbox) {
+      final conversation = chatStore.clubInboxForThread(t.threadId);
+      if (conversation != null && conversation.profileId != _myId) {
+        return _nameForUser(conversation.profileId);
+      }
+    }
     if (t.clubId != null) return clubForId(t.clubId!)?.name ?? '';
     return _nameForUser(t.peerId ?? '');
   }
@@ -238,15 +259,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (authService.currentAdmin != null) {
-      final communityThreadId = chatStore.managedCommunityThreadId(_myId);
-      if (communityThreadId == null) return _buildNoCommunityAssigned();
-      return ChatThreadScreen(
-        key: const ValueKey('admin-community-thread'),
-        threadId: communityThreadId,
-        embedded: true,
-      );
-    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
@@ -311,7 +323,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeader(totalUnread),
-                    _buildChatFilters(allThreads),
+                    if (authService.currentAdmin == null)
+                      _buildChatFilters(allThreads),
                     _buildSearchBar(),
                     if (query.isEmpty && showingClubs && clubThreads.isNotEmpty)
                       _buildClubOnlineRail(clubThreads)
@@ -353,50 +366,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildNoCommunityAssigned() {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 36),
-            child: Column(
-              key: const ValueKey('no-club-community-assigned'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.forum_outlined,
-                  size: 48,
-                  color: AppColors.secondaryText,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No club community assigned',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.text,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'This admin account does not have a club messaging space.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.45,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -975,6 +944,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .where((id) => id != _myId)
         .toList();
     final title = _titleFor(t);
+    final inbox = chatStore.clubInboxForThread(t.threadId);
+    final showStudentInboxAvatar = inbox != null && inbox.profileId != _myId;
     final clubColor = club == null
         ? AppColors.primaryRed
         : _colorForClub(club.id);
@@ -1013,7 +984,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
             padding: const EdgeInsets.fromLTRB(12, 11, 13, 11),
             child: Row(
               children: [
-                if (club != null)
+                if (showStudentInboxAvatar)
+                  PresenceAvatar(
+                    userId: inbox.profileId,
+                    name: title,
+                    size: 48,
+                    fontSize: 18,
+                    online: appPresenceService.onlineUserIds.contains(
+                      inbox.profileId,
+                    ),
+                  )
+                else if (club != null)
                   ClubAvatar(
                     clubId: club.id,
                     clubName: club.name,
