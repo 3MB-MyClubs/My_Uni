@@ -119,8 +119,6 @@ class UserPrefsService {
   void load(String userId) {
     if (!_initialized) return;
     final s = userState;
-    final mockUser = _mockUserFor(userId);
-
     final photoPath = _box.get('profilePhotoPath_$userId');
     if (photoPath != null) s.profilePhotoPaths[userId] = photoPath as String;
 
@@ -158,27 +156,11 @@ class UserPrefsService {
       if (values.isNotEmpty) s.doubleMajors[userId] = values;
     }
 
-    _restoreSet(
-      s.followedUserIds,
-      _box.get('followedUserIds_$userId'),
-      fallback: Set<String>.from(mockUser?.followingUserIds ?? const []),
-    );
+    _restoreSet(s.followedUserIds, _box.get('followedUserIds_$userId'));
 
-    _restoreSet(
-      s.followedClubIds,
-      _box.get('followedClubIds_$userId'),
-      fallback: SupabaseConfig.isConfigured
-          ? const {}
-          : Set<String>.from(mockUser?.subscribedClubIds ?? const []),
-    );
+    _restoreSet(s.followedClubIds, _box.get('followedClubIds_$userId'));
 
-    if (!SupabaseConfig.isConfigured) {
-      _restoreSet(
-        s.likedPostIds,
-        _box.get('likedPostIds_$userId'),
-        fallback: {'n1'},
-      );
-    }
+    _restoreSet(s.likedPostIds, _box.get('likedPostIds_$userId'));
 
     _restoreSet(s.savedPostIds, _box.get('savedPostIds_$userId'));
 
@@ -201,13 +183,6 @@ class UserPrefsService {
         (k, v) => s.usernames[k as String] = v as String,
       );
     }
-  }
-
-  dynamic _mockUserFor(String userId) {
-    for (final user in users) {
-      if (user.id == userId) return user;
-    }
-    return null;
   }
 
   /// Persists a club's profile photo path globally (not per-user).

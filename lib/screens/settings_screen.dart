@@ -27,6 +27,45 @@ import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'blocked_accounts_screen.dart';
 import 'edit_profile_screen.dart';
 
+Future<bool> showLogoutConfirmationDialog(BuildContext context) async {
+  final l10n = AppLocalizations.of(context)!;
+  return await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.card,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          title: Text(
+            l10n.confirmLogoutTitle,
+            style: TextStyle(
+              color: AppColors.text,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            l10n.confirmLogoutMessage,
+            style: TextStyle(color: AppColors.secondaryText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(l10n.logOut),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
+
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
   const SettingsScreen({super.key, required this.onLogout});
@@ -44,6 +83,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final adminId = authService.currentAdmin?.id;
     if (adminId == null || adminId == 'admin1') return null;
     return managedClubForAdmin(adminId);
+  }
+
+  Future<void> _confirmAndLogout() async {
+    final confirmed = await showLogoutConfirmationDialog(context);
+    if (!confirmed || !mounted) return;
+
+    await authService.logout();
+    if (!mounted) return;
+    rsvpStore.clear();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    widget.onLogout();
   }
 
   static const List<String> _clubCategoryOptions = [
@@ -1474,13 +1524,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                onTap: () async {
-                  await authService.logout();
-                  if (!context.mounted) return;
-                  rsvpStore.clear();
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                  widget.onLogout();
-                },
+                onTap: _confirmAndLogout,
               ),
             ),
 

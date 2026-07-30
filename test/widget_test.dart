@@ -26,11 +26,10 @@ void main() {
     expect(find.byType(TermsAcceptanceScreen), findsNothing);
   });
 
-  testWidgets('returning user sees intro before the re-accept gate', (
+  testWidgets('returning user never sees the first-run intro again', (
     WidgetTester tester,
   ) async {
-    // The intro appears once per launch. Dismissing it still reveals the
-    // mandatory Terms re-acceptance gate for returning users.
+    // The legacy authenticated flag migrates to the new intro-seen flag.
     SharedPreferences.setMockInitialValues({
       'has_completed_onboarding_intro_v2': true,
     });
@@ -38,20 +37,37 @@ void main() {
     await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
     await tester.pump();
 
-    expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
-    expect(find.text('Atla'), findsOneWidget);
-    expect(find.byType(TermsAcceptanceScreen), findsNothing);
-
-    await tester.tap(find.text('Atla'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 361));
-    await tester.pump();
-
     expect(find.byType(OnboardingCarouselScreen), findsNothing);
     expect(find.byType(TermsAcceptanceScreen), findsOneWidget);
     expect(find.text('TOPLULUK GÜVENLİĞİ KOŞULLARI'), findsOneWidget);
     expect(find.text('Kabul et ve devam et'), findsOneWidget);
     expect(find.text('Giriş yap'), findsNothing);
+  });
+
+  testWidgets('showing intro once persists across a second app launch', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await onboardingIntroService.initialize();
+    await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
+    await tester.pump();
+
+    expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getBool('has_seen_onboarding_intro_v1'), isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await onboardingIntroService.initialize();
+    await tester.pumpWidget(const MyApp(minimumLaunchDuration: Duration.zero));
+    await tester.pump();
+
+    expect(find.byType(OnboardingCarouselScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('app shows branded launch UI before its first destination', (

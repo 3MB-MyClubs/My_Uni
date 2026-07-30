@@ -44,6 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Firebase Admin credentials belong in Supabase secrets, never source control.
+*firebase-service-account*.json
+*firebase-adminsdk*.json
+
 # Drive-test screenshots and stray captures (dev output, not shipped assets)
 /screenshots/
 /flutter_01.png

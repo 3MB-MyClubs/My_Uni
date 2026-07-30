@@ -192,7 +192,6 @@ class SupabaseContentService {
 
   /// Removes only snapshots that came from Supabase.
   ///
-  /// Local/mock fixtures remain intact in widget tests and offline builds, but
   /// RLS-filtered rows from one authenticated account cannot remain visible
   /// while another account signs in.
   void clearSessionContent() {

@@ -13,19 +13,12 @@ import 'mock_data.dart';
 
 /// Persists user-generated content (posts, events, likes, shares, and dynamic
 /// notifications) to a Hive box.
-///
-/// On first run the lists keep their seed data from mock_data.dart.
-/// Every subsequent run loads the last saved state.
-///
-/// [_seedVersion] must be incremented whenever mock_data.dart changes event or
-/// post seed data. A version mismatch causes stored events/posts to be
-/// discarded so the fresh mock data is used instead.
 class ContentStore extends ChangeNotifier {
   static const _boxName = 'content_v1';
-
-  /// Bump this integer any time you change mock event / post seed data.
-  /// The stored version is compared on startup; a mismatch clears stale data.
-  static const int _seedVersion = 7;
+  static const int _fixtureRemovalVersion = 1;
+  static final RegExp _legacyPostId = RegExp(r'^n\d+$');
+  static final RegExp _legacyEventId = RegExp(r'^ev\d+$');
+  static final RegExp _legacyUserId = RegExp(r'^u\d+$');
 
   late Box<dynamic> _box;
   bool _initialized = false;
@@ -45,19 +38,13 @@ class ContentStore extends ChangeNotifier {
   void notifyContentChanged() => notifyListeners();
 
   /// Call once after [initialize] to replace in-memory lists with stored data.
-  /// If nothing is stored yet, or the seed version has changed, the lists keep
-  /// (or reset to) their mock-data seed values.
   void applyToLists() {
-    final storedVersion = _box.get('seedVersion') as int? ?? 0;
-    final versionMatch = storedVersion == _seedVersion;
-
     _load(
       'comments',
       comments,
       (m) => Comment.fromMap(Map<String, dynamic>.from(m as Map)),
     );
 
-    // Always load user-generated interaction data (safe across versions)
     _load(
       'likes',
       likes,
@@ -68,32 +55,59 @@ class ContentStore extends ChangeNotifier {
       shares,
       (m) => Share.fromMap(Map<String, dynamic>.from(m as Map)),
     );
+    _load(
+      'posts',
+      newsPosts,
+      (m) => NewsPost.fromMap(Map<String, dynamic>.from(m as Map)),
+    );
+    _load(
+      'events',
+      events,
+      (m) => Event.fromMap(Map<String, dynamic>.from(m as Map)),
+    );
 
-    if (versionMatch) {
-      // Load seed data that may have been mutated by user actions
-      _load(
-        'posts',
-        newsPosts,
-        (m) => NewsPost.fromMap(Map<String, dynamic>.from(m as Map)),
+    final storedRemovalVersion = _box.get('fixtureRemovalVersion') as int? ?? 0;
+    if (storedRemovalVersion < _fixtureRemovalVersion) {
+      _removeLegacyFixtures();
+      unawaited(
+        Future.wait([
+          saveNewsPosts(),
+          saveEvents(),
+          saveComments(),
+          saveLikes(),
+          saveShares(),
+          _box.put('fixtureRemovalVersion', _fixtureRemovalVersion),
+          _box.delete('seedVersion'),
+        ]),
       );
-      _load(
-        'events',
-        events,
-        (m) => Event.fromMap(Map<String, dynamic>.from(m as Map)),
-      );
-    } else {
-      // Seed data changed — discard stale Hive data, use fresh mock data,
-      // and write the new version so this only triggers once.
-      _box.delete('posts');
-      _box.delete('events');
-      _box.put('seedVersion', _seedVersion);
     }
     _box.delete('stories');
   }
 
+  void _removeLegacyFixtures() {
+    newsPosts.removeWhere((post) => _legacyPostId.hasMatch(post.id));
+    events.removeWhere((event) => _legacyEventId.hasMatch(event.id));
+    comments.removeWhere(
+      (comment) =>
+          _legacyPostId.hasMatch(comment.postId) ||
+          _legacyUserId.hasMatch(comment.userId),
+    );
+    likes.removeWhere(
+      (like) =>
+          _legacyPostId.hasMatch(like.postId) ||
+          _legacyUserId.hasMatch(like.userId),
+    );
+    shares.removeWhere(
+      (share) =>
+          _legacyPostId.hasMatch(share.targetId) ||
+          _legacyEventId.hasMatch(share.targetId) ||
+          _legacyUserId.hasMatch(share.userId),
+    );
+  }
+
   void _load<T>(String key, List<T> target, T Function(dynamic) fromRaw) {
     final raw = _box.get(key);
-    if (raw == null) return; // nothing stored yet — keep seed data
+    if (raw == null) return;
     target
       ..clear()
       ..addAll((raw as List).map(fromRaw));
@@ -173,13 +187,19 @@ class ContentStore extends ChangeNotifier {
         .map(
           (m) => AppNotification.fromMap(Map<String, dynamic>.from(m as Map)),
         )
-        .where((n) => n.targetType != 'story')
+        .where(
+          (notification) =>
+              notification.targetType != 'story' &&
+              !_legacyUserId.hasMatch(notification.userId) &&
+              !_legacyPostId.hasMatch(notification.targetId ?? '') &&
+              !_legacyEventId.hasMatch(notification.targetId ?? ''),
+        )
         .toList();
   }
 
   // ── Club board member IDs ────────────────────────────────────────────────────
-  // Only the mutable boardMemberIds list is persisted; static club data stays
-  // in mock_data.dart as the source of truth for names/descriptions etc.
+  // Only the mutable boardMemberIds list is persisted here; club records are
+  // hydrated from Supabase.
 
   Future<void> saveBoardMemberIds() async {
     final map = <String, List<String>>{};

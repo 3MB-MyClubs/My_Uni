@@ -43,6 +43,11 @@ class EventCoverImage extends ConsumerWidget {
       clubPhotoPath,
       fallbackUrl,
     ]);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final logicalCacheWidth =
+        cacheWidth ?? (width != null && width!.isFinite ? width : null);
+    final logicalCacheHeight =
+        cacheHeight ?? (height != null && height!.isFinite ? height : null);
 
     final child = path == null
         ? _EventCoverFallback(color: color)
@@ -61,6 +66,12 @@ class EventCoverImage extends ConsumerWidget {
             File(path),
             width: width,
             height: height,
+            cacheWidth: logicalCacheWidth == null
+                ? null
+                : (logicalCacheWidth * dpr).round(),
+            cacheHeight: logicalCacheHeight == null
+                ? null
+                : (logicalCacheHeight * dpr).round(),
             fit: fit,
             errorBuilder: (_, _, _) => _EventCoverFallback(color: color),
           );
@@ -91,8 +102,8 @@ class EventCoverImage extends ConsumerWidget {
         _firstValue(profileIds.map((id) => state.profilePhotoPaths[id]));
     final fallbackUrl = _firstNetworkImage([
       club?.logoUrl,
-      ...profileIds.map((id) => state.mockPhotoUrls[id]),
-      state.mockClubPhotoUrls[event.clubId],
+      ...profileIds.map((id) => state.remotePhotoUrls[id]),
+      state.remoteClubPhotoUrls[event.clubId],
     ]);
     return (clubPhotoPath, fallbackUrl);
   }

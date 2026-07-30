@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
@@ -9,6 +12,8 @@ import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/chat_store.dart';
+import '../services/supabase_config.dart';
+import '../services/push_notification_copy.dart';
 import '../widgets/club_avatar.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
@@ -27,25 +32,38 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final List<Map<String, dynamic>> _remoteNotificationRows = [];
+  RealtimeChannel? _notificationChannel;
+
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   List<AppNotification> get _allNotifs =>
-      [...notifications, ...userState.dynamicNotifications].where((n) {
-        if (n.userId != _myId || n.targetType == 'story') return false;
-        return !(ChatStore.isAdminAccountId(_myId) &&
-            n.targetType == 'message');
-      }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      [
+          ..._remoteNotificationRows.map(_remoteFromMap),
+          ...notifications,
+          ...userState.dynamicNotifications,
+        ].where((n) {
+          if (n.userId != _myId || n.targetType == 'story') return false;
+          return !(ChatStore.isAdminAccountId(_myId) &&
+              n.targetType == 'message');
+        }).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   @override
   void initState() {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
+    unawaited(_loadRemoteNotifications());
   }
 
   @override
   void dispose() {
+    final channel = _notificationChannel;
+    if (channel != null && SupabaseConfig.isConfigured) {
+      unawaited(Supabase.instance.client.removeChannel(channel));
+    }
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     super.dispose();
@@ -55,14 +73,124 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (mounted) setState(() {});
   }
 
-  bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
+  bool _isUnread(AppNotification n) =>
+      !n.read && !userState.isNotificationRead(n);
+
+  AppNotification _remoteFromMap(Map<String, dynamic> row) {
+    final rawArgs = row['localization_args'];
+    final args = rawArgs is Map
+        ? Map<String, dynamic>.from(rawArgs)
+        : <String, dynamic>{};
+    final copy = localizedPushNotificationCopy(
+      type: row['type']?.toString() ?? '',
+      args: args,
+      languageCode: localeService.languageCode,
+      fallbackTitle: row['title']?.toString() ?? '',
+      fallbackBody: row['body']?.toString() ?? '',
+    );
+    return AppNotification(
+      id: row['id'] as String,
+      userId: row['user_id'] as String,
+      fromId: row['actor_user_id'] as String?,
+      message: copy.body,
+      createdAt: DateTime.parse(row['created_at'] as String),
+      read: row['read_at'] != null,
+      targetType: row['target_type'] as String?,
+      targetId: row['target_id'] as String?,
+    );
+  }
+
+  Future<void> _loadRemoteNotifications() async {
+    if (!SupabaseConfig.isConfigured || _myId.isEmpty) return;
+    final client = Supabase.instance.client;
+    try {
+      final rows = await client
+          .from('notifications')
+          .select()
+          .eq('user_id', _myId)
+          .order('created_at', ascending: false)
+          .limit(100);
+      if (!mounted) return;
+      setState(() {
+        _remoteNotificationRows
+          ..clear()
+          ..addAll(rows.map((row) => Map<String, dynamic>.from(row)));
+      });
+
+      _notificationChannel = client
+          .channel('notifications:$_myId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: _myId,
+            ),
+            callback: (payload) {
+              if (!mounted) return;
+              final notification = _remoteFromMap(payload.newRecord);
+              setState(() {
+                if (_remoteNotificationRows.every(
+                  (item) => item['id'] != notification.id,
+                )) {
+                  _remoteNotificationRows.insert(
+                    0,
+                    Map<String, dynamic>.from(payload.newRecord),
+                  );
+                }
+              });
+            },
+          )
+          .subscribe();
+    } catch (_) {
+      // The mock/local notification feed remains available offline.
+    }
+  }
 
   // ── Read state ──────────────────────────────────────────────────────────────
   void _markRead(AppNotification n) {
     userState.markNotificationRead(n);
+    final index = _remoteNotificationRows.indexWhere(
+      (item) => item['id'] == n.id,
+    );
+    if (index < 0) return;
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    setState(() {
+      _remoteNotificationRows[index] = {
+        ..._remoteNotificationRows[index],
+        'read_at': readAt,
+      };
+    });
+    unawaited(
+      Supabase.instance.client
+          .from('notifications')
+          .update({'read_at': readAt})
+          .eq('id', n.id),
+    );
   }
 
-  void _markAllRead() => userState.markNotificationsRead(_allNotifs);
+  void _markAllRead() {
+    userState.markNotificationsRead(_allNotifs);
+    if (_remoteNotificationRows.isEmpty) return;
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    setState(() {
+      for (var index = 0; index < _remoteNotificationRows.length; index++) {
+        _remoteNotificationRows[index] = {
+          ..._remoteNotificationRows[index],
+          'read_at': readAt,
+        };
+      }
+    });
+    unawaited(
+      Supabase.instance.client
+          .from('notifications')
+          .update({'read_at': readAt})
+          .eq('user_id', _myId)
+          .isFilter('read_at', null),
+    );
+  }
 
   // ── Time helper ───────────────────────────────────────────────────────────
   String _timeAgo(DateTime dt) {

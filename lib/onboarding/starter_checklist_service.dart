@@ -12,9 +12,8 @@ import '../services/user_state.dart';
 /// The post-tour starter checklist: follow a club, RSVP to an event, say hi.
 ///
 /// Started when a student finishes (or skips) onboarding. Items check
-/// themselves off by observing the real stores, and detection is
-/// baseline-relative because the demo pre-seeds follows ('c1') and RSVPs —
-/// "did something NEW since the tour", not "is anything there".
+/// themselves off by observing the real stores. Detection is baseline-relative
+/// so existing follows and RSVPs do not count as new onboarding actions.
 ///
 /// State is persisted per user as JSON under `onboarding_checklist_<userId>`,
 /// and done-flags are sticky: un-following later doesn't un-check the item.

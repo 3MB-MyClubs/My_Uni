@@ -28,8 +28,7 @@ class PeopleService {
   /// Profiles that are allowed to appear in people pickers and chats.
   ///
   /// This intentionally contains only profiles fetched from the real profiles
-  /// table and accounts explicitly registered on this device. The static demo
-  /// users from mock_data.dart are never added here.
+  /// table and accounts explicitly registered on this device.
   List<User> get cachedPeople {
     final byId = <String, User>{
       for (final user in _localPeople.values) user.id: user,

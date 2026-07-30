@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/app_launch_screen.dart';
 import 'screens/login_screen.dart';
@@ -16,10 +19,9 @@ import 'screens/onboarding_carousel_screen.dart';
 import 'screens/terms_acceptance_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
-import 'services/mock_data.dart';
+import 'services/mock_data.dart' show appAdmin;
 import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
-import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
 import 'services/chat_store.dart';
 import 'services/club_chat_prefs.dart';
@@ -30,6 +32,7 @@ import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
 import 'services/people_service.dart';
 import 'services/poll_store.dart';
+import 'services/push_notification_service.dart';
 import 'services/theme_service.dart';
 import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
@@ -42,15 +45,28 @@ import 'services/moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
 import 'services/onboarding_intro_service.dart';
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SupabaseConfig.validate();
+
+  if (PushNotificationService.isSupported) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
 
   await Future.wait([
     if (SupabaseConfig.isConfigured)
       Supabase.initialize(
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.clientKey,
+        authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
         debug: false,
       ),
     hiveBootstrap.initialize(),
@@ -83,26 +99,20 @@ void main() async {
     starterChecklistService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
+  // Supabase restores its token pair from device storage. Reconstruct the
+  // matching app user/admin before the root router chooses its destination.
+  await authService.restorePersistedSession();
+
   runApp(const ProviderScope(child: MyApp()));
 
   // The app opens on the lightweight launch screen, so none of this needs to
-  // finish before first paint: the
-  // notification permission prompt, materializing mock_data.dart's seed
-  // lists, and the network cleanup call are all deferred to right after.
+  // finish before first paint: push listeners, local hydration, and the
+  // network cleanup call are deferred to right after.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(
       appBootstrap.ready.then((_) {
-        unawaited(notificationService.initialize());
+        unawaited(pushNotificationService.initialize());
 
-        // Give every demo student a stable mock profile photo so avatars show
-        // up in members/board lists etc. Curated seeds and real uploads are
-        // not overridden.
-        for (final u in users) {
-          userState.mockPhotoUrls.putIfAbsent(
-            u.id,
-            () => 'https://i.pravatar.cc/150?u=${u.id}',
-          );
-        }
         contentStore.applyToLists();
         unawaited(eventCleanupService.cleanupExpiredEvents());
         contentStore.loadBoardMemberIds();
@@ -160,9 +170,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _loggedIn = false;
   String _signupEmail = '';
 
-  // Set when the user leaves the first-run intro carousel (Get started or
-  // Log in/Skip) so it isn't rebuilt this session before the device flag lands.
-  bool _dismissedIntro = false;
+  // Snapshotted at app construction so persisting the seen flag cannot remove
+  // the carousel mid-launch during an unrelated theme/locale rebuild.
+  bool _showIntroThisLaunch = false;
 
   // Prefs/personalization are loaded once per logged-in user (from _onLogin or
   // the first build that sees the session) — not on every theme/locale
@@ -179,6 +189,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _showIntroThisLaunch = !onboardingIntroService.hasSeenOnceOnDevice;
+    if (_showIntroThisLaunch) {
+      // "Shown once" means the first rendered launch counts even if the user
+      // closes the app before pressing Skip or Get started.
+      unawaited(onboardingIntroService.markSeenOnDevice());
+    }
+    if (authService.currentUser != null || authService.currentAdmin != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _activateAuthenticatedServices();
+      });
+    }
     if (widget.minimumLaunchDuration == Duration.zero) {
       _isLaunching = false;
     } else {
@@ -233,8 +254,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _loggedIn = true;
       _showSignUp = false;
     });
+    _activateAuthenticatedServices();
+  }
+
+  void _activateAuthenticatedServices() {
+    final currentUserId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
       unawaited(appPresenceService.startForAuthenticatedSession());
+      unawaited(pushNotificationService.activateForCurrentUser());
       unawaited(moderationService.activateForUser(currentUserId));
       _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
@@ -255,6 +283,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // Custom back navigation from the sign-up flow → root Login Screen.
   void handleBack() {
     setState(() => _showSignUp = false);
+  }
+
+  Future<void> _dismissIntro({required bool showSignUp}) async {
+    // Persist before changing destinations so killing the app immediately
+    // after Skip/Get started still cannot replay the carousel next launch.
+    await onboardingIntroService.markSeenOnDevice();
+    if (!mounted) return;
+    setState(() {
+      _showIntroThisLaunch = false;
+      _showSignUp = showSignUp;
+    });
   }
 
   ThemeData _buildTheme(bool isDark) {
@@ -391,19 +430,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         final isDark = themeService.isDark;
         Widget homeWidget;
         String destinationKey;
-        if (!_dismissedIntro &&
+        if (_showIntroThisLaunch &&
             !_showSignUp &&
             !_loggedIn &&
             authService.currentUser == null &&
             authService.currentAdmin == null) {
-          // Show the intro once per cold app launch. It remains dismissed for
-          // the current session after Get started, Skip, or Log in.
+          // Show the intro once after installation. Get started, Skip, and Log
+          // in all persistently retire it before navigating away.
           homeWidget = OnboardingCarouselScreen(
-            onGetStarted: () => setState(() {
-              _dismissedIntro = true;
-              _showSignUp = true;
-            }),
-            onLogIn: () => setState(() => _dismissedIntro = true),
+            onGetStarted: () => unawaited(_dismissIntro(showSignUp: true)),
+            onLogIn: () => unawaited(_dismissIntro(showSignUp: false)),
           );
           destinationKey = 'onboarding';
         } else if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
