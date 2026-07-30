@@ -110,6 +110,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         chatStore.managedCommunityThreadId(id) == widget.threadId;
   }
 
+  /// Backgrounds affect the club's shared community identity, so board
+  /// members retain moderation tools without receiving this admin setting.
+  bool get _canChangeBackground {
+    final club = _club;
+    if (club == null || _myId.isEmpty) return false;
+    return club.adminUserIds.contains(_myId) ||
+        chatStore.managedCommunityThreadId(_myId) == widget.threadId;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -993,6 +1002,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     final t = _t;
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheetState) => Container(
@@ -1033,6 +1043,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     unawaited(_composeAnnouncement());
+                  },
+                ),
+              if (_canChangeBackground)
+                _ActionRow(
+                  icon: Icons.wallpaper_rounded,
+                  label: S.changeChatBackground,
+                  t: t,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _openBackgroundSheet();
                   },
                 ),
               const SizedBox(height: 10),
@@ -1100,6 +1120,197 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   }
 
   // ── Sheets ──────────────────────────────────────────────────────────────────
+
+  String _backgroundLabel(ClubChatBackground background) =>
+      switch (background) {
+        ClubChatBackground.classic => S.backgroundClassic,
+        ClubChatBackground.warm => S.backgroundWarm,
+        ClubChatBackground.ocean => S.backgroundOcean,
+        ClubChatBackground.forest => S.backgroundForest,
+        ClubChatBackground.midnight => S.backgroundMidnight,
+      };
+
+  LinearGradient _backgroundGradient(
+    ClubChatBackground background,
+    ClubChatTheme t,
+  ) {
+    final colors = switch (background) {
+      ClubChatBackground.classic => [
+        t.body,
+        Color.lerp(t.body, t.accent, t.isDark ? 0.10 : 0.055)!,
+      ],
+      ClubChatBackground.warm =>
+        t.isDark
+            ? const [Color(0xFF241A18), Color(0xFF321D22)]
+            : const [Color(0xFFFFF8F0), Color(0xFFFDE9E8)],
+      ClubChatBackground.ocean =>
+        t.isDark
+            ? const [Color(0xFF111D2B), Color(0xFF132C38)]
+            : const [Color(0xFFF2F8FF), Color(0xFFE5F3F8)],
+      ClubChatBackground.forest =>
+        t.isDark
+            ? const [Color(0xFF13221C), Color(0xFF1D2D24)]
+            : const [Color(0xFFF2FAF5), Color(0xFFE5F3E9)],
+      ClubChatBackground.midnight =>
+        t.isDark
+            ? const [Color(0xFF0B1020), Color(0xFF1B1730)]
+            : const [Color(0xFFF0F2FC), Color(0xFFE8E6F7)],
+    };
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: colors,
+    );
+  }
+
+  void _openBackgroundSheet() {
+    if (!_canChangeBackground) return;
+    final t = _t;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          decoration: BoxDecoration(
+            color: t.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: t.borderB,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  S.chatBackground,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: t.text,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final optionWidth = (constraints.maxWidth - 10) / 2;
+                    return Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final background in ClubChatBackground.values)
+                          SizedBox(
+                            width: optionWidth,
+                            child: _backgroundOption(
+                              background,
+                              t,
+                              selected:
+                                  clubChatPrefs.backgroundFor(
+                                    widget.threadId,
+                                  ) ==
+                                  background,
+                              onTap: () {
+                                clubChatPrefs.setBackground(
+                                  widget.threadId,
+                                  background,
+                                );
+                                setSheetState(() {});
+                              },
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: t.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text(S.done),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _backgroundOption(
+    ClubChatBackground background,
+    ClubChatTheme t, {
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: _backgroundLabel(background),
+      child: GestureDetector(
+        key: ValueKey('club-background-option-${background.name}'),
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: selected ? t.ltRed : t.solid,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? t.red : t.border,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: _backgroundGradient(background, t),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  selected ? Icons.check_circle_rounded : Icons.chat_rounded,
+                  size: 20,
+                  color: selected ? t.red : t.sub,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                _backgroundLabel(background),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: t.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   void _openSheetTab(ClubSheetTab tab) {
     setState(() => _openSheet = tab);
@@ -1456,6 +1667,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
+  Widget _withChatBackground(ClubChatTheme t, Widget child) {
+    final background = clubChatPrefs.backgroundFor(widget.threadId);
+    return Container(
+      key: ValueKey('club-chat-background-${background.name}'),
+      decoration: BoxDecoration(gradient: _backgroundGradient(background, t)),
+      child: child,
+    );
+  }
+
   Widget _buildStream(ClubChatTheme t) {
     final messages = chatStore.messagesFor(widget.threadId, viewerId: _myId);
     final typing = chatStore
@@ -1464,94 +1684,100 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         .toList();
 
     if (messages.isEmpty && typing.isEmpty) {
-      return Stack(
-        children: [
-          _glow(t),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 34),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: t.ltRed,
-                      shape: BoxShape.circle,
+      return _withChatBackground(
+        t,
+        Stack(
+          children: [
+            _glow(t),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 34),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: t.ltRed,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: t.red,
+                        size: 22,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      color: t.red,
-                      size: 22,
+                    const SizedBox(height: 13),
+                    Text(
+                      S.sayHello,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: t.text,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 13),
-                  Text(
-                    S.sayHello,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: t.text,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
     final items = _buildStreamItems(messages, typing, t);
-    return Stack(
-      children: [
-        _glow(t),
-        ListView.builder(
-          controller: _scrollController,
-          reverse: true,
-          padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
-          itemCount: items.length,
-          itemBuilder: (context, index) => items[items.length - 1 - index],
-        ),
-        if (_showJumpButton)
-          Positioned(
-            right: 14,
-            bottom: 14,
-            child: Semantics(
-              button: true,
-              label: S.jumpToLatest,
-              child: GestureDetector(
-                key: const ValueKey('club-jump-to-latest'),
-                onTap: _scrollToLatest,
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: t.sheet,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: t.borderB),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 22,
-                    color: t.red,
+    return _withChatBackground(
+      t,
+      Stack(
+        children: [
+          _glow(t),
+          ListView.builder(
+            controller: _scrollController,
+            reverse: true,
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
+            itemCount: items.length,
+            itemBuilder: (context, index) => items[items.length - 1 - index],
+          ),
+          if (_showJumpButton)
+            Positioned(
+              right: 14,
+              bottom: 14,
+              child: Semantics(
+                button: true,
+                label: S.jumpToLatest,
+                child: GestureDetector(
+                  key: const ValueKey('club-jump-to-latest'),
+                  onTap: _scrollToLatest,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: t.sheet,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: t.borderB),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                      color: t.red,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 

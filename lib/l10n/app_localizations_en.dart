@@ -1326,13 +1326,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get categoryBusiness => 'Business';
 
   @override
+  String get categoryCareer => 'Career';
+
+  @override
   String get categoryEngineering => 'Engineering';
+
+  @override
+  String get categoryMusic => 'Music';
 
   @override
   String get categorySocial => 'Social';
 
   @override
+  String get categorySocialImpact => 'Social Impact';
+
+  @override
   String get categorySports => 'Sports';
+
+  @override
+  String get categoryTech => 'Tech';
+
+  @override
+  String get categoryWellness => 'Wellness';
 
   @override
   String get changeEventPhoto => 'Change photo';

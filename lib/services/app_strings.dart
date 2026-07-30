@@ -862,6 +862,15 @@ class S {
   static String get announcementTitleHint =>
       _t('Announcement headline', 'Duyuru başlığı');
   static String get chatDisplay => _t('Chat display', 'Sohbet görünümü');
+  static String get changeChatBackground =>
+      _t('Change chat background', 'Sohbet arka planını değiştir');
+  static String get chatBackground =>
+      _t('Chat background', 'Sohbet arka planı');
+  static String get backgroundClassic => _t('Classic', 'Klasik');
+  static String get backgroundWarm => _t('Warm', 'Sıcak');
+  static String get backgroundOcean => _t('Ocean', 'Okyanus');
+  static String get backgroundForest => _t('Forest', 'Orman');
+  static String get backgroundMidnight => _t('Midnight', 'Gece');
   static String get messageStyle => _t('Message style', 'Mesaj biçimi');
   static String get styleRows => _t('Rows', 'Satır');
   static String get styleBubbles => _t('Bubbles', 'Balon');

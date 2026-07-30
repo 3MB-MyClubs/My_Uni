@@ -1326,13 +1326,28 @@ class AppLocalizationsTr extends AppLocalizations {
   String get categoryBusiness => 'İşletme';
 
   @override
+  String get categoryCareer => 'Kariyer';
+
+  @override
   String get categoryEngineering => 'Mühendislik';
+
+  @override
+  String get categoryMusic => 'Müzik';
 
   @override
   String get categorySocial => 'Sosyal';
 
   @override
+  String get categorySocialImpact => 'Sosyal Etki';
+
+  @override
   String get categorySports => 'Spor';
+
+  @override
+  String get categoryTech => 'Teknoloji';
+
+  @override
+  String get categoryWellness => 'Sağlıklı Yaşam';
 
   @override
   String get changeEventPhoto => 'Fotoğrafı değiştir';
