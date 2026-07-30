@@ -21,15 +21,12 @@ class UserState extends ChangeNotifier {
   // current locale.
   AppLocalizations get _l10n =>
       lookupAppLocalizations(Locale(localeService.languageCode));
-  final Set<String> likedPostIds = {'n1'}; // pre-seed from mock likes
-  final Set<String> followedClubIds = {
-    'c1',
-  }; // pre-seed from mock subscriptions
+  final Set<String> likedPostIds = {};
+  final Set<String> followedClubIds = {};
   final Set<String> savedPostIds = {};
-  // User-to-user follows — pre-seeded for demo (assumes Bob/u2 is logged in)
-  final Set<String> followedUserIds = {'u1', 'u4'};
+  final Set<String> followedUserIds = {};
   @Deprecated('Use unreadNotificationCountFor instead.')
-  int unreadNotifications = 3;
+  int unreadNotifications = 0;
 
   // Profile photo image paths keyed by user/admin id.
   final Map<String, String> profilePhotoPaths = {};
@@ -46,24 +43,8 @@ class UserState extends ChangeNotifier {
     _profilePhotoRevisions[userId] = profilePhotoRevisionFor(userId) + 1;
   }
 
-  // Mock network photo URLs for demo users (seeded at startup, overridden by a real upload).
-  final Map<String, String> mockPhotoUrls = {
-    'u1': 'https://i.pravatar.cc/150?img=47',
-    'u2': 'https://i.pravatar.cc/150?img=11',
-    'u3': 'https://i.pravatar.cc/150?img=15',
-    'u4': 'https://i.pravatar.cc/150?img=44',
-    'u5': 'https://i.pravatar.cc/150?u=u5',
-    'u6': 'https://i.pravatar.cc/150?img=5',
-    'u7': 'https://i.pravatar.cc/150?u=u7',
-    'u8': 'https://i.pravatar.cc/150?img=9',
-    'u9': 'https://i.pravatar.cc/150?u=u9',
-    'u10': 'https://i.pravatar.cc/150?img=32',
-    'u11': 'https://i.pravatar.cc/150?img=21',
-    'u12': 'https://i.pravatar.cc/150?u=u12',
-    'u13': 'https://i.pravatar.cc/150?img=53',
-    'u14': 'https://i.pravatar.cc/150?img=58',
-    'u15': 'https://i.pravatar.cc/150?u=u15',
-  };
+  /// Remote profile photo URLs hydrated from Supabase.
+  final Map<String, String> remotePhotoUrls = {};
 
   // Student bios keyed by user id.
   final Map<String, String> bios = {};
@@ -94,13 +75,8 @@ class UserState extends ChangeNotifier {
   // Club profile photo paths keyed by club id.
   final Map<String, String> clubPhotoPaths = {};
 
-  // Mock network photo URLs for demo clubs. Real uploaded club photos in
-  // [clubPhotoPaths] take priority; these make untouched club profiles feel
-  // more alive than initials-only avatars.
-  final Map<String, String> mockClubPhotoUrls = {
-    for (var i = 1; i <= 42; i++)
-      'c$i': 'https://picsum.photos/seed/unihub-club-c$i/300/300',
-  };
+  /// Remote club photo URLs hydrated from Supabase.
+  final Map<String, String> remoteClubPhotoUrls = {};
 
   /// Notifies listeners after a club's editable info (e.g. description) changed
   /// in place, so every screen showing the club rebuilds.
@@ -161,7 +137,7 @@ class UserState extends ChangeNotifier {
   void removeProfilePhoto(String userId) {
     final removedLocal = profilePhotoPaths.remove(userId);
     photoFileCache.invalidate(removedLocal);
-    final removedRemote = mockPhotoUrls.remove(userId) != null;
+    final removedRemote = remotePhotoUrls.remove(userId) != null;
     if (removedLocal != null || removedRemote) {
       _bumpProfilePhotoRevision(userId);
       notifyListeners();
@@ -175,7 +151,7 @@ class UserState extends ChangeNotifier {
     bool preserveLocal = false,
   }) {
     final value = url.trim();
-    final previousRemote = mockPhotoUrls[userId];
+    final previousRemote = remotePhotoUrls[userId];
     if (previousRemote != null && previousRemote != value) {
       _evictNetworkPhoto(previousRemote);
     }
@@ -185,20 +161,20 @@ class UserState extends ChangeNotifier {
       photoFileCache.invalidate(localPath);
     }
     if (value.isEmpty) {
-      mockPhotoUrls.remove(userId);
+      remotePhotoUrls.remove(userId);
     } else {
       // The URL is a stable storage path reused on every re-upload, so a
       // changed photo needs its old disk-cached bytes evicted too or every
       // avatar would keep showing the previous photo until reinstall.
       _evictNetworkPhoto(value);
-      mockPhotoUrls[userId] = value;
+      remotePhotoUrls[userId] = value;
     }
     _bumpProfilePhotoRevision(userId);
     notifyListeners();
   }
 
   bool hasProfilePhoto(String userId) =>
-      profilePhotoPaths[userId] != null || mockPhotoUrls[userId] != null;
+      profilePhotoPaths[userId] != null || remotePhotoUrls[userId] != null;
 
   /// Sets the student bio for [userId] and notifies all listeners.
   void setBio(String userId, String bio) {

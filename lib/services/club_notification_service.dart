@@ -15,16 +15,8 @@ import 'user_state.dart';
 
 /// Generates in-app notifications for club followers when new content is published.
 ///
-/// ARCHITECTURE NOTE (local/mock limitation):
-/// User follows are persisted per-account in Hive via userPrefsService, but
-/// only the currently logged-in account's prefs are loaded into memory at any
-/// time. To determine which users follow a club for OTHER accounts, we fall
-/// back to User.subscribedClubIds from mock_data.dart (the static seed list).
-/// This means:
-///   - Seed-subscribed users always receive notifications (demo-correct).
-///   - The currently logged-in user's runtime follows are also respected.
-///   - Runtime follows by other (not currently logged-in) accounts are not
-///     visible here — a real backend would query a follows table instead.
+/// Recipient IDs come from Supabase. The currently logged-in account's local
+/// follow state is also respected while an optimistic follow is being synced.
 class ClubNotificationService {
   // No BuildContext is available this deep in the service layer; these
   // generated in-app notification messages are resolved here via the
@@ -60,11 +52,11 @@ class ClubNotificationService {
               .where((id) => id.isNotEmpty),
         );
       } catch (_) {
-        // Fall back to local/demo recipients below.
+        // The current user's optimistic local follow is handled below.
       }
     }
 
-    // Source 1 — static seed subscriptions (covers all seeded user accounts).
+    // Include locally registered users until their follow state is synced.
     for (final user in users) {
       if (user.subscribedClubIds.contains(clubId)) {
         ids.add(user.id);

@@ -622,9 +622,12 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
 
     // Rank clubs by how many selected interests they match; exclude followed.
     final candidates =
-        kClubInterestMap.keys
-            .where((id) => !alreadyFollowed.contains(id))
-            .map((id) => (id, personalizationService.interestMatchCount(id)))
+        clubs
+            .where((club) => !alreadyFollowed.contains(club.id))
+            .map(
+              (club) =>
+                  (club.id, personalizationService.interestMatchCount(club.id)),
+            )
             .toList()
           ..sort((a, b) => b.$2.compareTo(a.$2));
 

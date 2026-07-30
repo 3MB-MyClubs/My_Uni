@@ -525,6 +525,13 @@ class AppLocalizationsTr extends AppLocalizations {
   String get logOut => 'Çıkış Yap';
 
   @override
+  String get confirmLogoutTitle => 'Çıkış yapılsın mı?';
+
+  @override
+  String get confirmLogoutMessage =>
+      'Hesabınızdan çıkış yapmak istediğinizden emin misiniz?';
+
+  @override
   String get editProfile => 'Profili Düzenle';
 
   @override

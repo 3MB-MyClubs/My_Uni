@@ -52,8 +52,8 @@ class ClubAvatar extends ConsumerWidget {
         s.clubPhotoPaths[clubId] ??
         _firstValue(profileIds.map((id) => s.profilePhotoPaths[id]));
     final fallbackUrl = _firstNetworkImage([
-      ...profileIds.map((id) => s.mockPhotoUrls[id]),
-      s.mockClubPhotoUrls[clubId],
+      ...profileIds.map((id) => s.remotePhotoUrls[id]),
+      s.remoteClubPhotoUrls[clubId],
     ]);
     return (photoPath, fallbackUrl);
   }

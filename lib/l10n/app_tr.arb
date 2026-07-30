@@ -166,6 +166,8 @@
   "couldNotOpenPage": "Bu sayfa açılamadı.",
   "account": "Hesap",
   "logOut": "Çıkış Yap",
+  "confirmLogoutTitle": "Çıkış yapılsın mı?",
+  "confirmLogoutMessage": "Hesabınızdan çıkış yapmak istediğinizden emin misiniz?",
   "editProfile": "Profili Düzenle",
   "editProfileSubtitle": "Fotoğraf, biyografi, bölüm & yıl",
   "changeMyName": "Adımı Değiştir",

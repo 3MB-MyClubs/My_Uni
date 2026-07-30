@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -11,6 +14,11 @@ class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   late FlutterLocalNotificationsPlugin _notificationsPlugin;
   bool _initialized = false;
+  final StreamController<Map<String, dynamic>> _remoteNotificationTaps =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get remoteNotificationTaps =>
+      _remoteNotificationTaps.stream;
 
   // No BuildContext is available this deep in the service layer; system
   // notification text is resolved here via the current locale.
@@ -42,9 +50,9 @@ class NotificationService {
 
     // iOS initialization
     const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
-      requestSoundPermission: true,
-      requestBadgePermission: true,
-      requestAlertPermission: true,
+      requestSoundPermission: false,
+      requestBadgePermission: false,
+      requestAlertPermission: false,
     );
 
     // Combined initialization
@@ -53,9 +61,31 @@ class NotificationService {
       iOS: iosInit,
     );
 
-    await _notificationsPlugin.initialize(initSettings);
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+    );
 
-    // Request permissions (iOS)
+    _initialized = true;
+  }
+
+  void _handleNotificationResponse(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map) {
+        _remoteNotificationTaps.add(
+          decoded.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      }
+    } catch (_) {
+      // Ignore malformed payloads from stale notification versions.
+    }
+  }
+
+  Future<void> requestPermissions() async {
+    if (!_initialized) await initialize();
     await _notificationsPlugin
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
@@ -66,12 +96,43 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
+  }
 
-    _initialized = true;
+  Future<void> showRemoteNotification({
+    required int id,
+    required String title,
+    required String body,
+    required Map<String, dynamic> data,
+  }) async {
+    if (!_initialized) await initialize();
+
+    const androidDetails = AndroidNotificationDetails(
+      'clubup_notifications',
+      'ClubUp notifications',
+      channelDescription: 'Messages and activity from ClubUp',
+      importance: Importance.max,
+      priority: Priority.high,
+      enableVibration: true,
+      playSound: true,
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    await _notificationsPlugin.show(
+      id,
+      title,
+      body,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      payload: jsonEncode(data),
+    );
   }
 
   Future<void> scheduleEventReminders(Event event) async {
     if (!_initialized) await initialize();
+    await requestPermissions();
 
     await cancelEventReminders(event.id);
     await _scheduleEventReminder(

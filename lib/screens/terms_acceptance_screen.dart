@@ -21,8 +21,21 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   Future<void> _continue() async {
     if (!_agreed || _saving) return;
     setState(() => _saving = true);
-    await widget.onAccepted();
-    if (mounted) setState(() => _saving = false);
+    try {
+      await widget.onAccepted();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+            ),
+          );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override

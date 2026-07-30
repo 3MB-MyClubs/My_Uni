@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../services/app_colors.dart';
@@ -28,15 +29,20 @@ class GroupAvatarStack extends StatelessWidget {
     if (photo.isNotEmpty &&
         (isNetworkPhoto || photoFileCache.existsSync(photo))) {
       final provider = isNetworkPhoto
-          ? NetworkImage(photo) as ImageProvider
+          ? CachedNetworkImageProvider(photo) as ImageProvider
           : FileImage(File(photo));
+      final decodeSize = (size * MediaQuery.devicePixelRatioOf(context))
+          .round();
       return Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.divider),
-          image: DecorationImage(image: provider, fit: BoxFit.cover),
+          image: DecorationImage(
+            image: ResizeImage(provider, width: decodeSize, height: decodeSize),
+            fit: BoxFit.cover,
+          ),
         ),
       );
     }

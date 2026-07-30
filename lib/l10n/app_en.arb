@@ -197,6 +197,8 @@
   "couldNotOpenPage": "Could not open this page.",
   "account": "Account",
   "logOut": "Log Out",
+  "confirmLogoutTitle": "Log out?",
+  "confirmLogoutMessage": "Are you sure you want to log out of your account?",
   "editProfile": "Edit Profile",
   "editProfileSubtitle": "Photo, bio, major & year",
   "changeMyName": "Change My Name",
