@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/chat_message.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 
@@ -154,6 +156,45 @@ void main() {
         'club:c5',
       ]);
       expect(chatStore.canAccessThread('club:c4', 'cadmin6'), isFalse);
+    });
+
+    test('database-linked club admin resolves only its own community', () {
+      // Real Supabase club sessions use the linked club id itself, rather than
+      // one of the local cadmin* fixture ids, as the in-app admin identity.
+      authService.setClubAdmin(
+        AppAdmin(
+          id: 'c5',
+          name: 'Database-linked club',
+          email: 'database.club@ku.edu.tr',
+          password: '',
+        ),
+      );
+      addTearDown(authService.logout);
+
+      expect(ChatStore.isAdminAccountId('c5'), isTrue);
+      expect(chatStore.managedCommunityThreadId('c5'), 'club:c5');
+      expect(chatStore.canAccessThread('club:c5', 'c5'), isTrue);
+      expect(chatStore.canAccessThread('club:c4', 'c5'), isFalse);
+      expect(chatStore.ensureDirectThread('c5', 'u2'), isNull);
+      expect(chatStore.threadsFor('c5').map((thread) => thread.threadId), [
+        'club:c5',
+      ]);
+      expect(
+        chatStore.sendMessage(
+          threadId: 'club:c4',
+          senderId: 'c5',
+          content: 'must not cross into another club',
+        ),
+        isNull,
+      );
+      expect(
+        chatStore.sendMessage(
+          threadId: 'club:c5',
+          senderId: 'c5',
+          content: 'stays in the linked club community',
+        ),
+        isNotNull,
+      );
     });
 
     test('admin accounts cannot create, read, or send direct messages', () {

@@ -162,6 +162,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   bool _isOnboardingReplay = false;
   double? _navDragDx;
   final ChatsController _chatsController = ChatsController();
+  final FeedController _feedController = FeedController();
   late final AnimationController _tabTransitionController;
 
   // Built once and never replaced by nav taps or content-creation callbacks,
@@ -173,7 +174,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   late final List<Widget> _screens = _buildScreens();
 
   List<Widget> _buildScreens() => <Widget>[
-    FeedScreen(), // 0
+    FeedScreen(controller: _feedController), // 0
     ThisWeekScreen(isTutorialHost: true), // 1
     ExploreScreen(), // 2
     ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
@@ -313,6 +314,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
     _chatsController.dispose();
+    _feedController.dispose();
     _tabTransitionController.dispose();
     super.dispose();
   }
@@ -321,6 +323,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // ChatThreadScreen), so unlike the old Alerts tab there's nothing to
   // mark read when the Chats tab itself is selected.
   void _selectNavIndex(int index) {
+    if (index == 0 && _selectedIndex == 0) {
+      _feedController.scrollToTop();
+      return;
+    }
     if (index == 3) _chatsController.showStudents();
     if (_selectedIndex != index) {
       if (_showOnboarding) _tabTransitionController.forward(from: 0);

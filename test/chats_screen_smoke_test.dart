@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/chats_screen.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
+import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -237,6 +238,22 @@ void main() {
       find.byKey(const ValueKey('group-name-field')),
     );
     expect(nameField.decoration?.hintText, 'Enter group name');
+    final nameFocusBorder = nameField.decoration?.focusedBorder;
+    expect(nameFocusBorder, isA<OutlineInputBorder>());
+    expect(
+      (nameFocusBorder! as OutlineInputBorder).borderSide,
+      BorderSide.none,
+    );
+
+    final memberSearch = tester.widget<TextField>(
+      find.byKey(const ValueKey('create-group-member-search')),
+    );
+    final memberSearchFocusBorder = memberSearch.decoration?.focusedBorder;
+    expect(memberSearchFocusBorder, isA<OutlineInputBorder>());
+    expect(
+      (memberSearchFocusBorder! as OutlineInputBorder).borderSide,
+      BorderSide.none,
+    );
 
     final createButton = find.byKey(const ValueKey('create-group-button'));
     expect(tester.widget<FilledButton>(createButton).onPressed, isNotNull);
@@ -309,6 +326,37 @@ void main() {
     expect(find.text('Dağcılık Kulübü (KUDAK)'), findsOneWidget);
     expect(find.text('Bilgisayar Kulübü (KUACM)'), findsNothing);
     expect(find.text(S.searchStudents), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('database-linked club admin opens its community directly', (
+    tester,
+  ) async {
+    // Mirrors a real Supabase club login, whose admin id is its linked club id
+    // and therefore is not one of the local cadmin* fixture identities.
+    authService.setClubAdmin(
+      AppAdmin(
+        id: 'c5',
+        name: 'Database-linked club',
+        email: 'database.club@ku.edu.tr',
+        password: '',
+      ),
+    );
+
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ChatsScreen())),
+    );
+    await tester.pump();
+
+    final thread = tester.widget<ChatThreadScreen>(
+      find.byKey(const ValueKey('admin-community-thread')),
+    );
+    expect(thread.threadId, ChatStore.clubThreadId('c5'));
+    expect(find.text('Dağcılık Kulübü (KUDAK)'), findsOneWidget);
+    expect(find.text('Bilgisayar Kulübü (KUACM)'), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-filter-students')), findsNothing);
+    expect(find.byKey(const ValueKey('chat-filter-clubs')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -3374,6 +3374,29 @@ class AppLocalizationsTr extends AppLocalizations {
   String get youreGoing => 'Katılıyorsun';
 
   @override
+  String get signInToContinueSubtitle =>
+      'Kaldığın yerden devam etmek için giriş yap.';
+
+  @override
+  String get kocUniversityWordmark => 'KOÇ ÜNİVERSİTESİ';
+
+  @override
+  String get usernameHint => 'adınız';
+
+  @override
+  String get newToKocUniversity => 'Koç Üniversitesi\'nde yeni misin?';
+
+  @override
+  String get runningAClub => 'Bir kulüp mü yönetiyorsun?';
+
+  @override
+  String get fullNameExampleHint => 'örn. Ali Yılmaz';
+
+  @override
+  String get couldNotUseCamera =>
+      'Kamera kullanılamadı. Kamera erişimini kontrol edip tekrar dene.';
+
+  @override
   String youreInName(String name) {
     return 'Aramıza katıldın,\n$name.';
   }

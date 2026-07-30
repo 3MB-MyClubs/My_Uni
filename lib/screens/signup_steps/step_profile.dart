@@ -289,6 +289,7 @@ class _StepProfileState extends State<StepProfile> {
 
   Future<void> _pickPhoto(ImageSource source) async {
     if (_isPickingPhoto) return;
+    final cropPhotoTitle = AppLocalizations.of(context)!.cropPhoto;
     setState(() => _isPickingPhoto = true);
 
     try {
@@ -322,14 +323,14 @@ class _StepProfileState extends State<StepProfile> {
               compressQuality: PhotoUploadQuality.jpegQuality,
               uiSettings: [
                 IOSUiSettings(
-                  title: 'Crop Photo',
+                  title: cropPhotoTitle,
                   aspectRatioLockEnabled: true,
                   resetAspectRatioEnabled: true,
                   aspectRatioPickerButtonHidden: true,
                   cropStyle: CropStyle.circle,
                 ),
                 AndroidUiSettings(
-                  toolbarTitle: 'Crop Photo',
+                  toolbarTitle: cropPhotoTitle,
                   toolbarColor: SC.burgundy,
                   toolbarWidgetColor: Colors.white,
                   lockAspectRatio: true,
@@ -350,8 +351,8 @@ class _StepProfileState extends State<StepProfile> {
   void _showPhotoError(ImageSource source) {
     if (!mounted) return;
     final message = source == ImageSource.camera
-        ? 'Could not use the camera. Check camera access and try again.'
-        : 'Could not open photo cropper.';
+        ? AppLocalizations.of(context)!.couldNotUseCamera
+        : AppLocalizations.of(context)!.couldNotOpenPhotoCropper;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -627,7 +628,7 @@ class _StepProfileState extends State<StepProfile> {
                   ),
                   decoration: SC.fieldDecoration(
                     label: AppLocalizations.of(context)!.fullNameLabel,
-                    hint: 'e.g. Ali Yılmaz',
+                    hint: AppLocalizations.of(context)!.fullNameExampleHint,
                     errorText: _nameError,
                   ),
                 ),

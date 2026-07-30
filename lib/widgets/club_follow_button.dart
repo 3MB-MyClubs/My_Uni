@@ -71,14 +71,27 @@ class ClubFollowButton extends ConsumerWidget {
         ),
       ),
       child: Center(
-        child: Text(
-          isFollowing
-              ? AppLocalizations.of(context)!.following
-              : AppLocalizations.of(context)!.follow,
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-            color: isFollowing ? AppColors.secondaryText : Colors.white,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            isFollowing
+                ? AppLocalizations.of(context)!.following
+                : AppLocalizations.of(context)!.follow,
+            key: ValueKey(isFollowing),
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: isFollowing ? AppColors.secondaryText : Colors.white,
+            ),
           ),
         ),
       ),

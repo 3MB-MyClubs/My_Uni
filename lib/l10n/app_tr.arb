@@ -915,5 +915,12 @@
   "yourEmailFallback": "e-postan",
   "yourKuDay": "Senin KU Günün",
   "youreGoing": "Katılıyorsun",
+  "signInToContinueSubtitle": "Kaldığın yerden devam etmek için giriş yap.",
+  "kocUniversityWordmark": "KOÇ ÜNİVERSİTESİ",
+  "usernameHint": "adınız",
+  "newToKocUniversity": "Koç Üniversitesi'nde yeni misin?",
+  "runningAClub": "Bir kulüp mü yönetiyorsun?",
+  "fullNameExampleHint": "örn. Ali Yılmaz",
+  "couldNotUseCamera": "Kamera kullanılamadı. Kamera erişimini kontrol edip tekrar dene.",
   "youreInName": "Aramıza katıldın,\n{name}."
 }

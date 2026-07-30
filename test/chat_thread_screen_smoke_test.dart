@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/screens/group_info_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
+import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -17,9 +19,20 @@ import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
+import 'package:flutter_application_1/widgets/loading_skeleton.dart';
 import 'package:flutter_application_1/widgets/presence_avatar.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
 import 'package:hive/hive.dart';
+
+void expectNoVisibleFocusedBorder(TextField field) {
+  final border = field.decoration?.focusedBorder;
+  expect(border, isNotNull);
+  if (border is OutlineInputBorder) {
+    expect(border.borderSide, BorderSide.none);
+  } else {
+    expect(border, InputBorder.none);
+  }
+}
 
 void main() {
   late Directory tempDir;
@@ -28,6 +41,16 @@ void main() {
     tempDir = await Directory.systemTemp.createTemp(
       'chat_thread_screen_smoke_test_',
     );
+    final avatarFile = File('${tempDir.path}/test-avatar.png')
+      ..writeAsBytesSync(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        ),
+      );
+    for (var i = 1; i <= 15; i++) {
+      userState.setProfilePhoto('u$i', avatarFile.path);
+    }
+    userState.setClubPhoto('c5', avatarFile.path);
     Hive.init(tempDir.path);
     await contentStore.initialize();
     await chatStore.initialize();
@@ -35,7 +58,6 @@ void main() {
       'u2': 'Can Serbester',
       'u3': 'Emir Karaarslan',
       'u4': 'Deniz Kaya',
-      'u5': 'Hakan Tuncay',
       'u6': 'Elif Şahin',
     };
     for (final entry in names.entries) {
@@ -54,7 +76,6 @@ void main() {
 
   tearDownAll(() async {
     await chatStore.saveAll();
-    await Hive.close();
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
@@ -93,6 +114,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(TextField), findsOneWidget);
+    expectNoVisibleFocusedBorder(
+      tester.widget<TextField>(find.byType(TextField)),
+    );
     expect(
       find.descendant(
         of: find.byType(PresenceAvatar),
@@ -100,8 +124,57 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('Can Serbester'), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
     expect(find.text('Computer Engineering · 3rd Year'), findsOneWidget);
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('DM header resolves the participant profile name', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+    const peerId = 'u5';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ChatThreadScreen(threadId: ChatStore.dmThreadId('u1', peerId)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Hakan Tuncay'), findsOneWidget);
+    expect(find.text('Student'), findsNothing);
+    expect(find.text('?'), findsNothing);
+    expect(find.text(peerId), findsNothing);
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unresolved DM avatar loads without showing a question mark', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+    const peerId = 'fd6ee260-7327-4e51-9828-6885c4c90800';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ChatThreadScreen(threadId: ChatStore.dmThreadId('u1', peerId)),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(SkeletonBox), findsWidgets);
+    expect(find.text('?'), findsNothing);
+    expect(find.text('Student'), findsNothing);
+    expect(find.text(peerId), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });
 
@@ -216,6 +289,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(GroupInfoScreen), findsOneWidget);
     expect(find.byKey(const ValueKey('edit-group-name-field')), findsOneWidget);
+    expectNoVisibleFocusedBorder(
+      tester.widget<TextField>(
+        find.byKey(const ValueKey('edit-group-name-field')),
+      ),
+    );
 
     await tester.tap(find.byKey(const ValueKey('group-member-actions-u2')));
     await tester.pumpAndSettle();
@@ -251,7 +329,7 @@ void main() {
   });
 
   testWidgets(
-    'group message runs show sender avatars beside final bubbles on both sides',
+    'group messages show the incoming sender photo and name on every bubble',
     (tester) async {
       authService.login('alice@ku.edu.tr', '111111');
       final threadId = chatStore.createGroupThread(
@@ -281,20 +359,25 @@ void main() {
       );
       await tester.pump();
 
-      expect(
-        find.byKey(ValueKey('group-message-avatar-${first.id}')),
-        findsNothing,
-      );
-      final avatar = find.byKey(ValueKey('group-message-avatar-${last.id}'));
-      expect(avatar, findsOneWidget);
-      expect(
-        tester
-            .widget<UserAvatar>(
-              find.descendant(of: avatar, matching: find.byType(UserAvatar)),
-            )
-            .userId,
-        'u2',
-      );
+      for (final message in [first, last]) {
+        final avatar = find.byKey(
+          ValueKey('group-message-avatar-${message.id}'),
+        );
+        expect(avatar, findsOneWidget);
+        expect(
+          tester
+              .widget<UserAvatar>(
+                find.descendant(of: avatar, matching: find.byType(UserAvatar)),
+              )
+              .userId,
+          'u2',
+        );
+        expect(
+          find.descendant(of: avatar, matching: find.byType(Image)),
+          findsOneWidget,
+        );
+      }
+      expect(find.text('Can Serbester'), findsNWidgets(2));
       final myAvatar = find.byKey(ValueKey('group-message-avatar-${mine.id}'));
       expect(myAvatar, findsOneWidget);
       expect(
@@ -305,7 +388,7 @@ void main() {
             .userId,
         'u1',
       );
-      await tester.pump(const Duration(seconds: 1));
+      await tester.runAsync(chatStore.saveAll);
       expect(tester.takeException(), isNull);
     },
   );
@@ -334,6 +417,16 @@ void main() {
     await themeService.setDark(false);
     authService.login('alice@ku.edu.tr', '111111');
     userState.followedClubIds.add('c5');
+    final incomingFirst = chatStore.sendMessage(
+      threadId: 'club:c5',
+      senderId: 'u2',
+      content: 'First incoming community message',
+    )!;
+    final incomingSecond = chatStore.sendMessage(
+      threadId: 'club:c5',
+      senderId: 'u2',
+      content: 'Second incoming community message',
+    )!;
 
     await tester.pumpWidget(
       const ProviderScope(
@@ -343,6 +436,32 @@ void main() {
     await tester.pump();
 
     expect(find.byType(TextField), findsOneWidget);
+    expectNoVisibleFocusedBorder(
+      tester.widget<TextField>(find.byType(TextField)),
+    );
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).decoration?.hintText,
+      S.communityComposerHint,
+    );
+    for (final message in [incomingFirst, incomingSecond]) {
+      final messageRow = find.byKey(ValueKey('club-message-${message.id}'));
+      expect(messageRow, findsOneWidget);
+      expect(
+        tester
+            .widget<UserAvatar>(
+              find.descendant(
+                of: messageRow,
+                matching: find.byType(UserAvatar),
+              ),
+            )
+            .userId,
+        'u2',
+      );
+      expect(
+        find.descendant(of: messageRow, matching: find.text('Can Serbester')),
+        findsOneWidget,
+      );
+    }
     expect(find.text(S.joinToChat), findsNothing);
     expect(
       find.text(S.communityMembers(clubMemberCount('c5'))),
@@ -356,6 +475,18 @@ void main() {
       ),
       findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const ValueKey('club-members-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('club-member-row-u1')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('club-member-row-u1')),
+        matching: find.text(S.you),
+      ),
+      findsOneWidget,
+    );
+    await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });
 
@@ -376,6 +507,76 @@ void main() {
     expect(find.text('100+ Members'), findsOneWidget);
     expect(find.text('243 Members'), findsNothing);
     expect(find.text('0 Online'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('database-linked club can publish rich community posts safely', (
+    tester,
+  ) async {
+    authService.setClubAdmin(
+      AppAdmin(
+        id: 'c5',
+        name: 'Database-linked club',
+        email: 'database.club@ku.edu.tr',
+        password: '',
+      ),
+    );
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: 'club:c5')),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(S.postAsAnnouncement));
+    await tester.pumpAndSettle();
+
+    for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
+      expectNoVisibleFocusedBorder(field);
+    }
+
+    Finder fieldWithHint(String hint) => find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.hintText == hint,
+    );
+
+    const title = 'Community posting regression announcement';
+    await tester.enterText(fieldWithHint(S.announcementTitleHint), title);
+    await tester.enterText(fieldWithHint(S.typeMessage), 'Announcement body');
+    await tester.tap(find.text(S.post));
+    await tester.pumpAndSettle();
+
+    // The default pinned announcement appears both in the stream and in the
+    // pinned strip above it.
+    expect(find.text(title), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('club-attach-button')));
+    await tester.pump();
+    await tester.tap(find.text(S.attachPoll));
+    await tester.pumpAndSettle();
+
+    const question = 'Which community activity should be next?';
+    await tester.enterText(fieldWithHint(S.pollQuestion), question);
+    await tester.enterText(fieldWithHint(S.pollOptionLabel(1)), 'Workshop');
+    await tester.enterText(fieldWithHint(S.pollOptionLabel(2)), 'Social');
+    await tester.tap(find.text(S.post));
+    await tester.pumpAndSettle();
+
+    expect(find.text(question), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('club-attach-button')));
+    await tester.pump();
+    await tester.tap(find.text(S.attachEvent));
+    await tester.pumpAndSettle();
+
+    expect(find.text(S.shareEvent), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('club-event-ev3')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Uludağ Kış Tırmanışı'), findsOneWidget);
+    await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/signup_service.dart';
+import '../widgets/language_toggle.dart';
 import 'signup_steps/signup_theme.dart';
 import 'signup_steps/step_email.dart';
 import 'signup_steps/step_verify.dart';
@@ -136,6 +137,8 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                         onPressed: _goBack,
                       ),
                       const Spacer(),
+                      const LanguageToggle(),
+                      const SizedBox(width: 14),
                       Text(
                         '${_currentStep + 1} / $_totalSteps',
                         style: TextStyle(

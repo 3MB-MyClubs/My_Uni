@@ -18,31 +18,13 @@ class StepEmail extends StatefulWidget {
   State<StepEmail> createState() => _StepEmailState();
 }
 
-// Splits the localized "only @ku.edu.tr addresses" sentence around the
-// literal domain so it can stay bold in every language.
-List<TextSpan> _kuEmailInfoSpans(BuildContext context) {
-  const domain = '@ku.edu.tr';
-  final text = AppLocalizations.of(context)!.onlyKuEmailInfoText;
-  final idx = text.indexOf(domain);
-  if (idx < 0) {
-    return [TextSpan(text: text)];
-  }
-  return [
-    if (idx > 0) TextSpan(text: text.substring(0, idx)),
-    TextSpan(
-      text: domain,
-      style: TextStyle(fontWeight: FontWeight.w700),
-    ),
-    if (idx + domain.length < text.length)
-      TextSpan(text: text.substring(idx + domain.length)),
-  ];
-}
-
 class _StepEmailState extends State<StepEmail> {
   late final TextEditingController _controller;
   String? _error;
   bool _isSubmitting = false;
 
+  static const _domain = '@ku.edu.tr';
+  static final _localPartRegex = RegExp(r'^[a-zA-Z0-9_.+-]+$');
   static final _emailRegex = RegExp(r'^[a-zA-Z0-9_.+-]+@ku\.edu\.tr$');
 
   @override
@@ -61,16 +43,17 @@ class _StepEmailState extends State<StepEmail> {
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
-    final val = _controller.text.trim();
-    if (val.isEmpty) {
+    final input = _controller.text.trim().toLowerCase();
+    if (input.isEmpty) {
       setState(
-        () => _error = AppLocalizations.of(
-          context,
-        )!.pleaseEnterUniversityEmail,
+        () => _error = AppLocalizations.of(context)!.pleaseEnterUniversityEmail,
       );
       return;
     }
-    if (!_emailRegex.hasMatch(val)) {
+
+    final email = input.contains('@') ? input : '$input$_domain';
+    if (!_emailRegex.hasMatch(email) ||
+        !_localPartRegex.hasMatch(email.substring(0, email.indexOf('@')))) {
       setState(
         () => _error = AppLocalizations.of(context)!.onlyKuAddressesAccepted,
       );
@@ -80,12 +63,21 @@ class _StepEmailState extends State<StepEmail> {
       _error = null;
       _isSubmitting = true;
     });
-    final error = await widget.onNext(val);
+    final error = await widget.onNext(email);
     if (!mounted) return;
     setState(() {
       _error = error;
       _isSubmitting = false;
     });
+  }
+
+  void _normalizePastedAddress(String value) {
+    if (!value.toLowerCase().endsWith(_domain)) return;
+    final localPart = value.substring(0, value.length - _domain.length);
+    _controller.value = TextEditingValue(
+      text: localPart,
+      selection: TextSelection.collapsed(offset: localPart.length),
+    );
   }
 
   @override
@@ -133,6 +125,7 @@ class _StepEmailState extends State<StepEmail> {
                   autofocus: true,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.done,
+                  onChanged: _normalizePastedAddress,
                   onSubmitted: (_) => _submit(),
                   style: TextStyle(
                     color: SC.ink,
@@ -141,59 +134,9 @@ class _StepEmailState extends State<StepEmail> {
                   ),
                   decoration: SC.fieldDecoration(
                     label: AppLocalizations.of(context)!.universityEmailLabel,
-                    hint: 'you@ku.edu.tr',
-                    suffixText: '@ku.edu.tr',
+                    hint: 'htuncay23',
+                    suffixText: _domain,
                     errorText: _error,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Info box — circular "i" icon
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: SC.burgundyTint,
-                    borderRadius: BorderRadius.all(Radius.circular(10)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: SC.burgundy,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'i',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              height: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              color: SC.burgundyDeep,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
-                            children: _kuEmailInfoSpans(context),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],

@@ -3384,6 +3384,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get youreGoing => 'You\'re going';
 
   @override
+  String get signInToContinueSubtitle =>
+      'Sign in to pick up where you left off.';
+
+  @override
+  String get kocUniversityWordmark => 'KOÇ UNIVERSITY';
+
+  @override
+  String get usernameHint => 'yourname';
+
+  @override
+  String get newToKocUniversity => 'New to Koç University?';
+
+  @override
+  String get runningAClub => 'Running a club?';
+
+  @override
+  String get fullNameExampleHint => 'e.g. Ali Yılmaz';
+
+  @override
+  String get couldNotUseCamera =>
+      'Could not use the camera. Check camera access and try again.';
+
+  @override
   String youreInName(String name) {
     return 'You\'re in,\n$name.';
   }
