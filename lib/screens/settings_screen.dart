@@ -119,6 +119,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .toList();
   }
 
+  String _localizedClubCategory(BuildContext context, String category) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (category.trim().toLowerCase()) {
+      'academic' => l10n.categoryAcademic,
+      'arts' => l10n.categoryArts,
+      'business' => l10n.categoryBusiness,
+      'career' => l10n.categoryCareer,
+      'engineering' => l10n.categoryEngineering,
+      'music' => l10n.categoryMusic,
+      'social' => l10n.categorySocial,
+      'social impact' => l10n.categorySocialImpact,
+      'sports' => l10n.categorySports,
+      'tech' => l10n.categoryTech,
+      'wellness' => l10n.categoryWellness,
+      _ => category,
+    };
+  }
+
   // ── Club photo ──────────────────────────────────────────────────────────────
   void _showClubPhotoOptions(Club club) {
     showModalBottomSheet(
@@ -570,7 +588,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       for (final category in _clubCategoryOptions)
                         FilterChip(
-                          label: Text(category),
+                          label: Text(_localizedClubCategory(ctx, category)),
                           selected: selected.contains(category),
                           selectedColor: AppColors.lightRed,
                           checkmarkColor: AppColors.primaryRed,
@@ -1009,7 +1027,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: Text(
                             _clubCategories(club).isEmpty
                                 ? AppLocalizations.of(context)!.addDiscoveryTags
-                                : _clubCategories(club).join(', '),
+                                : _clubCategories(club)
+                                      .map(
+                                        (category) => _localizedClubCategory(
+                                          context,
+                                          category,
+                                        ),
+                                      )
+                                      .join(', '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

@@ -9,6 +9,10 @@ enum ClubMessageStyle { rows, bubbles, cards }
 /// How much visual weight an officer announcement carries.
 enum ClubAnnouncementEmphasis { subtle, tinted, bold }
 
+/// Built-in community wallpapers. Stored by thread so every club can keep a
+/// distinct background without requiring image-file permissions.
+enum ClubChatBackground { classic, warm, ocean, forest, midnight }
+
 /// Per-device display preferences for the club community screen.
 ///
 /// Reading before [initialize] returns the defaults from the design
@@ -22,6 +26,7 @@ class ClubChatPrefs extends ChangeNotifier {
   ClubAnnouncementEmphasis _emphasis = ClubAnnouncementEmphasis.tinted;
   bool _showRoles = true;
   final Set<String> _mutedThreadIds = {};
+  final Map<String, ClubChatBackground> _backgroundsByThreadId = {};
 
   /// Pinned strips the reader dismissed, by message id. Kept per device so a
   /// dismissed strip stays dismissed but a newly pinned notice comes back.
@@ -30,6 +35,9 @@ class ClubChatPrefs extends ChangeNotifier {
   ClubMessageStyle get messageStyle => _messageStyle;
   ClubAnnouncementEmphasis get announcementEmphasis => _emphasis;
   bool get showRoles => _showRoles;
+
+  ClubChatBackground backgroundFor(String threadId) =>
+      _backgroundsByThreadId[threadId] ?? ClubChatBackground.classic;
 
   bool isMuted(String threadId) => _mutedThreadIds.contains(threadId);
 
@@ -68,6 +76,21 @@ class ClubChatPrefs extends ChangeNotifier {
     _dismissedPinIds
       ..clear()
       ..addAll(_readIds('dismissedPinIds'));
+    final storedBackgrounds = _box!.get('backgroundsByThreadId');
+    if (storedBackgrounds is Map) {
+      _backgroundsByThreadId
+        ..clear()
+        ..addEntries(
+          storedBackgrounds.entries.map((entry) {
+            final stored = entry.value?.toString();
+            final background = ClubChatBackground.values.firstWhere(
+              (value) => value.name == stored,
+              orElse: () => ClubChatBackground.classic,
+            );
+            return MapEntry(entry.key.toString(), background);
+          }),
+        );
+    }
     notifyListeners();
   }
 
@@ -98,6 +121,19 @@ class ClubChatPrefs extends ChangeNotifier {
     if (_showRoles == value) return;
     _showRoles = value;
     _persist('showRoles', value);
+  }
+
+  void setBackground(String threadId, ClubChatBackground value) {
+    if (threadId.isEmpty || backgroundFor(threadId) == value) return;
+    if (value == ClubChatBackground.classic) {
+      _backgroundsByThreadId.remove(threadId);
+    } else {
+      _backgroundsByThreadId[threadId] = value;
+    }
+    _persist('backgroundsByThreadId', {
+      for (final entry in _backgroundsByThreadId.entries)
+        entry.key: entry.value.name,
+    });
   }
 
   void _persist(String key, Object value) {

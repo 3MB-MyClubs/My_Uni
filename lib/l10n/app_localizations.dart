@@ -2354,11 +2354,23 @@ abstract class AppLocalizations {
   /// **'Business'**
   String get categoryBusiness;
 
+  /// No description provided for @categoryCareer.
+  ///
+  /// In en, this message translates to:
+  /// **'Career'**
+  String get categoryCareer;
+
   /// No description provided for @categoryEngineering.
   ///
   /// In en, this message translates to:
   /// **'Engineering'**
   String get categoryEngineering;
+
+  /// No description provided for @categoryMusic.
+  ///
+  /// In en, this message translates to:
+  /// **'Music'**
+  String get categoryMusic;
 
   /// No description provided for @categorySocial.
   ///
@@ -2366,11 +2378,29 @@ abstract class AppLocalizations {
   /// **'Social'**
   String get categorySocial;
 
+  /// No description provided for @categorySocialImpact.
+  ///
+  /// In en, this message translates to:
+  /// **'Social Impact'**
+  String get categorySocialImpact;
+
   /// No description provided for @categorySports.
   ///
   /// In en, this message translates to:
   /// **'Sports'**
   String get categorySports;
+
+  /// No description provided for @categoryTech.
+  ///
+  /// In en, this message translates to:
+  /// **'Tech'**
+  String get categoryTech;
+
+  /// No description provided for @categoryWellness.
+  ///
+  /// In en, this message translates to:
+  /// **'Wellness'**
+  String get categoryWellness;
 
   /// No description provided for @changeEventPhoto.
   ///

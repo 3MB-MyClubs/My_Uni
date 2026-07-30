@@ -12,6 +12,7 @@ import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
+import 'package:flutter_application_1/services/club_chat_prefs.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
@@ -507,6 +508,84 @@ void main() {
     expect(find.text('100+ Members'), findsOneWidget);
     expect(find.text('243 Members'), findsNothing);
     expect(find.text('0 Online'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('club members cannot change the community background', (
+    tester,
+  ) async {
+    authService.login('alice@ku.edu.tr', '111111');
+    userState.followedClubIds.add('c5');
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: 'club:c5')),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text(S.changeChatBackground), findsNothing);
+    expect(
+      find.byKey(const ValueKey('club-background-option-ocean')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('club admin changes the background from the three-dot menu', (
+    tester,
+  ) async {
+    const threadId = 'club:c5';
+    clubChatPrefs.setBackground(threadId, ClubChatBackground.classic);
+    addTearDown(
+      () => clubChatPrefs.setBackground(threadId, ClubChatBackground.classic),
+    );
+    authService.setClubAdmin(
+      AppAdmin(
+        id: 'c5',
+        name: 'Database-linked club',
+        email: 'database.club@ku.edu.tr',
+        password: '',
+      ),
+    );
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('club-chat-background-classic')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text(S.changeChatBackground), findsOneWidget);
+
+    await tester.tap(find.text(S.changeChatBackground));
+    await tester.pumpAndSettle();
+    expect(find.text(S.chatBackground), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('club-background-option-ocean')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('club-background-option-ocean')),
+    );
+    await tester.pump();
+    expect(clubChatPrefs.backgroundFor(threadId), ClubChatBackground.ocean);
+    await tester.tap(find.text(S.done));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('club-chat-background-ocean')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
