@@ -11,11 +11,16 @@ import 'supabase_config.dart';
 class PushNotificationTarget {
   const PushNotificationTarget({
     required this.type,
+    this.notificationType,
     this.targetId,
     this.notificationId,
   });
 
+  /// Navigation destination such as `post`, `event`, `user`, or `message`.
   final String type;
+
+  /// The event that produced the notification, such as `group_message`.
+  final String? notificationType;
   final String? targetId;
   final String? notificationId;
 
@@ -26,7 +31,10 @@ class PushNotificationTarget {
     }
 
     return PushNotificationTarget(
-      type: value('type') ?? value('target_type') ?? 'notification',
+      // `type` describes the event (for example `club_post`), while
+      // `target_type` is the screen the user should be sent to.
+      type: value('target_type') ?? value('type') ?? 'notification',
+      notificationType: value('type'),
       targetId: value('target_id'),
       notificationId: value('notification_id'),
     );

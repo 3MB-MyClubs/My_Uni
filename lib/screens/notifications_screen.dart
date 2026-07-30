@@ -97,6 +97,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       read: row['read_at'] != null,
       targetType: row['target_type'] as String?,
       targetId: row['target_id'] as String?,
+      notificationType: row['type'] as String?,
     );
   }
 
@@ -247,10 +248,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type == null || id == null) return;
     switch (type) {
       case 'post':
-        final post = newsPosts.firstWhere(
-          (p) => p.id == id,
-          orElse: () => newsPosts.first,
-        );
+        final index = newsPosts.indexWhere((post) => post.id == id);
+        if (index < 0) return;
+        final post = newsPosts[index];
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -261,10 +261,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         );
       case 'club':
-        final club = clubs.firstWhere(
-          (c) => c.id == id,
-          orElse: () => clubs.first,
-        );
+        final club = clubForId(id);
+        if (club == null) return;
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -273,10 +271,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         );
       case 'event':
-        final event = events.firstWhere(
-          (e) => e.id == id,
-          orElse: () => events.first,
-        );
+        final index = events.indexWhere((event) => event.id == id);
+        if (index < 0) return;
+        final event = events[index];
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -288,10 +285,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       case 'user':
       case 'follow_accepted':
-        final user = users.firstWhere(
-          (u) => u.id == id,
-          orElse: () => users.first,
-        );
+        final index = users.indexWhere((user) => user.id == id);
+        if (index < 0) return;
+        final user = users[index];
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
@@ -300,10 +296,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         // Admin accounts never enter direct-message routes, including from
         // stale notifications created by older app versions.
         if (ChatStore.isAdminAccountId(_myId)) return;
-        if (ChatStore.isGroupThread(id)) {
+        if (n.notificationType == 'group_message' ||
+            ChatStore.isGroupThread(id)) {
+          final threadId = ChatStore.isGroupThread(id) ? id : 'group:$id';
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ChatThreadScreen(threadId: id)),
+            MaterialPageRoute(
+              builder: (_) => ChatThreadScreen(threadId: threadId),
+            ),
           );
           return;
         }

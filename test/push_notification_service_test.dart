@@ -23,6 +23,18 @@ void main() {
     expect(PushNotificationTarget.fromData(const {}).type, 'notification');
   });
 
+  test('prefers navigation target_type over notification event type', () {
+    final target = PushNotificationTarget.fromData({
+      'type': 'group_message',
+      'target_type': 'message',
+      'target_id': 'group-123',
+    });
+
+    expect(target.type, 'message');
+    expect(target.notificationType, 'group_message');
+    expect(target.targetId, 'group-123');
+  });
+
   test('localizes club post copy in English and Turkish', () {
     final args = {'clubName': 'KU Music', 'content': 'Concert tonight'};
     final english = localizedPushNotificationCopy(

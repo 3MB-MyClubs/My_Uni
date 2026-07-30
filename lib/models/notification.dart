@@ -7,6 +7,8 @@ class AppNotification {
   // 'post' | 'club' | 'event' | 'user' | 'message' | 'follow_request' | 'follow_accepted'
   final String? targetType;
   final String? targetId;
+  // Event that produced a remote notification (for example 'group_message').
+  final String? notificationType;
   // For follow_request: the ID of the user who sent the request.
   final String? fromId;
 
@@ -18,6 +20,7 @@ class AppNotification {
     this.read = false,
     this.targetType,
     this.targetId,
+    this.notificationType,
     this.fromId,
   });
 
@@ -29,6 +32,7 @@ class AppNotification {
     'read': read,
     'targetType': targetType,
     'targetId': targetId,
+    'notificationType': notificationType,
     'fromId': fromId,
   };
 
@@ -40,6 +44,7 @@ class AppNotification {
     read: m['read'] as bool? ?? false,
     targetType: m['targetType'] as String?,
     targetId: m['targetId'] as String?,
+    notificationType: m['notificationType'] as String?,
     fromId: m['fromId'] as String?,
   );
 }

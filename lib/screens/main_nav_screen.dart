@@ -28,6 +28,11 @@ import 'chats_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
+import 'chat_thread_screen.dart';
+import 'club_profile_screen.dart';
+import 'event_detail_screen.dart';
+import 'post_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 /// Presents the older club-admin create chooser used by visual drive tests and
 /// any explicit callers that still need a Post/Event split.
@@ -217,12 +222,102 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   void _onPushNotificationOpened() {
     final target = pushNotificationService.takePendingTarget();
     if (!mounted || target == null) return;
-    final selectedIndex = target.type == 'message' || target.type == 'chat'
-        ? 3
-        : 0;
-    if (_selectedIndex != selectedIndex) {
-      setState(() => _selectedIndex = selectedIndex);
+    unawaited(_openPushNotificationTarget(target));
+  }
+
+  Future<void> _openPushNotificationTarget(
+    PushNotificationTarget target,
+  ) async {
+    await appBootstrap.ready;
+    if (!mounted) return;
+
+    final id = target.targetId;
+    switch (target.type) {
+      case 'message':
+      case 'chat':
+        if (ChatStore.isAdminAccountId(_currentUserId)) return;
+        _selectNavIndex(3);
+        if (id == null) return;
+        final isGroup =
+            target.notificationType == 'group_message' ||
+            ChatStore.isGroupThread(id);
+        final threadId = isGroup
+            ? (ChatStore.isGroupThread(id) ? id : 'group:$id')
+            : ChatStore.dmThreadId(_currentUserId, id);
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ChatThreadScreen(threadId: threadId),
+          ),
+        );
+      case 'post':
+        _selectNavIndex(0);
+        if (id == null) return;
+        final index = newsPosts.indexWhere((post) => post.id == id);
+        if (index < 0) return;
+        final post = newsPosts[index];
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PostDetailScreen(
+              post: post,
+              clubColor: _colorForNotificationClub(post.clubId),
+            ),
+          ),
+        );
+      case 'event':
+        _selectNavIndex(1);
+        if (id == null) return;
+        final index = events.indexWhere((event) => event.id == id);
+        if (index < 0) return;
+        final event = events[index];
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EventDetailScreen(
+              event: event,
+              color: _colorForNotificationClub(event.clubId),
+            ),
+          ),
+        );
+      case 'club':
+        _selectNavIndex(2);
+        if (id == null) return;
+        final club = clubForId(id);
+        if (club == null) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ClubProfileScreen(
+              club: club,
+              color: _colorForNotificationClub(id),
+            ),
+          ),
+        );
+      case 'user':
+      case 'profile':
+      case 'follow_accepted':
+        _selectNavIndex(2);
+        if (id == null) return;
+        final index = users.indexWhere((user) => user.id == id);
+        if (index < 0) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => UserProfileScreen(user: users[index]),
+          ),
+        );
+      default:
+        _selectNavIndex(0);
     }
+  }
+
+  Color _colorForNotificationClub(String clubId) {
+    const colors = <Color>[
+      Color(0xFFB41C18),
+      Color(0xFF1565C0),
+      Color(0xFF2E7D32),
+      Color(0xFF6A1B9A),
+      Color(0xFFE65100),
+      Color(0xFF00838F),
+    ];
+    final ordinal = clubOrdinal(clubId);
+    return colors[(ordinal < 0 ? 0 : ordinal) % colors.length];
   }
 
   void _onThemeOrLocaleChanged() {
