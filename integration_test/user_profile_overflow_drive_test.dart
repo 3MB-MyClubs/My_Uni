@@ -60,6 +60,9 @@ void main() {
     await binding.takeScreenshot('user-profile-long-major');
 
     expect(find.text('Efe Dinc'), findsWidgets); // app bar title + header
-    expect(tester.takeException(), isNull); // would fail on a RenderFlex overflow
+    expect(
+      tester.takeException(),
+      isNull,
+    ); // would fail on a RenderFlex overflow
   });
 }

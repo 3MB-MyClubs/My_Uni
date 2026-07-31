@@ -376,7 +376,9 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
                   ),
                 ),
                 Text(
-                  AppLocalizations.of(context)!.calendarItemsThisMonth(_monthCount),
+                  AppLocalizations.of(
+                    context,
+                  )!.calendarItemsThisMonth(_monthCount),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -495,7 +497,11 @@ class _MyCalendarScreenState extends State<MyCalendarScreen> {
   Widget _buildFilterChips() {
     final l10n = AppLocalizations.of(context)!;
     final filters = [
-      (type: null as CalEventType?, label: l10n.all, color: AppColors.primaryRed),
+      (
+        type: null as CalEventType?,
+        label: l10n.all,
+        color: AppColors.primaryRed,
+      ),
       (
         type: CalEventType.event,
         label: l10n.calendarFilterRsvpd,
@@ -1168,7 +1174,9 @@ class _AgendaItemState extends State<_AgendaItem> {
                             border: Border.all(color: AppColors.divider),
                           ),
                           child: Text(
-                            AppLocalizations.of(context)!.calendarYoursTapToEdit,
+                            AppLocalizations.of(
+                              context,
+                            )!.calendarYoursTapToEdit,
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
@@ -1250,8 +1258,12 @@ class _AgendaItemState extends State<_AgendaItem> {
                               _syncing
                                   ? AppLocalizations.of(context)!.addingEllipsis
                                   : _isSynced
-                                  ? AppLocalizations.of(context)!.calendarAddedToPhone
-                                  : AppLocalizations.of(context)!.calendarAddToPhone,
+                                  ? AppLocalizations.of(
+                                      context,
+                                    )!.calendarAddedToPhone
+                                  : AppLocalizations.of(
+                                      context,
+                                    )!.calendarAddToPhone,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1629,7 +1641,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SectionLabel(AppLocalizations.of(context)!.startsLabel),
+                        _SectionLabel(
+                          AppLocalizations.of(context)!.startsLabel,
+                        ),
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: () => _pickTime(true),
@@ -1657,7 +1671,9 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
               const SizedBox(height: 14),
 
               // Location
-              _SectionLabel(AppLocalizations.of(context)!.locationOptionalLabel),
+              _SectionLabel(
+                AppLocalizations.of(context)!.locationOptionalLabel,
+              ),
               const SizedBox(height: 8),
               _Field(
                 controller: _locCtrl,

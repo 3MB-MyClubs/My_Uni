@@ -240,10 +240,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             const SizedBox(width: 8),
             Text(
-              AppLocalizations.of(context)!.followersAndRsvpsSummary(
-                stat.followers,
-                stat.totalRsvps,
-              ),
+              AppLocalizations.of(
+                context,
+              )!.followersAndRsvpsSummary(stat.followers, stat.totalRsvps),
               style: TextStyle(fontSize: 11.5, color: AppColors.secondaryText),
             ),
             Icon(

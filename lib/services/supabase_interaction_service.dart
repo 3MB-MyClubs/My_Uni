@@ -270,6 +270,11 @@ class SupabaseInteractionService {
 
   // ── Comments ────────────────────────────────────────────────────────────────
 
+  // The live post_comments table has no parent_comment_id: migration 001
+  // reserved one for threading but the deployed table never got it, so asking
+  // for that column made every comment read and the insert's returning select
+  // fail with an undefined-column error. Threading stays a model-level
+  // placeholder until the column actually exists.
   Comment _commentFromRow(Map row) => Comment(
     id: row['id']?.toString() ?? '',
     postId: row['post_id']?.toString() ?? '',
@@ -290,7 +295,7 @@ class SupabaseInteractionService {
     final rows = await client
         .from('post_comments')
         .select(
-          'id, post_id, profile_id, content, parent_comment_id, created_at, '
+          'id, post_id, profile_id, content, created_at, '
           'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
         )
         .eq('post_id', postId)
@@ -346,9 +351,7 @@ class SupabaseInteractionService {
           'profile_id': profileId,
           'content': content,
         })
-        .select(
-          'id, post_id, profile_id, content, parent_comment_id, created_at',
-        )
+        .select('id, post_id, profile_id, content, created_at')
         .single();
     return _commentFromRow(row);
   }
@@ -357,6 +360,44 @@ class SupabaseInteractionService {
     final client = _client;
     if (client == null || commentId.isEmpty) return;
     await client.from('post_comments').delete().eq('id', commentId);
+  }
+
+  /// Subscribes to inserts, updates and deletes on [postId]'s comment thread.
+  ///
+  /// [onChanged] is a signal, not the new row: comment traffic is low enough
+  /// that refetching the thread is cheaper to get right than reconstructing it
+  /// from payloads, which for a delete carry only the row's own columns and
+  /// never the joined commenter profile an insert needs.
+  ///
+  /// Returns null when Supabase is unavailable, so callers stay usable offline.
+  RealtimeChannel? subscribeToComments(
+    String postId, {
+    required void Function() onChanged,
+  }) {
+    final client = _client;
+    if (client == null || postId.isEmpty) return null;
+
+    final channel = client
+        .channel('post-comments:$postId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'post_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'post_id',
+            value: postId,
+          ),
+          callback: (_) => onChanged(),
+        );
+    channel.subscribe();
+    return channel;
+  }
+
+  Future<void> unsubscribe(RealtimeChannel channel) async {
+    final client = _client;
+    if (client == null) return;
+    await client.removeChannel(channel);
   }
 
   Future<void> _insertIgnoringDuplicate(

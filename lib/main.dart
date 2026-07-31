@@ -16,7 +16,6 @@ import 'screens/signup_flow_screen.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
 import 'screens/onboarding_carousel_screen.dart';
-import 'screens/terms_acceptance_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_data.dart' show appAdmin;
@@ -430,6 +429,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         final isDark = themeService.isDark;
         Widget homeWidget;
         String destinationKey;
+        // No Terms gate lives in this chain. The agreement is made once, on
+        // the sign-up flow's last step, and recorded against the account by
+        // [SignupService]. The gate that used to sit here keyed off a
+        // device-local SharedPreferences flag rather than that account-level
+        // record, so signing in on a second device — or after a reinstall —
+        // re-prompted people who had already agreed.
         if (_showIntroThisLaunch &&
             !_showSignUp &&
             !_loggedIn &&
@@ -442,24 +447,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             onLogIn: () => unawaited(_dismissIntro(showSignUp: false)),
           );
           destinationKey = 'onboarding';
-        } else if (!termsAcceptanceService.hasAcceptedCurrentTerms &&
-            !_showSignUp &&
-            onboardingIntroService.hasCompletedOnceOnDevice) {
-          // New sign-ups accept the Terms via the checkbox on the sign-up
-          // flow's last step, so the full-screen gate must NOT preempt the
-          // first-run experience (intro carousel → sign-up). It only fires for
-          // returning users — devices that have already reached an
-          // authenticated state (hasCompletedOnceOnDevice) — which is the path
-          // that re-prompts when the Terms version is bumped. A returning user
-          // on a fresh install hits it right after logging in, since _onLogin
-          // marks the device completed.
-          homeWidget = TermsAcceptanceScreen(
-            onAccepted: () async {
-              await termsAcceptanceService.accept();
-              if (mounted) setState(() {});
-            },
-          );
-          destinationKey = 'terms';
         } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {

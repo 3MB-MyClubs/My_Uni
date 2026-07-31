@@ -82,9 +82,7 @@ class _ClubCommunitySheetState extends State<ClubCommunitySheet> {
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w800,
-                                color: _tab == tab
-                                    ? Colors.white
-                                    : t.textMuted,
+                                color: _tab == tab ? Colors.white : t.textMuted,
                               ),
                             ),
                           ),

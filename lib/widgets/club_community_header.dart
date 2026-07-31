@@ -201,11 +201,7 @@ class ClubHeaderIconButton extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: active ? t.red : t.border),
               ),
-              child: Icon(
-                icon,
-                size: 18,
-                color: active ? t.red : t.textMuted,
-              ),
+              child: Icon(icon, size: 18, color: active ? t.red : t.textMuted),
             ),
             if (badge > 0)
               Positioned(

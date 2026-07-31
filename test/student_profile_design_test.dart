@@ -83,8 +83,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: StudentProfileScreen(
             onShare: () => shared = true,
             onSettings: () => openedSettings = true,
@@ -183,8 +183,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: UserProfileScreen(user: student)),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: UserProfileScreen(user: student),
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 400));
@@ -249,9 +251,13 @@ void main() {
     roleOnlyClub.boardMemberTitles[student.id] = 'President';
 
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: ProfileScreen())),
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ProfileScreen(),
+        ),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 400));
 

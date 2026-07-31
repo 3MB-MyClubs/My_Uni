@@ -45,8 +45,18 @@ void main() {
     // The "Starts" date/time pill is near the top.
     final start = DateTime.now().add(const Duration(hours: 1));
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final dateStr = '${months[start.month - 1]} ${start.day}, ${start.year}';
 

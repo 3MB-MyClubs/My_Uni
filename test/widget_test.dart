@@ -26,10 +26,13 @@ void main() {
     expect(find.byType(TermsAcceptanceScreen), findsNothing);
   });
 
-  testWidgets('returning user never sees the first-run intro again', (
+  testWidgets('returning user goes straight to login, not the terms gate', (
     WidgetTester tester,
   ) async {
-    // The legacy authenticated flag migrates to the new intro-seen flag.
+    // The legacy authenticated flag migrates to the new intro-seen flag. This
+    // device has reached an authenticated state before but holds no local
+    // terms-acceptance flag — the case that used to re-prompt someone who had
+    // already agreed when they signed up.
     SharedPreferences.setMockInitialValues({
       'has_completed_onboarding_intro_v2': true,
     });
@@ -38,10 +41,8 @@ void main() {
     await tester.pump();
 
     expect(find.byType(OnboardingCarouselScreen), findsNothing);
-    expect(find.byType(TermsAcceptanceScreen), findsOneWidget);
-    expect(find.text('TOPLULUK GÜVENLİĞİ KOŞULLARI'), findsOneWidget);
-    expect(find.text('Kabul et ve devam et'), findsOneWidget);
-    expect(find.text('Giriş yap'), findsNothing);
+    expect(find.byType(TermsAcceptanceScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('showing intro once persists across a second app launch', (

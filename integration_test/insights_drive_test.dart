@@ -48,7 +48,10 @@ void main() {
     );
     final clubEvent = events.firstWhere((e) => e.clubId == club.id);
     if (clubEvent.attendeeUserIds.isNotEmpty &&
-        !checkinStore.isCheckedIn(clubEvent.id, clubEvent.attendeeUserIds.first)) {
+        !checkinStore.isCheckedIn(
+          clubEvent.id,
+          clubEvent.attendeeUserIds.first,
+        )) {
       await checkinStore.toggle(
         eventId: clubEvent.id,
         userId: clubEvent.attendeeUserIds.first,

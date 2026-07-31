@@ -15,8 +15,7 @@ class OnboardingIntroService {
 
   Future<void> initialize() async {
     final preferences = await SharedPreferences.getInstance();
-    _completed =
-        preferences.getBool(_authenticatedPreferenceKey) ?? false;
+    _completed = preferences.getBool(_authenticatedPreferenceKey) ?? false;
     // Anyone who authenticated under the old single-flag behavior has
     // necessarily already passed the intro, so migrate them without replaying
     // it after this update.

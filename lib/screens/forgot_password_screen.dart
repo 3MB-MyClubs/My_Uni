@@ -65,15 +65,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_isSubmitting) return;
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.pleaseEnterKuEmail,
-      );
+      setState(() => _error = AppLocalizations.of(context)!.pleaseEnterKuEmail);
       return;
     }
     if (!_emailRegex.hasMatch(email)) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.useKuEmailAddress,
-      );
+      setState(() => _error = AppLocalizations.of(context)!.useKuEmailAddress);
       return;
     }
     setState(() {

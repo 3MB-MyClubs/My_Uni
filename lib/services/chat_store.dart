@@ -1606,7 +1606,10 @@ class ChatStore extends ChangeNotifier {
       groupId: groupIdOf(threadId),
       peerId: peerId ?? dmPeerOf(threadId, userId),
       lastMessage: last,
-      unread: unreadCountFor(threadId, userId),
+      // [messages] is already this thread's bucket, so hand it over instead of
+      // letting unreadCountFor rescan every message in the store again — that
+      // rescan made threadsFor (and the nav badge behind it) quadratic.
+      unread: unreadCountFor(threadId, userId, within: messages),
     );
   }
 
@@ -1621,19 +1624,24 @@ class ChatStore extends ChangeNotifier {
     return List.unmodifiable(list);
   }
 
-  int unreadCountFor(String threadId, String userId) {
+  /// Pass [within] when the caller already holds exactly this thread's
+  /// messages; otherwise the whole store is scanned to find them.
+  int unreadCountFor(
+    String threadId,
+    String userId, {
+    Iterable<ChatMessage>? within,
+  }) {
     if (_box == null || userId.isEmpty) return 0;
     if (!canAccessThread(threadId, userId)) return 0;
+    final candidates = within ?? _messages.where((m) => m.threadId == threadId);
     if (isDirectThread(threadId)) {
-      return _messages.where((message) {
-        return message.threadId == threadId &&
-            message.senderId != userId &&
-            message.seenAt == null;
-      }).length;
+      return candidates
+          .where((m) => m.senderId != userId && m.seenAt == null)
+          .length;
     }
     final lastRead = _lastRead[userId]?[threadId];
-    return _messages.where((m) {
-      if (m.threadId != threadId || m.senderId == userId) return false;
+    return candidates.where((m) {
+      if (m.senderId == userId) return false;
       return lastRead == null || m.createdAt.isAfter(lastRead);
     }).length;
   }

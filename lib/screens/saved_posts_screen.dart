@@ -308,7 +308,8 @@ class _SavedPostRow extends StatelessWidget {
           children: [
             ClubAvatar(
               clubId: club?.id ?? post.clubId,
-              clubName: club?.name ?? AppLocalizations.of(context)!.clubFallbackName,
+              clubName:
+                  club?.name ?? AppLocalizations.of(context)!.clubFallbackName,
               color: color,
               imageUrl: club?.logoUrl,
               size: 42,
@@ -324,7 +325,8 @@ class _SavedPostRow extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          club?.name ?? AppLocalizations.of(context)!.campusPostFallback,
+                          club?.name ??
+                              AppLocalizations.of(context)!.campusPostFallback,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

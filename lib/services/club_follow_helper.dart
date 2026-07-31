@@ -75,9 +75,9 @@ Future<void> handleFollowTap(
     peopleService.invalidateClubMembers(clubId);
     onChanged();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_l10n.couldNotUpdateClubFollow)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_l10n.couldNotUpdateClubFollow)));
     }
   }
 }

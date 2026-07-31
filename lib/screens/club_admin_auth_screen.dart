@@ -195,7 +195,9 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 ],
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
-                  labelText: AppLocalizations.of(context)!.eightDigitPasscodeLabel,
+                  labelText: AppLocalizations.of(
+                    context,
+                  )!.eightDigitPasscodeLabel,
                   hintText: AppLocalizations.of(context)!.eightDigitsHint,
                   prefixIcon: Icon(
                     Icons.lock_outline,

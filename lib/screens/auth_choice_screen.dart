@@ -46,7 +46,9 @@ class AuthChoiceScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             Text(
-                              AppLocalizations.of(context)!.byContinuingAcknowledge,
+                              AppLocalizations.of(
+                                context,
+                              )!.byContinuingAcknowledge,
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 11.5,
@@ -124,7 +126,11 @@ class AuthChoiceScreen extends StatelessWidget {
     );
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.couldNotOpenPrivacyPolicy)),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)!.couldNotOpenPrivacyPolicy,
+          ),
+        ),
       );
     }
   }

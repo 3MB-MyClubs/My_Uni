@@ -24,8 +24,9 @@ void main() {
     await binding.takeScreenshot(name);
   }
 
-  testWidgets('Club own-profile — no follow/message, no banner',
-      (tester) async {
+  testWidgets('Club own-profile — no follow/message, no banner', (
+    tester,
+  ) async {
     await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
