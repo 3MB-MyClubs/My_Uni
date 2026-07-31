@@ -42,6 +42,7 @@ import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
+import '../widgets/post_share_sheet.dart';
 import '../services/supabase_interaction_service.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
@@ -2782,6 +2783,33 @@ class _PostCardState extends State<_PostCard>
     );
   }
 
+  Future<void> _sharePostToChat() async {
+    final currentUser = authService.currentUser;
+    if (!authService.isStudentSession || currentUser == null) return;
+    final threadId = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => PostShareSheet(
+        post: widget.post,
+        currentUserId: currentUser.id,
+        onShared: () {
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+    if (!mounted || threadId == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(S.postShared),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   void _showPostOptions() {
     final canDelete = contentStore.canDeletePost(
       widget.post.id,
@@ -3185,6 +3213,13 @@ class _PostCardState extends State<_PostCard>
                       ? AppColors.primaryRed
                       : AppColors.secondaryText,
                   onTap: _toggleLike,
+                ),
+                const SizedBox(width: 18),
+                _twAction(
+                  icon: Icons.send_outlined,
+                  count: null,
+                  color: AppColors.secondaryText,
+                  onTap: _sharePostToChat,
                 ),
               ],
             ),

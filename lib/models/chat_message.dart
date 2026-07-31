@@ -2,7 +2,16 @@ enum MessageDeliveryStatus { delivered, seen }
 
 /// What a message renders as in a community stream. Plain [text] is the
 /// default and keeps every existing (direct / group) message unchanged.
-enum ChatMessageKind { text, announcement, poll, event, photo, file, system }
+enum ChatMessageKind {
+  text,
+  announcement,
+  poll,
+  event,
+  postShare,
+  photo,
+  file,
+  system,
+}
 
 ChatMessageKind _kindFromName(Object? raw) {
   final name = raw?.toString() ?? '';
@@ -50,6 +59,9 @@ class ChatMessage {
   /// Event this message links to (for the inline event card).
   final String? eventId;
 
+  /// Post shared into a DM, user-created group, or club conversation.
+  final String? sharedPostId;
+
   /// Pinned to the top of the community stream.
   final bool pinned;
 
@@ -94,12 +106,13 @@ class ChatMessage {
     Map<String, int>? pollVotes,
     this.pollClosesAt,
     this.eventId,
+    this.sharedPostId,
     this.pinned = false,
   }) : deliveredAt = deliveredAt ?? createdAt,
        mentions = List.unmodifiable(mentions ?? const []),
        reactions = Map.unmodifiable({
-         for (final entry in (reactions ?? const <String, List<String>>{})
-             .entries)
+         for (final entry
+             in (reactions ?? const <String, List<String>>{}).entries)
            if (entry.value.isNotEmpty)
              entry.key: List<String>.unmodifiable(entry.value),
        }),
@@ -125,6 +138,7 @@ class ChatMessage {
     Map<String, int>? pollVotes,
     DateTime? pollClosesAt,
     String? eventId,
+    String? sharedPostId,
     bool? pinned,
   }) => ChatMessage(
     id: id ?? this.id,
@@ -145,6 +159,7 @@ class ChatMessage {
     pollVotes: pollVotes ?? this.pollVotes,
     pollClosesAt: pollClosesAt ?? this.pollClosesAt,
     eventId: eventId ?? this.eventId,
+    sharedPostId: sharedPostId ?? this.sharedPostId,
     pinned: pinned ?? this.pinned,
   );
 
@@ -170,6 +185,7 @@ class ChatMessage {
     if (pollVotes.isNotEmpty) 'pollVotes': pollVotes,
     if (pollClosesAt != null) 'pollClosesAt': pollClosesAt!.toIso8601String(),
     if (eventId != null) 'eventId': eventId,
+    if (sharedPostId != null) 'sharedPostId': sharedPostId,
     if (pinned) 'pinned': true,
   };
 
@@ -208,6 +224,7 @@ class ChatMessage {
         ? null
         : DateTime.tryParse(m['pollClosesAt'].toString()),
     eventId: m['eventId']?.toString(),
+    sharedPostId: m['sharedPostId']?.toString(),
     pinned: m['pinned'] == true,
   );
 }

@@ -21,6 +21,7 @@ class ClubCommunityHeader extends StatelessWidget {
     required this.onlineCount,
     required this.onOpenClub,
     required this.t,
+    this.topInset = 0,
     this.onBack,
     this.onToggleMute,
     this.onOpenSettings,
@@ -33,6 +34,7 @@ class ClubCommunityHeader extends StatelessWidget {
   final int onlineCount;
   final VoidCallback onOpenClub;
   final ClubChatTheme t;
+  final double topInset;
   final VoidCallback? onBack;
   final VoidCallback? onToggleMute;
   final VoidCallback? onOpenSettings;
@@ -43,23 +45,27 @@ class ClubCommunityHeader extends StatelessWidget {
     return Container(
       key: const ValueKey('club-community-header'),
       color: t.body,
-      padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+      padding: EdgeInsets.fromLTRB(10, topInset + 2, 14, 8),
       child: Row(
         children: [
           if (onBack != null)
             GestureDetector(
+              key: const ValueKey('chat-thread-back'),
               onTap: onBack,
               behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 3),
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 20,
-                  color: t.red,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 20,
+                    color: t.red,
+                  ),
                 ),
               ),
             ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Expanded(
             child: Semantics(
               button: true,
@@ -201,11 +207,7 @@ class ClubHeaderIconButton extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: active ? t.red : t.border),
               ),
-              child: Icon(
-                icon,
-                size: 18,
-                color: active ? t.red : t.textMuted,
-              ),
+              child: Icon(icon, size: 18, color: active ? t.red : t.textMuted),
             ),
             if (badge > 0)
               Positioned(

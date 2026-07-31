@@ -42,7 +42,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ].where((n) {
           if (n.userId != _myId || n.targetType == 'story') return false;
           return !(ChatStore.isAdminAccountId(_myId) &&
-              n.targetType == 'message');
+              n.targetType == 'message' &&
+              n.notificationType != 'club_channel_message' &&
+              n.notificationType != 'club_inbox_message');
         }).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 

@@ -6,7 +6,7 @@ import 'club_chat_theme.dart';
 import 'club_stream_items.dart';
 
 /// What the "+" sheet can attach to a community message.
-enum ClubAttachment { photo, file, poll, event }
+enum ClubAttachment { photo, poll, event }
 
 /// Community composer: attachment sheet, @-mention autocomplete, and send.
 class ClubComposer extends StatefulWidget {
@@ -226,7 +226,6 @@ class _ClubComposerState extends State<ClubComposer> {
                   children: [
                     for (final entry in const [
                       (ClubAttachment.photo, Icons.image_outlined),
-                      (ClubAttachment.file, Icons.description_outlined),
                       (ClubAttachment.poll, Icons.bar_chart_rounded),
                       (ClubAttachment.event, Icons.calendar_today_outlined),
                     ])
@@ -401,7 +400,6 @@ class _ClubComposerState extends State<ClubComposer> {
 
   String _attachLabel(ClubAttachment attachment) => switch (attachment) {
     ClubAttachment.photo => S.attachPhoto,
-    ClubAttachment.file => S.attachFile,
     ClubAttachment.poll => S.attachPoll,
     ClubAttachment.event => S.attachEvent,
   };

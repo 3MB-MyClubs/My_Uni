@@ -33,6 +33,8 @@ import '../widgets/club_composer.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/club_stream_items.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/shared_post_message_card.dart';
+import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'user_profile_screen.dart';
@@ -146,6 +148,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     // Post-frame: the community controller and the read receipt both notify
     // listeners, which is illegal while this route is still mounting.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(chatStore.startClubMessageSync(_myId));
       final canAccess = chatStore.canAccessThread(widget.threadId, _myId);
       if (canAccess || authService.isStudentSession) {
         unawaited(_communityInfo?.start());
@@ -473,6 +476,64 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     _scrollToLatest();
   }
 
+  Future<void> _messageClubPrivately() async {
+    final club = _club;
+    final profileId = authService.currentUser?.id ?? '';
+    if (club == null || profileId.isEmpty) return;
+    final threadId = await chatStore.ensureClubInboxThread(
+      profileId: profileId,
+      clubId: club.id,
+    );
+    if (!mounted) return;
+    if (threadId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(S.secureChatUnavailable)));
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ChatThreadScreen(threadId: threadId)),
+    );
+  }
+
+  Widget _buildFollowerActions(ClubChatTheme t) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(
+        color: t.sheet,
+        border: Border(top: BorderSide(color: t.hair)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              S.clubChannelReadOnly,
+              style: TextStyle(
+                color: t.sub,
+                fontSize: 11.5,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            key: const ValueKey('message-club-privately'),
+            onPressed: _messageClubPrivately,
+            icon: const Icon(Icons.lock_outline_rounded, size: 16),
+            label: Text(S.messageClub),
+            style: FilledButton.styleFrom(
+              backgroundColor: _accent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _scrollToLatest() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -492,10 +553,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         );
         if (picked == null) return;
         _sendAttachment(picked, ChatMessageKind.photo);
-      case ClubAttachment.file:
-        final picked = await ImagePicker().pickMedia();
-        if (picked == null) return;
-        _sendAttachment(picked, ChatMessageKind.file);
       case ClubAttachment.poll:
         await _composePoll();
       case ClubAttachment.event:
@@ -1005,116 +1062,57 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          decoration: BoxDecoration(
-            color: t.sheet,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: t.borderB,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        decoration: BoxDecoration(
+          color: t.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: t.borderB,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 14),
+            ),
+            const SizedBox(height: 14),
+            _ActionRow(
+              icon: Icons.groups_2_outlined,
+              label: S.openClubProfile,
+              t: t,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _openClubProfile();
+              },
+            ),
+            if (_canModerate)
               _ActionRow(
-                icon: Icons.groups_2_outlined,
-                label: S.openClubProfile,
+                icon: Icons.campaign_outlined,
+                label: S.postAsAnnouncement,
                 t: t,
                 onTap: () {
                   Navigator.of(sheetContext).pop();
-                  _openClubProfile();
+                  unawaited(_composeAnnouncement());
                 },
               ),
-              if (_canModerate)
-                _ActionRow(
-                  icon: Icons.campaign_outlined,
-                  label: S.postAsAnnouncement,
-                  t: t,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    unawaited(_composeAnnouncement());
-                  },
-                ),
-              if (_canChangeBackground)
-                _ActionRow(
-                  icon: Icons.wallpaper_rounded,
-                  label: S.changeChatBackground,
-                  t: t,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _openBackgroundSheet();
-                  },
-                ),
-              const SizedBox(height: 10),
-              Text(
-                S.chatDisplay.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.1,
-                  color: t.sub,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _SegmentedRow(
-                label: S.messageStyle,
+            if (_canChangeBackground)
+              _ActionRow(
+                icon: Icons.wallpaper_rounded,
+                label: S.changeChatBackground,
                 t: t,
-                options: [
-                  (S.styleRows, ClubMessageStyle.rows),
-                  (S.styleBubbles, ClubMessageStyle.bubbles),
-                  (S.styleCards, ClubMessageStyle.cards),
-                ],
-                selected: clubChatPrefs.messageStyle,
-                onSelect: (value) {
-                  clubChatPrefs.setMessageStyle(value);
-                  setSheetState(() {});
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openBackgroundSheet();
                 },
               ),
-              const SizedBox(height: 10),
-              _SegmentedRow(
-                label: S.announcementsStyle,
-                t: t,
-                options: [
-                  (S.emphasisSubtle, ClubAnnouncementEmphasis.subtle),
-                  (S.emphasisTinted, ClubAnnouncementEmphasis.tinted),
-                  (S.emphasisBold, ClubAnnouncementEmphasis.bold),
-                ],
-                selected: clubChatPrefs.announcementEmphasis,
-                onSelect: (value) {
-                  clubChatPrefs.setAnnouncementEmphasis(value);
-                  setSheetState(() {});
-                },
-              ),
-              SwitchListTile.adaptive(
-                value: clubChatPrefs.showRoles,
-                contentPadding: EdgeInsets.zero,
-                activeThumbColor: t.red,
-                title: Text(
-                  S.showRolesBadges,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: t.text,
-                  ),
-                ),
-                onChanged: (value) {
-                  clubChatPrefs.setShowRoles(value);
-                  setSheetState(() {});
-                },
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -1590,6 +1588,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             return SafeArea(bottom: false, child: _buildUnavailable(t));
           }
           return SafeArea(
+            top: false,
             bottom: false,
             child: Column(
               children: [
@@ -1598,18 +1597,21 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 if (canAccess) ...[
                   _buildPinnedStrip(t),
                   Expanded(child: _buildStream(t)),
-                  ClubComposer(
-                    controller: _inputController,
-                    t: t,
-                    hintText: S.communityComposerHint,
-                    people: _members,
-                    avatarBuilder: _avatarFor,
-                    onSend: _send,
-                    onAttach: (attachment) =>
-                        unawaited(_handleAttachment(attachment)),
-                    onTypingChanged: () =>
-                        chatStore.setTyping(widget.threadId, _myId),
-                  ),
+                  if (_canModerate)
+                    ClubComposer(
+                      controller: _inputController,
+                      t: t,
+                      hintText: S.communityComposerHint,
+                      people: _members,
+                      avatarBuilder: _avatarFor,
+                      onSend: _send,
+                      onAttach: (attachment) =>
+                          unawaited(_handleAttachment(attachment)),
+                      onTypingChanged: () =>
+                          chatStore.setTyping(widget.threadId, _myId),
+                    )
+                  else
+                    _buildFollowerActions(t),
                 ] else
                   Expanded(child: _buildJoinPrompt(club, t)),
               ],
@@ -1632,6 +1634,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       onlineCount: _communityInfo?.onlineCount ?? 0,
       onOpenClub: _openClubProfile,
       t: t,
+      topInset: widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top,
       muted: clubChatPrefs.isMuted(widget.threadId),
       onBack: widget.embedded ? null : () => Navigator.maybePop(context),
       onToggleMute: () => clubChatPrefs.setMuted(
@@ -1915,6 +1918,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           }
           items.add(_messageGroup(message, previous, style, showRoles, t));
         case ChatMessageKind.text:
+        case ChatMessageKind.postShare:
         case ChatMessageKind.photo:
         case ChatMessageKind.file:
           items.add(_messageGroup(message, previous, style, showRoles, t));
@@ -1997,6 +2001,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             t: t,
             onOpen: () => _showMessageActions(message),
           ),
+        if (message.kind == ChatMessageKind.postShare &&
+            message.sharedPostId != null)
+          SharedPostMessageCard(postId: message.sharedPostId!),
       ],
       reactions: message.reactions.isEmpty ? null : _reactionsFor(message, t),
     );
@@ -2267,68 +2274,6 @@ class _ActionRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _SegmentedRow<T> extends StatelessWidget {
-  const _SegmentedRow({
-    required this.label,
-    required this.t,
-    required this.options,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  final String label;
-  final ClubChatTheme t;
-  final List<(String, T)> options;
-  final T selected;
-  final void Function(T value) onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-              color: t.text,
-            ),
-          ),
-        ),
-        for (final option in options)
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: GestureDetector(
-              onTap: () => onSelect(option.$2),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: selected == option.$2 ? t.ltRed : t.solid,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: selected == option.$2 ? t.red : t.border,
-                  ),
-                ),
-                child: Text(
-                  option.$1,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: selected == option.$2 ? t.red : t.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

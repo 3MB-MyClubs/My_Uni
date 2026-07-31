@@ -137,6 +137,24 @@ void main() {
     expect(target.chatThreadIdFor('user-b'), 'dm:user-a|user-b');
   });
 
+  test('preserves club channel and club inbox messaging targets', () {
+    final channel = PushNotificationTarget.fromData({
+      'type': 'club_channel_message',
+      'target_type': 'message',
+      'target_id': 'club-1',
+    });
+    final inbox = PushNotificationTarget.fromData({
+      'type': 'club_inbox_message',
+      'target_type': 'message',
+      'target_id': 'inbox-1',
+    });
+
+    expect(channel.type, 'club_chat');
+    expect(channel.chatThreadIdFor('user-a'), 'club:club-1');
+    expect(inbox.type, 'club_inbox');
+    expect(inbox.chatThreadIdFor('club-admin'), 'clubdm:inbox-1');
+  });
+
   test('localizes club post copy in English and Turkish', () {
     final args = {'clubName': 'KU Music', 'content': 'Concert tonight'};
     final english = localizedPushNotificationCopy(
@@ -171,5 +189,17 @@ void main() {
 
     expect(copy.title, 'Ece gönderine yorum yaptı');
     expect(copy.body, 'Ece: “Harika!” Yanıtlamak için dokun.');
+  });
+
+  test('message notifications include the stored message preview', () {
+    final copy = localizedPushNotificationCopy(
+      type: 'direct_message',
+      args: {'actorName': 'Ece', 'content': 'See you at the library'},
+      languageCode: 'en',
+      fallbackTitle: '',
+      fallbackBody: '',
+    );
+
+    expect(copy.body, 'Ece: See you at the library');
   });
 }

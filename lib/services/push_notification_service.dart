@@ -26,8 +26,12 @@ class PushNotificationTarget {
   final String? notificationType;
   final String? actorId;
 
-  bool get isChat =>
-      type == 'direct_message' || type == 'group_chat' || type == 'club_chat';
+  bool get isChat => const {
+    'direct_message',
+    'group_chat',
+    'club_chat',
+    'club_inbox',
+  }.contains(type);
 
   /// Builds the canonical thread id expected by [ChatThreadScreen]. Backend
   /// notification rows store raw peer/group/club UUIDs, while the messaging
@@ -37,7 +41,8 @@ class PushNotificationTarget {
     if (!isChat || id == null || id.isEmpty) return null;
     if (id.startsWith('dm:') ||
         id.startsWith('group:') ||
-        id.startsWith('club:')) {
+        id.startsWith('club:') ||
+        id.startsWith('clubdm:')) {
       return id;
     }
     switch (type) {
@@ -45,6 +50,8 @@ class PushNotificationTarget {
         return 'group:$id';
       case 'club_chat':
         return 'club:$id';
+      case 'club_inbox':
+        return 'clubdm:$id';
       case 'direct_message':
         final peerId = actorId ?? id;
         if (currentUserId.isEmpty ||
@@ -82,6 +89,12 @@ class PushNotificationTarget {
         : normalize(rawTargetType);
 
     String messagingType() {
+      if (normalizedNotificationType == 'club_channel_message') {
+        return 'club_chat';
+      }
+      if (normalizedNotificationType == 'club_inbox_message') {
+        return 'club_inbox';
+      }
       if (normalizedNotificationType == 'direct_message' ||
           normalizedTargetType == 'direct_message' ||
           normalizedTargetType == 'dm') {
@@ -100,6 +113,7 @@ class PushNotificationTarget {
       }
       if (targetId?.startsWith('group:') == true) return 'group_chat';
       if (targetId?.startsWith('club:') == true) return 'club_chat';
+      if (targetId?.startsWith('clubdm:') == true) return 'club_inbox';
       return 'direct_message';
     }
 
@@ -118,6 +132,7 @@ class PushNotificationTarget {
           case 'club_chat':
           case 'club_message':
           case 'community':
+          case 'club_inbox':
             return messagingType();
           case 'profile':
           case 'person':
@@ -140,6 +155,9 @@ class PushNotificationTarget {
         case 'club_message':
         case 'community':
           return 'club_chat';
+        case 'club_inbox':
+        case 'club_inbox_message':
+          return 'club_inbox';
         case 'club_post':
         case 'post_like':
         case 'post_comment':

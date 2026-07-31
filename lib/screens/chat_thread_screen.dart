@@ -23,6 +23,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/shared_post_message_card.dart';
 import 'club_community_screen.dart';
 import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
@@ -62,13 +63,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   bool get _isClub => ChatStore.isClubThread(widget.threadId);
+  bool get _isClubInbox => ChatStore.isClubInboxThread(widget.threadId);
   bool get _isGroup => ChatStore.isGroupThread(widget.threadId);
   bool get _isDirect => ChatStore.isDirectThread(widget.threadId);
 
   Club? get _club {
-    final clubId = ChatStore.clubIdOf(widget.threadId);
+    final clubId =
+        ChatStore.clubIdOf(widget.threadId) ??
+        chatStore.clubInboxForThread(widget.threadId)?.clubId;
     return clubId == null ? null : clubForId(clubId);
   }
+
+  ClubInboxConversation? get _clubInbox =>
+      chatStore.clubInboxForThread(widget.threadId);
 
   User? _userForId(String userId) {
     final passedRecipient = widget.recipient;
@@ -131,13 +138,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (_isDirect || _isGroup) {
         unawaited(chatStore.startDirectMessageSync(_myId));
       }
+      if (_isClub || _isClubInbox) {
+        unawaited(chatStore.startClubMessageSync(_myId));
+      }
       if (_isDirect) {
         final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
         if (peerId != null) {
           chatStore.ensureDirectThread(_myId, peerId);
           unawaited(_hydratePeerProfile(peerId));
         }
-      } else if (_isClub || _isGroup) {
+      } else if (_isClub || _isGroup || _isClubInbox) {
         _hydrateVisibleParticipants();
       }
       // Only a visible, foreground conversation may create Seen receipts.
@@ -198,13 +208,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _hydrateVisibleParticipants() {
-    if ((!_isClub && !_isGroup) ||
+    if ((!_isClub && !_isGroup && !_isClubInbox) ||
         !chatStore.canAccessThread(widget.threadId, _myId)) {
       return;
     }
     final participantIds =
         <String>{
             if (_isGroup) ...chatStore.groupParticipants(widget.threadId),
+            if (_clubInbox case final inbox?) inbox.profileId,
             ...chatStore
                 .messagesFor(widget.threadId, viewerId: _myId)
                 .map((message) => message.senderId),
@@ -297,7 +308,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const SizedBox(height: 6),
             for (final (attachment, icon, label) in [
               (_ChatAttachment.photo, Icons.image_outlined, S.attachPhoto),
-              (_ChatAttachment.camera, Icons.photo_camera_outlined, S.takePhoto),
+              (
+                _ChatAttachment.camera,
+                Icons.photo_camera_outlined,
+                S.takePhoto,
+              ),
               (_ChatAttachment.file, Icons.attach_file_rounded, S.attachFile),
             ])
               InkWell(
@@ -451,6 +466,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   /// Display name + whether the sender is a club-admin account.
   (String, bool) _senderInfo(String senderId) {
+    final club = _club;
+    if (_isClubInbox && club != null && senderId == club.id) {
+      return (club.name, true);
+    }
     final user = _userForId(senderId);
     if (user != null) {
       return (userState.displayNameFor(senderId, user.name), false);
@@ -548,8 +567,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     Expanded(child: _buildMessageList(messages)),
                     // Openers stay docked above the composer until the first
                     // message lands.
-                    if (messages.isEmpty) _buildStarterChips(),
-                    _buildInputBar(enabled: canAccess),
+                    if (messages.isEmpty &&
+                        chatStore.canWriteThread(widget.threadId, _myId))
+                      _buildStarterChips(),
+                    _buildInputBar(
+                      enabled: chatStore.canWriteThread(widget.threadId, _myId),
+                    ),
                   ],
                 ),
               );
@@ -564,6 +587,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Widget _buildHeader() {
     if (_isGroup) return _buildGroupHeader();
+    if (_isClubInbox) return _buildClubInboxHeader();
     final peer = _peer;
     final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
     final name = peer != null
@@ -619,6 +643,94 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClubInboxHeader() {
+    final conversation = _clubInbox;
+    final club = _club;
+    final showingStudent =
+        conversation != null && conversation.profileId != _myId;
+    final student = showingStudent ? _userForId(conversation.profileId) : null;
+    final title = showingStudent
+        ? userState.displayNameFor(conversation.profileId, student?.name ?? '')
+        : club?.name ?? '';
+    final subtitle = showingStudent ? S.clubInbox : S.privateClubMessage;
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        10,
+        (widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top) + 6,
+        12,
+        8,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.card.withValues(
+          alpha: themeService.isDark ? 0.94 : 0.97,
+        ),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: Row(
+        children: [
+          if (!widget.embedded) ...[
+            IconButton(
+              key: const ValueKey('chat-thread-back'),
+              onPressed: () => Navigator.maybePop(context),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 17),
+              color: AppColors.secondaryText,
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              padding: EdgeInsets.zero,
+            ),
+            const SizedBox(width: 4),
+          ],
+          if (showingStudent)
+            PresenceAvatar(
+              userId: conversation.profileId,
+              name: title,
+              size: 40,
+              fontSize: 15,
+              online: appPresenceService.onlineUserIds.contains(
+                conversation.profileId,
+              ),
+            )
+          else if (club != null)
+            ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _colorForClub(club.id),
+              imageUrl: club.logoUrl,
+              size: 40,
+              fontSize: 15,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.lock_rounded, size: 17, color: AppColors.secondaryText),
         ],
       ),
     );
@@ -688,10 +800,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
       padding: EdgeInsets.fromLTRB(
         10,
-        // Absorb the status bar so the bar is one continuous surface.
-        (widget.embedded ? 0 : MediaQuery.paddingOf(context).top) + 8,
+        // viewPadding remains stable even if an ancestor SafeArea has already
+        // consumed MediaQuery.padding, keeping the controls below the status
+        // bar and Dynamic Island on every pushed chat route.
+        (widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top) + 6,
         12,
-        10,
+        8,
       ),
       child: Row(
         children: [
@@ -705,18 +819,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 key: const ValueKey('chat-thread-back'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () => Navigator.maybePop(context),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceAlt,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 17,
-                    color: AppColors.primaryRed,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 17,
+                        color: AppColors.primaryRed,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -916,7 +1036,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 GroupAvatarStack(
                   memberIds: memberIds,
                   nameForUser: (id) => _senderInfo(id).$1,
-                  photoPath: chatStore.groupForThread(widget.threadId)?.photoUrl,
+                  photoPath: chatStore
+                      .groupForThread(widget.threadId)
+                      ?.photoUrl,
                   size: 62,
                 )
               else
@@ -1149,31 +1271,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (photoPath != null) _photoAttachment(photoPath),
-          if (filePath != null) _fileAttachment(m, mine: mine),
-          if (hasText)
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                hasMedia ? 8 : 0,
-                hasMedia ? 7 : 0,
-                hasMedia ? 8 : 0,
-                hasMedia ? 3 : 0,
-              ),
-              child: Text(
-                m.content,
-                style: TextStyle(
-                  fontSize: 14.5,
-                  height: 1.45,
-                  letterSpacing: -0.1,
-                  color: mine ? Colors.white : AppColors.text,
-                ),
-              ),
+      child: m.kind == ChatMessageKind.postShare && m.sharedPostId != null
+          ? SharedPostMessageCard(
+              postId: m.sharedPostId!,
+              onDarkBackground: mine,
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (photoPath != null) _photoAttachment(photoPath),
+                if (filePath != null) _fileAttachment(m, mine: mine),
+                if (hasText)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      hasMedia ? 8 : 0,
+                      hasMedia ? 7 : 0,
+                      hasMedia ? 8 : 0,
+                      hasMedia ? 3 : 0,
+                    ),
+                    child: Text(
+                      m.content,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        height: 1.45,
+                        letterSpacing: -0.1,
+                        color: mine ? Colors.white : AppColors.text,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-        ],
-      ),
     );
 
     return Padding(
@@ -1248,8 +1375,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onLongPress: () => _openReactionPicker(m),
                   child: bubble,
                 ),
-                if (m.reactions.isNotEmpty)
-                  _reactionChips(m, alignEnd: mine),
+                if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
                 // Every outgoing DM carries a delivery receipt. Incoming and
                 // group messages keep the compact timestamp-only treatment.
                 Padding(
@@ -1597,10 +1723,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ? LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [
-                                AppColors.primaryRed,
-                                AppColors.darkRed,
-                              ],
+                              colors: [AppColors.primaryRed, AppColors.darkRed],
                             )
                           : null,
                       shape: BoxShape.circle,

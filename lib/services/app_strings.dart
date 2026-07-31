@@ -43,6 +43,14 @@ class S {
   static String get suggestedForYou =>
       _t('Suggested for you', 'Senin için önerilenler');
   static String get followBack => _t('Follow back', 'Geri takip et');
+  static String get sharePostToChat =>
+      _t('Share post to a chat', 'Gönderiyi sohbette paylaş');
+  static String get postShared => _t('Post shared', 'Gönderi paylaşıldı');
+  static String get noStudentChatsYet => _t(
+    'Start a student chat before sharing a post.',
+    'Gönderi paylaşmadan önce bir öğrenci sohbeti başlat.',
+  );
+  static String get sharedPost => _t('Shared post', 'Paylaşılan gönderi');
   static String get clubMightLike =>
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');
@@ -812,6 +820,18 @@ class S {
     'Bu sohbet sadece kulüp üyeleri içindir.\nSohbete katılmak için kulübü takip et.',
   );
   static String get clubChat => _t('Club chat', 'Kulüp sohbeti');
+  static String get clubInbox => _t('Club inbox', 'Kulüp gelen kutusu');
+  static String get privateClubMessage =>
+      _t('Private club message', 'Özel kulüp mesajı');
+  static String get messageClub => _t('Message club', 'Kulübe mesaj yaz');
+  static String get clubChannelReadOnly => _t(
+    'Only board members can post in this channel.',
+    'Bu kanalda yalnızca yönetim kurulu üyeleri paylaşım yapabilir.',
+  );
+  static String get secureChatUnavailable => _t(
+    'Messaging is not available yet. Try again shortly.',
+    'Mesajlaşma henüz kullanılamıyor. Birazdan tekrar dene.',
+  );
   static String chatMembers(int n) => _t('$n members', '$n üye');
   static String communityMembers(int n) =>
       n >= 100 ? _t('100+ Members', '100+ Üye') : _t('$n Members', '$n Üye');

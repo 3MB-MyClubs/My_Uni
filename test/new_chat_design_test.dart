@@ -202,7 +202,7 @@ void main() {
 
     final back = find.byKey(const ValueKey('chat-thread-back'));
     expect(back, findsOneWidget);
-    expect(tester.getSize(back), const Size(38, 38));
+    expect(tester.getSize(back), const Size(44, 44));
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
     final dmHeaderHeight = tester.getSize(find.byType(PresenceAvatar).first);
     expect(dmHeaderHeight.height, 38);
@@ -215,19 +215,76 @@ void main() {
     )!;
     await pumpThread(tester, threadId);
 
-    expect(tester.getSize(find.byKey(const ValueKey('chat-thread-back'))),
-        const Size(38, 38));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat-thread-back'))),
+      const Size(44, 44),
+    );
     expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
     final stack = tester.getSize(find.byType(GroupAvatarStack).first);
     expect(stack.height, 38);
     // Reserved slot is wider than the stack's own box, absorbing its bleed.
     final slot = tester.getSize(
-      find.ancestor(
-        of: find.byType(GroupAvatarStack).first,
-        matching: find.byType(Stack),
-      ).first,
+      find
+          .ancestor(
+            of: find.byType(GroupAvatarStack).first,
+            matching: find.byType(Stack),
+          )
+          .first,
     );
     expect(slot.width, greaterThan(stack.width));
+
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pushed chat keeps its back button below the device inset', (
+    tester,
+  ) async {
+    final threadId = ChatStore.dmThreadId(myId, peer.$1);
+    chatStore.ensureDirectThread(myId, peer.$1);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: const MediaQueryData(
+              size: Size(390, 844),
+              padding: EdgeInsets.only(top: 59),
+              viewPadding: EdgeInsets.only(top: 59),
+            ),
+            child: child!,
+          ),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  key: const ValueKey('open-chat'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ChatThreadScreen(threadId: threadId),
+                    ),
+                  ),
+                  child: const Text('Open chat'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open-chat')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final back = find.byKey(const ValueKey('chat-thread-back'));
+    expect(back, findsOneWidget);
+    expect(tester.getTopLeft(back).dy, greaterThanOrEqualTo(59));
+
+    await tester.tap(back);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('open-chat')), findsOneWidget);
 
     await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);

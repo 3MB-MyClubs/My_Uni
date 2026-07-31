@@ -27,6 +27,7 @@ import 'user_state.dart';
 /// [initialize] so screens render safely in widget tests without Hive.
 class ChatStore extends ChangeNotifier {
   static const _boxName = 'chat_v1';
+  static const _remoteMessageColumns = 'message_kind, payload, crypto_version';
 
   /// Removes the old scripted DMs, club messages, and empty demo threads from
   /// installs that opened the chat store before chats became real-data-only.
@@ -48,7 +49,9 @@ class ChatStore extends ChangeNotifier {
 
   RealtimeChannel? _directMessageChannel;
   RealtimeChannel? _groupMessageChannel;
+  RealtimeChannel? _clubMessageChannel;
   String? _syncedUserId;
+  String? _clubSyncedActorId;
   Timer? _syncRetry;
   bool _flushingRemote = false;
 
@@ -59,6 +62,9 @@ class ChatStore extends ChangeNotifier {
   final Map<String, ChatGroup> _groups = {};
   final Set<String> _pendingRemoteGroupIds = {};
   final Set<String> _pendingRemoteGroupMessageIds = {};
+  final Set<String> _pendingRemoteClubMessageIds = {};
+  final Map<String, ClubInboxConversation> _clubInboxes = {};
+  final Set<String> _pendingRemoteClubInboxMessageIds = {};
 
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
@@ -74,11 +80,16 @@ class ChatStore extends ChangeNotifier {
 
   static String groupThreadId(String groupId) => 'group:$groupId';
 
+  static String clubInboxThreadId(String inboxId) => 'clubdm:$inboxId';
+
   static bool isClubThread(String threadId) => threadId.startsWith('club:');
 
   static bool isDirectThread(String threadId) => threadId.startsWith('dm:');
 
   static bool isGroupThread(String threadId) => threadId.startsWith('group:');
+
+  static bool isClubInboxThread(String threadId) =>
+      threadId.startsWith('clubdm:');
 
   /// The club id of a `club:` thread, or null for DM threads.
   static String? clubIdOf(String threadId) =>
@@ -86,6 +97,9 @@ class ChatStore extends ChangeNotifier {
 
   static String? groupIdOf(String threadId) =>
       isGroupThread(threadId) ? threadId.substring(6) : null;
+
+  static String? clubInboxIdOf(String threadId) =>
+      isClubInboxThread(threadId) ? threadId.substring(7) : null;
 
   static List<String> dmParticipants(String threadId) {
     if (!threadId.startsWith('dm:')) return const [];
@@ -105,6 +119,11 @@ class ChatStore extends ChangeNotifier {
   ChatGroup? groupForThread(String threadId) {
     final groupId = groupIdOf(threadId);
     return groupId == null ? null : _groups[groupId];
+  }
+
+  ClubInboxConversation? clubInboxForThread(String threadId) {
+    final inboxId = clubInboxIdOf(threadId);
+    return inboxId == null ? null : _clubInboxes[inboxId];
   }
 
   List<String> groupParticipants(String threadId) =>
@@ -186,6 +205,20 @@ class ChatStore extends ChangeNotifier {
     if (rawPendingGroupMessages is List) {
       _pendingRemoteGroupMessageIds.addAll(
         rawPendingGroupMessages.map((id) => id.toString()),
+      );
+    }
+    final rawPendingClubMessages = box.get('pendingRemoteClubMessageIds');
+    if (rawPendingClubMessages is List) {
+      _pendingRemoteClubMessageIds.addAll(
+        rawPendingClubMessages.map((id) => id.toString()),
+      );
+    }
+    final rawPendingClubInboxMessages = box.get(
+      'pendingRemoteClubInboxMessageIds',
+    );
+    if (rawPendingClubInboxMessages is List) {
+      _pendingRemoteClubInboxMessageIds.addAll(
+        rawPendingClubInboxMessages.map((id) => id.toString()),
       );
     }
     // Existing installs predate the explicit empty-thread registry. Preserve
@@ -382,6 +415,376 @@ class ChatStore extends ChangeNotifier {
     await _reconcileRemoteGroups(client, userId);
   }
 
+  /// Starts the follower-visible, board-written club channel stream. The
+  /// authenticated Supabase ID may differ from [actorId] for club accounts,
+  /// whose in-app sender identity is the managed club ID.
+  Future<void> startClubMessageSync(String actorId) async {
+    if (actorId.isEmpty) return;
+    _clubSyncedActorId = actorId;
+    final client = _client;
+    final authId = client?.auth.currentUser?.id ?? '';
+    if (client == null || authId.isEmpty) return;
+    final existing = _clubMessageChannel;
+    if (existing != null) await client.removeChannel(existing);
+    final channel = client
+        .channel('club-channel-messages:$authId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_channel_messages',
+          callback: (payload) =>
+              unawaited(_handleClubMessageChange(payload, actorId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_channel_poll_votes',
+          callback: (payload) => _handleClubPollVoteChange(payload, actorId),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_inbox_threads',
+          callback: (_) =>
+              unawaited(_reconcileRemoteClubInboxes(client, actorId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'club_inbox_messages',
+          callback: (payload) =>
+              unawaited(_handleClubInboxMessageChange(payload, actorId)),
+        );
+    _clubMessageChannel = channel;
+    channel.subscribe((status, error) {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        unawaited(_flushClubMessages());
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut ||
+          status == RealtimeSubscribeStatus.closed) {
+        if (identical(_clubMessageChannel, channel)) {
+          _clubMessageChannel = null;
+        }
+        _scheduleSyncRetry();
+      }
+    });
+    await _reconcileRemoteClubMessages(client, actorId);
+    await _reconcileRemoteClubInboxes(client, actorId);
+  }
+
+  Set<String> _accessibleClubIds(String actorId) {
+    final managed = managedClubForAdmin(actorId);
+    return <String>{
+      ...userState.followedClubIds,
+      if (managed != null) managed.id,
+      for (final club in clubs)
+        if (club.boardMemberIds.contains(actorId)) club.id,
+    };
+  }
+
+  Future<void> _reconcileRemoteClubMessages(
+    SupabaseClient client,
+    String actorId,
+  ) async {
+    final clubIds = _accessibleClubIds(actorId).toList(growable: false);
+    if (clubIds.isEmpty) return;
+    try {
+      final rows = await client
+          .from('club_channel_messages')
+          .select(
+            'id, club_id, sender_auth_id, sender_profile_id, sender_club_id, content, created_at, $_remoteMessageColumns',
+          )
+          .inFilter('club_id', clubIds)
+          .order('created_at');
+      for (final raw in rows) {
+        await _mergeRemoteClubMessage(
+          Map<String, dynamic>.from(raw),
+          actorId,
+          notifyRecipient: false,
+        );
+      }
+      await _reconcileRemoteClubPollVotes(client, rows, actorId);
+      await _flushClubMessages();
+    } catch (_) {
+      _scheduleSyncRetry();
+    }
+  }
+
+  Future<void> _handleClubMessageChange(
+    PostgresChangePayload payload,
+    String actorId,
+  ) async {
+    final record = payload.newRecord;
+    if (record.isEmpty) return;
+    await _mergeRemoteClubMessage(record, actorId);
+  }
+
+  Future<void> _reconcileRemoteClubPollVotes(
+    SupabaseClient client,
+    List<dynamic> messageRows,
+    String actorId,
+  ) async {
+    final pollMessageIds = messageRows
+        .where((row) => row['message_kind']?.toString() == 'poll')
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (pollMessageIds.isEmpty) return;
+    final rows = await client
+        .from('club_channel_poll_votes')
+        .select('message_id, voter_auth_id, option_index')
+        .inFilter('message_id', pollMessageIds);
+    final votesByMessage = <String, Map<String, int>>{
+      for (final id in pollMessageIds) id: <String, int>{},
+    };
+    final authId = client.auth.currentUser?.id ?? '';
+    for (final raw in rows) {
+      final row = Map<String, dynamic>.from(raw);
+      final messageId = row['message_id']?.toString() ?? '';
+      final voterAuthId = row['voter_auth_id']?.toString() ?? '';
+      final optionIndex = row['option_index'];
+      if (messageId.isEmpty || voterAuthId.isEmpty || optionIndex is! int) {
+        continue;
+      }
+      final voterKey = voterAuthId == authId ? actorId : voterAuthId;
+      votesByMessage[messageId]?[voterKey] = optionIndex;
+    }
+    var changed = false;
+    for (final entry in votesByMessage.entries) {
+      final index = _messages.indexWhere((message) => message.id == entry.key);
+      if (index == -1 || mapEquals(_messages[index].pollVotes, entry.value)) {
+        continue;
+      }
+      _messages[index] = _messages[index].copyWith(pollVotes: entry.value);
+      changed = true;
+    }
+    if (changed) {
+      scheduleSave();
+      notifyListeners();
+    }
+  }
+
+  void _handleClubPollVoteChange(
+    PostgresChangePayload payload,
+    String actorId,
+  ) {
+    final isDelete = payload.newRecord.isEmpty;
+    final row = isDelete ? payload.oldRecord : payload.newRecord;
+    final messageId = row['message_id']?.toString() ?? '';
+    final voterAuthId = row['voter_auth_id']?.toString() ?? '';
+    final optionIndex = row['option_index'];
+    final authId = _client?.auth.currentUser?.id ?? '';
+    if (messageId.isEmpty || voterAuthId.isEmpty) return;
+    final voterKey = voterAuthId == authId ? actorId : voterAuthId;
+    final message = messageById(messageId);
+    if (message == null || message.kind != ChatMessageKind.poll) return;
+    final votes = Map<String, int>.from(message.pollVotes);
+    if (isDelete) {
+      votes.remove(voterKey);
+    } else if (optionIndex is int &&
+        optionIndex >= 0 &&
+        optionIndex < message.pollOptions.length) {
+      votes[voterKey] = optionIndex;
+    } else {
+      return;
+    }
+    _replaceMessage(messageId, (current) => current.copyWith(pollVotes: votes));
+  }
+
+  Future<void> _mergeRemoteClubMessage(
+    Map<String, dynamic> row,
+    String actorId, {
+    bool notifyRecipient = true,
+  }) async {
+    final id = row['id']?.toString() ?? '';
+    final clubId = row['club_id']?.toString() ?? '';
+    final senderId =
+        row['sender_profile_id']?.toString().trim().isNotEmpty == true
+        ? row['sender_profile_id'].toString()
+        : row['sender_club_id']?.toString() ?? '';
+    final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
+    if (id.isEmpty || clubId.isEmpty || senderId.isEmpty || createdAt == null) {
+      return;
+    }
+    if (_messages.any((message) => message.id == id)) {
+      _pendingRemoteClubMessageIds.remove(id);
+      return;
+    }
+    final message = await _messageFromRemotePayload(
+      row: row,
+      id: id,
+      threadId: clubThreadId(clubId),
+      senderId: senderId,
+      createdAt: createdAt,
+      deliveredAt: createdAt,
+    );
+    if (message == null) return;
+    _messages.add(message);
+    _pendingRemoteClubMessageIds.remove(id);
+    if (notifyRecipient && senderId != actorId) {
+      final clubName = clubForId(clubId)?.name ?? '';
+      userState.addNotification(
+        AppNotification(
+          id: 'remote_club_msg_${message.id}_$actorId',
+          userId: actorId,
+          message: '$clubName sent a message.',
+          createdAt: message.createdAt,
+          targetType: 'message',
+          targetId: message.threadId,
+          fromId: senderId,
+        ),
+      );
+    }
+    scheduleSave();
+    notifyListeners();
+  }
+
+  /// Creates or returns the private inbox between one student and one club.
+  /// The public follower channel remains read-only for that student.
+  Future<String?> ensureClubInboxThread({
+    required String profileId,
+    required String clubId,
+  }) async {
+    final client = _client;
+    if (client == null ||
+        profileId.isEmpty ||
+        clubId.isEmpty ||
+        client.auth.currentUser?.id != profileId) {
+      return null;
+    }
+    try {
+      final row = await client
+          .from('club_inbox_threads')
+          .upsert(<String, dynamic>{
+            'club_id': clubId,
+            'profile_id': profileId,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }, onConflict: 'club_id,profile_id')
+          .select('id, club_id, profile_id, created_at, updated_at')
+          .single();
+      final conversation = ClubInboxConversation.fromRemoteRow(row);
+      _clubInboxes[conversation.id] = conversation;
+      notifyListeners();
+      await startClubMessageSync(profileId);
+      return conversation.threadId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _reconcileRemoteClubInboxes(
+    SupabaseClient client,
+    String actorId,
+  ) async {
+    try {
+      final rows = await client
+          .from('club_inbox_threads')
+          .select('id, club_id, profile_id, created_at, updated_at')
+          .order('updated_at', ascending: false);
+      final visibleIds = <String>{};
+      for (final raw in rows) {
+        final conversation = ClubInboxConversation.fromRemoteRow(
+          Map<String, dynamic>.from(raw),
+        );
+        if (conversation.id.isEmpty) continue;
+        visibleIds.add(conversation.id);
+        _clubInboxes[conversation.id] = conversation;
+      }
+      _clubInboxes.removeWhere((id, _) => !visibleIds.contains(id));
+      if (visibleIds.isEmpty) {
+        notifyListeners();
+        return;
+      }
+      final messages = await client
+          .from('club_inbox_messages')
+          .select(
+            'id, thread_id, sender_auth_id, sender_profile_id, sender_club_id, content, created_at, delivered_at, seen_at, $_remoteMessageColumns',
+          )
+          .inFilter('thread_id', visibleIds.toList(growable: false))
+          .order('created_at');
+      for (final raw in messages) {
+        await _mergeRemoteClubInboxMessage(
+          Map<String, dynamic>.from(raw),
+          actorId,
+          notifyRecipient: false,
+        );
+      }
+      notifyListeners();
+      await _flushClubInboxMessages();
+    } catch (_) {
+      _scheduleSyncRetry();
+    }
+  }
+
+  Future<void> _handleClubInboxMessageChange(
+    PostgresChangePayload payload,
+    String actorId,
+  ) async {
+    final record = payload.newRecord;
+    if (record.isEmpty) return;
+    await _mergeRemoteClubInboxMessage(record, actorId);
+  }
+
+  Future<void> _mergeRemoteClubInboxMessage(
+    Map<String, dynamic> row,
+    String actorId, {
+    bool notifyRecipient = true,
+  }) async {
+    final id = row['id']?.toString() ?? '';
+    final inboxId = row['thread_id']?.toString() ?? '';
+    final senderId =
+        row['sender_profile_id']?.toString().trim().isNotEmpty == true
+        ? row['sender_profile_id'].toString()
+        : row['sender_club_id']?.toString() ?? '';
+    final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
+    final deliveredAt =
+        DateTime.tryParse(row['delivered_at']?.toString() ?? '') ?? createdAt;
+    final seenAt = DateTime.tryParse(row['seen_at']?.toString() ?? '');
+    if (id.isEmpty ||
+        inboxId.isEmpty ||
+        senderId.isEmpty ||
+        createdAt == null ||
+        deliveredAt == null ||
+        _clubInboxes[inboxId] == null) {
+      return;
+    }
+    if (_messages.any((message) => message.id == id)) {
+      _pendingRemoteClubInboxMessageIds.remove(id);
+      return;
+    }
+    final message = await _messageFromRemotePayload(
+      row: row,
+      id: id,
+      threadId: clubInboxThreadId(inboxId),
+      senderId: senderId,
+      createdAt: createdAt,
+      deliveredAt: deliveredAt,
+      seenAt: seenAt,
+    );
+    if (message == null) return;
+    _messages.add(message);
+    _pendingRemoteClubInboxMessageIds.remove(id);
+    if (notifyRecipient && senderId != actorId) {
+      final conversation = _clubInboxes[inboxId]!;
+      final title = senderId == conversation.clubId
+          ? clubForId(conversation.clubId)?.name ?? ''
+          : _nameForUser(senderId);
+      userState.addNotification(
+        AppNotification(
+          id: 'remote_club_inbox_${message.id}_$actorId',
+          userId: actorId,
+          message: '$title sent a message.',
+          createdAt: message.createdAt,
+          targetType: 'message',
+          targetId: message.threadId,
+          fromId: senderId,
+        ),
+      );
+    }
+    scheduleSave();
+    notifyListeners();
+  }
+
   Future<void> _reconcileRemoteGroups(
     SupabaseClient client,
     String userId,
@@ -433,7 +836,9 @@ class ChatStore extends ChangeNotifier {
             .order('joined_at'),
         client
             .from('group_messages')
-            .select('id, group_id, sender_id, content, created_at')
+            .select(
+              'id, group_id, sender_id, content, created_at, $_remoteMessageColumns',
+            )
             .inFilter('group_id', groupIds)
             .order('created_at'),
       ]);
@@ -477,7 +882,7 @@ class ChatStore extends ChangeNotifier {
         );
       }
       for (final raw in results[2]) {
-        _mergeRemoteGroupMessage(
+        await _mergeRemoteGroupMessage(
           Map<String, dynamic>.from(raw as Map),
           userId,
           notifyRecipient: false,
@@ -491,20 +896,18 @@ class ChatStore extends ChangeNotifier {
     }
   }
 
-  void _mergeRemoteGroupMessage(
+  Future<void> _mergeRemoteGroupMessage(
     Map<String, dynamic> row,
     String viewerId, {
     bool notifyRecipient = true,
-  }) {
+  }) async {
     final id = row['id']?.toString() ?? '';
     final groupId = row['group_id']?.toString() ?? '';
     final senderId = row['sender_id']?.toString() ?? '';
-    final content = row['content']?.toString() ?? '';
     final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
     if (id.isEmpty ||
         groupId.isEmpty ||
         senderId.isEmpty ||
-        content.isEmpty ||
         createdAt == null ||
         _groups[groupId] == null) {
       return;
@@ -513,14 +916,15 @@ class ChatStore extends ChangeNotifier {
       _pendingRemoteGroupMessageIds.remove(id);
       return;
     }
-    final message = ChatMessage(
+    final message = await _messageFromRemotePayload(
+      row: row,
       id: id,
       threadId: groupThreadId(groupId),
       senderId: senderId,
-      content: content,
-      createdAt: createdAt.toLocal(),
-      deliveredAt: createdAt.toLocal(),
+      createdAt: createdAt,
+      deliveredAt: createdAt,
     );
+    if (message == null) return;
     _messages.add(message);
     _pendingRemoteGroupMessageIds.remove(id);
     if (notifyRecipient && senderId != viewerId) {
@@ -552,7 +956,7 @@ class ChatStore extends ChangeNotifier {
     if (senderId.isNotEmpty) {
       await peopleService.hydrateProfilesByIds([senderId]);
     }
-    _mergeRemoteGroupMessage(record, viewerId);
+    await _mergeRemoteGroupMessage(record, viewerId);
   }
 
   Future<void> _reconcileRemoteMessages(
@@ -563,7 +967,7 @@ class ChatStore extends ChangeNotifier {
       final rows = await client
           .from('direct_messages')
           .select(
-            'id, sender_id, receiver_id, content, created_at, delivered_at, seen_at, read_at',
+            'id, sender_id, receiver_id, content, created_at, delivered_at, seen_at, read_at, $_remoteMessageColumns',
           )
           .or('sender_id.eq.$userId,receiver_id.eq.$userId')
           .order('created_at');
@@ -575,7 +979,7 @@ class ChatStore extends ChangeNotifier {
           ],
         ),
       );
-      _mergeRemoteRows(rows);
+      await _mergeRemoteRows(rows);
       await _flushRemoteChanges();
     } catch (_) {
       _scheduleSyncRetry();
@@ -585,7 +989,7 @@ class ChatStore extends ChangeNotifier {
   Future<void> _handleDirectMessageChange(PostgresChangePayload payload) async {
     final record = payload.newRecord;
     if (record.isEmpty) return;
-    final message = _messageFromRemoteRow(record);
+    final message = await _messageFromRemoteRow(record);
     if (message == null) return;
     await peopleService.hydrateProfilesByIds([
       record['sender_id']?.toString() ?? '',
@@ -594,27 +998,25 @@ class ChatStore extends ChangeNotifier {
     _mergeRemoteMessages([message]);
   }
 
-  void _mergeRemoteRows(List<dynamic> rows) {
-    _mergeRemoteMessages(
-      rows
-          .map(
-            (row) =>
-                _messageFromRemoteRow(Map<String, dynamic>.from(row as Map)),
-          )
-          .whereType<ChatMessage>(),
-    );
+  Future<void> _mergeRemoteRows(List<dynamic> rows) async {
+    final messages = <ChatMessage>[];
+    for (final raw in rows) {
+      final message = await _messageFromRemoteRow(
+        Map<String, dynamic>.from(raw as Map),
+      );
+      if (message != null) messages.add(message);
+    }
+    _mergeRemoteMessages(messages);
   }
 
-  ChatMessage? _messageFromRemoteRow(Map<String, dynamic> row) {
+  Future<ChatMessage?> _messageFromRemoteRow(Map<String, dynamic> row) async {
     final id = row['id']?.toString() ?? '';
     final senderId = row['sender_id']?.toString() ?? '';
     final receiverId = row['receiver_id']?.toString() ?? '';
-    final content = row['content']?.toString() ?? '';
     final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
     if (id.isEmpty ||
         senderId.isEmpty ||
         receiverId.isEmpty ||
-        content.isEmpty ||
         createdAt == null) {
       return null;
     }
@@ -623,15 +1025,49 @@ class ChatStore extends ChangeNotifier {
     final seenAt = DateTime.tryParse(
       (row['seen_at'] ?? row['read_at'])?.toString() ?? '',
     );
-    return ChatMessage(
+    return _messageFromRemotePayload(
+      row: row,
       id: id,
       threadId: dmThreadId(senderId, receiverId),
       senderId: senderId,
-      content: content,
-      createdAt: createdAt.toLocal(),
-      deliveredAt: deliveredAt.toLocal(),
-      seenAt: seenAt?.toLocal(),
+      createdAt: createdAt,
+      deliveredAt: deliveredAt,
+      seenAt: seenAt,
     );
+  }
+
+  Future<ChatMessage?> _messageFromRemotePayload({
+    required Map<String, dynamic> row,
+    required String id,
+    required String threadId,
+    required String senderId,
+    required DateTime createdAt,
+    required DateTime deliveredAt,
+    DateTime? seenAt,
+  }) async {
+    // Rows written by the retired E2EE client are intentionally preserved in
+    // Supabase, but their plaintext cannot be recovered without device keys.
+    if (row['crypto_version'] != null) return null;
+    final content = row['content']?.toString() ?? '';
+    final rawPayload = row['payload'];
+    final messageKind = row['message_kind']?.toString() ?? 'text';
+    final hasStructuredPayload =
+        rawPayload is Map && rawPayload.isNotEmpty && messageKind != 'text';
+    if (content.isEmpty && !hasStructuredPayload) return null;
+
+    final payload = rawPayload is Map
+        ? Map<String, dynamic>.from(rawPayload)
+        : <String, dynamic>{};
+    payload
+      ..['id'] = id
+      ..['threadId'] = threadId
+      ..['senderId'] = senderId
+      ..['content'] = content
+      ..['kind'] = messageKind == 'post_share' ? 'postShare' : messageKind
+      ..['createdAt'] = createdAt.toLocal().toIso8601String()
+      ..['deliveredAt'] = deliveredAt.toLocal().toIso8601String()
+      ..['seenAt'] = seenAt?.toLocal().toIso8601String();
+    return ChatMessage.fromMap(payload);
   }
 
   void _mergeRemoteMessages(Iterable<ChatMessage> remoteMessages) {
@@ -649,6 +1085,10 @@ class ChatStore extends ChangeNotifier {
             ? remote.copyWith(seenAt: local.seenAt)
             : remote;
         if (local.content != merged.content ||
+            local.kind != merged.kind ||
+            local.title != merged.title ||
+            local.sharedPostId != merged.sharedPostId ||
+            !listEquals(local.pollOptions, merged.pollOptions) ||
             local.deliveredAt != merged.deliveredAt ||
             local.seenAt != merged.seenAt) {
           _messages[index] = merged;
@@ -759,6 +1199,8 @@ class ChatStore extends ChangeNotifier {
             'group_id': groupId,
             'sender_id': userId,
             'content': message.content,
+            'message_kind': _databaseKind(message.kind),
+            'payload': _remotePayload(message),
             'created_at': message.createdAt.toUtc().toIso8601String(),
           });
           _pendingRemoteGroupMessageIds.remove(message.id);
@@ -787,6 +1229,8 @@ class ChatStore extends ChangeNotifier {
             'sender_id': userId,
             'receiver_id': receiverId,
             'content': message.content,
+            'message_kind': _databaseKind(message.kind),
+            'payload': _remotePayload(message),
             'created_at': message.createdAt.toUtc().toIso8601String(),
             'delivered_at': message.deliveredAt.toUtc().toIso8601String(),
           });
@@ -842,11 +1286,125 @@ class ChatStore extends ChangeNotifier {
     if (failed) _scheduleSyncRetry();
   }
 
+  Future<void> _flushClubMessages() async {
+    final client = _client;
+    final authId = client?.auth.currentUser?.id ?? '';
+    final actorId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    if (client == null || authId.isEmpty || actorId.isEmpty) return;
+    final pending = _messages
+        .where((message) {
+          return _pendingRemoteClubMessageIds.contains(message.id) &&
+              message.senderId == actorId &&
+              isClubThread(message.threadId);
+        })
+        .toList(growable: false);
+    for (final message in pending) {
+      final clubId = clubIdOf(message.threadId);
+      if (clubId == null || !canWriteThread(message.threadId, actorId)) {
+        continue;
+      }
+      try {
+        await client.from('club_channel_messages').insert({
+          'id': message.id,
+          'club_id': clubId,
+          'sender_auth_id': authId,
+          'sender_profile_id': authService.currentUser == null ? null : authId,
+          'sender_club_id': authService.currentAdmin == null ? null : clubId,
+          'message_kind': _databaseKind(message.kind),
+          'content': message.content,
+          'payload': _remotePayload(message),
+          'created_at': message.createdAt.toUtc().toIso8601String(),
+        });
+        _pendingRemoteClubMessageIds.remove(message.id);
+      } on PostgrestException catch (error) {
+        if (error.code == '23505') {
+          _pendingRemoteClubMessageIds.remove(message.id);
+        }
+      } catch (_) {
+        // The local outbox retains the message and retries on the next sync.
+      }
+    }
+    scheduleSave();
+  }
+
+  Future<void> _flushClubInboxMessages() async {
+    final client = _client;
+    final authId = client?.auth.currentUser?.id ?? '';
+    final actorId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    if (client == null || authId.isEmpty || actorId.isEmpty) return;
+    final pending = _messages
+        .where((message) {
+          return _pendingRemoteClubInboxMessageIds.contains(message.id) &&
+              message.senderId == actorId &&
+              isClubInboxThread(message.threadId);
+        })
+        .toList(growable: false);
+    for (final message in pending) {
+      final conversation = clubInboxForThread(message.threadId);
+      if (conversation == null || !canWriteThread(message.threadId, actorId)) {
+        continue;
+      }
+      try {
+        final sendingAsClub =
+            authService.currentAdmin != null ||
+            (clubForId(conversation.clubId)?.boardMemberIds.contains(actorId) ??
+                false);
+        await client.from('club_inbox_messages').insert({
+          'id': message.id,
+          'thread_id': conversation.id,
+          'sender_auth_id': authId,
+          'sender_profile_id': sendingAsClub ? null : authId,
+          'sender_club_id': sendingAsClub ? conversation.clubId : null,
+          'message_kind': _databaseKind(message.kind),
+          'content': message.content,
+          'payload': _remotePayload(message),
+          'created_at': message.createdAt.toUtc().toIso8601String(),
+          'delivered_at': message.deliveredAt.toUtc().toIso8601String(),
+        });
+        await client
+            .from('club_inbox_threads')
+            .update({'updated_at': DateTime.now().toUtc().toIso8601String()})
+            .eq('id', conversation.id);
+        _pendingRemoteClubInboxMessageIds.remove(message.id);
+      } on PostgrestException catch (error) {
+        if (error.code == '23505') {
+          _pendingRemoteClubInboxMessageIds.remove(message.id);
+        }
+      } catch (_) {
+        // Retained for retry.
+      }
+    }
+    scheduleSave();
+  }
+
+  static String _databaseKind(ChatMessageKind kind) => switch (kind) {
+    ChatMessageKind.postShare => 'post_share',
+    _ => kind.name,
+  };
+
+  static Map<String, dynamic> _remotePayload(ChatMessage message) {
+    final payload = message.toMap();
+    payload.remove('id');
+    payload.remove('threadId');
+    payload.remove('senderId');
+    payload.remove('content');
+    payload.remove('createdAt');
+    payload.remove('deliveredAt');
+    payload.remove('seenAt');
+    return payload;
+  }
+
   void _scheduleSyncRetry() {
     if (_syncRetry?.isActive ?? false) return;
     _syncRetry = Timer(const Duration(seconds: 5), () {
       final userId = _syncedUserId;
       if (userId != null) unawaited(startDirectMessageSync(userId));
+      final clubActorId = _clubSyncedActorId;
+      if (clubActorId != null) {
+        unawaited(startClubMessageSync(clubActorId));
+      }
     });
   }
 
@@ -872,6 +1430,14 @@ class ChatStore extends ChangeNotifier {
   /// that manages that club. The super admin has no chat access.
   bool canAccessThread(String threadId, String userId) {
     if (userId.isEmpty) return false;
+    if (isClubInboxThread(threadId)) {
+      final conversation = clubInboxForThread(threadId);
+      final club = conversation == null ? null : clubForId(conversation.clubId);
+      if (conversation == null || club == null) return false;
+      return conversation.profileId == userId ||
+          club.boardMemberIds.contains(userId) ||
+          managedClubForAdmin(userId)?.id == conversation.clubId;
+    }
     if (isAdminAccountId(userId)) {
       return managedCommunityThreadId(userId) == threadId;
     }
@@ -890,6 +1456,21 @@ class ChatStore extends ChangeNotifier {
     final club = clubId == null ? null : clubForId(clubId);
     if (club == null) return false;
     return userState.isFollowing(club.id);
+  }
+
+  /// Read membership and posting authority are intentionally separate for
+  /// club channels: every follower reads, while only board or club accounts
+  /// may publish. DMs and student-created groups remain conversational.
+  bool canWriteThread(String threadId, String userId) {
+    if (!canAccessThread(threadId, userId)) return false;
+    if (isClubInboxThread(threadId)) return true;
+    if (!isClubThread(threadId)) return true;
+    final clubId = clubIdOf(threadId);
+    final club = clubId == null ? null : clubForId(clubId);
+    if (club == null) return false;
+    return club.boardMemberIds.contains(userId) ||
+        club.adminUserIds.contains(userId) ||
+        managedCommunityThreadId(userId) == threadId;
   }
 
   /// Role lookup shared by every messaging entry point. UI visibility is not
@@ -933,7 +1514,9 @@ class ChatStore extends ChangeNotifier {
       if (threadId == null || !canAccessThread(threadId, userId)) {
         return const [];
       }
-      return [_summarize(threadId, userId, byThread[threadId] ?? const [])];
+      result.add(_summarize(threadId, userId, byThread[threadId] ?? const []));
+      _addClubInboxSummaries(result, userId, byThread);
+      return _sortThreadSummaries(result, userId);
     }
     final directThreadIds = {
       ..._directThreadIds,
@@ -955,7 +1538,37 @@ class ChatStore extends ChangeNotifier {
       if (!canAccessThread(threadId, userId)) continue;
       result.add(_summarize(threadId, userId, byThread[threadId] ?? const []));
     }
+    _addClubInboxSummaries(result, userId, byThread);
+    return _sortThreadSummaries(result, userId);
+  }
 
+  void _addClubInboxSummaries(
+    List<ChatThreadSummary> result,
+    String userId,
+    Map<String, List<ChatMessage>> byThread,
+  ) {
+    for (final conversation in _clubInboxes.values) {
+      final threadId = conversation.threadId;
+      if (!canAccessThread(threadId, userId)) continue;
+      result.add(
+        _summarize(
+          threadId,
+          userId,
+          byThread[threadId] ?? const [],
+          clubId: conversation.clubId,
+          clubInboxId: conversation.id,
+          peerId: conversation.profileId == userId
+              ? null
+              : conversation.profileId,
+        ),
+      );
+    }
+  }
+
+  List<ChatThreadSummary> _sortThreadSummaries(
+    List<ChatThreadSummary> result,
+    String userId,
+  ) {
     result.sort((a, b) {
       final aLast = a.lastMessage;
       final bLast = b.lastMessage;
@@ -977,17 +1590,21 @@ class ChatStore extends ChangeNotifier {
   ChatThreadSummary _summarize(
     String threadId,
     String userId,
-    List<ChatMessage> messages,
-  ) {
+    List<ChatMessage> messages, {
+    String? clubId,
+    String? clubInboxId,
+    String? peerId,
+  }) {
     ChatMessage? last;
     for (final m in messages) {
       if (last == null || m.createdAt.isAfter(last.createdAt)) last = m;
     }
     return ChatThreadSummary(
       threadId: threadId,
-      clubId: clubIdOf(threadId),
+      clubId: clubId ?? clubIdOf(threadId),
+      clubInboxId: clubInboxId,
       groupId: groupIdOf(threadId),
-      peerId: dmPeerOf(threadId, userId),
+      peerId: peerId ?? dmPeerOf(threadId, userId),
       lastMessage: last,
       unread: unreadCountFor(threadId, userId),
     );
@@ -1118,6 +1735,7 @@ class ChatStore extends ChangeNotifier {
       ...memberIds.where((id) => id.isNotEmpty && !isAdminAccountId(id)),
     };
     if (members.length < 2) return false;
+    if (setEquals(group.memberIds.toSet(), members)) return false;
     _groups[group.id] = group.withMembers(members);
     _pendingRemoteGroupIds.add(group.id);
     scheduleSave();
@@ -1194,6 +1812,7 @@ class ChatStore extends ChangeNotifier {
     List<String> pollOptions = const [],
     DateTime? pollClosesAt,
     String? eventId,
+    String? sharedPostId,
     bool pinned = false,
   }) {
     if (_box == null) return null;
@@ -1206,9 +1825,10 @@ class ChatStore extends ChangeNotifier {
         (title != null ||
             attachmentPath != null ||
             eventId != null ||
+            sharedPostId != null ||
             pollOptions.isNotEmpty);
     if (text.isEmpty && !carriesPayload) return null;
-    if (!canAccessThread(threadId, senderId)) return null;
+    if (!canWriteThread(threadId, senderId)) return null;
 
     if (isDirectThread(threadId)) _directThreadIds.add(threadId);
 
@@ -1229,6 +1849,7 @@ class ChatStore extends ChangeNotifier {
       pollOptions: pollOptions,
       pollClosesAt: pollClosesAt,
       eventId: eventId,
+      sharedPostId: sharedPostId,
       pinned: pinned,
     );
     if (pinned) _unpinAllIn(threadId);
@@ -1238,11 +1859,19 @@ class ChatStore extends ChangeNotifier {
       _pendingRemoteMessageIds.add(message.id);
     } else if (isGroupThread(threadId)) {
       _pendingRemoteGroupMessageIds.add(message.id);
+    } else if (isClubThread(threadId)) {
+      _pendingRemoteClubMessageIds.add(message.id);
+    } else if (isClubInboxThread(threadId)) {
+      _pendingRemoteClubInboxMessageIds.add(message.id);
     }
     scheduleSave();
     notifyListeners();
     if (isDirectThread(threadId) || isGroupThread(threadId)) {
       unawaited(_flushRemoteChanges());
+    } else if (isClubThread(threadId)) {
+      unawaited(_flushClubMessages());
+    } else if (isClubInboxThread(threadId)) {
+      unawaited(_flushClubInboxMessages());
     }
     if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;
@@ -1302,6 +1931,7 @@ class ChatStore extends ChangeNotifier {
         pollVotes: message.pollVotes,
         pollClosesAt: message.pollClosesAt,
         eventId: message.eventId,
+        sharedPostId: message.sharedPostId,
         pinned: message.pinned,
       ),
     );
@@ -1322,15 +1952,55 @@ class ChatStore extends ChangeNotifier {
       return false;
     }
     final votes = Map<String, int>.from(current.pollVotes);
-    if (votes[userId] == optionIndex) {
+    final retracting = votes[userId] == optionIndex;
+    if (retracting) {
       votes.remove(userId);
     } else {
       votes[userId] = optionIndex;
     }
-    return _replaceMessage(
+    final changed = _replaceMessage(
       messageId,
       (message) => message.copyWith(pollVotes: votes),
     );
+    if (changed && isClubThread(current.threadId)) {
+      unawaited(
+        _persistClubPollVote(
+          messageId: messageId,
+          optionIndex: retracting ? null : optionIndex,
+        ),
+      );
+    }
+    return changed;
+  }
+
+  Future<void> _persistClubPollVote({
+    required String messageId,
+    required int? optionIndex,
+  }) async {
+    final client = _client;
+    final authId = client?.auth.currentUser?.id ?? '';
+    if (client == null || authId.isEmpty) return;
+    try {
+      if (optionIndex == null) {
+        await client
+            .from('club_channel_poll_votes')
+            .delete()
+            .eq('message_id', messageId)
+            .eq('voter_auth_id', authId);
+      } else {
+        await client.from('club_channel_poll_votes').upsert({
+          'message_id': messageId,
+          'voter_auth_id': authId,
+          'option_index': optionIndex,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'message_id,voter_auth_id');
+      }
+    } catch (_) {
+      final actorId = _clubSyncedActorId;
+      if (actorId != null) {
+        await _reconcileRemoteClubMessages(client, actorId);
+      }
+    }
   }
 
   void _unpinAllIn(String threadId) {
@@ -1531,6 +2201,14 @@ class ChatStore extends ChangeNotifier {
         'pendingRemoteGroupMessageIds',
         _pendingRemoteGroupMessageIds.toList(),
       ),
+      box.put(
+        'pendingRemoteClubMessageIds',
+        _pendingRemoteClubMessageIds.toList(),
+      ),
+      box.put(
+        'pendingRemoteClubInboxMessageIds',
+        _pendingRemoteClubInboxMessageIds.toList(),
+      ),
     ]);
   }
 
@@ -1543,6 +2221,7 @@ final chatStore = ChatStore();
 class ChatThreadSummary {
   final String threadId;
   final String? clubId; // set for club rooms
+  final String? clubInboxId; // set for private student ↔ club inboxes
   final String? groupId; // set for student-created groups
   final String? peerId; // set for DM threads
   final ChatMessage? lastMessage;
@@ -1551,6 +2230,7 @@ class ChatThreadSummary {
   ChatThreadSummary({
     required this.threadId,
     required this.clubId,
+    this.clubInboxId,
     required this.groupId,
     required this.peerId,
     required this.lastMessage,
@@ -1558,5 +2238,41 @@ class ChatThreadSummary {
   });
 
   bool get isClub => clubId != null;
+  bool get isClubInbox => clubInboxId != null;
   bool get isGroup => groupId != null;
+}
+
+/// A private support-style conversation between one student profile and one
+/// club. Access is enforced remotely through authenticated RLS policies.
+class ClubInboxConversation {
+  const ClubInboxConversation({
+    required this.id,
+    required this.clubId,
+    required this.profileId,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String clubId;
+  final String profileId;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  String get threadId => ChatStore.clubInboxThreadId(id);
+
+  factory ClubInboxConversation.fromRemoteRow(Map<String, dynamic> row) {
+    final now = DateTime.now();
+    return ClubInboxConversation(
+      id: row['id']?.toString() ?? '',
+      clubId: row['club_id']?.toString() ?? '',
+      profileId: row['profile_id']?.toString() ?? '',
+      createdAt:
+          DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal() ??
+          now,
+      updatedAt:
+          DateTime.tryParse(row['updated_at']?.toString() ?? '')?.toLocal() ??
+          now,
+    );
+  }
 }

@@ -107,9 +107,11 @@ Future<bool> openNotificationTarget(
     case 'direct_message':
     case 'group_chat':
     case 'club_chat':
+    case 'club_inbox':
       if (currentUserId.isEmpty ||
           (ChatStore.isAdminAccountId(currentUserId) &&
-              target.type != 'club_chat')) {
+              target.type != 'club_chat' &&
+              target.type != 'club_inbox')) {
         return false;
       }
       final threadId = target.chatThreadIdFor(currentUserId);
@@ -125,6 +127,9 @@ Future<bool> openNotificationTarget(
         recipient = _knownUser(peerId);
       } else if (ChatStore.isGroupThread(threadId)) {
         await chatStore.startDirectMessageSync(currentUserId);
+      } else if (ChatStore.isClubThread(threadId) ||
+          ChatStore.isClubInboxThread(threadId)) {
+        await chatStore.startClubMessageSync(currentUserId);
       }
       if (!context.mounted ||
           !chatStore.canAccessThread(threadId, currentUserId)) {

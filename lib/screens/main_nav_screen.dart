@@ -229,16 +229,22 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (!mounted) return;
 
     // Club admins may only use their managed community. Never switch them to
-    // a stale DM/group destination left by an older notification payload.
+    // stale student-only messaging destinations.
     if (ChatStore.isAdminAccountId(_currentUserId) &&
         target.isChat &&
-        target.type != 'club_chat') {
+        target.type != 'club_chat' &&
+        target.type != 'club_inbox') {
       return;
     }
 
-    final selectedIndex = target.isChat ? 3 : 0;
+    final selectedIndex = switch (target.type) {
+      'direct_message' || 'group_chat' || 'club_chat' || 'club_inbox' => 3,
+      'event' => 1,
+      'club' || 'user' => 2,
+      _ => 0,
+    };
     if (_selectedIndex != selectedIndex) {
-      setState(() => _selectedIndex = selectedIndex);
+      _selectNavIndex(selectedIndex);
     }
     if (target.type == 'notification') {
       await Navigator.of(context).push(

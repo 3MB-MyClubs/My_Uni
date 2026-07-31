@@ -13,7 +13,7 @@ import 'supabase_config.dart';
 /// without subscribing that student to every club they have joined.
 class AppPresenceService extends ChangeNotifier {
   static const _topic = 'app:presence';
-  static const _backgroundGracePeriod = Duration(seconds: 30);
+  static const _backgroundGracePeriod = Duration(seconds: 5);
   static const _retryDelay = Duration(seconds: 5);
 
   SupabaseClient? _client;
@@ -49,8 +49,12 @@ class AppPresenceService extends ChangeNotifier {
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
     final client = _configuredClient;
-    final authUserId = client?.auth.currentSession?.user.id;
-    if (client == null || authUserId == null || authUserId.isEmpty) {
+    final session = client?.auth.currentSession;
+    final authUserId = session?.user.id;
+    if (client == null ||
+        session == null ||
+        authUserId == null ||
+        authUserId.isEmpty) {
       await _disconnect(clearUsers: true);
       return;
     }
@@ -61,6 +65,15 @@ class AppPresenceService extends ChangeNotifier {
 
     _client = client;
     _presenceUserId = authUserId;
+    // Private Realtime channels authorize at join time. Push the current JWT
+    // explicitly so a freshly restored/refreshed session cannot race the
+    // Supabase client's auth-state listener.
+    try {
+      await client.realtime.setAuth(session.accessToken);
+    } catch (_) {
+      // subscribe() below reports an authorization failure and enters the
+      // normal retry path if the socket cannot accept this token yet.
+    }
     final channel = client
         .channel(
           _topic,
@@ -70,7 +83,9 @@ class AppPresenceService extends ChangeNotifier {
             private: true,
           ),
         )
-        .onPresenceSync((_) => _syncOnlineUsers());
+        .onPresenceSync((_) => _syncOnlineUsers())
+        .onPresenceJoin((_) => _syncOnlineUsers())
+        .onPresenceLeave((_) => _syncOnlineUsers());
     _channel = channel;
 
     channel.subscribe((status, error) {

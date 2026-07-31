@@ -42,6 +42,8 @@ function localizedCopy(
     switch (type) {
       case "direct_message": return { title: actor, body: `${actor}: ${content}` };
       case "group_message": return { title: group, body: `${actor}: ${content}` };
+      case "club_channel_message": return { title: club, body: `${club}: ${content}` };
+      case "club_inbox_message": return { title: actor, body: `${actor}: ${content}` };
       case "club_post": return {
         title: `${club} yeni bir gönderi paylaştı`,
         body: `${club} yeni bir gönderi paylaştı: “${content}” Gönderiyi görmek için dokun.`,
@@ -73,6 +75,8 @@ function localizedCopy(
   switch (type) {
     case "direct_message": return { title: actor, body: `${actor}: ${content}` };
     case "group_message": return { title: group, body: `${actor}: ${content}` };
+    case "club_channel_message": return { title: club, body: `${club}: ${content}` };
+    case "club_inbox_message": return { title: actor, body: `${actor}: ${content}` };
     case "club_post": return {
       title: `${club} posted something new`,
       body: `${club} shared “${content}”. Tap to view the post.`,
