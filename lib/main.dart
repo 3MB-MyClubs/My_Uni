@@ -38,6 +38,7 @@ import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'onboarding/onboarding_service.dart';
 import 'onboarding/starter_checklist_service.dart';
+import 'debug/device_preview.dart';
 import 'services/event_cleanup_service.dart';
 import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
@@ -104,7 +105,14 @@ void main() async {
   // matching app user/admin before the root router chooses its destination.
   await authService.restorePersistedSession();
 
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(
+    const ProviderScope(
+      child: DevicePreview(
+        enabled: bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
+        child: MyApp(),
+      ),
+    ),
+  );
 
   // The app opens on the lightweight launch screen, so none of this needs to
   // finish before first paint: push listeners, local hydration, and the

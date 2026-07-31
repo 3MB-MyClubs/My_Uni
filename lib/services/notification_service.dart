@@ -103,10 +103,11 @@ class NotificationService {
     required String title,
     required String body,
     required Map<String, dynamic> data,
+    String? groupKey,
   }) async {
     if (!_initialized) await initialize();
 
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'clubup_notifications',
       'ClubUp notifications',
       channelDescription: 'Messages and activity from ClubUp',
@@ -114,18 +115,23 @@ class NotificationService {
       priority: Priority.high,
       enableVibration: true,
       playSound: true,
+      groupKey: groupKey,
+      // Keep the native (tag, id) pair stable for a conversation. This also
+      // covers notifications created locally while the app is foregrounded.
+      tag: groupKey,
     );
-    const iosDetails = DarwinNotificationDetails(
+    final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      threadIdentifier: groupKey,
     );
 
     await _notificationsPlugin.show(
       id,
       title,
       body,
-      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
       payload: jsonEncode(data),
     );
   }
@@ -201,6 +207,17 @@ class NotificationService {
 
   int _eventReminderId(String eventId, String offset) =>
       'event_reminder_${eventId}_$offset'.hashCode;
+
+  /// Stable notification ids let a new message replace the previous system
+  /// notification for the same conversation instead of creating another row.
+  int notificationIdFor(String key) {
+    var hash = 0x811c9dc5;
+    for (final unit in key.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0x7fffffff;
+    }
+    return hash == 0 ? 1 : hash;
+  }
 
   /// Cancel all notifications
   Future<void> cancelAllNotifications() async {

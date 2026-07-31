@@ -165,4 +165,45 @@ void main() {
       isFalse,
     );
   });
+
+  test('non-admin members can leave without removing the group creator', () {
+    final threadId = store.createGroupThread(
+      creatorId: 'u1',
+      recipientIds: ['u2', 'u3'],
+    )!;
+
+    expect(store.leaveGroup(threadId, userId: 'u2'), isTrue);
+    expect(store.groupParticipants(threadId), ['u1', 'u3']);
+    expect(store.canAccessThread(threadId, 'u2'), isFalse);
+    expect(store.canAccessThread(threadId, 'u3'), isTrue);
+
+    // Leaving a two-member group is still allowed; the creator remains in it.
+    expect(store.leaveGroup(threadId, userId: 'u3'), isTrue);
+    expect(store.groupParticipants(threadId), ['u1']);
+    expect(store.leaveGroup(threadId, userId: 'u1'), isFalse);
+  });
+
+  test('only group admins can delete the group for everyone', () {
+    final threadId = store.createGroupThread(
+      creatorId: 'u1',
+      recipientIds: ['u2', 'u3'],
+    )!;
+
+    expect(store.deleteGroup(threadId, actorId: 'u2'), isFalse);
+    expect(store.groupForThread(threadId), isNotNull);
+
+    expect(
+      store.setGroupMemberAdmin(
+        threadId,
+        actorId: 'u1',
+        memberId: 'u2',
+        isAdmin: true,
+      ),
+      isTrue,
+    );
+    expect(store.deleteGroup(threadId, actorId: 'u2'), isTrue);
+    expect(store.groupForThread(threadId), isNull);
+    expect(store.canAccessThread(threadId, 'u1'), isFalse);
+    expect(store.canAccessThread(threadId, 'u2'), isFalse);
+  });
 }

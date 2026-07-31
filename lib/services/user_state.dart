@@ -374,8 +374,25 @@ class UserState extends ChangeNotifier {
   void addNotification(AppNotification n) {
     if (n.targetType == 'story') return;
     if (dynamicNotifications.any((existing) => existing.id == n.id)) return;
+
+    final conversationKey = notificationConversationKey(n);
+    if (conversationKey != null) {
+      final existingIndex = dynamicNotifications.indexWhere(
+        (existing) => notificationConversationKey(existing) == conversationKey,
+      );
+      if (existingIndex >= 0) {
+        final previous = dynamicNotifications[existingIndex];
+        readNotificationIds.remove(previous.id);
+        dynamicNotifications[existingIndex] = n;
+        unreadNotifications = unreadNotificationCountFor(dynamicNotifications);
+        contentStore.saveDynamicNotifications(dynamicNotifications);
+        notifyListeners();
+        return;
+      }
+    }
+
     dynamicNotifications.insert(0, n);
-    unreadNotifications++;
+    unreadNotifications = unreadNotificationCountFor(dynamicNotifications);
     contentStore.saveDynamicNotifications(dynamicNotifications);
     notifyListeners();
   }

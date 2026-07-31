@@ -129,7 +129,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final canCreate = _selected.length >= 2;
-    final selectedIds = _selected.keys.toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -153,8 +152,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
                     child: GroupPhotoPicker(
-                      key: ValueKey(selectedIds.join('|')),
-                      memberIds: selectedIds,
+                      key: ValueKey(_selected.keys.join('|')),
+                      memberIds: _selected.keys.toList(),
                       nameForUser: _nameFor,
                       imagePath: _photoPath,
                       onChanged: (path) => setState(() => _photoPath = path),

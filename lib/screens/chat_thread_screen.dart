@@ -12,6 +12,7 @@ import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
+import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
 import '../services/mock_data.dart';
@@ -30,7 +31,7 @@ import 'group_info_screen.dart';
 import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
-enum _ChatAttachment { photo, camera, file }
+enum _ChatAttachment { photo, camera }
 
 /// The presence green shared by the header dot and the avatar dots.
 const Color _onlineGreen = Color(0xFF2E7D32);
@@ -243,15 +244,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _markVisibleMessagesSeen();
   }
 
-  /// Sends the composer draft, or [text] when a starter chip was tapped.
-  void _send({String? text}) {
+  /// Sends the current composer draft.
+  void _send() {
     final sent = chatStore.sendMessage(
       threadId: widget.threadId,
       senderId: _myId,
-      content: text ?? _inputController.text,
+      content: _inputController.text,
     );
     if (sent == null) return;
-    if (text == null) _inputController.clear();
+    _inputController.clear();
     _scrollToLatest();
   }
 
@@ -313,7 +314,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 Icons.photo_camera_outlined,
                 S.takePhoto,
               ),
-              (_ChatAttachment.file, Icons.attach_file_rounded, S.attachFile),
             ])
               InkWell(
                 key: ValueKey('chat-attach-${attachment.name}'),
@@ -360,19 +360,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final XFile? picked = switch (attachment) {
       _ChatAttachment.photo => await ImagePicker().pickImage(
         source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 88,
       ),
       _ChatAttachment.camera => await ImagePicker().pickImage(
         source: ImageSource.camera,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 88,
       ),
-      _ChatAttachment.file => await ImagePicker().pickMedia(),
     };
     if (picked == null || !mounted) return;
-    _sendAttachment(
-      picked,
-      attachment == _ChatAttachment.file
-          ? ChatMessageKind.file
-          : ChatMessageKind.photo,
-    );
+    _sendAttachment(picked, ChatMessageKind.photo);
   }
 
   void _sendAttachment(XFile file, ChatMessageKind kind) {
@@ -399,6 +399,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // ── Reactions ───────────────────────────────────────────────────────────────
 
   static const _quickReactions = ['👍', '❤️', '🎉', '👏', '😂', '🙌'];
+
+  Future<void> _confirmDeleteMessage(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(S.deleteMessage),
+        content: Text(S.deleteMessageMsg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(S.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              S.delete,
+              style: TextStyle(color: AppColors.primaryRed),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      chatStore.deleteMessage(messageId: message.id, userId: _myId);
+    }
+  }
 
   void _openReactionPicker(ChatMessage message) {
     showModalBottomSheet<void>(
@@ -456,6 +482,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
               ],
             ),
+            if (chatStore.isMessageOwner(message, _myId)) ...[
+              const SizedBox(height: 8),
+              Divider(color: AppColors.divider),
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  key: ValueKey('chat-delete-message-${message.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppColors.primaryRed,
+                  ),
+                  title: Text(
+                    S.deleteMessage,
+                    style: TextStyle(
+                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(_confirmDeleteMessage(message));
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -467,7 +519,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Display name + whether the sender is a club-admin account.
   (String, bool) _senderInfo(String senderId) {
     final club = _club;
-    if (_isClubInbox && club != null && senderId == club.id) {
+    if (club != null &&
+        (senderId == club.id ||
+            club.adminUserIds.contains(senderId) ||
+            managedClubForAdmin(senderId)?.id == club.id)) {
       return (club.name, true);
     }
     final user = _userForId(senderId);
@@ -499,7 +554,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           builder: (_) =>
               GroupInfoScreen(threadId: widget.threadId, myId: _myId),
         ),
-      ).then((_) => _markVisibleMessagesSeen());
+      ).then((leftGroup) {
+        if (leftGroup == true && mounted) {
+          Navigator.pop(context);
+        } else {
+          _markVisibleMessagesSeen();
+        }
+      });
       return;
     }
     final peer = _peer;
@@ -565,11 +626,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   children: [
                     _buildHeader(),
                     Expanded(child: _buildMessageList(messages)),
-                    // Openers stay docked above the composer until the first
-                    // message lands.
-                    if (messages.isEmpty &&
-                        chatStore.canWriteThread(widget.threadId, _myId))
-                      _buildStarterChips(),
                     _buildInputBar(
                       enabled: chatStore.canWriteThread(widget.threadId, _myId),
                     ),
@@ -971,8 +1027,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   /// The single quiet line under the name: what you already have in common
   /// with a peer, or who is in a new group. Falls back to plainly naming the
-  /// state — the starter chips above the composer carry the call to action, so
-  /// this line never needs to instruct.
+  /// state without adding another instruction to the empty conversation.
   String _introContext() {
     if (_isGroup) {
       final group = chatStore.groupForThread(widget.threadId);
@@ -1094,60 +1149,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  // ── Starter chips ───────────────────────────────────────────────────────────
-
-  Widget _buildStarterChips() {
-    final starters = _isGroup ? S.groupStarters : S.dmStarters;
-    return SizedBox(
-      height: 54,
-      child: ListView.separated(
-        key: const ValueKey('chat-starter-chips'),
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-        itemCount: starters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final starter = starters[index];
-          return Center(
-            child: GestureDetector(
-              key: ValueKey('chat-starter-$index'),
-              onTap: () => _send(text: starter),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 15,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: AppColors.divider),
-                  boxShadow: themeService.isDark
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: AppColors.primaryRed.withValues(alpha: 0.07),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                ),
-                child: Text(
-                  starter,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.1,
-                    color: AppColors.primaryRed,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   // ── Message list ────────────────────────────────────────────────────────────
 
   Widget _buildMessageList(List<ChatMessage> messages) {
@@ -1188,7 +1189,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required bool firstOfRun,
     required bool lastOfRun,
   }) {
-    final mine = m.senderId == _myId;
+    final mine = chatStore.isMessageOwner(m, _myId);
     final (senderName, senderIsAdmin) = _senderInfo(m.senderId);
     final club = _club;
     final isMultiParticipant = _isClub || _isGroup;
@@ -1487,8 +1488,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Widget _photoAttachment(String path) {
-    final file = File(path);
-    final exists = file.existsSync();
+    final isRemote = path.startsWith('http://') || path.startsWith('https://');
+    final file = isRemote ? null : File(path);
+    final exists = isRemote || file!.existsSync();
+    final imageProvider = isRemote
+        ? NetworkImage(path) as ImageProvider
+        : FileImage(file!);
     return GestureDetector(
       key: ValueKey('chat-photo-$path'),
       onTap: exists
@@ -1499,7 +1504,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 onTap: () => Navigator.pop(dialogContext),
                 child: InteractiveViewer(
                   maxScale: 4,
-                  child: Center(child: Image.file(file, fit: BoxFit.contain)),
+                  child: Center(
+                    child: Image(image: imageProvider, fit: BoxFit.contain),
+                  ),
                 ),
               ),
             )
@@ -1514,7 +1521,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             borderRadius: BorderRadius.circular(15),
           ),
           child: exists
-              ? Image.file(file, fit: BoxFit.cover)
+              ? Image(
+                  image: imageProvider,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => _missingPhotoPlaceholder(),
+                )
               : Container(
                   height: 140,
                   alignment: Alignment.center,
@@ -1529,6 +1540,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
   }
+
+  Widget _missingPhotoPlaceholder() => Container(
+    height: 140,
+    alignment: Alignment.center,
+    color: AppColors.surfaceAlt,
+    child: Icon(Icons.image_outlined, size: 26, color: AppColors.secondaryText),
+  );
 
   Widget _fileAttachment(ChatMessage m, {required bool mine}) {
     final name = m.attachmentName ?? S.attachFile;
@@ -1627,9 +1645,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       child: SafeArea(
         top: false,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // "+" — photo, camera, or file.
+            // "+" — photo or camera.
             _composerCircleButton(
               key: const ValueKey('chat-attach-button'),
               size: 40,
@@ -1643,21 +1661,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             Expanded(
               child: Container(
                 constraints: const BoxConstraints(minHeight: 44),
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: AppColors.surfaceAlt,
                   borderRadius: const BorderRadius.all(Radius.circular(22)),
                   border: Border.all(color: AppColors.divider),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _inputController,
                         enabled: enabled,
                         minLines: 1,
-                        maxLines: 4,
+                        maxLines: 1,
+                        textInputAction: TextInputAction.send,
+                        textAlignVertical: TextAlignVertical.center,
                         textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: enabled ? (_) => _send() : null,
                         style: TextStyle(fontSize: 14.5, color: AppColors.text),
                         decoration: InputDecoration(
                           hintText: S.typeMessage,
@@ -1672,9 +1694,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           disabledBorder: InputBorder.none,
                           contentPadding: const EdgeInsets.fromLTRB(
                             16,
-                            12,
+                            0,
                             4,
-                            12,
+                            0,
                           ),
                         ),
                       ),
@@ -1698,8 +1720,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
             const SizedBox(width: 9),
-            // Send once there is a draft; the mic affordance sits in its place
-            // until then.
+            // Send once there is a draft. The disabled send affordance keeps
+            // the composer layout stable without offering voice notes.
             ListenableBuilder(
               listenable: _inputController,
               builder: (context, _) {
@@ -1708,11 +1730,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 return GestureDetector(
                   key: const ValueKey('chat-send-button'),
                   behavior: HitTestBehavior.opaque,
-                  onTap: !enabled
-                      ? null
-                      : hasDraft
-                      ? _send
-                      : _announceVoiceUnavailable,
+                  onTap: enabled && hasDraft ? _send : null,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     width: 46,
@@ -1743,9 +1761,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           : null,
                     ),
                     child: Icon(
-                      hasDraft ? Icons.send_rounded : Icons.mic_none_rounded,
+                      Icons.send_rounded,
                       size: 21,
-                      color: hasDraft ? Colors.white : AppColors.primaryRed,
+                      color: hasDraft ? Colors.white : AppColors.secondaryText,
                     ),
                   ),
                 );
@@ -1786,15 +1804,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               : null,
           child: Icon(icon, size: iconSize, color: iconColor),
         ),
-      ),
-    );
-  }
-
-  void _announceVoiceUnavailable() {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text(S.voiceNotesUnavailable),
-        duration: const Duration(seconds: 2),
       ),
     );
   }

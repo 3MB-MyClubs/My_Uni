@@ -20,13 +20,16 @@ import 'user_state.dart';
 /// one members-only community chat per club.
 ///
 /// Messages and per-user read state persist to Hive. Group membership and an
-/// optional custom name are persisted too; an unnamed group's displayed name
-/// is always derived from its current members at render time.
+/// optional custom name are persisted too; an unnamed group's displayed name is
+/// always derived from its current members at render time.
 ///
 /// Like the other stores, every method no-ops / returns empty before
 /// [initialize] so screens render safely in widget tests without Hive.
 class ChatStore extends ChangeNotifier {
   static const _boxName = 'chat_v1';
+  static const _chatAttachmentBucket = 'chat-attachments';
+  static const _chatAttachmentReferencePrefix = 'chat-attachment://';
+  static const _chatAttachmentSignedUrlLifetimeSeconds = 3600;
   static const _remoteMessageColumns = 'message_kind, payload, crypto_version';
 
   /// Removes the old scripted DMs, club messages, and empty demo threads from
@@ -66,6 +69,19 @@ class ChatStore extends ChangeNotifier {
   final Map<String, ClubInboxConversation> _clubInboxes = {};
   final Set<String> _pendingRemoteClubInboxMessageIds = {};
 
+  /// Group id → user id for groups an admin deleted locally and still needs
+  /// to delete from Supabase.
+  final Map<String, String> _pendingRemoteGroupDeleteActorIds = {};
+
+  /// Group id → user id for membership rows that a non-creator left locally
+  /// and still needs to delete from Supabase.
+  final Map<String, String> _pendingRemoteGroupLeaveUserIds = {};
+
+  /// Message id → thread id for locally deleted messages awaiting remote
+  /// deletion. Keeping this separate from the message outboxes prevents a
+  /// failed delete from being resurrected by a later remote reconciliation.
+  final Map<String, String> _pendingRemoteDeleteThreadIds = {};
+
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
 
@@ -90,6 +106,14 @@ class ChatStore extends ChangeNotifier {
 
   static bool isClubInboxThread(String threadId) =>
       threadId.startsWith('clubdm:');
+
+  static String? _messageTableForThread(String threadId) {
+    if (isDirectThread(threadId)) return 'direct_messages';
+    if (isGroupThread(threadId)) return 'group_messages';
+    if (isClubThread(threadId)) return 'club_channel_messages';
+    if (isClubInboxThread(threadId)) return 'club_inbox_messages';
+    return null;
+  }
 
   /// The club id of a `club:` thread, or null for DM threads.
   static String? clubIdOf(String threadId) =>
@@ -221,6 +245,36 @@ class ChatStore extends ChangeNotifier {
         rawPendingClubInboxMessages.map((id) => id.toString()),
       );
     }
+    final rawPendingRemoteDeletes = box.get('pendingRemoteDeleteThreadIds');
+    if (rawPendingRemoteDeletes is Map) {
+      for (final entry in rawPendingRemoteDeletes.entries) {
+        final messageId = entry.key.toString();
+        final threadId = entry.value.toString();
+        if (messageId.isNotEmpty && threadId.isNotEmpty) {
+          _pendingRemoteDeleteThreadIds[messageId] = threadId;
+        }
+      }
+    }
+    final rawPendingGroupLeaves = box.get('pendingRemoteGroupLeaveUserIds');
+    if (rawPendingGroupLeaves is Map) {
+      for (final entry in rawPendingGroupLeaves.entries) {
+        final groupId = entry.key.toString();
+        final userId = entry.value.toString();
+        if (groupId.isNotEmpty && userId.isNotEmpty) {
+          _pendingRemoteGroupLeaveUserIds[groupId] = userId;
+        }
+      }
+    }
+    final rawPendingGroupDeletes = box.get('pendingRemoteGroupDeleteActorIds');
+    if (rawPendingGroupDeletes is Map) {
+      for (final entry in rawPendingGroupDeletes.entries) {
+        final groupId = entry.key.toString();
+        final actorId = entry.value.toString();
+        if (groupId.isNotEmpty && actorId.isNotEmpty) {
+          _pendingRemoteGroupDeleteActorIds[groupId] = actorId;
+        }
+      }
+    }
     // Existing installs predate the explicit empty-thread registry. Preserve
     // every conversation that can already be inferred from its messages.
     _directThreadIds.addAll(
@@ -281,6 +335,9 @@ class ChatStore extends ChangeNotifier {
     final retainedMessageIds = _messages.map((message) => message.id).toSet();
     _pendingRemoteMessageIds.retainAll(retainedMessageIds);
     _pendingRemoteGroupMessageIds.retainAll(retainedMessageIds);
+    _pendingRemoteDeleteThreadIds.removeWhere(
+      (_, threadId) => removedDirectThreads.contains(threadId),
+    );
     for (final reads in _lastRead.values) {
       for (final threadId in removedDirectThreads) {
         reads.remove(threadId);
@@ -514,8 +571,13 @@ class ChatStore extends ChangeNotifier {
     PostgresChangePayload payload,
     String actorId,
   ) async {
-    final record = payload.newRecord;
+    final isDelete = payload.newRecord.isEmpty;
+    final record = isDelete ? payload.oldRecord : payload.newRecord;
     if (record.isEmpty) return;
+    if (isDelete) {
+      _removeRemoteMessageLocally(record['id']?.toString() ?? '');
+      return;
+    }
     await _mergeRemoteClubMessage(record, actorId);
   }
 
@@ -606,10 +668,7 @@ class ChatStore extends ChangeNotifier {
     if (id.isEmpty || clubId.isEmpty || senderId.isEmpty || createdAt == null) {
       return;
     }
-    if (_messages.any((message) => message.id == id)) {
-      _pendingRemoteClubMessageIds.remove(id);
-      return;
-    }
+    if (_pendingRemoteDeleteThreadIds.containsKey(id)) return;
     final message = await _messageFromRemotePayload(
       row: row,
       id: id,
@@ -619,6 +678,20 @@ class ChatStore extends ChangeNotifier {
       deliveredAt: createdAt,
     );
     if (message == null) return;
+    final existingIndex = _messages.indexWhere(
+      (candidate) => candidate.id == id,
+    );
+    if (existingIndex != -1) {
+      if (_messages[existingIndex].attachmentPath != message.attachmentPath) {
+        _messages[existingIndex] = _messages[existingIndex].copyWith(
+          attachmentPath: message.attachmentPath,
+        );
+        scheduleSave();
+        notifyListeners();
+      }
+      _pendingRemoteClubMessageIds.remove(id);
+      return;
+    }
     _messages.add(message);
     _pendingRemoteClubMessageIds.remove(id);
     if (notifyRecipient && senderId != actorId) {
@@ -720,8 +793,13 @@ class ChatStore extends ChangeNotifier {
     PostgresChangePayload payload,
     String actorId,
   ) async {
-    final record = payload.newRecord;
+    final isDelete = payload.newRecord.isEmpty;
+    final record = isDelete ? payload.oldRecord : payload.newRecord;
     if (record.isEmpty) return;
+    if (isDelete) {
+      _removeRemoteMessageLocally(record['id']?.toString() ?? '');
+      return;
+    }
     await _mergeRemoteClubInboxMessage(record, actorId);
   }
 
@@ -748,10 +826,7 @@ class ChatStore extends ChangeNotifier {
         _clubInboxes[inboxId] == null) {
       return;
     }
-    if (_messages.any((message) => message.id == id)) {
-      _pendingRemoteClubInboxMessageIds.remove(id);
-      return;
-    }
+    if (_pendingRemoteDeleteThreadIds.containsKey(id)) return;
     final message = await _messageFromRemotePayload(
       row: row,
       id: id,
@@ -762,6 +837,20 @@ class ChatStore extends ChangeNotifier {
       seenAt: seenAt,
     );
     if (message == null) return;
+    final existingIndex = _messages.indexWhere(
+      (candidate) => candidate.id == id,
+    );
+    if (existingIndex != -1) {
+      if (_messages[existingIndex].attachmentPath != message.attachmentPath) {
+        _messages[existingIndex] = _messages[existingIndex].copyWith(
+          attachmentPath: message.attachmentPath,
+        );
+        scheduleSave();
+        notifyListeners();
+      }
+      _pendingRemoteClubInboxMessageIds.remove(id);
+      return;
+    }
     _messages.add(message);
     _pendingRemoteClubInboxMessageIds.remove(id);
     if (notifyRecipient && senderId != actorId) {
@@ -790,6 +879,14 @@ class ChatStore extends ChangeNotifier {
     String userId,
   ) async {
     try {
+      final pendingLeaveGroupIds = _pendingRemoteGroupLeaveUserIds.entries
+          .where((entry) => entry.value == userId)
+          .map((entry) => entry.key)
+          .toSet();
+      final pendingDeleteGroupIds = _pendingRemoteGroupDeleteActorIds.entries
+          .where((entry) => entry.value == userId)
+          .map((entry) => entry.key)
+          .toSet();
       final ownMembershipRows = await client
           .from('group_chat_members')
           .select('group_id')
@@ -797,6 +894,8 @@ class ChatStore extends ChangeNotifier {
       final groupIds = ownMembershipRows
           .map((row) => row['group_id']?.toString() ?? '')
           .where((id) => id.isNotEmpty)
+          .where((id) => !pendingLeaveGroupIds.contains(id))
+          .where((id) => !pendingDeleteGroupIds.contains(id))
           .toSet()
           .toList();
       final removedGroupIds = _groups.values
@@ -826,7 +925,9 @@ class ChatStore extends ChangeNotifier {
       final results = await Future.wait([
         client
             .from('group_chats')
-            .select('id, creator_id, custom_name, photo_url, created_at')
+            .select(
+              'id, creator_id, admin_ids, custom_name, photo_url, created_at',
+            )
             .inFilter('id', groupIds),
         client
             .from('group_chat_members')
@@ -867,11 +968,18 @@ class ChatStore extends ChangeNotifier {
           continue;
         }
         final custom = row['custom_name']?.toString().trim() ?? '';
+        final rawAdminIds = row['admin_ids'];
+        final adminIds = rawAdminIds is List
+            ? rawAdminIds
+                  .map((id) => id.toString())
+                  .where((id) => id.isNotEmpty)
+                  .toList(growable: false)
+            : const <String>[];
         _groups[id] = ChatGroup(
           id: id,
           creatorId: row['creator_id']?.toString() ?? '',
           memberIds: membersByGroup[id] ?? const [],
-          adminIds: _groups[id]?.adminIds ?? const [],
+          adminIds: adminIds,
           customName: custom.isEmpty ? null : custom,
           photoUrl: row['photo_url']?.toString(),
           createdAt:
@@ -912,10 +1020,7 @@ class ChatStore extends ChangeNotifier {
         _groups[groupId] == null) {
       return;
     }
-    if (_messages.any((message) => message.id == id)) {
-      _pendingRemoteGroupMessageIds.remove(id);
-      return;
-    }
+    if (_pendingRemoteDeleteThreadIds.containsKey(id)) return;
     final message = await _messageFromRemotePayload(
       row: row,
       id: id,
@@ -925,6 +1030,20 @@ class ChatStore extends ChangeNotifier {
       deliveredAt: createdAt,
     );
     if (message == null) return;
+    final existingIndex = _messages.indexWhere(
+      (candidate) => candidate.id == id,
+    );
+    if (existingIndex != -1) {
+      if (_messages[existingIndex].attachmentPath != message.attachmentPath) {
+        _messages[existingIndex] = _messages[existingIndex].copyWith(
+          attachmentPath: message.attachmentPath,
+        );
+        scheduleSave();
+        notifyListeners();
+      }
+      _pendingRemoteGroupMessageIds.remove(id);
+      return;
+    }
     _messages.add(message);
     _pendingRemoteGroupMessageIds.remove(id);
     if (notifyRecipient && senderId != viewerId) {
@@ -950,8 +1069,13 @@ class ChatStore extends ChangeNotifier {
     PostgresChangePayload payload,
     String viewerId,
   ) async {
-    final record = payload.newRecord;
+    final isDelete = payload.newRecord.isEmpty;
+    final record = isDelete ? payload.oldRecord : payload.newRecord;
     if (record.isEmpty) return;
+    if (isDelete) {
+      _removeRemoteMessageLocally(record['id']?.toString() ?? '');
+      return;
+    }
     final senderId = record['sender_id']?.toString() ?? '';
     if (senderId.isNotEmpty) {
       await peopleService.hydrateProfilesByIds([senderId]);
@@ -987,8 +1111,13 @@ class ChatStore extends ChangeNotifier {
   }
 
   Future<void> _handleDirectMessageChange(PostgresChangePayload payload) async {
-    final record = payload.newRecord;
+    final isDelete = payload.newRecord.isEmpty;
+    final record = isDelete ? payload.oldRecord : payload.newRecord;
     if (record.isEmpty) return;
+    if (isDelete) {
+      _removeRemoteMessageLocally(record['id']?.toString() ?? '');
+      return;
+    }
     final message = await _messageFromRemoteRow(record);
     if (message == null) return;
     await peopleService.hydrateProfilesByIds([
@@ -1067,12 +1196,46 @@ class ChatStore extends ChangeNotifier {
       ..['createdAt'] = createdAt.toLocal().toIso8601String()
       ..['deliveredAt'] = deliveredAt.toLocal().toIso8601String()
       ..['seenAt'] = seenAt?.toLocal().toIso8601String();
+    final attachmentReference = payload['attachmentPath']?.toString() ?? '';
+    if (attachmentReference.startsWith(_chatAttachmentReferencePrefix)) {
+      final objectPath = attachmentReference.substring(
+        _chatAttachmentReferencePrefix.length,
+      );
+      if (objectPath.isNotEmpty) {
+        try {
+          payload['attachmentPath'] = await _signedChatAttachmentUrl(
+            objectPath,
+          );
+        } catch (_) {
+          // Keep the reference so a later reconciliation can refresh it.
+        }
+      }
+    }
     return ChatMessage.fromMap(payload);
+  }
+
+  Future<String> _signedChatAttachmentUrl(String objectPath) async {
+    final client = _client;
+    if (client == null) return objectPath;
+    return client.storage
+        .from(_chatAttachmentBucket)
+        .createSignedUrl(objectPath, _chatAttachmentSignedUrlLifetimeSeconds);
+  }
+
+  void _removeRemoteMessageLocally(String messageId) {
+    if (messageId.isEmpty) return;
+    final index = _messages.indexWhere((message) => message.id == messageId);
+    _pendingRemoteDeleteThreadIds.remove(messageId);
+    if (index == -1) return;
+    _messages.removeAt(index);
+    scheduleSave();
+    notifyListeners();
   }
 
   void _mergeRemoteMessages(Iterable<ChatMessage> remoteMessages) {
     var changed = false;
     for (final remote in remoteMessages) {
+      if (_pendingRemoteDeleteThreadIds.containsKey(remote.id)) continue;
       final index = _messages.indexWhere((local) => local.id == remote.id);
       if (index == -1) {
         _messages.add(remote);
@@ -1088,6 +1251,9 @@ class ChatStore extends ChangeNotifier {
             local.kind != merged.kind ||
             local.title != merged.title ||
             local.sharedPostId != merged.sharedPostId ||
+            local.attachmentPath != merged.attachmentPath ||
+            local.attachmentName != merged.attachmentName ||
+            local.attachmentSize != merged.attachmentSize ||
             !listEquals(local.pollOptions, merged.pollOptions) ||
             local.deliveredAt != merged.deliveredAt ||
             local.seenAt != merged.seenAt) {
@@ -1103,6 +1269,117 @@ class ChatStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _flushRemoteDeletes() async {
+    final client = _client;
+    if (client == null || client.auth.currentUser == null) return;
+    var failed = false;
+    for (final entry in _pendingRemoteDeleteThreadIds.entries.toList()) {
+      final table = _messageTableForThread(entry.value);
+      if (table == null) {
+        _pendingRemoteDeleteThreadIds.remove(entry.key);
+        continue;
+      }
+      try {
+        await client.from(table).delete().eq('id', entry.key);
+        _pendingRemoteDeleteThreadIds.remove(entry.key);
+      } catch (_) {
+        failed = true;
+      }
+    }
+    scheduleSave();
+    if (failed) _scheduleSyncRetry();
+  }
+
+  Future<ChatMessage?> _prepareMessageForRemote(
+    SupabaseClient client,
+    ChatMessage message, {
+    required String storageOwnerId,
+  }) async {
+    final attachmentPath = message.attachmentPath?.trim() ?? '';
+    if (message.kind != ChatMessageKind.photo || attachmentPath.isEmpty) {
+      return message;
+    }
+    if (attachmentPath.startsWith(_chatAttachmentReferencePrefix)) {
+      return message;
+    }
+    if (_isRemoteAttachmentUrl(attachmentPath)) {
+      final objectPath = _chatAttachmentObjectPathFromUrl(attachmentPath);
+      return objectPath == null
+          ? message
+          : message.copyWith(
+              attachmentPath: '$_chatAttachmentReferencePrefix$objectPath',
+            );
+    }
+
+    final file = File(attachmentPath);
+    if (!await file.exists()) return null;
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty || storageOwnerId.isEmpty) return null;
+
+    final extension = _attachmentExtension(
+      message.attachmentName ?? attachmentPath,
+    );
+    final objectPath = '$storageOwnerId/${message.id}.$extension';
+    await client.storage
+        .from(_chatAttachmentBucket)
+        .uploadBinary(
+          objectPath,
+          bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: _attachmentContentType(extension),
+            cacheControl: '31536000',
+          ),
+        );
+
+    // Keep the storage reference in the remote row. A signed URL requires
+    // SELECT access to storage.objects, but the participant-based policy can
+    // only see the attachment after the chat message row exists. Signing here
+    // would therefore fail before the insert below gets a chance to run.
+    // The remote hydration path creates a signed URL after the row is present.
+    final remoteMessage = message.copyWith(
+      attachmentPath: '$_chatAttachmentReferencePrefix$objectPath',
+    );
+    return remoteMessage;
+  }
+
+  static bool _isRemoteAttachmentUrl(String value) =>
+      value.startsWith('http://') || value.startsWith('https://');
+
+  static String? _chatAttachmentObjectPathFromUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null) return null;
+    final segments = uri.pathSegments;
+    final bucketIndex = segments.lastIndexOf(_chatAttachmentBucket);
+    if (bucketIndex == -1 || bucketIndex == segments.length - 1) return null;
+    return segments.skip(bucketIndex + 1).map(Uri.decodeComponent).join('/');
+  }
+
+  static String _attachmentExtension(String value) {
+    final lower = value.toLowerCase();
+    for (final extension in [
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+      'gif',
+      'heic',
+      'heif',
+    ]) {
+      if (lower.endsWith('.$extension')) return extension;
+    }
+    return 'jpg';
+  }
+
+  static String _attachmentContentType(String extension) => switch (extension) {
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'gif' => 'image/gif',
+    'heic' => 'image/heic',
+    'heif' => 'image/heif',
+    _ => 'image/jpeg',
+  };
+
   Future<void> _flushRemoteChanges() async {
     if (_flushingRemote) return;
     final userId = _syncedUserId;
@@ -1114,7 +1391,43 @@ class ChatStore extends ChangeNotifier {
     }
     _flushingRemote = true;
     var failed = false;
+    var removedLocalGroup = false;
     try {
+      for (final entry in _pendingRemoteGroupDeleteActorIds.entries.toList()) {
+        final groupId = entry.key;
+        final actorId = entry.value;
+        if (actorId != userId) continue;
+        try {
+          await client.from('group_chats').delete().eq('id', groupId);
+          _pendingRemoteGroupDeleteActorIds.remove(groupId);
+        } catch (_) {
+          failed = true;
+        }
+      }
+
+      for (final entry in _pendingRemoteGroupLeaveUserIds.entries.toList()) {
+        final groupId = entry.key;
+        final leaveUserId = entry.value;
+        if (leaveUserId != userId) continue;
+        try {
+          await client
+              .from('group_chat_members')
+              .delete()
+              .eq('group_id', groupId)
+              .eq('user_id', leaveUserId);
+          _pendingRemoteGroupLeaveUserIds.remove(groupId);
+          final group = _groups.remove(groupId);
+          if (group != null) {
+            final threadId = group.threadId;
+            _messages.removeWhere((message) => message.threadId == threadId);
+            _lastRead[userId]?.remove(threadId);
+            removedLocalGroup = true;
+          }
+        } catch (_) {
+          failed = true;
+        }
+      }
+
       for (final groupId in _pendingRemoteGroupIds.toList()) {
         final group = _groups[groupId];
         if (group == null || group.creatorId != userId) continue;
@@ -1126,6 +1439,7 @@ class ChatStore extends ChangeNotifier {
           await client.from('group_chats').upsert({
             'id': group.id,
             'creator_id': group.creatorId,
+            'admin_ids': {group.creatorId, ...group.adminIds}.toList(),
             'custom_name': group.customName,
             'photo_url': hasRemotePhoto ? localPhoto : null,
             'created_at': group.createdAt.toUtc().toIso8601String(),
@@ -1194,16 +1508,25 @@ class ChatStore extends ChangeNotifier {
         final groupId = groupIdOf(message.threadId);
         if (groupId == null) continue;
         try {
+          final remoteMessage = await _prepareMessageForRemote(
+            client,
+            message,
+            storageOwnerId: userId,
+          );
+          if (remoteMessage == null) {
+            failed = true;
+            continue;
+          }
           await client.from('group_messages').insert({
-            'id': message.id,
+            'id': remoteMessage.id,
             'group_id': groupId,
             'sender_id': userId,
-            'content': message.content,
-            'message_kind': _databaseKind(message.kind),
-            'payload': _remotePayload(message),
-            'created_at': message.createdAt.toUtc().toIso8601String(),
+            'content': remoteMessage.content,
+            'message_kind': _databaseKind(remoteMessage.kind),
+            'payload': _remotePayload(remoteMessage),
+            'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
           });
-          _pendingRemoteGroupMessageIds.remove(message.id);
+          _pendingRemoteGroupMessageIds.remove(remoteMessage.id);
         } on PostgrestException catch (error) {
           if (error.code == '23505') {
             _pendingRemoteGroupMessageIds.remove(message.id);
@@ -1224,17 +1547,26 @@ class ChatStore extends ChangeNotifier {
         final receiverId = dmPeerOf(message.threadId, userId);
         if (receiverId == null) continue;
         try {
+          final remoteMessage = await _prepareMessageForRemote(
+            client,
+            message,
+            storageOwnerId: userId,
+          );
+          if (remoteMessage == null) {
+            failed = true;
+            continue;
+          }
           await client.from('direct_messages').insert({
-            'id': message.id,
+            'id': remoteMessage.id,
             'sender_id': userId,
             'receiver_id': receiverId,
-            'content': message.content,
-            'message_kind': _databaseKind(message.kind),
-            'payload': _remotePayload(message),
-            'created_at': message.createdAt.toUtc().toIso8601String(),
-            'delivered_at': message.deliveredAt.toUtc().toIso8601String(),
+            'content': remoteMessage.content,
+            'message_kind': _databaseKind(remoteMessage.kind),
+            'payload': _remotePayload(remoteMessage),
+            'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
+            'delivered_at': remoteMessage.deliveredAt.toUtc().toIso8601String(),
           });
-          _pendingRemoteMessageIds.remove(message.id);
+          _pendingRemoteMessageIds.remove(remoteMessage.id);
         } on PostgrestException catch (error) {
           if (error.code == '23505') {
             _pendingRemoteMessageIds.remove(message.id);
@@ -1279,7 +1611,9 @@ class ChatStore extends ChangeNotifier {
           failed = true;
         }
       }
+      await _flushRemoteDeletes();
       scheduleSave();
+      if (removedLocalGroup) notifyListeners();
     } finally {
       _flushingRemote = false;
     }
@@ -1305,18 +1639,24 @@ class ChatStore extends ChangeNotifier {
         continue;
       }
       try {
+        final remoteMessage = await _prepareMessageForRemote(
+          client,
+          message,
+          storageOwnerId: authId,
+        );
+        if (remoteMessage == null) continue;
         await client.from('club_channel_messages').insert({
-          'id': message.id,
+          'id': remoteMessage.id,
           'club_id': clubId,
           'sender_auth_id': authId,
           'sender_profile_id': authService.currentUser == null ? null : authId,
           'sender_club_id': authService.currentAdmin == null ? null : clubId,
-          'message_kind': _databaseKind(message.kind),
-          'content': message.content,
-          'payload': _remotePayload(message),
-          'created_at': message.createdAt.toUtc().toIso8601String(),
+          'message_kind': _databaseKind(remoteMessage.kind),
+          'content': remoteMessage.content,
+          'payload': _remotePayload(remoteMessage),
+          'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
         });
-        _pendingRemoteClubMessageIds.remove(message.id);
+        _pendingRemoteClubMessageIds.remove(remoteMessage.id);
       } on PostgrestException catch (error) {
         if (error.code == '23505') {
           _pendingRemoteClubMessageIds.remove(message.id);
@@ -1325,6 +1665,7 @@ class ChatStore extends ChangeNotifier {
         // The local outbox retains the message and retries on the next sync.
       }
     }
+    await _flushRemoteDeletes();
     scheduleSave();
   }
 
@@ -1347,27 +1688,33 @@ class ChatStore extends ChangeNotifier {
         continue;
       }
       try {
+        final remoteMessage = await _prepareMessageForRemote(
+          client,
+          message,
+          storageOwnerId: authId,
+        );
+        if (remoteMessage == null) continue;
         final sendingAsClub =
             authService.currentAdmin != null ||
             (clubForId(conversation.clubId)?.boardMemberIds.contains(actorId) ??
                 false);
         await client.from('club_inbox_messages').insert({
-          'id': message.id,
+          'id': remoteMessage.id,
           'thread_id': conversation.id,
           'sender_auth_id': authId,
           'sender_profile_id': sendingAsClub ? null : authId,
           'sender_club_id': sendingAsClub ? conversation.clubId : null,
-          'message_kind': _databaseKind(message.kind),
-          'content': message.content,
-          'payload': _remotePayload(message),
-          'created_at': message.createdAt.toUtc().toIso8601String(),
-          'delivered_at': message.deliveredAt.toUtc().toIso8601String(),
+          'message_kind': _databaseKind(remoteMessage.kind),
+          'content': remoteMessage.content,
+          'payload': _remotePayload(remoteMessage),
+          'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
+          'delivered_at': remoteMessage.deliveredAt.toUtc().toIso8601String(),
         });
         await client
             .from('club_inbox_threads')
             .update({'updated_at': DateTime.now().toUtc().toIso8601String()})
             .eq('id', conversation.id);
-        _pendingRemoteClubInboxMessageIds.remove(message.id);
+        _pendingRemoteClubInboxMessageIds.remove(remoteMessage.id);
       } on PostgrestException catch (error) {
         if (error.code == '23505') {
           _pendingRemoteClubInboxMessageIds.remove(message.id);
@@ -1376,6 +1723,7 @@ class ChatStore extends ChangeNotifier {
         // Retained for retry.
       }
     }
+    await _flushRemoteDeletes();
     scheduleSave();
   }
 
@@ -1456,6 +1804,22 @@ class ChatStore extends ChangeNotifier {
     final club = clubId == null ? null : clubForId(clubId);
     if (club == null) return false;
     return userState.isFollowing(club.id);
+  }
+
+  /// Returns whether [userId] authored [message]. Club accounts may be stored
+  /// remotely under the managed club ID even though the local session uses a
+  /// board/admin ID, so those identities are normalized here.
+  bool isMessageOwner(ChatMessage message, String userId) {
+    if (userId.isEmpty || message.senderId == userId) return userId.isNotEmpty;
+    final clubId = isClubThread(message.threadId)
+        ? clubIdOf(message.threadId)
+        : isClubInboxThread(message.threadId)
+        ? clubInboxForThread(message.threadId)?.clubId
+        : null;
+    if (clubId == null || message.senderId != clubId) return false;
+    final club = clubForId(clubId);
+    return (club?.boardMemberIds.contains(userId) ?? false) ||
+        managedClubForAdmin(userId)?.id == clubId;
   }
 
   /// Read membership and posting authority are intentionally separate for
@@ -1735,20 +2099,25 @@ class ChatStore extends ChangeNotifier {
     return true;
   }
 
-  bool _updateGroupMembers(String threadId, Iterable<String> memberIds) {
+  bool _updateGroupMembers(
+    String threadId,
+    Iterable<String> memberIds, {
+    int minimumMembers = 2,
+    bool flushRemoteChanges = true,
+  }) {
     final group = groupForThread(threadId);
     if (group == null) return false;
     final members = {
       group.creatorId,
       ...memberIds.where((id) => id.isNotEmpty && !isAdminAccountId(id)),
     };
-    if (members.length < 2) return false;
+    if (members.length < minimumMembers) return false;
     if (setEquals(group.memberIds.toSet(), members)) return false;
     _groups[group.id] = group.withMembers(members);
     _pendingRemoteGroupIds.add(group.id);
     scheduleSave();
     notifyListeners();
-    unawaited(_flushRemoteChanges());
+    if (flushRemoteChanges) unawaited(_flushRemoteChanges());
     return true;
   }
 
@@ -1778,6 +2147,56 @@ class ChatStore extends ChangeNotifier {
       threadId,
       group.memberIds.where((id) => id != memberId),
     );
+  }
+
+  /// Lets a non-admin member leave a group without granting them the ability
+  /// to remove anybody else. The creator remains the group owner and cannot
+  /// leave, so every group always retains its creator.
+  bool leaveGroup(String threadId, {required String userId}) {
+    final group = groupForThread(threadId);
+    if (group == null ||
+        userId.isEmpty ||
+        !group.memberIds.contains(userId) ||
+        userId == group.creatorId ||
+        group.isAdmin(userId)) {
+      return false;
+    }
+    final changed = _updateGroupMembers(
+      threadId,
+      group.memberIds.where((id) => id != userId),
+      minimumMembers: 1,
+      flushRemoteChanges: false,
+    );
+    if (!changed) return false;
+    _pendingRemoteGroupIds.remove(group.id);
+    _pendingRemoteGroupLeaveUserIds[group.id] = userId;
+    scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return true;
+  }
+
+  /// Deletes a group for every member. Only a group admin may do this; regular
+  /// members must use [leaveGroup] instead.
+  bool deleteGroup(String threadId, {required String actorId}) {
+    final group = groupForThread(threadId);
+    if (group == null || actorId.isEmpty || !group.isAdmin(actorId)) {
+      return false;
+    }
+    final groupId = group.id;
+    final groupThread = group.threadId;
+    _groups.remove(groupId);
+    _pendingRemoteGroupIds.remove(groupId);
+    _pendingRemoteGroupLeaveUserIds.remove(groupId);
+    _pendingRemoteGroupDeleteActorIds[groupId] = actorId;
+    _messages.removeWhere((message) => message.threadId == groupThread);
+    for (final reads in _lastRead.values) {
+      reads.remove(groupThread);
+    }
+    scheduleSave();
+    notifyListeners();
+    unawaited(_flushRemoteChanges());
+    return true;
   }
 
   bool setGroupMemberAdmin(
@@ -1890,6 +2309,38 @@ class ChatStore extends ChangeNotifier {
   ChatMessage? messageById(String messageId) {
     final index = _messages.indexWhere((message) => message.id == messageId);
     return index == -1 ? null : _messages[index];
+  }
+
+  /// Removes one message locally and queues the same deletion for Supabase.
+  /// Ownership is checked here as well as by the database policy so an
+  /// optimistic UI action cannot remove somebody else's message.
+  bool deleteMessage({required String messageId, required String userId}) {
+    if (messageId.isEmpty || userId.isEmpty) return false;
+    final index = _messages.indexWhere((message) => message.id == messageId);
+    if (index == -1) return false;
+    final message = _messages[index];
+    if (!isMessageOwner(message, userId) ||
+        !canAccessThread(message.threadId, userId)) {
+      return false;
+    }
+
+    _messages.removeAt(index);
+    _pendingRemoteDeleteThreadIds[message.id] = message.threadId;
+    _pendingRemoteMessageIds.remove(message.id);
+    _pendingRemoteGroupMessageIds.remove(message.id);
+    _pendingRemoteClubMessageIds.remove(message.id);
+    _pendingRemoteClubInboxMessageIds.remove(message.id);
+    scheduleSave();
+    notifyListeners();
+
+    if (isDirectThread(message.threadId) || isGroupThread(message.threadId)) {
+      unawaited(_flushRemoteChanges());
+    } else if (isClubThread(message.threadId)) {
+      unawaited(_flushClubMessages());
+    } else if (isClubInboxThread(message.threadId)) {
+      unawaited(_flushClubInboxMessages());
+    }
+    return true;
   }
 
   bool _replaceMessage(String messageId, ChatMessage Function(ChatMessage) f) {
@@ -2143,7 +2594,10 @@ class ChatStore extends ChangeNotifier {
     }
     if (unread == 0 && !markedSeen) return;
     (_lastRead[userId] ??= {})[threadId] = now;
-    scheduleSave();
+    // Persist the receipt immediately. A debounced write can be lost when the
+    // app is closed right after the conversation is opened, which would make
+    // this same chat appear unread on the next launch.
+    unawaited(saveAll());
     notifyListeners();
     if (markedSeen) unawaited(_flushRemoteChanges());
   }
@@ -2216,6 +2670,18 @@ class ChatStore extends ChangeNotifier {
       box.put(
         'pendingRemoteClubInboxMessageIds',
         _pendingRemoteClubInboxMessageIds.toList(),
+      ),
+      box.put(
+        'pendingRemoteDeleteThreadIds',
+        Map<String, String>.from(_pendingRemoteDeleteThreadIds),
+      ),
+      box.put(
+        'pendingRemoteGroupLeaveUserIds',
+        Map<String, String>.from(_pendingRemoteGroupLeaveUserIds),
+      ),
+      box.put(
+        'pendingRemoteGroupDeleteActorIds',
+        Map<String, String>.from(_pendingRemoteGroupDeleteActorIds),
       ),
     ]);
   }

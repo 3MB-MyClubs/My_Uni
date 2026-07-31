@@ -8,6 +8,7 @@ import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/screens/group_info_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/models/app_admin.dart';
+import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -218,7 +219,6 @@ void main() {
     // or mutual friend yet.
     expect(find.text(recipient.name), findsNWidgets(2));
     expect(find.text(S.chatNoMessagesYet), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-starter-chips')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -331,6 +331,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(chatStore.groupParticipants(threadId), isNot(contains('u2')));
     await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('non-admin group members can leave from group info', (
+    tester,
+  ) async {
+    final threadId = chatStore.createGroupThread(
+      creatorId: 'u1',
+      recipientIds: ['u2', 'u3'],
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: GroupInfoScreen(threadId: threadId, myId: 'u2'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('leave-group-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('edit-group-name-field')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('leave-group-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Leave group?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-leave-group')));
+    await tester.pumpAndSettle();
+
+    expect(chatStore.groupParticipants(threadId), isNot(contains('u2')));
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('group admins can delete the group from group info', (
+    tester,
+  ) async {
+    final threadId = chatStore.createGroupThread(
+      creatorId: 'u1',
+      recipientIds: ['u2', 'u3'],
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: GroupInfoScreen(threadId: threadId, myId: 'u1'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('delete-group-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('leave-group-button')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('delete-group-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete group?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-delete-group')));
+    await tester.pumpAndSettle();
+
+    expect(chatStore.groupForThread(threadId), isNull);
+    await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });
 
@@ -473,7 +535,7 @@ void main() {
       find.text(S.communityMembers(clubMemberCount('c5'))),
       findsOneWidget,
     );
-    expect(find.text(S.communityOnline(0)), findsOneWidget);
+    expect(find.text(S.communityOnline(0)), findsNothing);
     expect(
       find.descendant(
         of: find.byType(ClubAvatar),
@@ -512,7 +574,70 @@ void main() {
     expect(find.byKey(const ValueKey('club-community-header')), findsOneWidget);
     expect(find.text('100+ Members'), findsOneWidget);
     expect(find.text('243 Members'), findsNothing);
-    expect(find.text('0 Online'), findsOneWidget);
+    expect(find.text('0 Online'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('club-account messages use the club name and logo', (
+    tester,
+  ) async {
+    final club = Club(
+      id: 'club-account-identity',
+      name: 'Identity Club',
+      description: 'Club identity test',
+      logoUrl: 'https://cdn.example.com/identity-club.png',
+      adminUserIds: const [],
+    );
+    clubs.add(club);
+    addTearDown(() => clubs.remove(club));
+    final viewer = User(
+      id: 'club-identity-viewer',
+      name: 'Identity Viewer',
+      email: 'identity-viewer@example.test',
+      password: '111111',
+      role: 'student',
+      subscribedClubIds: [club.id],
+    );
+    users.add(viewer);
+    addTearDown(() => users.remove(viewer));
+
+    authService.setClubAdmin(
+      AppAdmin(
+        id: club.id,
+        name: 'Identity Club account',
+        email: 'identity-club@example.test',
+        password: '',
+      ),
+    );
+    final message = chatStore.sendMessage(
+      threadId: ChatStore.clubThreadId(club.id),
+      senderId: club.id,
+      content: 'Club account announcement',
+    );
+    expect(message, isNotNull);
+    userState.followedClubIds.add(club.id);
+    expect(authService.login(viewer.email, viewer.password), isTrue);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: ChatThreadScreen(threadId: 'club:club-account-identity'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final messageRow = find.byKey(ValueKey('club-message-${message!.id}'));
+    expect(messageRow, findsOneWidget);
+    expect(
+      find.descendant(of: messageRow, matching: find.text(club.name)),
+      findsOneWidget,
+    );
+    final clubAvatar = tester.widget<ClubAvatar>(
+      find.descendant(of: messageRow, matching: find.byType(ClubAvatar)),
+    );
+    expect(clubAvatar.clubId, club.id);
+    expect(clubAvatar.imageUrl, club.logoUrl);
     expect(tester.takeException(), isNull);
   });
 

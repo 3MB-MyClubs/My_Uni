@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/widgets/group_photo_editor.dart';
 import 'package:flutter_application_1/widgets/group_photo_picker.dart';
+import 'package:flutter_application_1/services/locale_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
 void main() {
-  test('group photo editor exposes Instagram-style editing tools', () {
+  test('group photo editor exposes Instagram-style editing tools', () async {
+    final originalLanguage = localeService.languageCode;
+    await localeService.setLanguage('en');
+    addTearDown(() => localeService.setLanguage(originalLanguage));
+
     final configs = groupPhotoEditorConfigs();
     final tiltTheme = groupPhotoTiltTheme();
 

@@ -8,6 +8,39 @@ import 'notification_service.dart';
 import 'locale_service.dart';
 import 'supabase_config.dart';
 
+String? notificationGroupKeyFromPushData(Map<String, dynamic> data) {
+  final explicit = data['notification_group_key']?.toString().trim();
+  if (explicit != null && explicit.isNotEmpty) return explicit;
+
+  String normalize(String value) =>
+      value.toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+
+  final type = data['type']?.toString().trim();
+  final normalizedType = type == null || type.isEmpty ? '' : normalize(type);
+  final targetType = data['target_type']?.toString().trim().toLowerCase();
+  final targetId = data['target_id']?.toString().trim();
+  if (targetId == null || targetId.isEmpty || targetType != 'message') {
+    return null;
+  }
+
+  if (normalizedType == 'direct_message' || targetId.startsWith('dm:')) {
+    final peer = data['actor_user_id']?.toString().trim();
+    return 'direct:${peer == null || peer.isEmpty ? targetId : peer}';
+  }
+  if (normalizedType == 'group_message' || targetId.startsWith('group:')) {
+    return 'group:${targetId.replaceFirst('group:', '')}';
+  }
+  if (normalizedType == 'club_channel_message' ||
+      targetId.startsWith('club:')) {
+    return 'club:${targetId.replaceFirst('club:', '')}';
+  }
+  if (normalizedType == 'club_inbox_message' ||
+      targetId.startsWith('clubdm:')) {
+    return 'club_inbox:${targetId.replaceFirst('clubdm:', '')}';
+  }
+  return 'message:${normalizedType.isEmpty ? 'unknown' : normalizedType}:$targetId';
+}
+
 class PushNotificationTarget {
   const PushNotificationTarget({
     required this.type,
@@ -331,13 +364,19 @@ class PushNotificationService extends ChangeNotifier {
     final body = remoteNotification?.body ?? message.data['body']?.toString();
     if (title == null || body == null) return;
 
+    // FCM's notification payload is rendered by the OS in the background,
+    // while foreground messages need a local notification. Reusing this key
+    // keeps both paths on the same per-chat notification slot.
+    final groupKey = notificationGroupKeyFromPushData(message.data);
+    final notificationKey =
+        groupKey ??
+        'notification:${message.data['notification_id'] ?? message.messageId ?? '$title:$body'}';
     await notificationService.showRemoteNotification(
-      id:
-          message.messageId?.hashCode ??
-          DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+      id: notificationService.notificationIdFor(notificationKey),
       title: title,
       body: body,
       data: message.data,
+      groupKey: groupKey,
     );
   }
 

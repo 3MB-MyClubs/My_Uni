@@ -103,6 +103,63 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     );
   }
 
+  Future<void> _confirmAndLeaveGroup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Leave group?'),
+        content: const Text(
+          'You will no longer receive messages from this group.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-leave-group'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Leave group'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (chatStore.leaveGroup(widget.threadId, userId: widget.myId)) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _confirmAndDeleteGroup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete group?'),
+        content: const Text(
+          'This permanently deletes the group and its messages for everyone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-delete-group'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+            ),
+            child: const Text('Delete group'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (chatStore.deleteGroup(widget.threadId, actorId: widget.myId)) {
+      Navigator.pop(context, true);
+    }
+  }
+
   Future<void> _handleMemberAction(
     _GroupMemberAction action,
     String memberId,
@@ -267,6 +324,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       return const Scaffold(body: Center(child: Text('Group unavailable')));
     }
     final canManage = group.isAdmin(widget.myId);
+    final canLeave = group.memberIds.contains(widget.myId) && !canManage;
     final visibleIds = group.memberIds
         .where((id) => id != widget.myId)
         .toList();
@@ -343,6 +401,38 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 ),
               ),
             ),
+          if (canLeave) ...[
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const ValueKey('leave-group-button'),
+                onPressed: _confirmAndLeaveGroup,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Leave group'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryRed,
+                  side: BorderSide(color: AppColors.primaryRed),
+                ),
+              ),
+            ),
+          ],
+          if (canManage) ...[
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const ValueKey('delete-group-button'),
+                onPressed: _confirmAndDeleteGroup,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('Delete group'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryRed,
+                  side: BorderSide(color: AppColors.primaryRed),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Row(
             children: [

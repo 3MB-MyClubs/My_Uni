@@ -10,15 +10,13 @@ import 'club_stream_items.dart';
 /// Identity + live community information header for every club chat.
 ///
 /// Follows the Club Community handoff: back, club monogram, name, the
-/// "N members · M active now" status line, and the notification / settings
-/// icon buttons.
+/// member count, and the notification / settings icon buttons.
 class ClubCommunityHeader extends StatelessWidget {
   const ClubCommunityHeader({
     super.key,
     required this.club,
     required this.avatarColor,
     required this.memberCount,
-    required this.onlineCount,
     required this.onOpenClub,
     required this.t,
     this.topInset = 0,
@@ -31,7 +29,6 @@ class ClubCommunityHeader extends StatelessWidget {
   final Club club;
   final Color avatarColor;
   final int memberCount;
-  final int onlineCount;
   final VoidCallback onOpenClub;
   final ClubChatTheme t;
   final double topInset;
@@ -70,8 +67,7 @@ class ClubCommunityHeader extends StatelessWidget {
             child: Semantics(
               button: true,
               label:
-                  '${club.name}, ${S.communityMembers(memberCount)}, '
-                  '${S.communityOnline(onlineCount)}',
+                  '${club.name}, ${S.communityMembers(memberCount)}',
               child: GestureDetector(
                 onTap: onOpenClub,
                 behavior: HitTestBehavior.opaque,
@@ -115,24 +111,6 @@ class ClubCommunityHeader extends StatelessWidget {
                                   height: 1.2,
                                   fontWeight: FontWeight.w600,
                                   color: t.sub,
-                                ),
-                              ),
-                              Text(
-                                ' · ',
-                                style: TextStyle(fontSize: 11.5, color: t.sub),
-                              ),
-                              Flexible(
-                                child: Text(
-                                  S.communityOnline(onlineCount),
-                                  key: const ValueKey('club-community-online'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    height: 1.2,
-                                    fontWeight: FontWeight.w600,
-                                    color: onlineCount > 0 ? t.online : t.sub,
-                                  ),
                                 ),
                               ),
                             ],

@@ -1370,11 +1370,16 @@ class ClubPhotoAttachment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final file = File(path);
+    final isRemote = path.startsWith('http://') || path.startsWith('https://');
+    final file = isRemote ? null : File(path);
+    final exists = isRemote || file!.existsSync();
+    final imageProvider = isRemote
+        ? NetworkImage(path) as ImageProvider
+        : FileImage(file!);
     return Padding(
       padding: const EdgeInsets.only(top: 9),
       child: GestureDetector(
-        onTap: file.existsSync()
+        onTap: exists
             ? () => showDialog<void>(
                 context: context,
                 barrierColor: Colors.black.withValues(alpha: 0.92),
@@ -1382,7 +1387,9 @@ class ClubPhotoAttachment extends StatelessWidget {
                   onTap: () => Navigator.of(dialogContext).pop(),
                   child: InteractiveViewer(
                     maxScale: 4,
-                    child: Center(child: Image.file(file, fit: BoxFit.contain)),
+                    child: Center(
+                      child: Image(image: imageProvider, fit: BoxFit.contain),
+                    ),
                   ),
                 ),
               )
@@ -1393,8 +1400,12 @@ class ClubPhotoAttachment extends StatelessWidget {
             constraints: const BoxConstraints(maxHeight: 240),
             width: double.infinity,
             decoration: BoxDecoration(border: Border.all(color: t.border)),
-            child: file.existsSync()
-                ? Image.file(file, fit: BoxFit.cover)
+            child: exists
+                ? Image(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _missingPhotoPlaceholder(t),
+                  )
                 : Container(
                     height: 140,
                     alignment: Alignment.center,
@@ -1406,4 +1417,11 @@ class ClubPhotoAttachment extends StatelessWidget {
       ),
     );
   }
+
+  Widget _missingPhotoPlaceholder(ClubChatTheme t) => Container(
+    height: 140,
+    alignment: Alignment.center,
+    color: t.solid,
+    child: Icon(Icons.image_outlined, color: t.sub, size: 22),
+  );
 }

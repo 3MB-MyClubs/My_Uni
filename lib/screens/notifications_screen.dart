@@ -27,6 +27,13 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
+class _NotificationGroup {
+  const _NotificationGroup({required this.latest, required this.items});
+
+  final AppNotification latest;
+  final List<AppNotification> items;
+}
+
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final List<Map<String, dynamic>> _remoteNotificationRows = [];
   RealtimeChannel? _notificationChannel;
@@ -34,19 +41,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
-  List<AppNotification> get _allNotifs =>
-      [
-          ..._remoteNotificationRows.map(_remoteFromMap),
-          ...notifications,
-          ...userState.dynamicNotifications,
-        ].where((n) {
-          if (n.userId != _myId || n.targetType == 'story') return false;
-          return !(ChatStore.isAdminAccountId(_myId) &&
-              n.targetType == 'message' &&
-              n.notificationType != 'club_channel_message' &&
-              n.notificationType != 'club_inbox_message');
-        }).toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  List<_NotificationGroup> get _allNotifs {
+    final byId = <String, AppNotification>{};
+    for (final notification in [
+      ..._remoteNotificationRows.map(_remoteFromMap),
+      ...notifications,
+      ...userState.dynamicNotifications,
+    ]) {
+      if (notification.userId != _myId || notification.targetType == 'story') {
+        continue;
+      }
+      if (ChatStore.isAdminAccountId(_myId) &&
+          notification.targetType == 'message' &&
+          notification.notificationType != 'club_channel_message' &&
+          notification.notificationType != 'club_inbox_message') {
+        continue;
+      }
+      byId.putIfAbsent(notification.id, () => notification);
+    }
+
+    final grouped = <String, List<AppNotification>>{};
+    for (final notification in byId.values) {
+      final key =
+          notificationConversationKey(notification) ??
+          'notification:${notification.id}';
+      grouped.putIfAbsent(key, () => <AppNotification>[]).add(notification);
+    }
+
+    final result = grouped.values.map((items) {
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return _NotificationGroup(latest: items.first, items: items);
+    }).toList();
+    result.sort((a, b) => b.latest.createdAt.compareTo(a.latest.createdAt));
+    return result;
+  }
 
   @override
   void initState() {
@@ -71,8 +99,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (mounted) setState(() {});
   }
 
-  bool _isUnread(AppNotification n) =>
-      !n.read && !userState.isNotificationRead(n);
+  bool _isUnread(_NotificationGroup group) =>
+      group.items.any((n) => !n.read && !userState.isNotificationRead(n));
 
   AppNotification _remoteFromMap(Map<String, dynamic> row) {
     final rawArgs = row['localization_args'];
@@ -128,18 +156,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               value: _myId,
             ),
             callback: (payload) {
-              if (!mounted) return;
-              final notification = _remoteFromMap(payload.newRecord);
-              setState(() {
-                if (_remoteNotificationRows.every(
-                  (item) => item['id'] != notification.id,
-                )) {
-                  _remoteNotificationRows.insert(
-                    0,
-                    Map<String, dynamic>.from(payload.newRecord),
-                  );
-                }
-              });
+              _upsertRemoteRow(payload.newRecord);
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: _myId,
+            ),
+            callback: (payload) {
+              _upsertRemoteRow(payload.newRecord);
             },
           )
           .subscribe();
@@ -148,30 +178,59 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  // ── Read state ──────────────────────────────────────────────────────────────
-  void _markRead(AppNotification n) {
-    userState.markNotificationRead(n);
+  void _upsertRemoteRow(Map<String, dynamic> rawRow) {
+    if (!mounted) return;
+    final row = Map<String, dynamic>.from(rawRow);
+    final id = row['id'];
+    if (id == null) return;
     final index = _remoteNotificationRows.indexWhere(
-      (item) => item['id'] == n.id,
+      (item) => item['id'] == id,
     );
-    if (index < 0) return;
+    setState(() {
+      if (index < 0) {
+        _remoteNotificationRows.insert(0, row);
+      } else {
+        _remoteNotificationRows[index] = {
+          ..._remoteNotificationRows[index],
+          ...row,
+        };
+      }
+    });
+  }
+
+  // ── Read state ──────────────────────────────────────────────────────────────
+  void _markRead(AppNotification n) =>
+      _markGroupRead(_NotificationGroup(latest: n, items: [n]));
+
+  void _markGroupRead(_NotificationGroup group) {
+    userState.markNotificationsRead(group.items);
+    final remoteIds = group.items
+        .map((n) => n.id)
+        .where((id) => _remoteNotificationRows.any((item) => item['id'] == id))
+        .toSet()
+        .toList(growable: false);
+    if (remoteIds.isEmpty) return;
     final readAt = DateTime.now().toUtc().toIso8601String();
     setState(() {
-      _remoteNotificationRows[index] = {
-        ..._remoteNotificationRows[index],
-        'read_at': readAt,
-      };
+      for (var index = 0; index < _remoteNotificationRows.length; index++) {
+        if (!remoteIds.contains(_remoteNotificationRows[index]['id'])) continue;
+        _remoteNotificationRows[index] = {
+          ..._remoteNotificationRows[index],
+          'read_at': readAt,
+        };
+      }
     });
     unawaited(
       Supabase.instance.client
           .from('notifications')
           .update({'read_at': readAt})
-          .eq('id', n.id),
+          .inFilter('id', remoteIds),
     );
   }
 
   void _markAllRead() {
-    userState.markNotificationsRead(_allNotifs);
+    final all = _allNotifs;
+    userState.markNotificationsRead(all.expand((group) => group.items));
     if (_remoteNotificationRows.isEmpty) return;
     final readAt = DateTime.now().toUtc().toIso8601String();
     setState(() {
@@ -235,8 +294,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  void _onRowTap(AppNotification n) {
-    _markRead(n);
+  void _onRowTap(_NotificationGroup group) {
+    final n = group.latest;
+    _markGroupRead(group);
     // Follow requests have no destination — the Accept / Decline buttons act.
     if (n.targetType == 'follow_request') return;
     _openTarget(n);
@@ -424,15 +484,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   // ── A single notification row (Style B) ─────────────────────────────────────
-  Widget _row(AppNotification n) {
-    final unread = _isUnread(n);
+  Widget _row(_NotificationGroup group) {
+    final n = group.latest;
+    final unread = _isUnread(group);
     final (icon, accent) = _tileStyle(n);
     final prefix = _boldPrefix(n);
     final pending = _isPending(n);
     final club = _clubForNotification(n);
 
     return InkWell(
-      onTap: () => _onRowTap(n),
+      onTap: () => _onRowTap(group),
       child: Container(
         decoration: BoxDecoration(
           color: unread ? AppColors.card : Colors.transparent,

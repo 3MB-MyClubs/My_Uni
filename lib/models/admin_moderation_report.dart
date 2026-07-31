@@ -39,19 +39,33 @@ class AdminModerationReport {
   factory AdminModerationReport.fromMap(Map<String, dynamic> map) {
     return AdminModerationReport(
       id: map['id']?.toString() ?? '',
-      reporterId: map['reporterId']?.toString() ?? '',
-      targetType: map['targetType']?.toString() ?? '',
-      targetId: map['targetId']?.toString() ?? '',
+      reporterId: _value(map, 'reporterId', 'reporter_id'),
+      targetType: _value(map, 'targetType', 'target_type'),
+      targetId: _value(map, 'targetId', 'target_id'),
       reason: map['reason']?.toString() ?? '',
       source: map['source']?.toString() ?? 'report',
-      reportedUserId: _optionalString(map['reportedUserId']),
-      reportedClubId: _optionalString(map['reportedClubId']),
-      contentSnapshot: _optionalString(map['contentSnapshot']),
+      reportedUserId: _optionalString(
+        map['reportedUserId'] ?? map['reported_user_id'],
+      ),
+      reportedClubId: _optionalString(
+        map['reportedClubId'] ?? map['reported_club_id'],
+      ),
+      contentSnapshot: _optionalString(
+        map['contentSnapshot'] ?? map['content_snapshot'],
+      ),
       createdAt:
-          DateTime.tryParse(map['createdAt']?.toString() ?? '') ??
+          DateTime.tryParse(
+            (map['createdAt'] ?? map['created_at'])?.toString() ?? '',
+          ) ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
+
+  static String _value(
+    Map<String, dynamic> map,
+    String preferredKey,
+    String fallbackKey,
+  ) => (map[preferredKey] ?? map[fallbackKey])?.toString() ?? '';
 
   static String? _optionalString(Object? value) {
     final text = value?.toString().trim() ?? '';

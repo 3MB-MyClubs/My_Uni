@@ -22,6 +22,16 @@ PushNotificationCopy localizedPushNotificationCopy({
   final club = value('clubName', isTurkish ? 'Bir kulüp' : 'A club');
   final group = value('groupName', isTurkish ? 'Grup sohbeti' : 'Group chat');
   final content = value('content', '');
+  final rawMessageCount = args['messageCount'];
+  final parsedMessageCount = rawMessageCount is num
+      ? rawMessageCount.toInt()
+      : int.tryParse(rawMessageCount?.toString() ?? '');
+  final messageCount = parsedMessageCount == null || parsedMessageCount < 1
+      ? 1
+      : parsedMessageCount;
+  final messageBody = messageCount > 1
+      ? (isTurkish ? '$messageCount yeni mesaj' : '$messageCount new messages')
+      : '$actor: $content';
   final eventTitle = value(
     'eventTitle',
     isTurkish ? 'etkinliğin' : 'your event',
@@ -34,21 +44,15 @@ PushNotificationCopy localizedPushNotificationCopy({
 
   if (isTurkish) {
     return switch (type) {
-      'direct_message' => PushNotificationCopy(
-        title: actor,
-        body: '$actor: $content',
-      ),
-      'group_message' => PushNotificationCopy(
-        title: group,
-        body: '$actor: $content',
-      ),
+      'direct_message' => PushNotificationCopy(title: actor, body: messageBody),
+      'group_message' => PushNotificationCopy(title: group, body: messageBody),
       'club_channel_message' => PushNotificationCopy(
         title: club,
-        body: '$club: $content',
+        body: messageCount > 1 ? messageBody : '$club: $content',
       ),
       'club_inbox_message' => PushNotificationCopy(
         title: actor,
-        body: '$actor: $content',
+        body: messageBody,
       ),
       'club_post' => PushNotificationCopy(
         title: '$club yeni bir gönderi paylaştı',
@@ -85,21 +89,15 @@ PushNotificationCopy localizedPushNotificationCopy({
   }
 
   return switch (type) {
-    'direct_message' => PushNotificationCopy(
-      title: actor,
-      body: '$actor: $content',
-    ),
-    'group_message' => PushNotificationCopy(
-      title: group,
-      body: '$actor: $content',
-    ),
+    'direct_message' => PushNotificationCopy(title: actor, body: messageBody),
+    'group_message' => PushNotificationCopy(title: group, body: messageBody),
     'club_channel_message' => PushNotificationCopy(
       title: club,
-      body: '$club: $content',
+      body: messageCount > 1 ? messageBody : '$club: $content',
     ),
     'club_inbox_message' => PushNotificationCopy(
       title: actor,
-      body: '$actor: $content',
+      body: messageBody,
     ),
     'club_post' => PushNotificationCopy(
       title: '$club posted something new',

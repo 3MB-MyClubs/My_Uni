@@ -228,6 +228,13 @@ class S {
     'Sohbete katılmak için öğrenci hesabınla giriş yap.',
   );
 
+  // ── Messages
+  static String get deleteMessage => _t('Delete message', 'Mesajı sil');
+  static String get deleteMessageMsg => _t(
+    'This message will be permanently removed.',
+    'Bu mesaj kalıcı olarak kaldırılacak.',
+  );
+
   // ── Profile
   static String get posts => _t('Posts', 'Gönderiler');
   static String get clubs => _t('Clubs', 'Kulüpler');
@@ -869,6 +876,7 @@ class S {
       n >= 100 ? _t('100+ Members', '100+ Üye') : _t('$n Members', '$n Üye');
   static String communityOnline(int n) => _t('$n Online', '$n Çevrimiçi');
   static String get message => _t('Message', 'Mesaj');
+
   /// Sits under the club name on an empty community room. The empty screen
   /// already says there are no messages, so this line only invites.
   static String get sayHello =>
@@ -905,8 +913,7 @@ class S {
 
   // ── New student chat (empty thread)
   /// Shown under the name when there is nothing else worth saying about a
-  /// brand-new thread. Deliberately short: the starter chips above the
-  /// composer already invite the first message.
+  /// brand-new thread. Deliberately short so the empty state stays quiet.
   static String get chatNoMessagesYet =>
       _t('No messages yet', 'Henüz mesaj yok');
   static String chatPeopleCount(int n) => _t('$n people', '$n kişi');
@@ -917,21 +924,6 @@ class S {
       ? _t('1 mutual friend', '1 ortak arkadaş')
       : _t('$n mutual friends', '$n ortak arkadaş');
 
-  /// One-tap openers offered while a brand-new thread is still empty.
-  static List<String> get dmStarters => [
-    _t('👋 Hey!', '👋 Selam!'),
-    _t('Going tonight?', 'Bu akşam geliyor musun?'),
-    _t('Study later?', 'Sonra çalışalım mı?'),
-  ];
-  static List<String> get groupStarters => [
-    _t('👋 Hey everyone', '👋 Selam herkese'),
-    _t("Who's in?", 'Kimler var?'),
-    _t('Pick a time', 'Bir saat belirleyin'),
-  ];
-  static String get voiceNotesUnavailable => _t(
-    'Voice messages are not available yet.',
-    'Sesli mesajlar henüz kullanılamıyor.',
-  );
   static String get attachToMessage => _t('Add to message', 'Mesaja ekle');
 
   // ── Club community
