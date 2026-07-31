@@ -17,6 +17,11 @@ type ServiceAccount = {
 
 type NotificationCopy = { title: string; body: string };
 
+function messageCount(args: Record<string, unknown>): number {
+  const value = Number(args.messageCount ?? 1);
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 1;
+}
+
 function localizedCopy(
   type: string,
   args: Record<string, unknown>,
@@ -34,16 +39,20 @@ function localizedCopy(
   const club = value("clubName", tr ? "Bir kulüp" : "A club");
   const group = value("groupName", tr ? "Grup sohbeti" : "Group chat");
   const content = value("content", "");
+  const count = messageCount(args);
+  const messageBody = count > 1
+    ? (tr ? `${count} yeni mesaj` : `${count} new messages`)
+    : `${actor}: ${content}`;
   const eventTitle = value("eventTitle", tr ? "etkinliğin" : "your event");
   const postPreview = value("postPreview", tr ? "son gönderin" : "your latest post");
   const comment = value("comment", "");
 
   if (tr) {
     switch (type) {
-      case "direct_message": return { title: actor, body: `${actor}: ${content}` };
-      case "group_message": return { title: group, body: `${actor}: ${content}` };
-      case "club_channel_message": return { title: club, body: `${club}: ${content}` };
-      case "club_inbox_message": return { title: actor, body: `${actor}: ${content}` };
+      case "direct_message": return { title: actor, body: messageBody };
+      case "group_message": return { title: group, body: messageBody };
+      case "club_channel_message": return { title: club, body: count > 1 ? messageBody : `${club}: ${content}` };
+      case "club_inbox_message": return { title: actor, body: messageBody };
       case "club_post": return {
         title: `${club} yeni bir gönderi paylaştı`,
         body: `${club} yeni bir gönderi paylaştı: “${content}” Gönderiyi görmek için dokun.`,
@@ -73,10 +82,10 @@ function localizedCopy(
   }
 
   switch (type) {
-    case "direct_message": return { title: actor, body: `${actor}: ${content}` };
-    case "group_message": return { title: group, body: `${actor}: ${content}` };
-    case "club_channel_message": return { title: club, body: `${club}: ${content}` };
-    case "club_inbox_message": return { title: actor, body: `${actor}: ${content}` };
+    case "direct_message": return { title: actor, body: messageBody };
+    case "group_message": return { title: group, body: messageBody };
+    case "club_channel_message": return { title: club, body: count > 1 ? messageBody : `${club}: ${content}` };
+    case "club_inbox_message": return { title: actor, body: messageBody };
     case "club_post": return {
       title: `${club} posted something new`,
       body: `${club} shared “${content}”. Tap to view the post.`,
@@ -176,7 +185,7 @@ Deno.serve(async (request) => {
     .eq("id", notificationId)
     .is("push_started_at", null)
     .is("push_sent_at", null)
-    .select("id,user_id,title,body,type,target_type,target_id,localization_args")
+    .select("id,user_id,actor_user_id,title,body,type,target_type,target_id,notification_group_key,message_count,localization_args")
     .maybeSingle();
 
   if (claimError) return json({ error: "Could not claim notification" }, 500);
@@ -227,12 +236,37 @@ Deno.serve(async (request) => {
                 type: notification.type,
                 target_type: notification.target_type,
                 target_id: notification.target_id,
+                ...(notification.actor_user_id
+                  ? { actor_user_id: notification.actor_user_id }
+                  : {}),
+                ...(notification.notification_group_key
+                  ? { notification_group_key: notification.notification_group_key }
+                  : {}),
+                message_count: String(notification.message_count ?? 1),
               },
               android: {
+                collapse_key: notification.notification_group_key ?? notification.id,
                 priority: "high",
-                notification: { channel_id: "clubup_notifications", sound: "default" },
+                notification: {
+                  channel_id: "clubup_notifications",
+                  sound: "default",
+                  tag: notification.notification_group_key ?? notification.id,
+                },
               },
-              apns: { payload: { aps: { sound: "default", "content-available": 1 } } },
+              apns: {
+                headers: {
+                  // APNs uses this collapse id to coalesce pending alerts for
+                  // one conversation. Keep it identical to Android's tag.
+                  "apns-collapse-id": notification.notification_group_key ?? notification.id,
+                },
+                payload: {
+                  aps: {
+                    sound: "default",
+                    "content-available": 1,
+                    "thread-id": notification.notification_group_key ?? notification.id,
+                  },
+                },
+              },
             },
           }),
         },

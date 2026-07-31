@@ -293,11 +293,7 @@ class ClubFileChip extends StatelessWidget {
                   color: t.ltRed,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  Icons.description_outlined,
-                  size: 17,
-                  color: t.red,
-                ),
+                child: Icon(Icons.description_outlined, size: 17, color: t.red),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -363,10 +359,7 @@ class ClubReactionsRow extends StatelessWidget {
             GestureDetector(
               onTap: () => onToggle(entry.key),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: entry.value.contains(myId) ? t.ltRed : t.solid,
                   borderRadius: BorderRadius.circular(999),
@@ -394,11 +387,7 @@ class ClubReactionsRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(color: t.borderB, style: BorderStyle.solid),
               ),
-              child: Icon(
-                Icons.add_reaction_outlined,
-                size: 13,
-                color: t.sub,
-              ),
+              child: Icon(Icons.add_reaction_outlined, size: 13, color: t.sub),
             ),
           ),
         ],
@@ -623,9 +612,7 @@ class ClubPollMessageCard extends StatelessWidget {
       for (var i = 0; i < message.pollOptions.length; i++)
         message.votesForOption(i),
     ];
-    final leader = counts.isEmpty
-        ? 0
-        : counts.reduce((a, b) => a > b ? a : b);
+    final leader = counts.isEmpty ? 0 : counts.reduce((a, b) => a > b ? a : b);
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -771,18 +758,13 @@ class _PollOption extends StatelessWidget {
                   color: picked
                       ? t.ltRed
                       : (leading
-                            ? t.accent.withValues(
-                                alpha: t.isDark ? 0.1 : 0.055,
-                              )
+                            ? t.accent.withValues(alpha: t.isDark ? 0.1 : 0.055)
                             : t.solid),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 9,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               child: Row(
                 children: [
                   Container(
@@ -807,9 +789,7 @@ class _PollOption extends StatelessWidget {
                       label,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: picked
-                            ? FontWeight.w800
-                            : FontWeight.w600,
+                        fontWeight: picked ? FontWeight.w800 : FontWeight.w600,
                         color: t.text,
                       ),
                     ),
@@ -929,7 +909,10 @@ class ClubEventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      [clockLabel, place].where((v) => v.isNotEmpty).join(' · '),
+                      [
+                        clockLabel,
+                        place,
+                      ].where((v) => v.isNotEmpty).join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -1100,9 +1083,7 @@ class ClubMessageGroup extends StatelessWidget {
           width: 30,
           child: head
               ? Center(child: avatar)
-              : Center(
-                  child: Container(width: 1, height: 18, color: t.hair),
-                ),
+              : Center(child: Container(width: 1, height: 18, color: t.hair)),
         ),
         const SizedBox(width: 11),
         Expanded(
@@ -1382,22 +1363,23 @@ class _ClubTypingRowState extends State<ClubTypingRow>
 
 /// Inline photo attachment.
 class ClubPhotoAttachment extends StatelessWidget {
-  const ClubPhotoAttachment({
-    super.key,
-    required this.path,
-    required this.t,
-  });
+  const ClubPhotoAttachment({super.key, required this.path, required this.t});
 
   final String path;
   final ClubChatTheme t;
 
   @override
   Widget build(BuildContext context) {
-    final file = File(path);
+    final isRemote = path.startsWith('http://') || path.startsWith('https://');
+    final file = isRemote ? null : File(path);
+    final exists = isRemote || file!.existsSync();
+    final imageProvider = isRemote
+        ? NetworkImage(path) as ImageProvider
+        : FileImage(file!);
     return Padding(
       padding: const EdgeInsets.only(top: 9),
       child: GestureDetector(
-        onTap: file.existsSync()
+        onTap: exists
             ? () => showDialog<void>(
                 context: context,
                 barrierColor: Colors.black.withValues(alpha: 0.92),
@@ -1405,7 +1387,9 @@ class ClubPhotoAttachment extends StatelessWidget {
                   onTap: () => Navigator.of(dialogContext).pop(),
                   child: InteractiveViewer(
                     maxScale: 4,
-                    child: Center(child: Image.file(file, fit: BoxFit.contain)),
+                    child: Center(
+                      child: Image(image: imageProvider, fit: BoxFit.contain),
+                    ),
                   ),
                 ),
               )
@@ -1416,21 +1400,28 @@ class ClubPhotoAttachment extends StatelessWidget {
             constraints: const BoxConstraints(maxHeight: 240),
             width: double.infinity,
             decoration: BoxDecoration(border: Border.all(color: t.border)),
-            child: file.existsSync()
-                ? Image.file(file, fit: BoxFit.cover)
+            child: exists
+                ? Image(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _missingPhotoPlaceholder(t),
+                  )
                 : Container(
                     height: 140,
                     alignment: Alignment.center,
                     color: t.solid,
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: t.sub,
-                      size: 22,
-                    ),
+                    child: Icon(Icons.image_outlined, color: t.sub, size: 22),
                   ),
           ),
         ),
       ),
     );
   }
+
+  Widget _missingPhotoPlaceholder(ClubChatTheme t) => Container(
+    height: 140,
+    alignment: Alignment.center,
+    color: t.solid,
+    child: Icon(Icons.image_outlined, color: t.sub, size: 22),
+  );
 }

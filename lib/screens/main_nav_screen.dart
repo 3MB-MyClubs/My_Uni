@@ -185,7 +185,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     else
       ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
     ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
-    if (widget.isAdmin) AdminDashboard(), // 5
+    if (widget.isAdmin) AdminDashboard(onLogout: widget.onLogout), // 5
   ];
 
   String get _currentUserId =>
@@ -513,7 +513,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         activeIcon: Icons.calendar_today_rounded,
         label: AppLocalizations.of(context)!.events,
       ),
-      if (!_isClubAdmin)
+      if (!_isClubAdmin && !_isPlatformModerator)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
@@ -536,12 +536,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
           label: S.chats,
           badge: unreadChats,
         ),
-      _NavSlot(
-        index: 4,
-        icon: Icons.person_outline_rounded,
-        activeIcon: Icons.person_rounded,
-        label: AppLocalizations.of(context)!.profile,
-      ),
+      if (!_isPlatformModerator)
+        _NavSlot(
+          index: 4,
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          label: AppLocalizations.of(context)!.profile,
+        ),
       if (widget.isAdmin)
         _NavSlot(
           index: 5,

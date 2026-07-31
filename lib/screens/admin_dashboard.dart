@@ -20,12 +20,15 @@ import '../services/theme_service.dart';
 import 'club_insights_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
+import 'settings_screen.dart';
 
 /// App-wide moderation dashboard. The overview keeps campus totals and club
 /// rankings, while the content tabs expose every loaded post and event to the
 /// verified platform administrator.
 class AdminDashboard extends StatefulWidget {
-  const AdminDashboard({super.key});
+  final VoidCallback? onLogout;
+
+  const AdminDashboard({super.key, this.onLogout});
 
   @override
   State<AdminDashboard> createState() => _AdminDashboardState();
@@ -96,6 +99,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   String _dateTime(DateTime value) =>
       DateFormat.yMMMd(localeService.languageCode).add_jm().format(value);
+
+  // MainNavScreen's floating bottom navigation overlays this dashboard's
+  // inner Scaffold, so keep enough room for the final row to scroll clear of
+  // it on devices with and without a bottom safe-area inset.
+  double get _bottomScrollInset =>
+      128 + MediaQuery.of(context).padding.bottom;
+
+  Future<void> _confirmAndLogout() async {
+    if (widget.onLogout == null) return;
+    if (!await showLogoutConfirmationDialog(context) || !mounted) return;
+    widget.onLogout!();
+  }
 
   Future<bool> _confirmDelete({
     required String title,
@@ -210,6 +225,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           actions: [
+            IconButton(
+              tooltip: l10n.logOut,
+              onPressed: widget.onLogout == null ? null : _confirmAndLogout,
+              icon: const Icon(Icons.logout_rounded),
+            ),
             if (_refreshing)
               const Padding(
                 padding: EdgeInsets.only(right: 18),
@@ -255,7 +275,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 40),
+        padding: EdgeInsets.fromLTRB(16, 14, 16, _bottomScrollInset),
         children: [
           Row(
             children: [
@@ -304,7 +324,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onRefresh: _refresh,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 36),
+        padding: EdgeInsets.fromLTRB(12, 12, 12, _bottomScrollInset),
         itemCount: allPosts.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
@@ -374,7 +394,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onRefresh: _refresh,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 36),
+        padding: EdgeInsets.fromLTRB(12, 12, 12, _bottomScrollInset),
         itemCount: allEvents.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
@@ -439,6 +459,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(bottom: _bottomScrollInset),
         children: [
           SizedBox(
             height: 360,

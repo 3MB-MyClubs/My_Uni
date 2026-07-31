@@ -15,6 +15,7 @@ import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
 import '../services/chat_store.dart';
+import '../services/club_admin_access.dart';
 import '../services/club_chat_prefs.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
@@ -334,6 +335,23 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   ClubPerson _personFor(String userId) {
     final club = _club;
+    // Supabase stores messages sent by a linked club account with the club id
+    // in `sender_club_id`. Local optimistic messages may still carry the
+    // managed admin id until the remote row is reconciled. Both identities
+    // represent the club in this stream, so always render the shared club
+    // identity instead of an admin profile.
+    if (club != null &&
+        (userId == club.id ||
+            club.adminUserIds.contains(userId) ||
+            managedClubForAdmin(userId)?.id == club.id)) {
+      return ClubPerson(
+        id: club.id,
+        name: club.name,
+        role: S.adminLabel,
+        isClubAccount: true,
+        online: true,
+      );
+    }
     final adminIndex = clubAdmins.indexWhere((admin) => admin.id == userId);
     if (adminIndex != -1) {
       return ClubPerson(
@@ -550,6 +568,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       case ClubAttachment.photo:
         final picked = await ImagePicker().pickImage(
           source: ImageSource.gallery,
+          maxWidth: 2048,
+          maxHeight: 2048,
+          imageQuality: 88,
         );
         if (picked == null) return;
         _sendAttachment(picked, ChatMessageKind.photo);
@@ -936,6 +957,31 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   static const _quickReactions = ['👍', '❤️', '🎉', '👏', '😂', '🙌'];
 
+  Future<void> _confirmDeleteMessage(ChatMessage message) async {
+    final t = _t;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: t.sheet,
+        title: Text(S.deleteMessage, style: TextStyle(color: t.text)),
+        content: Text(S.deleteMessageMsg, style: TextStyle(color: t.sub)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(S.cancel, style: TextStyle(color: t.sub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(S.delete, style: TextStyle(color: t.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      chatStore.deleteMessage(messageId: message.id, userId: _myId);
+    }
+  }
+
   void _showMessageActions(ChatMessage message) {
     final t = _t;
     showModalBottomSheet<void>(
@@ -1004,6 +1050,17 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   ScaffoldMessenger.of(
                     context,
                   ).showSnackBar(SnackBar(content: Text(S.copied)));
+                },
+              ),
+            if (chatStore.isMessageOwner(message, _myId))
+              _ActionRow(
+                key: ValueKey('club-delete-message-${message.id}'),
+                icon: Icons.delete_outline_rounded,
+                label: S.deleteMessage,
+                t: t,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_confirmDeleteMessage(message));
                 },
               ),
             if (_canModerate)
@@ -1631,7 +1688,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       club: club,
       avatarColor: _accent,
       memberCount: memberCount,
-      onlineCount: _communityInfo?.onlineCount ?? 0,
       onOpenClub: _openClubProfile,
       t: t,
       topInset: widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top,
@@ -1963,7 +2019,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     bool showRoles,
     ClubChatTheme t,
   ) {
-    final mine = message.senderId == _myId;
+    final mine = chatStore.isMessageOwner(message, _myId);
     final sender = _personFor(message.senderId);
     final head =
         !mine ||
@@ -2242,6 +2298,7 @@ class _PrimaryAction extends StatelessWidget {
 
 class _ActionRow extends StatelessWidget {
   const _ActionRow({
+    super.key,
     required this.icon,
     required this.label,
     required this.t,

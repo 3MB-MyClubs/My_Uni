@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/models/notification.dart';
 import 'package:flutter_application_1/services/notification_navigation.dart';
+import 'package:flutter_application_1/services/notification_service.dart';
 import 'package:flutter_application_1/services/push_notification_service.dart';
 import 'package:flutter_application_1/services/push_notification_copy.dart';
 
@@ -201,5 +202,78 @@ void main() {
     );
 
     expect(copy.body, 'Ece: See you at the library');
+  });
+
+  test(
+    'normalizes local and remote direct-message rows to one conversation',
+    () {
+      final remote = AppNotification(
+        id: 'remote-message',
+        userId: 'user-a',
+        fromId: 'user-b',
+        message: 'Ece: Hello',
+        createdAt: DateTime(2026),
+        notificationType: 'direct_message',
+        targetType: 'message',
+        targetId: 'user-b',
+      );
+      final local = AppNotification(
+        id: 'local-message',
+        userId: 'user-a',
+        fromId: 'user-b',
+        message: 'Ece: Later',
+        createdAt: DateTime(2026, 1, 1, 0, 1),
+        targetType: 'message',
+        targetId: 'dm:user-a|user-b',
+      );
+
+      expect(
+        notificationConversationKey(remote),
+        notificationConversationKey(local),
+      );
+    },
+  );
+
+  test('groups push data by the chat conversation', () {
+    expect(
+      notificationGroupKeyFromPushData({
+        'type': 'group_message',
+        'target_type': 'message',
+        'target_id': 'group-123',
+      }),
+      'group:group-123',
+    );
+    expect(
+      notificationGroupKeyFromPushData({
+        'type': 'direct_message',
+        'target_type': 'message',
+        'target_id': 'user-b',
+        'actor_user_id': 'user-b',
+      }),
+      'direct:user-b',
+    );
+  });
+
+  test('uses one deterministic local notification id per chat key', () {
+    final first = notificationService.notificationIdFor('group:group-123');
+    final second = notificationService.notificationIdFor('group:group-123');
+    final other = notificationService.notificationIdFor('group:group-456');
+
+    expect(first, greaterThan(0));
+    expect(second, first);
+    expect(other, isNot(first));
+  });
+
+  test('renders a grouped message count instead of another alert preview', () {
+    final copy = localizedPushNotificationCopy(
+      type: 'group_message',
+      args: {'groupName': 'Study group', 'actorName': 'Ece', 'messageCount': 3},
+      languageCode: 'en',
+      fallbackTitle: '',
+      fallbackBody: '',
+    );
+
+    expect(copy.title, 'Study group');
+    expect(copy.body, '3 new messages');
   });
 }

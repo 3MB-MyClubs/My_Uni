@@ -2,20 +2,25 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/admin_moderation_report.dart';
 import '../models/app_admin.dart';
 import 'mock_clubup_profile.dart';
+import 'supabase_config.dart';
 
-/// Device-local moderation state for the development-only ClubUp profile.
+/// Local moderation state plus the server-side moderation queue for ClubUp.
 ///
 /// The mock profile is not a Supabase Auth identity, so giving it direct read
 /// access to the server moderation queue would also expose that queue to the
-/// public client key. This store keeps the prototype safe: reports created on
-/// this installation are reviewable here, while every administrative read and
-/// write is guarded by the active ClubUp identity.
+/// public client key. Mock reports remain reviewable on this installation,
+/// while production reports are loaded only for the authenticated platform
+/// admin through the RLS-protected `app_admins` assignment.
 class AdminModerationService extends ChangeNotifier {
   static const _reportsKey = 'clubup_admin_moderation_reports_v1';
+  static const _serverReportColumns =
+      'id, reporter_id, reported_user_id, target_type, target_id, '
+      'reason, source, content_snapshot, created_at';
   static const _bannedUserIdsKey = 'clubup_admin_banned_user_ids_v1';
   static const _bannedUserEmailsKey = 'clubup_admin_banned_user_emails_v1';
   static const _bannedClubIdsKey = 'clubup_admin_banned_club_ids_v1';
@@ -64,7 +69,53 @@ class AdminModerationService extends ChangeNotifier {
       normalize: true,
     );
     _initialized = true;
+    await _loadServerReports();
     notifyListeners();
+  }
+
+  /// Loads the server queue for authenticated platform admins. Mock reports
+  /// remain device-local, so they are kept alongside the server results.
+  Future<void> _loadServerReports() async {
+    if (!SupabaseConfig.isConfigured) return;
+
+    SupabaseClient client;
+    try {
+      client = Supabase.instance.client;
+    } catch (_) {
+      return;
+    }
+    if (client.auth.currentUser == null) return;
+
+    try {
+      final response = await client
+          .from('moderation_reports')
+          .select(_serverReportColumns)
+          .order('created_at', ascending: false)
+          .limit(500);
+      final serverReports = <AdminModerationReport>[];
+      for (final row in response as List) {
+        if (row is Map) {
+          serverReports.add(
+            AdminModerationReport.fromMap(Map<String, dynamic>.from(row)),
+          );
+        }
+      }
+
+      final serverIds = serverReports.map((report) => report.id).toSet();
+      final localOnlyReports = _reports
+          .where((report) => !serverIds.contains(report.id))
+          .toList();
+      _reports
+        ..clear()
+        ..addAll(serverReports)
+        ..addAll(localOnlyReports)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } on PostgrestException catch (error) {
+      // A missing/unapplied RLS migration should not hide local mock reports.
+      debugPrint('Could not load server moderation reports: ${error.message}');
+    } catch (error) {
+      debugPrint('Could not load server moderation reports: $error');
+    }
   }
 
   List<AdminModerationReport> reportsFor(AppAdmin? actor) {

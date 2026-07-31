@@ -302,6 +302,70 @@ void main() {
       expect(chatStore.totalUnreadFor('u9'), 0);
     });
 
+    test(
+      'previously read direct messages stay read when sync starts',
+      () async {
+        final thread = ChatStore.dmThreadId('restart-sender', 'restart-reader');
+        chatStore.sendMessage(
+          threadId: thread,
+          senderId: 'restart-sender',
+          content: 'read before restart',
+        );
+        chatStore.markThreadRead(thread, 'restart-reader');
+        expect(chatStore.unreadCountFor(thread, 'restart-reader'), 0);
+        await chatStore.saveAll();
+
+        // This is the path used after a full app restart. A sync must not turn
+        // an already-seen local message back into an unread one.
+        await chatStore.startDirectMessageSync('restart-reader');
+
+        expect(chatStore.unreadCountFor(thread, 'restart-reader'), 0);
+        expect(chatStore.messagesFor(thread).single.seenAt, isNotNull);
+      },
+    );
+
+    test('previously read club messages stay read when sync starts', () async {
+      userState.followedClubIds.add('c4');
+      const thread = 'club:c4';
+      chatStore.sendMessage(
+        threadId: thread,
+        senderId: 'club-restart-sender',
+        content: 'club message read before restart',
+      );
+      chatStore.markThreadRead(thread, 'club-restart-reader');
+      expect(chatStore.unreadCountFor(thread, 'club-restart-reader'), 0);
+      await chatStore.saveAll();
+
+      await chatStore.startClubMessageSync('club-restart-reader');
+
+      expect(chatStore.unreadCountFor(thread, 'club-restart-reader'), 0);
+    });
+
+    test('deletes only the current user own message', () {
+      final thread = ChatStore.dmThreadId('delete-owner', 'delete-peer');
+      final own = chatStore.sendMessage(
+        threadId: thread,
+        senderId: 'delete-owner',
+        content: 'remove my message',
+      )!;
+      final other = chatStore.sendMessage(
+        threadId: thread,
+        senderId: 'delete-peer',
+        content: 'keep their message',
+      )!;
+
+      expect(
+        chatStore.deleteMessage(messageId: other.id, userId: 'delete-owner'),
+        isFalse,
+      );
+      expect(
+        chatStore.deleteMessage(messageId: own.id, userId: 'delete-owner'),
+        isTrue,
+      );
+      expect(chatStore.messageById(own.id), isNull);
+      expect(chatStore.messageById(other.id), isNotNull);
+    });
+
     test('empty and whitespace-only messages are rejected', () {
       final thread = ChatStore.dmThreadId('u3', 'u9');
       final before = chatStore.messagesFor(thread).length;

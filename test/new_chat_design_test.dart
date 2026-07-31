@@ -17,8 +17,8 @@ import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
 import 'package:flutter_application_1/widgets/presence_avatar.dart';
 import 'package:hive/hive.dart';
 
-/// Verifies the "New chat" design (campus wallpaper, intro card, starter chips,
-/// composer) on student threads — direct messages and student-created groups.
+/// Verifies the "New chat" design (campus wallpaper, intro card, composer) on
+/// student threads — direct messages and student-created groups.
 void main() {
   late Directory tempDir;
   late String myId;
@@ -74,7 +74,7 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('empty DM shows the campus canvas, intro card and starters', (
+  testWidgets('empty DM shows the campus canvas, intro card and composer', (
     tester,
   ) async {
     final threadId = ChatStore.dmThreadId(myId, peer.$1);
@@ -97,62 +97,33 @@ void main() {
     expect(find.text(peer.$2), findsNWidgets(2)); // header + intro headline
     // Nothing in common yet, so the line falls back to naming the state.
     expect(find.text(S.chatNoMessagesYet), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-starter-chips')), findsNothing);
 
-    // Starter chips are docked above the composer while the thread is empty.
-    expect(find.byKey(const ValueKey('chat-starter-chips')), findsOneWidget);
-    for (final starter in S.dmStarters) {
-      expect(find.text(starter), findsOneWidget);
-    }
-
-    // Composer: attach, camera, and the mic that becomes send.
+    // Composer: attach, camera, and a disabled send affordance until typing.
     expect(find.byKey(const ValueKey('chat-attach-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-send-button')), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.byIcon(Icons.mic_none_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.send_rounded), findsNothing);
+    final messageField = tester.widget<TextField>(find.byType(TextField));
+    expect(messageField.maxLines, 1);
+    expect(messageField.textInputAction, TextInputAction.send);
+    expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
+    expect(find.byIcon(Icons.send_rounded), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Draft');
     await tester.pump();
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
 
-    // Flush the store's debounced save on the real event loop, so no fake-async
-    // timer survives the test.
-    await tester.runAsync(chatStore.saveAll);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('tapping a starter sends it and retires the chip row', (
-    tester,
-  ) async {
-    final threadId = ChatStore.dmThreadId(myId, second.$1);
-    chatStore.ensureDirectThread(myId, second.$1);
-
-    await pumpThread(tester, threadId);
-
-    final starter = S.dmStarters.first;
-    await tester.tap(find.byKey(const ValueKey('chat-starter-0')));
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
-
     expect(
       chatStore
           .messagesFor(threadId, viewerId: myId)
           .map((message) => message.content),
-      contains(starter),
+      contains('Draft'),
     );
-    expect(find.byKey(const ValueKey('chat-starter-chips')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('chat-empty-conversation-card')),
-      findsNothing,
-    );
-    // The day marker and the outgoing read receipt replace the intro.
-    expect(find.text(S.today.toUpperCase()), findsOneWidget);
-    final sent = chatStore.messagesFor(threadId, viewerId: myId).last;
-    expect(
-      find.byKey(ValueKey('message-status-${sent.id}-${sent.status.name}')),
-      findsOneWidget,
-    );
+
     // Flush the store's debounced save on the real event loop, so no fake-async
     // timer survives the test.
     await tester.runAsync(chatStore.saveAll);
@@ -184,11 +155,31 @@ void main() {
       findsOneWidget,
     );
 
-    for (final starter in S.groupStarters) {
-      expect(find.text(starter), findsOneWidget);
-    }
     // Flush the store's debounced save on the real event loop, so no fake-async
     // timer survives the test.
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('chat attachment sheet only offers photos and camera', (
+    tester,
+  ) async {
+    final threadId = ChatStore.dmThreadId(myId, second.$1);
+    chatStore.ensureDirectThread(myId, second.$1);
+
+    await pumpThread(tester, threadId);
+    await tester.tap(find.byKey(const ValueKey('chat-attach-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat-attach-sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-attach-photo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-attach-camera')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-attach-file')), findsNothing);
+
+    Navigator.of(
+      tester.element(find.byKey(const ValueKey('chat-attach-sheet'))),
+    ).pop();
+    await tester.pumpAndSettle();
     await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });
@@ -304,6 +295,10 @@ void main() {
     await tester.longPress(find.byKey(ValueKey('chat-message-${message.id}')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chat-reaction-sheet')), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('chat-delete-message-${message.id}')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('chat-reaction-option-🎉')));
     await tester.pumpAndSettle();

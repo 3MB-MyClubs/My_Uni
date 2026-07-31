@@ -16,6 +16,19 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Live device preview
+
+Run the app in a desktop browser with an interactive phone/tablet frame:
+
+```sh
+flutter run -d chrome --dart-define=CLUBUP_DEVICE_PREVIEW=true
+```
+
+Use the toolbar to switch between iPhone, Pixel, and iPad sizes or rotate the
+device. Press `r` in the Flutter terminal after saving code to hot reload the
+preview live. The preview is debug-only and is disabled in normal and release
+runs.
+
 ## Mock club admin
 
 For local development, start the app with mock authentication enabled:
