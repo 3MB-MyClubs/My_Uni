@@ -18,7 +18,7 @@ import 'screens/theme_choice_screen.dart';
 import 'screens/onboarding_carousel_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
-import 'services/mock_data.dart' show appAdmin;
+import 'services/mock_clubup_profile.dart';
 import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
 import 'services/user_prefs_service.dart';
@@ -41,6 +41,7 @@ import 'onboarding/starter_checklist_service.dart';
 import 'services/event_cleanup_service.dart';
 import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
+import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
 import 'services/onboarding_intro_service.dart';
 
@@ -96,6 +97,7 @@ void main() async {
     calendarSyncService.initialize(),
     onboardingService.initialize(),
     starterChecklistService.initialize(),
+    adminModerationService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
   // Supabase restores its token pair from device storage. Reconstruct the
@@ -450,8 +452,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
-          final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
-          final isAdmin = isSuperAdmin;
+          final isAdmin = isClubUpAdmin(authService.currentAdmin);
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
           if (currentUserId != null && currentUserId != _prefsLoadedForUserId) {

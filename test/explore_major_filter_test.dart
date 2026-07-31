@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/screens/explore_screen.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
@@ -63,8 +64,13 @@ void main() {
 
   Future<void> pumpFindPeople(WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: ExploreScreen(initialTabIndex: 2)),
+      ProviderScope(
+        child: MaterialApp(
+          locale: Locale(localeService.languageCode),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const ExploreScreen(initialTabIndex: 2),
+        ),
       ),
     );
     await tester.pump();

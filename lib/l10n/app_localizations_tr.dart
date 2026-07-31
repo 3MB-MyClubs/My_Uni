@@ -153,6 +153,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get allEvents => 'Tüm etkinlikler';
 
   @override
+  String get allPosts => 'Tüm gönderiler';
+
+  @override
+  String get overview => 'Genel bakış';
+
+  @override
   String get everythingOnCampus => 'Kampüste olan her şey';
 
   @override
@@ -435,6 +441,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get deleteEventMsg => 'Bu etkinlik kalıcı olarak kaldırılacak.';
+
+  @override
+  String get eventDeletedConfirmation => 'Etkinlik silindi';
 
   @override
   String get majorNotAdded => 'Bölüm eklenmedi';
@@ -862,6 +871,27 @@ class AppLocalizationsTr extends AppLocalizations {
       'Kulübünü yönetmek için kulüp e-postanı ve 8 haneli şifreni gir.';
 
   @override
+  String get platformAdminLoginTitle => 'Platform Yöneticisi Girişi';
+
+  @override
+  String get platformAdminLoginSubtitle =>
+      'ClubUp platform yöneticisine ayrılmış kısıtlı erişim.';
+
+  @override
+  String get adminEmailLabel => 'Yönetici e-postası';
+
+  @override
+  String get adminCredentialsRequired =>
+      'Yönetici e-postası ve şifresi gerekli';
+
+  @override
+  String get invalidAdminCredentials =>
+      'Geçersiz yönetici e-postası veya şifresi';
+
+  @override
+  String get notPlatformAdmin => 'Bu bilgiler platform yöneticisine atanmamış';
+
+  @override
   String get clubEmailLabel => 'Kulüp E-postası';
 
   @override
@@ -919,6 +949,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get enterKuEmailSubtitle => 'Hesabın için KU e-postanı gir.';
+
+  @override
+  String get enterAccountEmailSubtitle => 'Hesabın için e-posta adresini gir.';
 
   @override
   String enterCodeSubtitle(String email) {
@@ -1018,6 +1051,9 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get useKuEmailAddress =>
       '@ku.edu.tr uzantılı e-posta adresini kullan.';
+
+  @override
+  String get useValidEmailAddress => 'Geçerli bir e-posta adresi gir.';
 
   @override
   String get newCodeSent => 'Yeni kod gönderildi.';

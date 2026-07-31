@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/comment.dart';
 import '../models/news_post.dart';
+import 'admin_moderation_service.dart';
 import 'auth_service.dart';
 import 'supabase_config.dart';
 
@@ -126,6 +127,7 @@ class ModerationService extends ChangeNotifier {
       targetType: 'post',
       targetId: post.id,
       reportedUserId: post.authorId,
+      reportedClubId: post.clubId,
       reason: reason,
       snapshot: post.content,
     );
@@ -240,6 +242,7 @@ class ModerationService extends ChangeNotifier {
     await _submitReport(
       targetType: 'club',
       targetId: clubId,
+      reportedClubId: clubId,
       reason: reason,
       source: 'block',
     );
@@ -277,11 +280,23 @@ class ModerationService extends ChangeNotifier {
     required String targetId,
     required String reason,
     String? reportedUserId,
+    String? reportedClubId,
     String? snapshot,
     String source = 'report',
   }) async {
-    final client = _client;
     final actorId = _actorId;
+    await adminModerationService.recordReport(
+      reporterId: actorId,
+      targetType: targetType,
+      targetId: targetId,
+      reason: reason,
+      source: source,
+      reportedUserId: reportedUserId,
+      reportedClubId: reportedClubId,
+      contentSnapshot: snapshot,
+    );
+
+    final client = _client;
     if (client == null || !_uuidPattern.hasMatch(actorId)) return;
 
     final payload = <String, dynamic>{

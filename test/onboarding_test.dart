@@ -42,6 +42,7 @@ Map<String, String Function()> _allOnboardingCopy() => {
   'clubCreateEvent': () => S.onboardingClubCreateEvent,
   'clubProfileTabs': () => S.onboardingClubProfileTabs,
   'clubChats': () => S.onboardingClubChats,
+  'clubModeration': () => S.onboardingClubModeration,
   'clubSettings': () => S.onboardingClubSettings,
   'finishTitle': () => S.onboardingFinishTitle,
   'finishBody': () => S.onboardingFinishBody,

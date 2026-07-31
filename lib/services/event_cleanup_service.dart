@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../models/event.dart';
+import 'auth_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 import 'supabase_event_service.dart';
 
 class EventCleanupService {
@@ -16,6 +18,10 @@ class EventCleanupService {
   }
 
   Future<void> cleanupExpiredEvents() async {
+    // The platform moderation archive must retain historical events. Running
+    // the normal 24-hour cleanup with its global delete policy would otherwise
+    // erase every expired event as soon as an administrator signs in.
+    if (isClubUpAdmin(authService.currentAdmin)) return;
     if (_running) return;
     _running = true;
     try {

@@ -15,11 +15,16 @@ class ForgotPasswordScreen extends StatefulWidget {
   /// What the credential is called in the copy ('password' or 'passcode').
   final String passwordNoun;
 
+  /// Club accounts can use an approved external address. Student accounts
+  /// remain restricted to the university domain.
+  final bool allowExternalEmail;
+
   const ForgotPasswordScreen({
     super.key,
     this.initialEmail = '',
     this.passwordLength = 6,
     this.passwordNoun = 'password',
+    this.allowExternalEmail = false,
   });
 
   @override
@@ -40,6 +45,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _obscureConfirm = true;
 
   static final _emailRegex = RegExp(r'^[a-zA-Z0-9_.+-]+@ku\.edu\.tr$');
+  static final _generalEmailRegex = RegExp(
+    r'^[a-zA-Z0-9.!#$%&\x27*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$',
+  );
 
   @override
   void initState() {
@@ -68,8 +76,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => _error = AppLocalizations.of(context)!.pleaseEnterKuEmail);
       return;
     }
-    if (!_emailRegex.hasMatch(email)) {
-      setState(() => _error = AppLocalizations.of(context)!.useKuEmailAddress);
+    final isValidEmail = widget.allowExternalEmail
+        ? _generalEmailRegex.hasMatch(email)
+        : _emailRegex.hasMatch(email);
+    if (!isValidEmail) {
+      setState(
+        () => _error = widget.allowExternalEmail
+            ? AppLocalizations.of(context)!.useValidEmailAddress
+            : AppLocalizations.of(context)!.useKuEmailAddress,
+      );
       return;
     }
     setState(() {
@@ -305,7 +320,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final l10n = AppLocalizations.of(context)!;
     switch (_step) {
       case _ResetStep.email:
-        return l10n.enterKuEmailSubtitle;
+        return widget.allowExternalEmail
+            ? l10n.enterAccountEmailSubtitle
+            : l10n.enterKuEmailSubtitle;
       case _ResetStep.code:
         return l10n.enterCodeSubtitle(_email);
       case _ResetStep.password:

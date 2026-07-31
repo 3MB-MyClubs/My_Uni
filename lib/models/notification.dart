@@ -4,11 +4,11 @@ class AppNotification {
   final String message;
   final DateTime createdAt;
   final bool read;
+  // Backend copy/category type, e.g. direct_message or group_message.
+  final String? notificationType;
   // 'post' | 'club' | 'event' | 'user' | 'message' | 'follow_request' | 'follow_accepted'
   final String? targetType;
   final String? targetId;
-  // Event that produced a remote notification (for example 'group_message').
-  final String? notificationType;
   // For follow_request: the ID of the user who sent the request.
   final String? fromId;
 
@@ -18,9 +18,9 @@ class AppNotification {
     required this.message,
     required this.createdAt,
     this.read = false,
+    this.notificationType,
     this.targetType,
     this.targetId,
-    this.notificationType,
     this.fromId,
   });
 
@@ -30,9 +30,9 @@ class AppNotification {
     'message': message,
     'createdAt': createdAt.toIso8601String(),
     'read': read,
+    'notificationType': notificationType,
     'targetType': targetType,
     'targetId': targetId,
-    'notificationType': notificationType,
     'fromId': fromId,
   };
 
@@ -42,9 +42,9 @@ class AppNotification {
     message: m['message'] as String,
     createdAt: DateTime.parse(m['createdAt'] as String),
     read: m['read'] as bool? ?? false,
+    notificationType: m['notificationType'] as String?,
     targetType: m['targetType'] as String?,
     targetId: m['targetId'] as String?,
-    notificationType: m['notificationType'] as String?,
     fromId: m['fromId'] as String?,
   );
 }

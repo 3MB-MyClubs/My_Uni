@@ -75,7 +75,9 @@ List<OnboardingStep> studentOnboardingSteps() => <OnboardingStep>[
 
 /// The club-admin tour. Their nav has no Search tab and a center "+" button;
 /// their Profile tab is the club's own management view.
-List<OnboardingStep> clubAdminOnboardingSteps() => <OnboardingStep>[
+List<OnboardingStep> clubAdminOnboardingSteps({
+  bool usesModerationTab = false,
+}) => <OnboardingStep>[
   OnboardingStep(
     guideLine: () => S.onboardingClubComposer,
     icon: Icons.campaign_rounded,
@@ -93,8 +95,9 @@ List<OnboardingStep> clubAdminOnboardingSteps() => <OnboardingStep>[
     tapThrough: false,
   ),
   OnboardingStep(
-    guideLine: () => S.onboardingClubChats,
-    icon: Icons.chat_bubble_rounded,
+    guideLine: () =>
+        usesModerationTab ? S.onboardingClubModeration : S.onboardingClubChats,
+    icon: usesModerationTab ? Icons.shield_rounded : Icons.chat_bubble_rounded,
     targetKey: onboardingAnchors.keyFor(OnboardingAnchors.navChats),
     tabIndex: 3,
   ),

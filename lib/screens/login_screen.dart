@@ -1,14 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/language_toggle.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
+import 'platform_admin_auth_screen.dart';
 
 /// Combined brand + sign-in entry screen (recreated from the
 /// "Login Screen v2" design handoff). It is the app's root: a centered crest
@@ -49,6 +53,10 @@ class _LoginScreenState extends State<LoginScreen>
   bool _entranceConfigured = false;
   double _languageContentOpacity = 1;
   bool _isSwitchingLanguage = false;
+  int _clubAdminTapCount = 0;
+  Timer? _clubAdminTapTimer;
+
+  static const _clubAdminTapWindow = Duration(milliseconds: 700);
 
   bool get _canSubmit =>
       _emailController.text.trim().isNotEmpty &&
@@ -102,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
+    _clubAdminTapTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     _entranceController.dispose();
@@ -142,7 +151,9 @@ class _LoginScreenState extends State<LoginScreen>
     } else {
       setState(() {
         _isSubmitting = false;
-        _error = AppLocalizations.of(context)!.incorrectEmailOrPassword;
+        _error = authService.lastLoginFailure == AuthLoginFailure.banned
+            ? S.bannedFromApp
+            : AppLocalizations.of(context)!.incorrectEmailOrPassword;
       });
     }
   }
@@ -172,6 +183,41 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       ),
     );
+  }
+
+  void _openPlatformAdmin() {
+    Navigator.of(context).push(
+      _fadeSlideRoute(
+        PlatformAdminAuthScreen(
+          onAdminLogin: () {
+            Navigator.of(context).pop();
+            widget.onAdminLogin();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _handleClubAdminEntryTap() {
+    _clubAdminTapCount++;
+    _clubAdminTapTimer?.cancel();
+
+    if (_clubAdminTapCount >= 5) {
+      _clubAdminTapCount = 0;
+      _clubAdminTapTimer = null;
+      HapticFeedback.selectionClick();
+      _openPlatformAdmin();
+      return;
+    }
+
+    // Wait briefly before treating the gesture as a normal club-admin tap so
+    // five quick taps can reveal the separate platform-admin entry point.
+    _clubAdminTapTimer = Timer(_clubAdminTapWindow, () {
+      if (!mounted) return;
+      _clubAdminTapCount = 0;
+      _clubAdminTapTimer = null;
+      _openClubAdmin();
+    });
   }
 
   Future<void> _switchLanguage(String code) async {
@@ -497,7 +543,11 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
                                     GestureDetector(
-                                      onTap: _openClubAdmin,
+                                      key: const ValueKey<String>(
+                                        'club-admin-sign-in-trigger',
+                                      ),
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _handleClubAdminEntryTap,
                                       child: Text(
                                         AppLocalizations.of(
                                           context,
