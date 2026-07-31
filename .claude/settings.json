@@ -52,7 +52,14 @@
       "Bash(dart format *)",
       "Bash(git checkout *)",
       "Bash(cd \"c:/Users/Can Doğu/Documents/GitHub/My_Uni\" && sed -n '/^Failing tests:/,$p' \"C:/Users/CANDOU~1/AppData/Local/Temp/claude/c--Users-Can-Do-u-Documents-GitHub-My-Uni/fbd790a8-f670-4e85-9e7d-e511e503eeb5/tasks/baf3bhwhl.output\" | head -70)",
-      "Bash(awk '/^      profiles: \\\\{/,/^        Insert:/' supabase/live_database.types.ts)"
+      "Bash(awk '/^      profiles: \\\\{/,/^        Insert:/' supabase/live_database.types.ts)",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "Bash(gh pr *)",
+      "PowerShell(gh pr list --state open --json number,title,headRefName,baseRefName,mergeable)",
+      "Bash(git merge *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
     "additionalDirectories": [
       "/tmp",
