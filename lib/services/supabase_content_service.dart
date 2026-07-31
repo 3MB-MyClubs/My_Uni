@@ -7,6 +7,7 @@ import '../models/event.dart';
 import '../models/news_post.dart';
 import 'locale_service.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 import 'poll_store.dart';
 import 'supabase_config.dart';
 import 'supabase_club_service.dart';
@@ -28,6 +29,7 @@ class SupabaseContentService {
   Future<bool> refreshPublicContent({bool Function()? shouldApply}) async {
     final client = _client;
     if (client == null) return true;
+    final preservedMockClub = clubUpMockClub;
 
     // Events older than EventCleanupService's 24h-past-end retention window
     // are already permanently deleted, so this cutoff (with margin for
@@ -61,8 +63,12 @@ class SupabaseContentService {
         .map((row) => _clubFromRow(Map<String, dynamic>.from(row as Map)))
         .where((club) => club.id.isNotEmpty)
         .toList();
-    final visibleClubIds = nextClubs.map((club) => club.id).toSet();
     await _hydrateBoardMembers(client, nextClubs);
+    if (isClubUpMockProfileRegistered && preservedMockClub != null) {
+      nextClubs.removeWhere((club) => club.id == preservedMockClub.id);
+      nextClubs.add(preservedMockClub);
+    }
+    final visibleClubIds = nextClubs.map((club) => club.id).toSet();
     final nextEvents = (results[1] as List)
         .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
         .where(
@@ -80,9 +86,9 @@ class SupabaseContentService {
 
     if (shouldApply != null && !shouldApply()) return false;
 
-    // A successful empty response is authoritative. Keeping the previous/mock
-    // rows here could retain content that RLS intentionally filtered out and
-    // later make an orphan event appear under an unrelated fallback club.
+    // A successful empty response is authoritative for remote rows. The one
+    // development-only mock profile was reattached explicitly above; keeping
+    // any other previous rows could retain content that RLS filtered out.
     clubs
       ..clear()
       ..addAll(nextClubs);

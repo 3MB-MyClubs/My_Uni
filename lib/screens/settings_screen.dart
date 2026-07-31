@@ -18,6 +18,7 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/theme_service.dart';
 import '../services/locale_service.dart';
+import '../services/mock_clubup_profile.dart';
 import '../l10n/app_localizations.dart';
 import '../services/photo_upload_quality.dart';
 import '../onboarding/onboarding_service.dart';
@@ -26,6 +27,7 @@ import '../widgets/language_toggle.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'blocked_accounts_screen.dart';
 import 'edit_profile_screen.dart';
+import 'moderation_center_screen.dart';
 
 Future<bool> showLogoutConfirmationDialog(BuildContext context) async {
   final l10n = AppLocalizations.of(context)!;
@@ -77,6 +79,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
+  bool get _isClubUpModerator => isClubUpMockAdmin(authService.currentAdmin);
 
   /// The club this account administers (null for students and the super admin).
   Club? get _managedClub {
@@ -1136,6 +1140,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   );
                 },
+              ),
+            ],
+
+            if (_isClubUpModerator) ...[
+              const SizedBox(height: 24),
+              _SectionHeader(title: S.moderation),
+              Container(
+                color: AppColors.card,
+                child: ListTile(
+                  leading: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.lightRed,
+                      borderRadius: const BorderRadius.all(Radius.circular(10)),
+                    ),
+                    child: Icon(
+                      Icons.admin_panel_settings_outlined,
+                      color: AppColors.primaryRed,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    S.moderationCenter,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  subtitle: Text(
+                    S.moderationCenterSubtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.secondaryText,
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ModerationCenterScreen(),
+                    ),
+                  ),
+                ),
               ),
             ],
 

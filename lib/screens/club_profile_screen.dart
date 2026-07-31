@@ -89,7 +89,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -107,32 +107,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   List get _clubEvents =>
       events.where((e) => e.clubId == widget.club.id).toList()
         ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-
-  // Posts that tag this club via @ClubName
-  List get _taggedPosts =>
-      newsPosts
-          .where(
-            (p) =>
-                p.clubId != widget.club.id &&
-                p.taggedClubIds.contains(widget.club.id),
-          )
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-  // Events co-hosted: events from other clubs that explicitly tag this club
-  // (taggedClubIds on events not modelled, so we use posts for now)
-  // Partner clubs = clubs whose posts tag this club OR this club's posts tag them
-  List<Club> get _partnerClubs {
-    final ids = <String>{};
-    for (final p in newsPosts) {
-      if (p.clubId == widget.club.id) {
-        ids.addAll(p.taggedClubIds);
-      } else if (p.taggedClubIds.contains(widget.club.id)) {
-        ids.add(p.clubId);
-      }
-    }
-    return clubs.where((c) => ids.contains(c.id)).toList();
-  }
 
   /// True when the currently logged-in admin is the admin of THIS club.
   bool get _isThisClubAdmin {
@@ -272,14 +246,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         : initials;
   }
 
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    final loc = AppLocalizations.of(context)!;
-    if (diff.inMinutes < 60) return loc.minutesAgo(diff.inMinutes);
-    if (diff.inHours < 24) return loc.hoursAgo(diff.inHours);
-    return loc.daysAgoShort(diff.inDays);
-  }
-
   String _monthAbbr(int m) {
     return AppLocalizations.of(context)!.monthAbbr(m.toString());
   }
@@ -303,8 +269,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     // build (same reasoning as the memberCount local above).
     final clubPosts = _clubPosts;
     final clubEvents = _clubEvents;
-    final taggedPosts = _taggedPosts;
-    final partnerClubs = _partnerClubs;
     final bg = AppColors.background;
     final borderColor = _clubPageBorder(context);
     final subText = AppColors.secondaryText;
@@ -727,12 +691,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     label: AppLocalizations.of(context)!.events.toUpperCase(),
                   ),
                   _IconTab(
-                    icon: Icons.people_alt_outlined,
-                    label: AppLocalizations.of(
-                      context,
-                    )!.collabsTab.toUpperCase(),
-                  ),
-                  _IconTab(
                     icon: Icons.assignment_outlined,
                     label: AppLocalizations.of(context)!.board.toUpperCase(),
                   ),
@@ -764,13 +722,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               onChanged: () {
                 if (mounted) setState(() {});
               },
-            ),
-            _CollaborationsTab(
-              taggedPosts: taggedPosts,
-              partnerClubs: partnerClubs,
-              thisClub: widget.club,
-              clubColor: widget.color,
-              timeAgo: _timeAgo,
             ),
             _BoardTab(
               club: widget.club,
@@ -1807,353 +1758,6 @@ class _LiveDotState extends State<_LiveDot>
           ),
         ),
       ),
-    );
-  }
-}
-
-// ─── Collaborations Tab ───────────────────────────────────────────────────────
-
-class _CollaborationsTab extends StatelessWidget {
-  final List taggedPosts;
-  final List<Club> partnerClubs;
-  final Club thisClub;
-  final Color clubColor;
-  final String Function(DateTime) timeAgo;
-
-  const _CollaborationsTab({
-    required this.taggedPosts,
-    required this.partnerClubs,
-    required this.thisClub,
-    required this.clubColor,
-    required this.timeAgo,
-  });
-
-  static const List<Color> _colors = [
-    Color(0xFF8C1D40),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
-  Widget _partnerClubRow(
-    BuildContext context,
-    Club club,
-    Color cardColor,
-    Color borderColor,
-    Color strongBorderColor,
-  ) {
-    final color = _colors[clubOrdinal(club.id) % _colors.length];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ClubProfileScreen(club: club, color: color),
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: cardColor,
-            border: Border.all(color: borderColor),
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-          ),
-          child: Row(
-            children: [
-              ClubAvatar(
-                clubId: club.id,
-                clubName: club.name,
-                color: color,
-                imageUrl: club.logoUrl,
-                size: 48,
-                fontSize: 20,
-                borderRadius: 14,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      club.name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.text,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      AppLocalizations.of(
-                        context,
-                      )!.memberCountLabel(clubMemberCount(club.id)),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: strongBorderColor),
-                  borderRadius: BorderRadius.all(Radius.circular(8)),
-                ),
-                child: Text(
-                  AppLocalizations.of(context)!.viewChevron,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _taggedPostRow(
-    BuildContext context,
-    dynamic post,
-    Color cardColor,
-    Color borderColor,
-  ) {
-    final authorClub = clubForId(post.clubId as String) ?? clubs.first;
-    final color = _colors[clubOrdinal(authorClub.id) % _colors.length];
-    final likeCount = postLikeCount(post.id as String);
-    final hasImage =
-        post.imagePath != null && (post.imagePath as String).isNotEmpty;
-
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PostDetailScreen(post: post, clubColor: color),
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-        decoration: BoxDecoration(
-          color: cardColor,
-          border: Border.all(color: borderColor),
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-        ),
-        clipBehavior: Clip.hardEdge,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-              child: Row(
-                children: [
-                  ClubAvatar(
-                    clubId: authorClub.id,
-                    clubName: authorClub.name,
-                    color: color,
-                    imageUrl: authorClub.logoUrl,
-                    size: 36,
-                    fontSize: 15,
-                    borderRadius: 10,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          authorClub.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: AppColors.text,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          timeAgo(post.createdAt as DateTime),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Collab badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: clubColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.handshake_outlined,
-                          size: 12,
-                          color: clubColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          AppLocalizations.of(context)!.collabBadge,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: clubColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Banner / club avatar fallback
-            if (hasImage)
-              buildPostBanner(
-                imagePath: post.imagePath as String?,
-                fallbackColor: color,
-                fallbackLetter: authorClub.name[0],
-                height: 140,
-              )
-            else
-              Container(
-                height: 140,
-                width: double.infinity,
-                color: color.withValues(alpha: 0.08),
-                alignment: Alignment.center,
-                child: ClubAvatar(
-                  clubId: authorClub.id,
-                  clubName: authorClub.name,
-                  color: color,
-                  imageUrl: authorClub.logoUrl,
-                  size: 72,
-                  fontSize: 30,
-                  borderRadius: 20,
-                ),
-              ),
-            // Stats
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.favorite, size: 14, color: Colors.pink),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$likeCount',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cardColor = _clubPageCard(context);
-    final borderColor = _clubPageBorder(context);
-    final strongBorderColor = _clubPageStrongBorder(context);
-    final isEmpty = taggedPosts.isEmpty && partnerClubs.isEmpty;
-
-    if (isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.only(top: 8, bottom: 80),
-        children: [
-          Padding(
-            padding: EdgeInsets.all(40),
-            child: Center(
-              child: Text(
-                AppLocalizations.of(context)!.noCollaborationsYet,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.secondaryText, height: 1.6),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Mix of fixed section-header chrome (cheap, at most 2 of them) and
-    // partner-club/tagged-post rows, the latter built lazily below instead
-    // of eagerly materializing every row up front.
-    final items = <dynamic>[];
-    if (partnerClubs.isNotEmpty) {
-      items.add(
-        Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            AppLocalizations.of(context)!.partnerClubsHeader.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-              color: AppColors.secondaryText,
-            ),
-          ),
-        ),
-      );
-      items.addAll(partnerClubs);
-      items.add(const SizedBox(height: 4));
-    }
-    if (taggedPosts.isNotEmpty) {
-      items.add(
-        Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(
-            AppLocalizations.of(context)!.postsFeaturingClub.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-              color: AppColors.secondaryText,
-            ),
-          ),
-        ),
-      );
-      items.addAll(taggedPosts);
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 80),
-      itemCount: items.length,
-      itemBuilder: (context, i) {
-        final item = items[i];
-        if (item is Widget) return item;
-        if (item is Club) {
-          return _partnerClubRow(
-            context,
-            item,
-            cardColor,
-            borderColor,
-            strongBorderColor,
-          );
-        }
-        return _taggedPostRow(context, item, cardColor, borderColor);
-      },
     );
   }
 }

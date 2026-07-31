@@ -12,14 +12,10 @@ import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/chat_store.dart';
+import '../services/notification_navigation.dart';
 import '../services/supabase_config.dart';
 import '../services/push_notification_copy.dart';
 import '../widgets/club_avatar.dart';
-import 'chat_thread_screen.dart';
-import 'club_profile_screen.dart';
-import 'event_detail_screen.dart';
-import 'post_detail_screen.dart';
-import 'user_profile_screen.dart';
 
 /// Notification center: a single chronological feed with unread emphasis and
 /// mark-all-read. Tapping a row marks it read and opens its target. Follow
@@ -95,6 +91,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       message: copy.body,
       createdAt: DateTime.parse(row['created_at'] as String),
       read: row['read_at'] != null,
+      notificationType: row['type'] as String?,
       targetType: row['target_type'] as String?,
       targetId: row['target_id'] as String?,
     );
@@ -206,20 +203,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   // ── Navigation (only types with a real destination) ─────────────────────────
-  static const List<Color> _clubColors = [
-    Color(0xFFB41C18),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
-  Color _colorForClub(String clubId) {
-    final idx = clubOrdinal(clubId);
-    return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-  }
-
   /// The club a notification is "from", if any — so its uploaded profile photo
   /// can be shown as the row avatar (clubs are visible app-wide this way).
   dynamic _clubForNotification(AppNotification n) {
@@ -241,83 +224,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _openTarget(AppNotification n) {
-    final type = n.targetType;
-    final id = n.targetId;
-
-    if (type == null || id == null) return;
-    switch (type) {
-      case 'post':
-        final post = newsPosts.firstWhere(
-          (p) => p.id == id,
-          orElse: () => newsPosts.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PostDetailScreen(
-              post: post,
-              clubColor: _colorForClub(post.clubId),
-            ),
-          ),
-        );
-      case 'club':
-        final club = clubs.firstWhere(
-          (c) => c.id == id,
-          orElse: () => clubs.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ClubProfileScreen(club: club, color: _colorForClub(id)),
-          ),
-        );
-      case 'event':
-        final event = events.firstWhere(
-          (e) => e.id == id,
-          orElse: () => events.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EventDetailScreen(
-              event: event,
-              color: _colorForClub(event.clubId),
-            ),
-          ),
-        );
-      case 'user':
-      case 'follow_accepted':
-        final user = users.firstWhere(
-          (u) => u.id == id,
-          orElse: () => users.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
-        );
-      case 'message':
-        // Admin accounts never enter direct-message routes, including from
-        // stale notifications created by older app versions.
-        if (ChatStore.isAdminAccountId(_myId)) return;
-        if (ChatStore.isGroupThread(id)) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ChatThreadScreen(threadId: id)),
-          );
-          return;
-        }
-        // targetId (and fromId when set) is the other participant's id.
-        final peerId = n.fromId ?? id;
-        if (_myId.isEmpty) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ChatThreadScreen(threadId: ChatStore.dmThreadId(_myId, peerId)),
-          ),
-        );
-    }
+    unawaited(
+      openNotificationTarget(
+        context,
+        notificationTargetFor(n),
+        currentUserId: _myId,
+      ),
+    );
   }
 
   void _onRowTap(AppNotification n) {

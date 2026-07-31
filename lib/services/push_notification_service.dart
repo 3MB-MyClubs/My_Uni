@@ -13,11 +13,50 @@ class PushNotificationTarget {
     required this.type,
     this.targetId,
     this.notificationId,
+    this.notificationType,
+    this.actorId,
   });
 
+  /// The normalized navigation destination. Messaging destinations retain
+  /// their subtype (`direct_message`, `group_chat`, or `club_chat`) because
+  /// each one needs a different thread-id shape.
   final String type;
   final String? targetId;
   final String? notificationId;
+  final String? notificationType;
+  final String? actorId;
+
+  bool get isChat =>
+      type == 'direct_message' || type == 'group_chat' || type == 'club_chat';
+
+  /// Builds the canonical thread id expected by [ChatThreadScreen]. Backend
+  /// notification rows store raw peer/group/club UUIDs, while the messaging
+  /// system uses prefixed ids locally.
+  String? chatThreadIdFor(String currentUserId) {
+    final id = targetId;
+    if (!isChat || id == null || id.isEmpty) return null;
+    if (id.startsWith('dm:') ||
+        id.startsWith('group:') ||
+        id.startsWith('club:')) {
+      return id;
+    }
+    switch (type) {
+      case 'group_chat':
+        return 'group:$id';
+      case 'club_chat':
+        return 'club:$id';
+      case 'direct_message':
+        final peerId = actorId ?? id;
+        if (currentUserId.isEmpty ||
+            peerId.isEmpty ||
+            peerId == currentUserId) {
+          return null;
+        }
+        final participants = [currentUserId, peerId]..sort();
+        return 'dm:${participants.join('|')}';
+    }
+    return null;
+  }
 
   factory PushNotificationTarget.fromData(Map<String, dynamic> data) {
     String? value(String key) {
@@ -25,10 +64,108 @@ class PushNotificationTarget {
       return text.isEmpty ? null : text;
     }
 
+    String normalize(String value) =>
+        value.toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+
+    final notificationType = value('type') ?? value('notification_type');
+    final rawTargetType = value('target_type') ?? value('targetType');
+    final targetId =
+        value('target_id') ??
+        value('targetId') ??
+        value('thread_id') ??
+        value('chat_id');
+    final normalizedNotificationType = notificationType == null
+        ? null
+        : normalize(notificationType);
+    final normalizedTargetType = rawTargetType == null
+        ? null
+        : normalize(rawTargetType);
+
+    String messagingType() {
+      if (normalizedNotificationType == 'direct_message' ||
+          normalizedTargetType == 'direct_message' ||
+          normalizedTargetType == 'dm') {
+        return 'direct_message';
+      }
+      if (normalizedNotificationType == 'group_message' ||
+          normalizedTargetType == 'group_message' ||
+          normalizedTargetType == 'group_chat' ||
+          normalizedTargetType == 'group') {
+        return 'group_chat';
+      }
+      if (normalizedTargetType == 'club_message' ||
+          normalizedTargetType == 'club_chat' ||
+          normalizedTargetType == 'community') {
+        return 'club_chat';
+      }
+      if (targetId?.startsWith('group:') == true) return 'group_chat';
+      if (targetId?.startsWith('club:') == true) return 'club_chat';
+      return 'direct_message';
+    }
+
+    String navigationType() {
+      final targetType = normalizedTargetType;
+      if (targetType == 'message' || targetType == 'chat') {
+        return messagingType();
+      }
+      if (targetType != null) {
+        switch (targetType) {
+          case 'dm':
+          case 'direct_message':
+          case 'group':
+          case 'group_chat':
+          case 'group_message':
+          case 'club_chat':
+          case 'club_message':
+          case 'community':
+            return messagingType();
+          case 'profile':
+          case 'person':
+          case 'follow_accepted':
+            return 'user';
+          default:
+            return targetType;
+        }
+      }
+
+      switch (normalizedNotificationType) {
+        case 'dm':
+        case 'direct_message':
+          return 'direct_message';
+        case 'group':
+        case 'group_chat':
+        case 'group_message':
+          return 'group_chat';
+        case 'club_chat':
+        case 'club_message':
+        case 'community':
+          return 'club_chat';
+        case 'club_post':
+        case 'post_like':
+        case 'post_comment':
+          return 'post';
+        case 'club_event':
+        case 'event_rsvp':
+          return 'event';
+        case 'profile_follow':
+        case 'follow_accepted':
+          return 'user';
+        case 'message':
+        case 'chat':
+          return messagingType();
+        case final type?:
+          return type;
+        default:
+          return 'notification';
+      }
+    }
+
     return PushNotificationTarget(
-      type: value('type') ?? value('target_type') ?? 'notification',
-      targetId: value('target_id'),
-      notificationId: value('notification_id'),
+      type: navigationType(),
+      targetId: targetId,
+      notificationId: value('notification_id') ?? value('notificationId'),
+      notificationType: notificationType,
+      actorId: value('actor_user_id') ?? value('from_id') ?? value('sender_id'),
     );
   }
 }

@@ -13,6 +13,7 @@ import '../services/mock_data.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
+import '../services/notification_navigation.dart';
 import '../services/push_notification_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -28,6 +29,7 @@ import 'chats_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
+import 'notifications_screen.dart';
 
 /// Presents the older club-admin create chooser used by visual drive tests and
 /// any explicit callers that still need a Post/Event split.
@@ -217,12 +219,38 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   void _onPushNotificationOpened() {
     final target = pushNotificationService.takePendingTarget();
     if (!mounted || target == null) return;
-    final selectedIndex = target.type == 'message' || target.type == 'chat'
-        ? 3
-        : 0;
+    unawaited(_openPushNotificationTarget(target));
+  }
+
+  Future<void> _openPushNotificationTarget(
+    PushNotificationTarget target,
+  ) async {
+    await appBootstrap.ready;
+    if (!mounted) return;
+
+    // Club admins may only use their managed community. Never switch them to
+    // a stale DM/group destination left by an older notification payload.
+    if (ChatStore.isAdminAccountId(_currentUserId) &&
+        target.isChat &&
+        target.type != 'club_chat') {
+      return;
+    }
+
+    final selectedIndex = target.isChat ? 3 : 0;
     if (_selectedIndex != selectedIndex) {
       setState(() => _selectedIndex = selectedIndex);
     }
+    if (target.type == 'notification') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+      );
+      return;
+    }
+    await openNotificationTarget(
+      context,
+      target,
+      currentUserId: _currentUserId,
+    );
   }
 
   void _onThemeOrLocaleChanged() {

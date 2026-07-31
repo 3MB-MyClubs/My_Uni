@@ -20,6 +20,7 @@ import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
+import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/photo_upload_quality.dart';
@@ -67,6 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
+    _refreshClubMemberCounts();
   }
 
   @override
@@ -78,6 +80,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _onLocaleChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _refreshClubMemberCounts() async {
+    try {
+      await lazyContentLoader.ensureCountsLoaded(force: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep the last successful aggregate snapshot while offline.
+    }
   }
 
   int _contentTab = 0; // 0 = Posts, 1 = Events
@@ -958,9 +969,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final nextEvent = _nextUpcomingEvent(user.id);
 
           final clubDetails = followedClubs.map((club) {
-            final memberCount = subscriptions
-                .where((s) => s.clubId == club.id)
-                .length;
+            final memberCount = clubMemberCount(club.id);
             final role =
                 studentClubRoleService.roleTitleFor(club, user.id) ??
                 AppLocalizations.of(context)!.memberRoleFallback;

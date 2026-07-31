@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_application_1/models/notification.dart';
+import 'package:flutter_application_1/services/notification_navigation.dart';
 import 'package:flutter_application_1/services/push_notification_service.dart';
 import 'package:flutter_application_1/services/push_notification_copy.dart';
 
@@ -21,6 +23,118 @@ void main() {
       'post',
     );
     expect(PushNotificationTarget.fromData(const {}).type, 'notification');
+  });
+
+  test('uses target_type for navigation instead of the copy type', () {
+    final target = PushNotificationTarget.fromData({
+      'type': 'club_post',
+      'target_type': 'post',
+      'target_id': 'post-123',
+    });
+
+    expect(target.type, 'post');
+    expect(target.notificationType, 'club_post');
+    expect(target.targetId, 'post-123');
+  });
+
+  test('normalizes direct-message payload to the canonical DM thread', () {
+    final target = PushNotificationTarget.fromData({
+      'type': 'direct_message',
+      'target_type': 'message',
+      'target_id': 'user-b',
+    });
+
+    expect(target.type, 'direct_message');
+    expect(target.isChat, isTrue);
+    expect(target.chatThreadIdFor('user-a'), 'dm:user-a|user-b');
+  });
+
+  test('normalizes raw group UUID to the canonical group thread', () {
+    final target = PushNotificationTarget.fromData({
+      'type': 'group_message',
+      'target_type': 'message',
+      'target_id': 'group-123',
+      'actor_user_id': 'sender-456',
+    });
+
+    expect(target.type, 'group_chat');
+    expect(target.actorId, 'sender-456');
+    expect(target.chatThreadIdFor('user-a'), 'group:group-123');
+  });
+
+  test('keeps legacy prefixed chat targets intact', () {
+    final group = PushNotificationTarget.fromData({
+      'target_type': 'message',
+      'target_id': 'group:legacy-group',
+    });
+    final club = PushNotificationTarget.fromData({
+      'target_type': 'chat',
+      'target_id': 'club:club-1',
+    });
+
+    expect(group.type, 'group_chat');
+    expect(group.chatThreadIdFor('user-a'), 'group:legacy-group');
+    expect(club.type, 'club_chat');
+    expect(club.chatThreadIdFor('user-a'), 'club:club-1');
+  });
+
+  test('derives content destinations from notification type as fallback', () {
+    expect(
+      PushNotificationTarget.fromData({
+        'type': 'post_comment',
+        'target_id': 'post-1',
+      }).type,
+      'post',
+    );
+    expect(
+      PushNotificationTarget.fromData({
+        'type': 'club_event',
+        'target_id': 'event-1',
+      }).type,
+      'event',
+    );
+    expect(
+      PushNotificationTarget.fromData({
+        'type': 'profile_follow',
+        'target_id': 'user-1',
+      }).type,
+      'user',
+    );
+  });
+
+  test('notification-center rows preserve the group-message subtype', () {
+    final target = notificationTargetFor(
+      AppNotification(
+        id: 'notification-1',
+        userId: 'user-a',
+        message: 'A new message',
+        createdAt: DateTime(2026),
+        notificationType: 'group_message',
+        targetType: 'message',
+        targetId: 'group-123',
+        fromId: 'user-b',
+      ),
+    );
+
+    expect(target.type, 'group_chat');
+    expect(target.chatThreadIdFor('user-a'), 'group:group-123');
+  });
+
+  test('legacy notification-center DM rows build a canonical DM thread', () {
+    final target = notificationTargetFor(
+      AppNotification(
+        id: 'notification-2',
+        userId: 'user-b',
+        message: 'A new message',
+        createdAt: DateTime(2026),
+        targetType: 'message',
+        targetId: 'user-a',
+        fromId: 'user-a',
+      ),
+    );
+
+    expect(target.type, 'direct_message');
+    expect(target.chatThreadIdFor('user-b'), 'dm:user-a|user-b');
   });
 
   test('localizes club post copy in English and Turkish', () {

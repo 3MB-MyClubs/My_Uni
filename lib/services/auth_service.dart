@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import '../models/user.dart';
 import '../models/app_admin.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 import 'club_follow_service.dart';
 import 'rsvp_store.dart';
 import 'student_profile_service.dart';
@@ -20,15 +21,21 @@ import 'app_presence_service.dart';
 import 'lazy_content_loader.dart';
 import 'people_service.dart';
 import 'terms_acceptance_service.dart';
+import 'admin_moderation_service.dart';
 
-// ...existing code...
+enum AuthLoginFailure { none, invalidCredentials, banned }
 
 class AuthService {
+  AuthService({AdminModerationService? moderationService})
+    : _moderationService = moderationService ?? adminModerationService;
+
+  final AdminModerationService _moderationService;
   User? _currentUser;
   AppAdmin? _currentAdmin;
 
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
+  AuthLoginFailure lastLoginFailure = AuthLoginFailure.none;
 
   bool get isStudentSession =>
       _currentAdmin == null &&
@@ -37,6 +44,7 @@ class AuthService {
 
   void setClubAdmin(AppAdmin admin) {
     lazyContentLoader.invalidate();
+    if (isClubUpMockAdmin(admin)) ensureClubUpMockProfile();
     _currentAdmin = admin;
     _currentUser = null;
     _syncTermsAcceptance();
@@ -93,22 +101,38 @@ class AuthService {
   }
 
   bool login(String email, String password) {
+    lastLoginFailure = AuthLoginFailure.none;
+    final normalizedEmail = email.trim().toLowerCase();
+    if (SupabaseConfig.canUseMockAuth &&
+        normalizedEmail == clubUpMockEmail &&
+        password == clubUpMockPasscode) {
+      ensureClubUpMockProfile();
+    }
     if (appAdmin.id.isNotEmpty &&
-        email == appAdmin.email &&
+        normalizedEmail == appAdmin.email.toLowerCase() &&
         appAdmin.password == password) {
       _currentAdmin = appAdmin;
+      _currentUser = null;
       return true;
     }
     final clubAdmin = clubAdmins.firstWhere(
-      (a) => a.email == email && a.password == password,
+      (a) => a.email.toLowerCase() == normalizedEmail && a.password == password,
       orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
     );
     if (clubAdmin.id.isNotEmpty) {
+      if (_moderationService.isClubBannedCached(
+        clubId: clubAdmin.id,
+        email: clubAdmin.email,
+      )) {
+        lastLoginFailure = AuthLoginFailure.banned;
+        return false;
+      }
       _currentAdmin = clubAdmin;
+      _currentUser = null;
       return true;
     }
     final user = users.firstWhere(
-      (u) => u.email == email && u.password == password,
+      (u) => u.email.toLowerCase() == normalizedEmail && u.password == password,
       orElse: () => User(
         id: '',
         name: '',
@@ -119,24 +143,38 @@ class AuthService {
       ),
     );
     if (user.id.isNotEmpty) {
+      if (_moderationService.isUserBannedCached(
+        userId: user.id,
+        email: user.email,
+      )) {
+        lastLoginFailure = AuthLoginFailure.banned;
+        return false;
+      }
       _currentUser = user;
+      _currentAdmin = null;
       return true;
     }
+    lastLoginFailure = AuthLoginFailure.invalidCredentials;
     return false;
   }
 
   Future<bool> loginStudent(String email, String password) async {
+    lastLoginFailure = AuthLoginFailure.none;
     final normalizedEmail = email.trim().toLowerCase();
 
     final isMockAdmin =
         (appAdmin.id.isNotEmpty &&
             appAdmin.email.toLowerCase() == normalizedEmail) ||
-        clubAdmins.any((a) => a.email.toLowerCase() == normalizedEmail);
+        clubAdmins.any((a) => a.email.toLowerCase() == normalizedEmail) ||
+        (SupabaseConfig.canUseMockAuth && normalizedEmail == clubUpMockEmail);
     if (SupabaseConfig.canUseMockAuth && isMockAdmin) {
       return isValidClubPassword(password) && login(email, password);
     }
 
-    if (!isValidStudentPassword(password)) return false;
+    if (!isValidStudentPassword(password)) {
+      lastLoginFailure = AuthLoginFailure.invalidCredentials;
+      return false;
+    }
     if (SupabaseConfig.canUseMockAuth &&
         users.any(
           (user) =>
@@ -153,7 +191,18 @@ class AuthService {
           password: password,
         );
         final authUser = response.user;
-        if (authUser == null) return false;
+        if (authUser == null) {
+          lastLoginFailure = AuthLoginFailure.invalidCredentials;
+          return false;
+        }
+        if (await _moderationService.isUserBanned(
+          userId: authUser.id,
+          email: authUser.email ?? normalizedEmail,
+        )) {
+          await Supabase.instance.client.auth.signOut();
+          lastLoginFailure = AuthLoginFailure.banned;
+          return false;
+        }
         await authSessionStore.startNewSession();
         lazyContentLoader.invalidate();
 
@@ -195,13 +244,19 @@ class AuthService {
         _syncTermsAcceptance();
         return true;
       } on AuthException {
+        lastLoginFailure = AuthLoginFailure.invalidCredentials;
         return false;
       } catch (_) {
+        lastLoginFailure = AuthLoginFailure.invalidCredentials;
         return false;
       }
     }
 
-    return SupabaseConfig.canUseMockAuth && login(email, password);
+    final loggedIn = SupabaseConfig.canUseMockAuth && login(email, password);
+    if (!loggedIn && lastLoginFailure == AuthLoginFailure.none) {
+      lastLoginFailure = AuthLoginFailure.invalidCredentials;
+    }
+    return loggedIn;
   }
 
   /// Rebuilds the app's in-memory account from Supabase's persisted session.
@@ -254,17 +309,32 @@ class AuthService {
         }
 
         final club = Map<String, dynamic>.from(linkedClubs.first as Map);
+        final clubEmail = club['email']?.toString() ?? authUser.email ?? '';
+        if (await _moderationService.isClubBanned(
+          clubId: clubId,
+          email: clubEmail,
+        )) {
+          await _clearPersistedSession(client);
+          return false;
+        }
         setClubAdmin(
           AppAdmin(
             id: clubId,
             name: club['name']?.toString() ?? '',
-            email: club['email']?.toString() ?? authUser.email ?? '',
+            email: clubEmail,
             password: '',
           ),
         );
         return true;
       }
 
+      if (await _moderationService.isUserBanned(
+        userId: authUser.id,
+        email: authUser.email,
+      )) {
+        await _clearPersistedSession(client);
+        return false;
+      }
       await _setStudentFromAuthUser(authUser);
       return true;
     } on AuthException {
@@ -469,10 +539,12 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    final wasClubUpMockSession = isClubUpMockAdmin(_currentAdmin);
     final presenceStop = appPresenceService.stop();
     lazyContentLoader.invalidate();
     _currentUser = null;
     _currentAdmin = null;
+    if (wasClubUpMockSession) removeClubUpMockProfile();
 
     try {
       await authSessionStore.clear();

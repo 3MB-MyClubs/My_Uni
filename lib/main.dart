@@ -42,6 +42,7 @@ import 'onboarding/starter_checklist_service.dart';
 import 'services/event_cleanup_service.dart';
 import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
+import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
 import 'services/onboarding_intro_service.dart';
 
@@ -97,6 +98,7 @@ void main() async {
     calendarSyncService.initialize(),
     onboardingService.initialize(),
     starterChecklistService.initialize(),
+    adminModerationService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
   // Supabase restores its token pair from device storage. Reconstruct the

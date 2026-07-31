@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
@@ -142,7 +143,9 @@ class _LoginScreenState extends State<LoginScreen>
     } else {
       setState(() {
         _isSubmitting = false;
-        _error = AppLocalizations.of(context)!.incorrectEmailOrPassword;
+        _error = authService.lastLoginFailure == AuthLoginFailure.banned
+            ? S.bannedFromApp
+            : AppLocalizations.of(context)!.incorrectEmailOrPassword;
       });
     }
   }

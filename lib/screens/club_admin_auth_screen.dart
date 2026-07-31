@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../services/app_strings.dart';
 import '../services/club_passcode_auth_service.dart';
 import '../l10n/app_localizations.dart';
 import 'forgot_password_screen.dart';
@@ -43,6 +44,8 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         return l10n.linkedClubNotFound;
       case ClubPasscodeAuthError.notConfigured:
         return l10n.clubLoginNotReady;
+      case ClubPasscodeAuthError.banned:
+        return S.bannedFromApp;
     }
   }
 
@@ -195,7 +198,9 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 ],
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
-                  labelText: AppLocalizations.of(context)!.eightDigitPasscodeLabel,
+                  labelText: AppLocalizations.of(
+                    context,
+                  )!.eightDigitPasscodeLabel,
                   hintText: AppLocalizations.of(context)!.eightDigitsHint,
                   prefixIcon: Icon(
                     Icons.lock_outline,
