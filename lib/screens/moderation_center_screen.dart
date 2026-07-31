@@ -21,7 +21,7 @@ class ModerationCenterScreen extends StatefulWidget {
 class _ModerationCenterScreenState extends State<ModerationCenterScreen> {
   late final Future<void> _loadFuture = adminModerationService.initialize();
 
-  bool get _isAuthorized => isClubUpMockAdmin(authService.currentAdmin);
+  bool get _isAuthorized => isClubUpAdmin(authService.currentAdmin);
 
   List<AdminModerationReport> get _reports =>
       adminModerationService.reportsFor(authService.currentAdmin);

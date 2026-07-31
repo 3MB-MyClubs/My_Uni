@@ -16,5 +16,6 @@ void main() {
 
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Sign In as Admin'), findsNothing);
+    expect(find.text('@ku.edu.tr'), findsNothing);
   });
 }

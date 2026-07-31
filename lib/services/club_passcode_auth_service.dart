@@ -111,6 +111,15 @@ class ClubPasscodeAuthService {
           );
         }
 
+        // The singleton platform administrator has its own hidden entry flow.
+        // Keep this public route strictly scoped to ordinary club accounts.
+        if (await _isPlatformAdmin(client, authUser.id)) {
+          await client.auth.signOut();
+          return ClubPasscodeAuthResult.failure(
+            ClubPasscodeAuthError.invalidCredentials,
+          );
+        }
+
         final accountRows = await client
             .from('club_auth_accounts')
             .select('club_id')
@@ -185,6 +194,15 @@ class ClubPasscodeAuthService {
     return ClubPasscodeAuthResult.failure(
       ClubPasscodeAuthError.invalidCredentials,
     );
+  }
+
+  Future<bool> _isPlatformAdmin(SupabaseClient client, String userId) async {
+    final rows = await client
+        .from('app_admins')
+        .select('auth_user_id')
+        .eq('auth_user_id', userId)
+        .limit(1);
+    return (rows as List).isNotEmpty;
   }
 }
 

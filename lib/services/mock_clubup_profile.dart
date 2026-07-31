@@ -29,6 +29,13 @@ Club _newClubUpMockClub() => Club(
 
 bool isClubUpMockAdmin(AppAdmin? admin) => admin?.id == clubUpMockAdminId;
 
+/// The production platform admin and the development-only fixture share the
+/// same moderation experience. Production authority comes from the singleton
+/// `app_admins` database row, never from user-editable metadata or an email
+/// hard-coded into the client.
+bool isClubUpAdmin(AppAdmin? admin) =>
+    admin?.isPlatformAdmin == true || isClubUpMockAdmin(admin);
+
 bool get isClubUpMockProfileRegistered => clubAdmins.any(isClubUpMockAdmin);
 
 Club? get clubUpMockClub {

@@ -80,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
-  bool get _isClubUpModerator => isClubUpMockAdmin(authService.currentAdmin);
+  bool get _isClubUpModerator => isClubUpAdmin(authService.currentAdmin);
 
   /// The club this account administers (null for students and the super admin).
   Club? get _managedClub {

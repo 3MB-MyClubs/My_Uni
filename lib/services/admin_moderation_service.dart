@@ -68,17 +68,17 @@ class AdminModerationService extends ChangeNotifier {
   }
 
   List<AdminModerationReport> reportsFor(AppAdmin? actor) {
-    if (!isClubUpMockAdmin(actor)) return const [];
+    if (!isClubUpAdmin(actor)) return const [];
     return List.unmodifiable(_reports);
   }
 
   Set<String> bannedUserIdsFor(AppAdmin? actor) {
-    if (!isClubUpMockAdmin(actor)) return const {};
+    if (!isClubUpAdmin(actor)) return const {};
     return Set.unmodifiable(_bannedUserIds);
   }
 
   Set<String> bannedClubIdsFor(AppAdmin? actor) {
-    if (!isClubUpMockAdmin(actor)) return const {};
+    if (!isClubUpAdmin(actor)) return const {};
     return Set.unmodifiable(_bannedClubIds);
   }
 
@@ -125,9 +125,9 @@ class AdminModerationService extends ChangeNotifier {
     required String userId,
     String? email,
   }) async {
-    if (!isClubUpMockAdmin(actor) || userId == clubUpMockAdminId) return false;
+    if (!isClubUpAdmin(actor) || userId == actor?.id) return false;
     final normalizedEmail = _normalizeEmail(email);
-    if (normalizedEmail == clubUpMockEmail) return false;
+    if (normalizedEmail == _normalizeEmail(actor?.email)) return false;
     if (userId.trim().isEmpty && normalizedEmail.isEmpty) return false;
     await initialize();
     if (userId.trim().isNotEmpty) _bannedUserIds.add(userId.trim());
@@ -142,7 +142,7 @@ class AdminModerationService extends ChangeNotifier {
     required String userId,
     String? email,
   }) async {
-    if (!isClubUpMockAdmin(actor)) return false;
+    if (!isClubUpAdmin(actor)) return false;
     await initialize();
     final changed =
         _bannedUserIds.remove(userId.trim()) |
@@ -159,9 +159,9 @@ class AdminModerationService extends ChangeNotifier {
     required String clubId,
     String? email,
   }) async {
-    if (!isClubUpMockAdmin(actor) || clubId == clubUpMockAdminId) return false;
+    if (!isClubUpAdmin(actor) || clubId == actor?.id) return false;
     final normalizedEmail = _normalizeEmail(email);
-    if (normalizedEmail == clubUpMockEmail) return false;
+    if (normalizedEmail == _normalizeEmail(actor?.email)) return false;
     if (clubId.trim().isEmpty && normalizedEmail.isEmpty) return false;
     await initialize();
     if (clubId.trim().isNotEmpty) _bannedClubIds.add(clubId.trim());
@@ -176,7 +176,7 @@ class AdminModerationService extends ChangeNotifier {
     required String clubId,
     String? email,
   }) async {
-    if (!isClubUpMockAdmin(actor)) return false;
+    if (!isClubUpAdmin(actor)) return false;
     await initialize();
     final changed =
         _bannedClubIds.remove(clubId.trim()) |

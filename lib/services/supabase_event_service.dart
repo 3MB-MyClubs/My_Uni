@@ -105,7 +105,14 @@ class SupabaseEventService {
     final client = _client;
     if (client == null || !_looksLikeUuid(event.id)) return;
 
-    await client.from('events').delete().eq('id', event.id);
+    final deletedRows = await client
+        .from('events')
+        .delete()
+        .eq('id', event.id)
+        .select('id');
+    if (deletedRows.isEmpty) {
+      throw StateError('Event was not deleted.');
+    }
     await _deleteStoredImage(event.imagePath);
   }
 

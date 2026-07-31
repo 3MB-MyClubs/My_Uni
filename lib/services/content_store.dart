@@ -8,8 +8,10 @@ import '../models/like.dart';
 import '../models/news_post.dart';
 import '../models/notification.dart';
 import '../models/share.dart';
+import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 
 /// Persists user-generated content (posts, events, likes, shares, and dynamic
 /// notifications) to a Hive box.
@@ -250,25 +252,41 @@ class ContentStore extends ChangeNotifier {
   }
 
   // ── Club-admin deletion ───────────────────────────────────────────────────────
-  // Only a club admin can delete posts/events, and only for their own club.
+  // Club admins can delete only their club's content. The verified platform
+  // administrator can delete any post or event.
 
   bool _isClubAdmin(String clubId, String userId) =>
       clubs.any((c) => c.id == clubId && clubIsManagedByAdmin(c, userId));
 
+  bool _isPlatformAdmin(String userId) {
+    final admin = authService.currentAdmin;
+    return userId.isNotEmpty && admin?.id == userId && isClubUpAdmin(admin);
+  }
+
   bool canDeleteEvent(String eventId, String requestingUserId) {
     return events.any(
-      (e) => e.id == eventId && _isClubAdmin(e.clubId, requestingUserId),
+      (e) =>
+          e.id == eventId &&
+          (_isPlatformAdmin(requestingUserId) ||
+              _isClubAdmin(e.clubId, requestingUserId)),
     );
   }
 
   bool canDeletePost(String postId, String requestingUserId) {
     return newsPosts.any(
-      (p) => p.id == postId && _isClubAdmin(p.clubId, requestingUserId),
+      (p) =>
+          p.id == postId &&
+          (_isPlatformAdmin(requestingUserId) ||
+              _isClubAdmin(p.clubId, requestingUserId)),
     );
   }
 
-  bool canEditEvent(String eventId, String requestingUserId) =>
-      canDeleteEvent(eventId, requestingUserId);
+  bool canEditEvent(String eventId, String requestingUserId) {
+    return events.any(
+      (event) =>
+          event.id == eventId && _isClubAdmin(event.clubId, requestingUserId),
+    );
+  }
 
   /// Replaces the stored event with [updated] (matched by id) when the
   /// requester is a club admin of that event's club. Returns false otherwise.

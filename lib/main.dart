@@ -19,7 +19,7 @@ import 'screens/onboarding_carousel_screen.dart';
 import 'screens/terms_acceptance_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
-import 'services/mock_data.dart' show appAdmin;
+import 'services/mock_clubup_profile.dart';
 import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
 import 'services/user_prefs_service.dart';
@@ -465,8 +465,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
-          final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
-          final isAdmin = isSuperAdmin;
+          final isAdmin = isClubUpAdmin(authService.currentAdmin);
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
           if (currentUserId != null && currentUserId != _prefsLoadedForUserId) {

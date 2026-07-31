@@ -21,7 +21,14 @@ class SupabasePostService {
     final client = _client;
     if (client == null || !_looksLikeUuid(post.id)) return;
 
-    await client.from('club_posts').delete().eq('id', post.id);
+    final deletedRows = await client
+        .from('club_posts')
+        .delete()
+        .eq('id', post.id)
+        .select('id');
+    if (deletedRows.isEmpty) {
+      throw StateError('Post was not deleted.');
+    }
     await _deleteStoredImage(post.imagePath);
   }
 

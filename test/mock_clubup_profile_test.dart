@@ -1,3 +1,4 @@
+import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/services/club_admin_access.dart';
 import 'package:flutter_application_1/services/club_passcode_auth_service.dart';
 import 'package:flutter_application_1/services/mock_clubup_profile.dart';
@@ -23,6 +24,19 @@ void main() {
     expect(club, isNotNull);
     expect(club!.name, 'ClubUp');
     expect(clubIsManagedByAdmin(club, first.id), isTrue);
+  });
+
+  test('recognizes the database-backed singleton as the platform admin', () {
+    final admin = AppAdmin(
+      id: 'production-club-id',
+      name: 'ClubUp',
+      email: 'dev3mb@gmail.com',
+      password: '',
+      isPlatformAdmin: true,
+    );
+
+    expect(isClubUpAdmin(admin), isTrue);
+    expect(isClubUpMockAdmin(admin), isFalse);
   });
 
   test('mock club passcode login accepts the ClubUp credentials', () async {

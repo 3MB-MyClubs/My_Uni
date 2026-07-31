@@ -37,6 +37,17 @@ entry. Reports and bans in the mock center are stored on the current device;
 production, cross-device moderation requires an authenticated server-side
 moderator role and must not expose a Supabase service-role key in the app.
 
+## Production app admin
+
+The production app-wide moderator is stored in the singleton Supabase
+`app_admins` table. From the main login screen, tap **Club admin sign in** five
+times within the gesture window to open its separate login UI. Enter
+`dev3mb@gmail.com` and the account's 8-digit passcode. Authorization
+still comes from the authenticated user's RLS-protected `app_admins` row; the
+hidden gesture is only a navigation affordance. The normal club-admin login
+rejects the platform-admin identity, and ordinary club-owner accounts remain
+club-scoped.
+
 ## Android release signing
 
 Google Play requires release APKs and app bundles to be signed with an upload

@@ -455,6 +455,10 @@ class S {
     'Topluluk sohbetin burada — üyeler birbirleriyle ve seninle '
         'konuşabilir.',
   );
+  static String get onboardingClubModeration => _t(
+    'Review reports and manage profile or club access from the moderation area.',
+    'Bildirimleri incele ve profil ya da kulüp erişimini moderasyon alanından yönet.',
+  );
   static String get onboardingClubSettings => _t(
     'Name, photo, categories, board members — manage all of it '
         'from settings.',

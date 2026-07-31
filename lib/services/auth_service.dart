@@ -22,6 +22,7 @@ import 'lazy_content_loader.dart';
 import 'people_service.dart';
 import 'terms_acceptance_service.dart';
 import 'admin_moderation_service.dart';
+import 'platform_admin_auth_service.dart';
 
 enum AuthLoginFailure { none, invalidCredentials, banned }
 
@@ -45,6 +46,7 @@ class AuthService {
   void setClubAdmin(AppAdmin admin) {
     lazyContentLoader.invalidate();
     if (isClubUpMockAdmin(admin)) ensureClubUpMockProfile();
+    if (admin.isPlatformAdmin) appAdmin = admin;
     _currentAdmin = admin;
     _currentUser = null;
     _syncTermsAcceptance();
@@ -289,6 +291,36 @@ class AuthService {
         return false;
       }
 
+      // Platform administration is a distinct identity, independent of club
+      // ownership. RLS only exposes this singleton assignment to its owner.
+      final platformAdminRows = await client
+          .from('app_admins')
+          .select('auth_user_id, email')
+          .eq('auth_user_id', authUser.id)
+          .limit(1);
+      final platformAssignments = platformAdminRows as List;
+      if (platformAssignments.isNotEmpty) {
+        final assignment = Map<String, dynamic>.from(
+          platformAssignments.first as Map,
+        );
+        if (assignment['email']?.toString().trim().toLowerCase() !=
+                platformAdminEmail ||
+            authUser.email?.trim().toLowerCase() != platformAdminEmail) {
+          await _clearPersistedSession(client);
+          return false;
+        }
+        setClubAdmin(
+          AppAdmin(
+            id: authUser.id,
+            name: 'ClubUp Admin',
+            email: platformAdminEmail,
+            password: '',
+            isPlatformAdmin: true,
+          ),
+        );
+        return true;
+      }
+
       final accountRows = await client
           .from('club_auth_accounts')
           .select('club_id')
@@ -386,6 +418,7 @@ class AuthService {
   Future<void> _clearPersistedSession([SupabaseClient? client]) async {
     _currentUser = null;
     _currentAdmin = null;
+    _clearPlatformAdminIdentity();
     try {
       await authSessionStore.clear();
     } catch (_) {
@@ -481,6 +514,7 @@ class AuthService {
         name: appAdmin.name,
         email: appAdmin.email,
         password: newPassword,
+        isPlatformAdmin: appAdmin.isPlatformAdmin,
       );
       if (_currentAdmin?.id == appAdmin.id) {
         _currentAdmin = appAdmin;
@@ -499,6 +533,7 @@ class AuthService {
         name: admin.name,
         email: admin.email,
         password: newPassword,
+        isPlatformAdmin: admin.isPlatformAdmin,
       );
       if (_currentAdmin?.id == admin.id) {
         _currentAdmin = clubAdmins[adminIndex];
@@ -544,6 +579,7 @@ class AuthService {
     lazyContentLoader.invalidate();
     _currentUser = null;
     _currentAdmin = null;
+    _clearPlatformAdminIdentity();
     if (wasClubUpMockSession) removeClubUpMockProfile();
 
     try {
@@ -566,6 +602,11 @@ class AuthService {
       }
     }
     await presenceStop;
+  }
+
+  void _clearPlatformAdminIdentity() {
+    if (!appAdmin.isPlatformAdmin) return;
+    appAdmin = AppAdmin(id: '', name: '', email: '', password: '');
   }
 }
 

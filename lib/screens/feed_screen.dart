@@ -44,6 +44,7 @@ import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../widgets/post_share_sheet.dart';
 import '../services/supabase_interaction_service.dart';
+import '../services/supabase_post_service.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
@@ -2909,8 +2910,26 @@ class _PostCardState extends State<_PostCard>
                 borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext);
+              try {
+                await supabasePostService.deletePost(widget.post);
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(
+                          context,
+                        )!.couldNotDeletePostSupabase,
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                return;
+              }
               final deleted = contentStore.deletePost(
                 widget.post.id,
                 authService.currentAdmin?.id ?? '',
