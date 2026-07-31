@@ -9,10 +9,11 @@ import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
-import '../services/mock_data.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
+import '../services/mock_clubup_profile.dart';
+import '../services/notification_navigation.dart';
 import '../services/push_notification_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/onboarding_flow.dart';
@@ -28,11 +29,8 @@ import 'chats_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
-import 'chat_thread_screen.dart';
-import 'club_profile_screen.dart';
-import 'event_detail_screen.dart';
-import 'post_detail_screen.dart';
-import 'user_profile_screen.dart';
+import 'notifications_screen.dart';
+import 'moderation_center_screen.dart';
 
 /// Presents the older club-admin create chooser used by visual drive tests and
 /// any explicit callers that still need a Post/Event split.
@@ -182,7 +180,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     FeedScreen(controller: _feedController), // 0
     ThisWeekScreen(isTutorialHost: true), // 1
     ExploreScreen(), // 2
-    ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
+    if (_isPlatformModerator)
+      const ModerationCenterScreen() // 3
+    else
+      ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
     ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
     if (widget.isAdmin) AdminDashboard(), // 5
   ];
@@ -231,111 +232,38 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     await appBootstrap.ready;
     if (!mounted) return;
 
-    final id = target.targetId;
-    switch (target.type) {
-      case 'message':
-      case 'chat':
-        _selectNavIndex(3);
-        if (id == null) return;
-        if (target.notificationType == 'club_channel_message') {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  ChatThreadScreen(threadId: ChatStore.clubThreadId(id)),
-            ),
-          );
-          return;
-        }
-        if (target.notificationType == 'club_inbox_message') {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  ChatThreadScreen(threadId: ChatStore.clubInboxThreadId(id)),
-            ),
-          );
-          return;
-        }
-        if (ChatStore.isAdminAccountId(_currentUserId)) return;
-        final isGroup =
-            target.notificationType == 'group_message' ||
-            ChatStore.isGroupThread(id);
-        final threadId = isGroup
-            ? (ChatStore.isGroupThread(id) ? id : 'group:$id')
-            : ChatStore.dmThreadId(_currentUserId, id);
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChatThreadScreen(threadId: threadId),
-          ),
-        );
-      case 'post':
-        _selectNavIndex(0);
-        if (id == null) return;
-        final index = newsPosts.indexWhere((post) => post.id == id);
-        if (index < 0) return;
-        final post = newsPosts[index];
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => PostDetailScreen(
-              post: post,
-              clubColor: _colorForNotificationClub(post.clubId),
-            ),
-          ),
-        );
-      case 'event':
-        _selectNavIndex(1);
-        if (id == null) return;
-        final index = events.indexWhere((event) => event.id == id);
-        if (index < 0) return;
-        final event = events[index];
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => EventDetailScreen(
-              event: event,
-              color: _colorForNotificationClub(event.clubId),
-            ),
-          ),
-        );
-      case 'club':
-        _selectNavIndex(2);
-        if (id == null) return;
-        final club = clubForId(id);
-        if (club == null) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ClubProfileScreen(
-              club: club,
-              color: _colorForNotificationClub(id),
-            ),
-          ),
-        );
-      case 'user':
-      case 'profile':
-      case 'follow_accepted':
-        _selectNavIndex(2);
-        if (id == null) return;
-        final index = users.indexWhere((user) => user.id == id);
-        if (index < 0) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => UserProfileScreen(user: users[index]),
-          ),
-        );
-      default:
-        _selectNavIndex(0);
-    }
-  }
+    // ClubUp uses this navigation position for moderation and has no chat tab.
+    if (_isPlatformModerator && target.isChat) return;
 
-  Color _colorForNotificationClub(String clubId) {
-    const colors = <Color>[
-      Color(0xFFB41C18),
-      Color(0xFF1565C0),
-      Color(0xFF2E7D32),
-      Color(0xFF6A1B9A),
-      Color(0xFFE65100),
-      Color(0xFF00838F),
-    ];
-    final ordinal = clubOrdinal(clubId);
-    return colors[(ordinal < 0 ? 0 : ordinal) % colors.length];
+    // Other club admins may only use their managed community. Never switch
+    // them to stale student-only messaging destinations.
+    if (ChatStore.isAdminAccountId(_currentUserId) &&
+        target.isChat &&
+        target.type != 'club_chat' &&
+        target.type != 'club_inbox') {
+      return;
+    }
+
+    final selectedIndex = switch (target.type) {
+      'direct_message' || 'group_chat' || 'club_chat' || 'club_inbox' => 3,
+      'event' => 1,
+      'club' || 'user' => 2,
+      _ => 0,
+    };
+    if (_selectedIndex != selectedIndex) {
+      _selectNavIndex(selectedIndex);
+    }
+    if (target.type == 'notification') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+      );
+      return;
+    }
+    await openNotificationTarget(
+      context,
+      target,
+      currentUserId: _currentUserId,
+    );
   }
 
   void _onThemeOrLocaleChanged() {
@@ -392,7 +320,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (_selectedIndex == step.tabIndex) return;
     _tabTransitionController.forward(from: 0);
     setState(() => _selectedIndex = step.tabIndex);
-    if (step.tabIndex == 3) _chatsController.showStudents();
+    if (step.tabIndex == 3 && !_isPlatformModerator) {
+      _chatsController.showStudents();
+    }
   }
 
   String get _onboardingFirstName {
@@ -434,13 +364,14 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   // Chat unreads clear per-thread when a conversation is opened (see
   // ChatThreadScreen), so unlike the old Alerts tab there's nothing to
-  // mark read when the Chats tab itself is selected.
+  // mark read when the Chats tab itself is selected. ClubUp's tab at this
+  // index is Moderation, so it must not touch chat state.
   void _selectNavIndex(int index) {
     if (index == 0 && _selectedIndex == 0) {
       _feedController.scrollToTop();
       return;
     }
-    if (index == 3) _chatsController.showStudents();
+    if (index == 3 && !_isPlatformModerator) _chatsController.showStudents();
     if (_selectedIndex != index) {
       if (_showOnboarding) _tabTransitionController.forward(from: 0);
       setState(() => _selectedIndex = index);
@@ -461,7 +392,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       slots.length - 1,
     );
     final navIndex = slots[slotIndex].index;
-    final enteringChats = navIndex == 3 && _selectedIndex != 3;
+    final enteringChats =
+        navIndex == 3 && _selectedIndex != 3 && !_isPlatformModerator;
 
     setState(() {
       _navDragDx = clampedDx;
@@ -479,9 +411,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   bool get _isClubAdmin {
     final admin = authService.currentAdmin;
-    if (admin == null) return false;
-    return admin.id != appAdmin.id; // not the super admin
+    return admin != null && !isClubUpAdmin(admin);
   }
+
+  bool get _isPlatformModerator => isClubUpAdmin(authService.currentAdmin);
 
   void _openCreateEvent() {
     Navigator.of(context).push(
@@ -540,7 +473,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
             Positioned.fill(
               child: OnboardingFlow(
                 steps: _isClubAdmin
-                    ? clubAdminOnboardingSteps()
+                    ? clubAdminOnboardingSteps(
+                        usesModerationTab: _isPlatformModerator,
+                      )
                     : studentOnboardingSteps(),
                 userId: _onboardingUserId,
                 firstName: _onboardingFirstName,
@@ -586,13 +521,21 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
           label: AppLocalizations.of(context)!.search,
         ),
       if (_isClubAdmin) const _NavSlot.center(),
-      _NavSlot(
-        index: 3,
-        icon: Icons.chat_bubble_outline_rounded,
-        activeIcon: Icons.chat_bubble_rounded,
-        label: S.chats,
-        badge: unreadChats,
-      ),
+      if (_isPlatformModerator)
+        _NavSlot(
+          index: 3,
+          icon: Icons.shield_outlined,
+          activeIcon: Icons.shield_rounded,
+          label: S.moderation,
+        )
+      else
+        _NavSlot(
+          index: 3,
+          icon: Icons.chat_bubble_outline_rounded,
+          activeIcon: Icons.chat_bubble_rounded,
+          label: S.chats,
+          badge: unreadChats,
+        ),
       _NavSlot(
         index: 4,
         icon: Icons.person_outline_rounded,

@@ -6,6 +6,7 @@ import '../services/app_strings.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
+import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
@@ -115,12 +116,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     _hydrateProfile();
+    _refreshClubMemberCounts();
   }
 
   @override
   void didUpdateWidget(covariant UserProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.user.id != widget.user.id) _hydrateProfile();
+    if (oldWidget.user.id != widget.user.id) {
+      _hydrateProfile();
+      _refreshClubMemberCounts();
+    }
+  }
+
+  Future<void> _refreshClubMemberCounts() async {
+    try {
+      await lazyContentLoader.ensureCountsLoaded(force: true);
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep the last successful aggregate snapshot while offline.
+    }
   }
 
   Future<void> _hydrateProfile() async {
@@ -358,9 +372,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               role:
                   _roleTitleFor(club) ??
                   AppLocalizations.of(context)!.memberRoleFallback,
-              detail: AppLocalizations.of(context)!.membersCountLabel(
-                subscriptions.where((s) => s.clubId == club.id).length,
-              ),
+              detail: AppLocalizations.of(
+                context,
+              )!.membersCountLabel(clubMemberCount(club.id)),
             ),
         ];
 

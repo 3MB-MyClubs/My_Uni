@@ -9,6 +9,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/post_like_helper.dart';
+import '../services/supabase_post_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/moderation_reason_sheet.dart';
@@ -72,8 +73,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
         ],
       ),
-    ).then((confirmed) {
+    ).then((confirmed) async {
       if (confirmed != true || !mounted) return;
+      try {
+        await supabasePostService.deletePost(widget.post);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)!.couldNotDeletePostSupabase,
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
       final ok = contentStore.deletePost(widget.post.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {

@@ -24,6 +24,7 @@ import '../services/rsvp_store.dart';
 import '../services/student_club_role_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
+import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_chat_theme.dart';
 import '../widgets/club_community_header.dart';
@@ -1587,6 +1588,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             return SafeArea(bottom: false, child: _buildUnavailable(t));
           }
           return SafeArea(
+            top: false,
             bottom: false,
             child: Column(
               children: [
@@ -1632,6 +1634,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       onlineCount: _communityInfo?.onlineCount ?? 0,
       onOpenClub: _openClubProfile,
       t: t,
+      topInset: widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top,
       muted: clubChatPrefs.isMuted(widget.threadId),
       onBack: widget.embedded ? null : () => Navigator.maybePop(context),
       onToggleMute: () => clubChatPrefs.setMuted(
@@ -1673,7 +1676,14 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     return Container(
       key: ValueKey('club-chat-background-${background.name}'),
       decoration: BoxDecoration(gradient: _backgroundGradient(background, t)),
-      child: child,
+      // The same campus wallpaper the student threads use, painted over the
+      // club's chosen gradient so every option keeps its own tint. The ink
+      // follows the club accent, matching the rest of the community theme.
+      child: ChatCampusBackdrop(
+        isDark: t.isDark,
+        accent: t.accent,
+        child: child,
+      ),
     );
   }
 
@@ -1685,6 +1695,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         .toList();
 
     if (messages.isEmpty && typing.isEmpty) {
+      final club = _club;
+      // Same composition as an empty student thread: the room's own face, its
+      // name, and one quiet line — no card on top of the wallpaper.
       return _withChatBackground(
         t,
         Stack(
@@ -1692,32 +1705,59 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             _glow(t),
             Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 34),
+                padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Column(
+                  key: const ValueKey('club-empty-conversation'),
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
-                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: t.ltRed,
+                        color: t.red.withValues(alpha: t.isDark ? 0.13 : 0.07),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        color: t.red,
-                        size: 22,
-                      ),
+                      child: club == null
+                          ? Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: t.red,
+                              size: 40,
+                            )
+                          : ClubAvatar(
+                              clubId: club.id,
+                              clubName: club.name,
+                              color: _accent,
+                              imageUrl: club.logoUrl,
+                              size: 72,
+                              fontSize: 27,
+                              shape: 'circle',
+                            ),
                     ),
-                    const SizedBox(height: 13),
+                    if (club != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        club.name,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          height: 1.25,
+                          color: t.text,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
                     Text(
                       S.sayHello,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: t.text,
+                        fontSize: 12.5,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                        color: t.textMuted,
                       ),
                     ),
                   ],

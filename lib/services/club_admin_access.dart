@@ -1,6 +1,7 @@
 import '../models/club.dart';
 import 'auth_service.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 
 bool clubIsManagedByAdmin(Club club, String adminId) {
   if (adminId.isEmpty) return false;
@@ -21,7 +22,12 @@ bool currentAdminOwnsClubId(String clubId) {
 }
 
 Club? managedClubForAdmin(String adminId) {
-  if (adminId.isEmpty || adminId == appAdmin.id) return null;
+  if (adminId.isEmpty ||
+      adminId == appAdmin.id ||
+      (authService.currentAdmin?.id == adminId &&
+          isClubUpAdmin(authService.currentAdmin))) {
+    return null;
+  }
   for (final club in clubs) {
     if (clubIsManagedByAdmin(club, adminId)) return club;
   }

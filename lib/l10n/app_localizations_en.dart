@@ -154,6 +154,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get allEvents => 'All events';
 
   @override
+  String get allPosts => 'All posts';
+
+  @override
+  String get overview => 'Overview';
+
+  @override
   String get everythingOnCampus => 'Everything happening on campus';
 
   @override
@@ -437,6 +443,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteEventMsg => 'This event will be permanently removed.';
+
+  @override
+  String get eventDeletedConfirmation => 'Event deleted';
 
   @override
   String get majorNotAdded => 'Major not added';
@@ -861,6 +870,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter the club email and 8 digit passcode to manage your club.';
 
   @override
+  String get platformAdminLoginTitle => 'Platform Admin Login';
+
+  @override
+  String get platformAdminLoginSubtitle =>
+      'Restricted access for the ClubUp platform administrator.';
+
+  @override
+  String get adminEmailLabel => 'Admin email';
+
+  @override
+  String get adminCredentialsRequired =>
+      'Admin email and passcode are required';
+
+  @override
+  String get invalidAdminCredentials => 'Invalid admin email or passcode';
+
+  @override
+  String get notPlatformAdmin =>
+      'These credentials are not assigned to the platform administrator';
+
+  @override
   String get clubEmailLabel => 'Club Email';
 
   @override
@@ -917,6 +947,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enterKuEmailSubtitle => 'Enter the KU email for your account.';
+
+  @override
+  String get enterAccountEmailSubtitle => 'Enter the email for your account.';
 
   @override
   String enterCodeSubtitle(String email) {
@@ -1016,6 +1049,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get useKuEmailAddress => 'Use your @ku.edu.tr email address.';
+
+  @override
+  String get useValidEmailAddress => 'Enter a valid email address.';
 
   @override
   String get newCodeSent => 'New code sent.';

@@ -386,6 +386,18 @@ abstract class AppLocalizations {
   /// **'All events'**
   String get allEvents;
 
+  /// No description provided for @allPosts.
+  ///
+  /// In en, this message translates to:
+  /// **'All posts'**
+  String get allPosts;
+
+  /// No description provided for @overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get overview;
+
   /// No description provided for @everythingOnCampus.
   ///
   /// In en, this message translates to:
@@ -919,6 +931,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This event will be permanently removed.'**
   String get deleteEventMsg;
+
+  /// No description provided for @eventDeletedConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Event deleted'**
+  String get eventDeletedConfirmation;
 
   /// No description provided for @majorNotAdded.
   ///
@@ -1658,6 +1676,42 @@ abstract class AppLocalizations {
   /// **'Enter the club email and 8 digit passcode to manage your club.'**
   String get clubAdminLoginSubtitle;
 
+  /// No description provided for @platformAdminLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform Admin Login'**
+  String get platformAdminLoginTitle;
+
+  /// No description provided for @platformAdminLoginSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restricted access for the ClubUp platform administrator.'**
+  String get platformAdminLoginSubtitle;
+
+  /// No description provided for @adminEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin email'**
+  String get adminEmailLabel;
+
+  /// No description provided for @adminCredentialsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin email and passcode are required'**
+  String get adminCredentialsRequired;
+
+  /// No description provided for @invalidAdminCredentials.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid admin email or passcode'**
+  String get invalidAdminCredentials;
+
+  /// No description provided for @notPlatformAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'These credentials are not assigned to the platform administrator'**
+  String get notPlatformAdmin;
+
   /// No description provided for @clubEmailLabel.
   ///
   /// In en, this message translates to:
@@ -1735,6 +1789,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter the KU email for your account.'**
   String get enterKuEmailSubtitle;
+
+  /// No description provided for @enterAccountEmailSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the email for your account.'**
+  String get enterAccountEmailSubtitle;
 
   /// No description provided for @enterCodeSubtitle.
   ///
@@ -1855,6 +1915,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use your @ku.edu.tr email address.'**
   String get useKuEmailAddress;
+
+  /// No description provided for @useValidEmailAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get useValidEmailAddress;
 
   /// No description provided for @newCodeSent.
   ///

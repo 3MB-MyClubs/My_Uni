@@ -118,14 +118,15 @@ void main() {
     expectNoVisibleFocusedBorder(
       tester.widget<TextField>(find.byType(TextField)),
     );
+    // Header avatar plus the new-chat intro card avatar.
     expect(
       find.descendant(
         of: find.byType(PresenceAvatar),
         matching: find.byType(Image),
       ),
-      findsOneWidget,
+      findsNWidgets(2),
     );
-    expect(find.text('Can Serbester'), findsOneWidget);
+    expect(find.text('Can Serbester'), findsNWidgets(2));
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
     expect(find.text('Computer Engineering · 3rd Year'), findsOneWidget);
     await tester.runAsync(chatStore.saveAll);
@@ -147,7 +148,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Hakan Tuncay'), findsOneWidget);
+    expect(find.text('Hakan Tuncay'), findsNWidgets(2));
     expect(find.text('Student'), findsNothing);
     expect(find.text('?'), findsNothing);
     expect(find.text(peerId), findsNothing);
@@ -212,8 +213,12 @@ void main() {
       find.byKey(const ValueKey('chat-empty-conversation-card')),
       findsOneWidget,
     );
-    expect(find.text(S.startConversation), findsOneWidget);
-    expect(find.text(S.privateConversationHint), findsOneWidget);
+    // The intro is headed by the recipient (header + intro headline); the
+    // context line falls back to naming the state when there is no shared club
+    // or mutual friend yet.
+    expect(find.text(recipient.name), findsNWidgets(2));
+    expect(find.text(S.chatNoMessagesYet), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-starter-chips')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -242,16 +247,16 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Can Serbester'), findsOneWidget);
+    expect(find.text('Can Serbester'), findsNWidgets(2));
     expect(
       find.byKey(const ValueKey('chat-empty-conversation-card')),
       findsOneWidget,
     );
-    final avatar = tester.widget<UserAvatar>(find.byType(UserAvatar));
+    final avatar = tester.widget<UserAvatar>(find.byType(UserAvatar).first);
     expect(avatar.userId, recipient.id);
     expect(find.text('Student profile'), findsNothing);
 
-    await tester.tap(find.text('Can Serbester'));
+    await tester.tap(find.text('Can Serbester').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(UserProfileScreen), findsOneWidget);

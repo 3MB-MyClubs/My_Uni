@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 class SupabaseConfig {
   static const url = String.fromEnvironment(
     'SUPABASE_URL',
@@ -22,7 +24,7 @@ class SupabaseConfig {
 
   /// Demo credentials are opt-in and can never silently become a production
   /// fallback when Supabase is unavailable or misconfigured.
-  static bool get canUseMockAuth => allowMockAuth;
+  static bool get canUseMockAuth => allowMockAuth && !kReleaseMode;
 
   static String? get configurationError {
     if (url.isEmpty && clientKey.isEmpty) {

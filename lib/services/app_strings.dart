@@ -444,9 +444,9 @@ class S {
         'konuşmacılar, hepsi.',
   );
   static String get onboardingClubProfileTabs => _t(
-    "Your club's public home: posts, events, collabs and your board, "
+    "Your club's public home: posts, events and your board, "
         'all in one place.',
-    'Kulübünün herkese açık yüzü: gönderiler, etkinlikler, iş birlikleri '
+    'Kulübünün herkese açık yüzü: gönderiler, etkinlikler '
         've yönetim kurulu, hepsi bir arada.',
   );
   static String get onboardingClubChats => _t(
@@ -454,6 +454,10 @@ class S {
         'and to you.',
     'Topluluk sohbetin burada — üyeler birbirleriyle ve seninle '
         'konuşabilir.',
+  );
+  static String get onboardingClubModeration => _t(
+    'Review reports and manage profile or club access from the moderation area.',
+    'Bildirimleri incele ve profil ya da kulüp erişimini moderasyon alanından yönet.',
   );
   static String get onboardingClubSettings => _t(
     'Name, photo, categories, board members — manage all of it '
@@ -676,6 +680,55 @@ class S {
   );
   static String get safetyOptions =>
       _t('Safety options', 'Güvenlik seçenekleri');
+  static String get moderation => _t('Moderation', 'Moderasyon');
+  static String get moderationCenter =>
+      _t('ClubUp moderation center', 'ClubUp moderasyon merkezi');
+  static String get moderationCenterSubtitle => _t(
+    'Review reports and manage login bans on this device.',
+    'Bildirimleri incele ve bu cihazdaki giriş yasaklarını yönet.',
+  );
+  static String get reports => _t('Reports', 'Bildirimler');
+  static String get profiles => _t('Profiles', 'Profiller');
+  static String get noReports =>
+      _t('No reports have been made yet.', 'Henüz bildirim yapılmadı.');
+  static String get noProfiles =>
+      _t('No profiles are available yet.', 'Henüz profil bulunmuyor.');
+  static String get noClubsForModeration =>
+      _t('No clubs are available yet.', 'Henüz kulüp bulunmuyor.');
+  static String get ban => _t('Ban', 'Yasakla');
+  static String get unban => _t('Unban', 'Yasağı kaldır');
+  static String get banned => _t('Banned', 'Yasaklandı');
+  static String get active => _t('Active', 'Aktif');
+  static String get banProfile => _t('Ban profile', 'Profili yasakla');
+  static String get unbanProfile =>
+      _t('Unban profile', 'Profil yasağını kaldır');
+  static String get banClub => _t('Ban club', 'Kulübü yasakla');
+  static String get unbanClub => _t('Unban club', 'Kulüp yasağını kaldır');
+  static String get banConfirmation => _t(
+    'They will no longer be able to log in with their email and password.',
+    'E-posta ve şifreleriyle artık giriş yapamayacaklar.',
+  );
+  static String get unbanConfirmation =>
+      _t('They will be able to log in again.', 'Tekrar giriş yapabilecekler.');
+  static String get moderationActionFailed => _t(
+    'This action is available only to the ClubUp profile.',
+    'Bu işlem yalnızca ClubUp profili tarafından kullanılabilir.',
+  );
+  static String get moderationAccessDenied => _t(
+    'Only the ClubUp profile can access this area.',
+    'Bu alana yalnızca ClubUp profili erişebilir.',
+  );
+  static String get reportedBy => _t('Reported by', 'Bildiren');
+  static String get reportedContent =>
+      _t('Reported content', 'Bildirilen içerik');
+  static String get reason => _t('Reason', 'Neden');
+  static String get unknownProfile =>
+      _t('Unknown profile', 'Bilinmeyen profil');
+  static String get unknownClub => _t('Unknown club', 'Bilinmeyen kulüp');
+  static String get bannedFromApp => _t(
+    'You have been banned from this app.',
+    'Bu uygulamadan yasaklandınız.',
+  );
   static String get contentSafetyRejected => _t(
     'This content cannot be published because it may violate the ClubUp Community Safety Terms.',
     'Bu içerik ClubUp Topluluk Güvenliği Koşullarını ihlal edebileceği için yayımlanamaz.',
@@ -764,10 +817,6 @@ class S {
   static String get typeMessage => _t('Message…', 'Mesaj…');
   static String get startConversation =>
       _t('Start the conversation', 'Sohbeti başlat');
-  static String get privateConversationHint => _t(
-    'Messages stay between the people in this conversation.',
-    'Mesajlar yalnızca bu sohbetteki kişiler arasında kalır.',
-  );
   static String get joinToChat =>
       _t('Join the club to chat', 'Sohbet için kulübe katıl');
   static String get joinToChatHint => _t(
@@ -792,10 +841,10 @@ class S {
       n >= 100 ? _t('100+ Members', '100+ Üye') : _t('$n Members', '$n Üye');
   static String communityOnline(int n) => _t('$n Online', '$n Çevrimiçi');
   static String get message => _t('Message', 'Mesaj');
-  static String get sayHello => _t(
-    'No messages yet — say hello to your club!',
-    'Henüz mesaj yok — kulübüne merhaba de!',
-  );
+  /// Sits under the club name on an empty community room. The empty screen
+  /// already says there are no messages, so this line only invites.
+  static String get sayHello =>
+      _t('Say hello to your club', 'Kulübüne merhaba de');
   static String get adminLabel => _t('Admin', 'Yönetici');
   static String get you => _t('You', 'Sen');
   static String get onlineNow => _t('Online now', 'Şimdi çevrimiçi');
@@ -825,6 +874,37 @@ class S {
   );
   static String get messagesLabel => _t('Messages', 'Mesajlar');
   static String get viewProfile => _t('View profile', 'Profili gör');
+
+  // ── New student chat (empty thread)
+  /// Shown under the name when there is nothing else worth saying about a
+  /// brand-new thread. Deliberately short: the starter chips above the
+  /// composer already invite the first message.
+  static String get chatNoMessagesYet =>
+      _t('No messages yet', 'Henüz mesaj yok');
+  static String chatPeopleCount(int n) => _t('$n people', '$n kişi');
+  static String get chatCreatedByYou => _t('created by you', 'sen kurdun');
+  static String chatAlsoIn(String clubName) =>
+      _t('Also in $clubName', 'Ortak kulüp: $clubName');
+  static String chatMutualFriends(int n) => n == 1
+      ? _t('1 mutual friend', '1 ortak arkadaş')
+      : _t('$n mutual friends', '$n ortak arkadaş');
+
+  /// One-tap openers offered while a brand-new thread is still empty.
+  static List<String> get dmStarters => [
+    _t('👋 Hey!', '👋 Selam!'),
+    _t('Going tonight?', 'Bu akşam geliyor musun?'),
+    _t('Study later?', 'Sonra çalışalım mı?'),
+  ];
+  static List<String> get groupStarters => [
+    _t('👋 Hey everyone', '👋 Selam herkese'),
+    _t("Who's in?", 'Kimler var?'),
+    _t('Pick a time', 'Bir saat belirleyin'),
+  ];
+  static String get voiceNotesUnavailable => _t(
+    'Voice messages are not available yet.',
+    'Sesli mesajlar henüz kullanılamıyor.',
+  );
+  static String get attachToMessage => _t('Add to message', 'Mesaja ekle');
 
   // ── Club community
   static String communityActiveNow(int n) =>

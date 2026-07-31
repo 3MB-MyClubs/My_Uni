@@ -6,8 +6,10 @@ import '../l10n/app_localizations.dart';
 import '../models/app_admin.dart';
 import 'locale_service.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 import 'auth_session_store.dart';
 import 'supabase_config.dart';
+import 'admin_moderation_service.dart';
 
 // No BuildContext is available this deep in the service layer, so failures
 // are signaled as a code — callers resolve the localized message themselves
@@ -19,6 +21,7 @@ enum ClubPasscodeAuthError {
   notLinkedToClub,
   linkedClubNotFound,
   notConfigured,
+  banned,
 }
 
 class ClubPasscodeAuthResult {
@@ -42,6 +45,15 @@ class ClubPasscodeAuthResult {
 }
 
 class ClubPasscodeAuthService {
+  ClubPasscodeAuthService({
+    bool Function()? canUseMockAuth,
+    AdminModerationService? moderationService,
+  }) : _canUseMockAuth = canUseMockAuth ?? _defaultCanUseMockAuth,
+       _moderationService = moderationService ?? adminModerationService;
+
+  final bool Function() _canUseMockAuth;
+  final AdminModerationService _moderationService;
+
   Future<ClubPasscodeAuthResult> login({
     required String email,
     required String passcode,
@@ -60,7 +72,7 @@ class ClubPasscodeAuthService {
       );
     }
 
-    if (SupabaseConfig.canUseMockAuth) {
+    if (_canUseMockAuth()) {
       final mockAdmin = clubAdmins.firstWhere(
         (admin) =>
             admin.email.toLowerCase() == normalizedEmail &&
@@ -68,7 +80,20 @@ class ClubPasscodeAuthService {
         orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
       );
       if (mockAdmin.id.isNotEmpty) {
+        if (await _moderationService.isClubBanned(
+          clubId: mockAdmin.id,
+          email: mockAdmin.email,
+        )) {
+          return ClubPasscodeAuthResult.failure(ClubPasscodeAuthError.banned);
+        }
         return ClubPasscodeAuthResult.success(mockAdmin);
+      }
+      if (normalizedEmail == clubUpMockEmail) {
+        return normalizedPasscode == clubUpMockPasscode
+            ? ClubPasscodeAuthResult.success(ensureClubUpMockProfile())
+            : ClubPasscodeAuthResult.failure(
+                ClubPasscodeAuthError.invalidCredentials,
+              );
       }
     }
 
@@ -81,6 +106,15 @@ class ClubPasscodeAuthService {
         );
         final authUser = response.user;
         if (authUser == null) {
+          return ClubPasscodeAuthResult.failure(
+            ClubPasscodeAuthError.invalidCredentials,
+          );
+        }
+
+        // The singleton platform administrator has its own hidden entry flow.
+        // Keep this public route strictly scoped to ordinary club accounts.
+        if (await _isPlatformAdmin(client, authUser.id)) {
+          await client.auth.signOut();
           return ClubPasscodeAuthResult.failure(
             ClubPasscodeAuthError.invalidCredentials,
           );
@@ -128,6 +162,13 @@ class ClubPasscodeAuthService {
               Locale(localeService.languageCode),
             ).clubFallbackName;
         final clubEmail = club['email']?.toString() ?? normalizedEmail;
+        if (await _moderationService.isClubBanned(
+          clubId: clubId,
+          email: clubEmail,
+        )) {
+          await client.auth.signOut();
+          return ClubPasscodeAuthResult.failure(ClubPasscodeAuthError.banned);
+        }
         await authSessionStore.startNewSession();
         return ClubPasscodeAuthResult.success(
           AppAdmin(id: clubId, name: clubName, email: clubEmail, password: ''),
@@ -154,6 +195,17 @@ class ClubPasscodeAuthService {
       ClubPasscodeAuthError.invalidCredentials,
     );
   }
+
+  Future<bool> _isPlatformAdmin(SupabaseClient client, String userId) async {
+    final rows = await client
+        .from('app_admins')
+        .select('auth_user_id')
+        .eq('auth_user_id', userId)
+        .limit(1);
+    return (rows as List).isNotEmpty;
+  }
 }
 
 final clubPasscodeAuthService = ClubPasscodeAuthService();
+
+bool _defaultCanUseMockAuth() => SupabaseConfig.canUseMockAuth;

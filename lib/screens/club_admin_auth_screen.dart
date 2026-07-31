@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../services/app_strings.dart';
 import '../services/club_passcode_auth_service.dart';
 import '../l10n/app_localizations.dart';
 import 'forgot_password_screen.dart';
@@ -23,9 +24,10 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
 
   bool _isLoading = false;
 
-  static String _localPart(String email) {
-    final at = email.indexOf('@');
-    return at < 0 ? email : email.substring(0, at);
+  static String _normalizedClubEmail(String input) {
+    final email = input.trim().toLowerCase();
+    if (email.isEmpty || email.contains('@')) return email;
+    return '$email@ku.edu.tr';
   }
 
   String _errorMessage(ClubPasscodeAuthError code) {
@@ -43,13 +45,15 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
         return l10n.linkedClubNotFound;
       case ClubPasscodeAuthError.notConfigured:
         return l10n.clubLoginNotReady;
+      case ClubPasscodeAuthError.banned:
+        return S.bannedFromApp;
     }
   }
 
   Future<void> _handleAdminLogin() async {
-    final localPart = _localPart(_clubEmailController.text.trim());
+    final email = _normalizedClubEmail(_clubEmailController.text);
     final passcode = _passwordController.text.trim();
-    if (localPart.isEmpty || passcode.isEmpty) {
+    if (email.isEmpty || passcode.isEmpty) {
       setState(
         () => _error = AppLocalizations.of(context)!.clubEmailPasscodeRequired,
       );
@@ -71,7 +75,7 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
     // first paint; by the time credentials are typed this is a no-op.
     await appBootstrap.ready;
     final result = await clubPasscodeAuthService.login(
-      email: '${localPart.toLowerCase()}@ku.edu.tr',
+      email: email,
       passcode: passcode,
     );
 
@@ -91,22 +95,20 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
   }
 
   Future<void> _openForgotPasscode() async {
-    final localPart = _localPart(_clubEmailController.text.trim());
-    final initialEmail = localPart.isEmpty
-        ? ''
-        : '${localPart.toLowerCase()}@ku.edu.tr';
+    final initialEmail = _normalizedClubEmail(_clubEmailController.text);
     final resetEmail = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => ForgotPasswordScreen(
           initialEmail: initialEmail,
           passwordLength: 8,
           passwordNoun: 'passcode',
+          allowExternalEmail: true,
         ),
       ),
     );
     if (!mounted || resetEmail == null || resetEmail.isEmpty) return;
     setState(() {
-      _clubEmailController.text = _localPart(resetEmail);
+      _clubEmailController.text = resetEmail;
       _passwordController.clear();
       _error = null;
     });
@@ -175,11 +177,9 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
               _buildField(
                 controller: _clubEmailController,
                 label: AppLocalizations.of(context)!.clubEmailLabel,
-                hint: 'clubname',
+                hint: 'club@ku.edu.tr',
                 icon: Icons.email_outlined,
-                keyboardType: TextInputType.text,
-                suffixText: '@ku.edu.tr',
-                inputFormatters: [_NoDomainFormatter()],
+                keyboardType: TextInputType.emailAddress,
                 errorText: _error,
               ),
               const SizedBox(height: 14),
@@ -195,7 +195,9 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
                 ],
                 onSubmitted: (_) => _handleAdminLogin(),
                 decoration: InputDecoration(
-                  labelText: AppLocalizations.of(context)!.eightDigitPasscodeLabel,
+                  labelText: AppLocalizations.of(
+                    context,
+                  )!.eightDigitPasscodeLabel,
                   hintText: AppLocalizations.of(context)!.eightDigitsHint,
                   prefixIcon: Icon(
                     Icons.lock_outline,
@@ -300,7 +302,6 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
-    String? suffixText,
     List<TextInputFormatter>? inputFormatters,
     String? errorText,
   }) {
@@ -311,7 +312,6 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        suffixText: suffixText,
         prefixIcon: Icon(icon, color: AppColors.secondaryText),
         errorText: errorText,
         filled: true,
@@ -337,22 +337,6 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
           borderSide: BorderSide(color: AppColors.divider, width: 1),
         ),
       ),
-    );
-  }
-}
-
-class _NoDomainFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final at = newValue.text.indexOf('@');
-    if (at < 0) return newValue;
-    final text = newValue.text.substring(0, at);
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }
