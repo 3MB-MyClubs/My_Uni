@@ -66,7 +66,8 @@ void main() {
     await shot(tester, 'desc-02-edit-sheet');
 
     // Replace the description and save.
-    const newDesc = 'Hack-KU 2026 sign-ups are open — weekly workshops, '
+    const newDesc =
+        'Hack-KU 2026 sign-ups are open — weekly workshops, '
         'mentorship and a spring hackathon. All majors welcome!';
     await tester.enterText(find.byType(TextField).first, newDesc);
     await tester.pump(const Duration(milliseconds: 300));

@@ -127,7 +127,10 @@ void main() {
                       decoration: BoxDecoration(
                         color: AppColors.surfaceAlt,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.divider, width: 1.5),
+                        border: Border.all(
+                          color: AppColors.divider,
+                          width: 1.5,
+                        ),
                       ),
                       child: const Icon(Icons.notifications_none_rounded),
                     ),

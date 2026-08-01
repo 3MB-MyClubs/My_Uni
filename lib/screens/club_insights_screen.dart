@@ -12,7 +12,11 @@ class ClubInsightsScreen extends StatelessWidget {
   final Club club;
   final Color accent;
 
-  const ClubInsightsScreen({super.key, required this.club, required this.accent});
+  const ClubInsightsScreen({
+    super.key,
+    required this.club,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {

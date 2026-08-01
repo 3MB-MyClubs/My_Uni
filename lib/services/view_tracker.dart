@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
@@ -38,17 +39,14 @@ class ViewTracker extends ChangeNotifier {
   // ── Record a view ─────────────────────────────────────────────────────────────
 
   void recordView(String contentId, String userId, {bool syncRemote = false}) {
-    if (userId.isEmpty) return;
+    if (userId.isEmpty || !_initialized) return;
     final existing = _viewerIds(contentId);
-    final alreadyViewed = existing.contains(userId);
-    if (!alreadyViewed) {
+    if (!existing.contains(userId)) {
       existing.add(userId);
-      _box.put(contentId, existing.toList());
+      unawaited(_box.put(contentId, existing.toList()));
       notifyListeners();
     }
-    if (syncRemote) {
-      unawaited(_recordRemotePostView(contentId: contentId, userId: userId));
-    }
+    if (syncRemote) _enqueueRemotePostView(contentId, userId);
   }
 
   // ── Read ──────────────────────────────────────────────────────────────────────
@@ -56,7 +54,10 @@ class ViewTracker extends ChangeNotifier {
   int viewCount(String contentId) =>
       _remotePostViewCounts[contentId] ?? _viewerIds(contentId).length;
 
-  Set<String> viewerIds(String contentId) => _viewerIds(contentId);
+  // A view, not a copy: callers read this per item inside feed filters, so
+  // copying here would put back the per-call allocation _viewerCache removes.
+  Set<String> viewerIds(String contentId) =>
+      UnmodifiableSetView(_viewerIds(contentId));
 
   List<User> viewers(String contentId) {
     final ids = _viewerIds(contentId);
@@ -118,40 +119,83 @@ class ViewTracker extends ChangeNotifier {
 
   // ── Private ───────────────────────────────────────────────────────────────────
 
+  /// Decoded viewer sets, mirroring the Hive box. Reads happen per item inside
+  /// feed filters and sort comparators, so rebuilding a `Set` from the stored
+  /// `List` on every call was allocating once per comparison; the box is only
+  /// ever written through [recordView], which mutates the cached set in place.
+  final Map<String, Set<String>> _viewerCache = {};
+
   Set<String> _viewerIds(String contentId) {
     if (!_initialized) return {};
-    final raw = _box.get(contentId);
-    if (raw == null) return {};
-    return Set<String>.from(raw as List);
+    return _viewerCache.putIfAbsent(contentId, () {
+      final raw = _box.get(contentId);
+      return raw == null ? <String>{} : Set<String>.from(raw as List);
+    });
   }
 
-  Future<void> _recordRemotePostView({
-    required String contentId,
-    required String userId,
-  }) async {
-    final client = _client;
-    if (client == null || !_looksLikeUuid(contentId)) return;
+  // Cards mount as the feed scrolls, so views arrive in bursts: a flick past
+  // ten posts used to fire ten separate upserts — ten round trips encoded and
+  // decoded on the UI isolate mid-gesture, each answering with its own
+  // notifyListeners(). They are now coalesced into one batched upsert a beat
+  // after scrolling settles, and a post already reported in this run is never
+  // re-sent when its card is recycled back into view.
+  static const _remoteFlushDelay = Duration(milliseconds: 1200);
+  final Set<String> _remoteViewsSent = {};
+  final Map<String, String> _pendingRemoteViews = {};
+  Timer? _remoteFlushTimer;
 
+  void _enqueueRemotePostView(String contentId, String userId) {
+    if (_client == null || !_looksLikeUuid(contentId)) return;
+    if (!_remoteViewsSent.add('$contentId|$userId')) return;
+    _pendingRemoteViews[contentId] = userId;
+    // A fixed window, not a debounce: the first unreported view opens it and
+    // everything seen while it is open rides along. Debouncing would let a
+    // long uninterrupted scroll postpone the flush indefinitely.
+    if (_remoteFlushTimer != null) return;
+    _remoteFlushTimer = Timer(_remoteFlushDelay, () {
+      _remoteFlushTimer = null;
+      unawaited(_flushRemotePostViews());
+    });
+  }
+
+  Future<void> _flushRemotePostViews() async {
+    final client = _client;
+    if (client == null || _pendingRemoteViews.isEmpty) return;
+    final batch = Map<String, String>.from(_pendingRemoteViews);
+    _pendingRemoteViews.clear();
+
+    final viewedAt = DateTime.now().toUtc().toIso8601String();
     try {
-      await client.from('post_views').upsert({
-        'post_id': contentId,
-        'profile_id': userId,
-        'viewed_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'post_id,profile_id');
+      await client.from('post_views').upsert([
+        for (final entry in batch.entries)
+          {
+            'post_id': entry.key,
+            'profile_id': entry.value,
+            'viewed_at': viewedAt,
+          },
+      ], onConflict: 'post_id,profile_id');
+    } catch (_) {
+      // Local tracking already happened; do not disturb the feed. Allow a
+      // retry if these posts are seen again later in the session.
+      for (final entry in batch.entries) {
+        _remoteViewsSent.remove('${entry.key}|${entry.value}');
+      }
+      return;
+    }
+
+    for (final contentId in batch.keys) {
       _remotePostViewCounts[contentId] =
           (_remotePostViewCounts[contentId] ?? _viewerIds(contentId).length)
               .clamp(1, 1 << 31);
-      notifyListeners();
-    } catch (_) {
-      // Local tracking already happened; do not disturb the feed.
     }
+    notifyListeners();
   }
 
-  bool _looksLikeUuid(String value) {
-    return RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-    ).hasMatch(value);
-  }
+  static final RegExp _uuidPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  bool _looksLikeUuid(String value) => _uuidPattern.hasMatch(value);
 }
 
 final viewTracker = ViewTracker();

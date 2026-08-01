@@ -199,6 +199,34 @@ class S {
     'Henüz yorum yok. İlk yorumu sen yap!',
   );
   static String get deleteComment => _t('Delete comment', 'Yorumu sil');
+  static String get reportComment => _t('Report comment', 'Yorumu bildir');
+  static String get whyReportComment => _t(
+    'Why are you reporting this comment?',
+    'Bu yorumu neden bildiriyorsun?',
+  );
+  static String get commentReported => _t(
+    'Comment reported and removed from your feed.',
+    'Yorum bildirildi ve akışından kaldırıldı.',
+  );
+  static String get commentHiddenOffline => _t(
+    'Comment hidden. We will send the report when you are back online.',
+    'Yorum gizlendi. Çevrimiçi olduğunda bildirim gönderilecek.',
+  );
+  static String get commentDeleted => _t('Comment deleted', 'Yorum silindi');
+  static String get commentDeleteFailed => _t(
+    'Comment could not be deleted. Please try again.',
+    'Yorum silinemedi. Lütfen tekrar dene.',
+  );
+  static String get commentFailed => _t(
+    'Comment could not be posted. Please try again.',
+    'Yorum gönderilemedi. Lütfen tekrar dene.',
+  );
+  static String commentsWithCount(int count) =>
+      _t('Comments · $count', 'Yorumlar · $count');
+  static String get commentsStudentsOnly => _t(
+    'Sign in with a student account to join the conversation.',
+    'Sohbete katılmak için öğrenci hesabınla giriş yap.',
+  );
 
   // ── Messages
   static String get deleteMessage => _t('Delete message', 'Mesajı sil');

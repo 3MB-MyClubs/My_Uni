@@ -6,8 +6,8 @@ import 'package:flutter_application_1/widgets/expandable_post_caption.dart';
 void main() {
   Widget buildCaption(String caption) {
     return MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: ExpandablePostCaption(authorName: 'Chess Club', caption: caption),
       ),

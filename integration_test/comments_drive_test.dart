@@ -4,9 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:flutter_application_1/models/news_post.dart';
-import 'package:flutter_application_1/screens/post_detail_screen.dart';
+import 'package:flutter_application_1/screens/feed_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'package:flutter_application_1/services/comment_store.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
@@ -15,15 +14,20 @@ import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
+import 'package:flutter_application_1/widgets/comments_sheet.dart';
 
-/// Comments are disabled for posts: students can still view the post detail,
-/// but no comment list, composer, or send action is available.
+/// Drives the Home feed's comment affordance: every post card carries a
+/// comment button and tapping it opens the sheet with a working composer.
+///
+/// Posting is deliberately not asserted here. Comments are server-owned — a
+/// send only succeeds against a real Supabase session, which this harness
+/// (mock login, fixture post ids) does not have — so a green "comment posted"
+/// assertion would only be provable by letting comments fall back to local
+/// storage, which is exactly what [CommentStore] refuses to do.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Post detail hides comments and disables comment creation', (
-    tester,
-  ) async {
+  testWidgets('Home feed post card opens the comments sheet', (tester) async {
     authService.logout();
     await hiveBootstrap.initialize();
     await userPrefsService.initialize();
@@ -36,43 +40,62 @@ void main() {
     await themeService.setDark(false);
     authService.login('alice@ku.edu.tr', '111111');
 
-    final club = clubs.first;
+    final originalPosts = List<NewsPost>.from(newsPosts);
+    addTearDown(() {
+      newsPosts
+        ..clear()
+        ..addAll(originalPosts);
+      comments.removeWhere((c) => c.postId == 'comments_feed_test_post');
+    });
+
     final post = NewsPost(
-      id: 'comments_disabled_test_post',
-      clubId: club.id,
-      authorId: 'comments_disabled_test_author',
-      content: 'Comments are disabled on this post.',
+      id: 'comments_feed_test_post',
+      clubId: clubs.first.id,
+      authorId: 'comments_feed_test_author',
+      content: 'A post that can be commented on.',
       createdAt: DateTime.now(),
     );
-    final before = commentStore.countFor(post.id);
-
+    newsPosts
+      ..clear()
+      ..add(post);
     await tester.pumpWidget(
-      ProviderScope(
+      const ProviderScope(
         child: MaterialApp(
-          home: PostDetailScreen(
-            post: post,
-            clubColor: const Color(0xFF8C1D40),
-          ),
+          debugShowCheckedModeBanner: false,
+          home: FeedScreen(),
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.textContaining('Comments · '), findsNothing);
-    expect(find.byIcon(Icons.mode_comment_outlined), findsNothing);
-    expect(find.byType(TextField), findsNothing);
-    expect(find.byIcon(Icons.send_rounded), findsNothing);
+    // "All" shows every club's posts regardless of what alice follows.
+    if (find.text('All').evaluate().isNotEmpty) {
+      await tester.tap(find.text('All'));
+      await tester.pump(const Duration(milliseconds: 400));
+    }
 
-    await commentStore.add(post: post, content: 'This should not appear');
-    await tester.pump(const Duration(milliseconds: 600));
+    final commentButton = find.byKey(ValueKey('home-feed-comment-${post.id}'));
+    expect(commentButton, findsOneWidget);
 
-    expect(find.text('This should not appear'), findsNothing);
-    expect(commentStore.countFor(post.id), before);
+    await tester.tap(commentButton);
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.byType(CommentsSheet), findsOneWidget);
 
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();
-    await binding.takeScreenshot('comments-disabled');
+    await binding.takeScreenshot('comments-sheet-empty');
 
+    // The composer is present and the send button only lights up once there is
+    // something to send.
+    final sendButton = find.byKey(const ValueKey('post-comment-send'));
+    expect(find.byType(TextField), findsOneWidget);
+    expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), 'Nice post!');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.widget<IconButton>(sendButton).onPressed, isNotNull);
+
+    await binding.takeScreenshot('comments-sheet-composing');
     expect(tester.takeException(), isNull);
   });
 }

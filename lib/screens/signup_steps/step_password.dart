@@ -50,13 +50,13 @@ class _StepPasswordState extends State<StepPassword> {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
     if (!authService.isValidNewStudentPassword(password)) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.passwordRulesError,
-      );
+      setState(() => _error = AppLocalizations.of(context)!.passwordRulesError);
       return;
     }
     if (password != confirm) {
-      setState(() => _error = AppLocalizations.of(context)!.passwordsDoNotMatch);
+      setState(
+        () => _error = AppLocalizations.of(context)!.passwordsDoNotMatch,
+      );
       return;
     }
     setState(() => _error = null);

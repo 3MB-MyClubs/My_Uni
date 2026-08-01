@@ -463,10 +463,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
             // ChatStore can notify for message delivery, read receipts,
             // typing state, and sync progress. Only the unread badge depends
             // on those updates, so keep them from rebuilding the mounted tab
-            // stack and the rest of this scaffold.
-            bottomNavigationBar: ListenableBuilder(
-              listenable: chatStore,
-              builder: (context, _) => _buildBottomNav(context),
+            // stack and the rest of this scaffold — and since rebuilding the
+            // nav bar re-runs its BackdropFilter subtree, drop the (frequent)
+            // notifications that leave the badge number unchanged.
+            bottomNavigationBar: _UnreadNavBar(
+              unread: () => chatStore.totalUnreadFor(_currentUserId),
+              builder: _buildBottomNav,
             ),
           ),
           if (_showOnboarding)
@@ -492,10 +494,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    final currentId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final unreadChats = chatStore.totalUnreadFor(currentId);
+  Widget _buildBottomNav(BuildContext context, int unreadChats) {
     final isDark = themeService.isDark;
 
     // Ordered slots so the sliding highlight can be positioned purely from
@@ -784,6 +783,52 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         ),
       ),
     );
+  }
+}
+
+/// Listens to [chatStore] on the nav bar's behalf but only rebuilds when the
+/// unread total it reads actually changes. Most of what chatStore notifies
+/// about — read receipts, typing signals, realtime sync progress — leaves that
+/// number alone, and the nav bar it wraps is an expensive subtree to rebuild.
+class _UnreadNavBar extends StatefulWidget {
+  final int Function() unread;
+  final Widget Function(BuildContext context, int unread) builder;
+
+  const _UnreadNavBar({required this.unread, required this.builder});
+
+  @override
+  State<_UnreadNavBar> createState() => _UnreadNavBarState();
+}
+
+class _UnreadNavBarState extends State<_UnreadNavBar> {
+  late int _unread = widget.unread();
+
+  @override
+  void initState() {
+    super.initState();
+    chatStore.addListener(_onChatStoreChanged);
+  }
+
+  @override
+  void dispose() {
+    chatStore.removeListener(_onChatStoreChanged);
+    super.dispose();
+  }
+
+  void _onChatStoreChanged() {
+    if (!mounted) return;
+    final next = widget.unread();
+    if (next == _unread) return;
+    setState(() => _unread = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Re-read here too: the parent rebuilds this for its own reasons (tab
+    // change, theme, locale) and the signed-in user can change underneath us,
+    // so _unread is refreshed rather than trusted from the last notification.
+    _unread = widget.unread();
+    return widget.builder(context, _unread);
   }
 }
 

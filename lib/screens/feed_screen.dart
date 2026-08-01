@@ -36,7 +36,9 @@ import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
+import '../widgets/comments_sheet.dart';
 import '../widgets/moderation_reason_sheet.dart';
+import '../services/comment_store.dart';
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
@@ -395,10 +397,11 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _hydrateVisiblePostViews({bool force = false}) {
-    viewTracker.hydratePostViewCounts(
-      newsPosts.map((post) => post.id),
-      force: force,
-    );
+    final postIds = newsPosts.map((post) => post.id).toList();
+    viewTracker.hydratePostViewCounts(postIds, force: force);
+    // One bulk query for every card's comment badge, so opening a post is not
+    // the only way its count becomes correct.
+    unawaited(commentStore.hydrateCounts(postIds, force: force));
   }
 
   Future<void> _onRefresh() async {
@@ -3220,26 +3223,50 @@ class _PostCardState extends State<_PostCard>
           ],
           const SizedBox(height: 4),
           // ── Action row (X-style) ──
-          if (isStudent)
+          // Club admins get no like/share controls on their own posts, but
+          // they still need to read the discussion underneath them, so the
+          // comment button appears for them too.
+          if (isStudent || ownContent)
             Row(
               children: [
-                _twAction(
-                  icon: isLiked
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  count: null,
-                  color: isLiked
-                      ? AppColors.primaryRed
-                      : AppColors.secondaryText,
-                  onTap: _toggleLike,
+                if (isStudent) ...[
+                  _twAction(
+                    icon: isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    count: null,
+                    color: isLiked
+                        ? AppColors.primaryRed
+                        : AppColors.secondaryText,
+                    onTap: _toggleLike,
+                  ),
+                  const SizedBox(width: 18),
+                ],
+                // Scoped to the badge: commentStore notifies whenever any
+                // post's comments load, and rebuilding the whole card for a
+                // number would undo the feed's scroll work.
+                ListenableBuilder(
+                  listenable: commentStore,
+                  builder: (context, _) {
+                    final count = commentStore.countFor(widget.post.id);
+                    return _twAction(
+                      key: ValueKey('home-feed-comment-${widget.post.id}'),
+                      icon: Icons.mode_comment_outlined,
+                      count: count > 0 ? '$count' : null,
+                      color: AppColors.secondaryText,
+                      onTap: _openComments,
+                    );
+                  },
                 ),
-                const SizedBox(width: 18),
-                _twAction(
-                  icon: Icons.send_outlined,
-                  count: null,
-                  color: AppColors.secondaryText,
-                  onTap: _sharePostToChat,
-                ),
+                if (isStudent) ...[
+                  const SizedBox(width: 18),
+                  _twAction(
+                    icon: Icons.send_outlined,
+                    count: null,
+                    color: AppColors.secondaryText,
+                    onTap: _sharePostToChat,
+                  ),
+                ],
               ],
             ),
           if (likeCount > 0)
@@ -3253,14 +3280,28 @@ class _PostCardState extends State<_PostCard>
     );
   }
 
+  void _openComments() {
+    unawaited(
+      showCommentsSheet(
+        context,
+        post: widget.post,
+        onChanged: () {
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+  }
+
   // X-style action: an icon with an optional count beside it.
   Widget _twAction({
+    Key? key,
     required IconData icon,
     String? count,
     required Color color,
     required VoidCallback onTap,
   }) {
     return InkWell(
+      key: key,
       onTap: onTap,
       borderRadius: BorderRadius.all(Radius.circular(20)),
       child: Padding(

@@ -119,7 +119,9 @@ class _StepDoneState extends State<StepDone>
                           const SizedBox(height: 16),
 
                           Text(
-                            AppLocalizations.of(context)!.accountReadyRedirecting,
+                            AppLocalizations.of(
+                              context,
+                            )!.accountReadyRedirecting,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 15,

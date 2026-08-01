@@ -58,7 +58,11 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     size: 18,
                   ),
                   const SizedBox(width: 8),
-                  Text(AppLocalizations.of(context)!.calendarAddedToCalendarSnackbar),
+                  Text(
+                    AppLocalizations.of(
+                      context,
+                    )!.calendarAddedToCalendarSnackbar,
+                  ),
                 ],
               ),
               backgroundColor: const Color(0xFF2E7D32),
@@ -138,7 +142,9 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
                     isLoading
                         ? AppLocalizations.of(context)!.addingEllipsis
                         : isSuccess
-                        ? AppLocalizations.of(context)!.calendarAddedToCalendarButton
+                        ? AppLocalizations.of(
+                            context,
+                          )!.calendarAddedToCalendarButton
                         : AppLocalizations.of(context)!.addToCalendarButton,
                     style: TextStyle(
                       fontSize: 14,
