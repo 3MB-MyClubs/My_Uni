@@ -79,6 +79,42 @@ void main() {
     expect(club.chatThreadIdFor('user-a'), 'club:club-1');
   });
 
+  test('rejects pushes addressed to a different signed-in user', () {
+    expect(
+      pushDataBelongsToUser({
+        'recipient_user_id': 'user-b',
+        'type': 'direct_message',
+        'target_type': 'message',
+      }, currentUserId: 'user-a'),
+      isFalse,
+    );
+    expect(
+      pushDataBelongsToUser({
+        'recipient_user_id': 'user-a',
+        'type': 'direct_message',
+        'target_type': 'message',
+      }, currentUserId: 'user-a'),
+      isTrue,
+    );
+  });
+
+  test('legacy chat pushes without a recipient binding fail closed', () {
+    expect(
+      pushDataBelongsToUser({
+        'type': 'group_message',
+        'target_type': 'message',
+      }, currentUserId: 'user-a'),
+      isFalse,
+    );
+    expect(
+      pushDataBelongsToUser({
+        'type': 'club_event',
+        'target_type': 'event',
+      }, currentUserId: 'user-a'),
+      isTrue,
+    );
+  });
+
   test('derives content destinations from notification type as fallback', () {
     expect(
       PushNotificationTarget.fromData({

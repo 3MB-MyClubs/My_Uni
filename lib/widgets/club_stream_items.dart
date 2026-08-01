@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
 import '../services/app_strings.dart';
+import '../services/club_role_localization.dart';
+import '../l10n/app_localizations.dart';
 import '../services/club_chat_prefs.dart';
 import 'club_chat_theme.dart';
 
@@ -58,7 +60,7 @@ class ClubRoleChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        role.toUpperCase(),
+        localizedClubRole(AppLocalizations.of(context)!, role).toUpperCase(),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -410,6 +412,7 @@ class ClubAnnouncementCard extends StatelessWidget {
     required this.seenCount,
     required this.timeLabel,
     required this.onLongPress,
+    this.onOpenAuthor,
     this.reactions,
   });
 
@@ -422,6 +425,7 @@ class ClubAnnouncementCard extends StatelessWidget {
   final int seenCount;
   final String timeLabel;
   final VoidCallback onLongPress;
+  final VoidCallback? onOpenAuthor;
   final Widget? reactions;
 
   @override
@@ -542,17 +546,25 @@ class ClubAnnouncementCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    avatar,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onOpenAuthor,
+                      child: avatar,
+                    ),
                     const SizedBox(width: 8),
                     Flexible(
-                      child: Text(
-                        author.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: bold ? Colors.white : t.textSoft,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onOpenAuthor,
+                        child: Text(
+                          author.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: bold ? Colors.white : t.textSoft,
+                          ),
                         ),
                       ),
                     ),
@@ -592,6 +604,7 @@ class ClubPollMessageCard extends StatelessWidget {
     required this.closesLabel,
     required this.onVote,
     required this.onLongPress,
+    this.onOpenAuthor,
   });
 
   final ChatMessage message;
@@ -603,6 +616,7 @@ class ClubPollMessageCard extends StatelessWidget {
   final String closesLabel;
   final void Function(int optionIndex) onVote;
   final VoidCallback onLongPress;
+  final VoidCallback? onOpenAuthor;
 
   @override
   Widget build(BuildContext context) {
@@ -679,17 +693,25 @@ class ClubPollMessageCard extends StatelessWidget {
               const SizedBox(height: 11),
               Row(
                 children: [
-                  avatar,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onOpenAuthor,
+                    child: avatar,
+                  ),
                   const SizedBox(width: 8),
                   Flexible(
-                    child: Text(
-                      author.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: t.textMuted,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onOpenAuthor,
+                      child: Text(
+                        author.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: t.textMuted,
+                        ),
                       ),
                     ),
                   ),
@@ -990,6 +1012,7 @@ class ClubMessageGroup extends StatelessWidget {
     required this.flagged,
     required this.t,
     required this.onLongPress,
+    this.onOpenSender,
     this.statusLabel,
     this.attachments = const [],
     this.reactions,
@@ -1010,6 +1033,7 @@ class ClubMessageGroup extends StatelessWidget {
   final bool flagged;
   final ClubChatTheme t;
   final VoidCallback onLongPress;
+  final VoidCallback? onOpenSender;
   final String? statusLabel;
   final List<Widget> attachments;
   final Widget? reactions;
@@ -1030,15 +1054,19 @@ class ClubMessageGroup extends StatelessWidget {
     child: Row(
       children: [
         Flexible(
-          child: Text(
-            sender.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.1,
-              color: mine ? t.red : t.text,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpenSender,
+            child: Text(
+              sender.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.1,
+                color: mine ? t.red : t.text,
+              ),
             ),
           ),
         ),
@@ -1082,7 +1110,13 @@ class ClubMessageGroup extends StatelessWidget {
         SizedBox(
           width: 30,
           child: head
-              ? Center(child: avatar)
+              ? Center(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onOpenSender,
+                    child: avatar,
+                  ),
+                )
               : Center(child: Container(width: 1, height: 18, color: t.hair)),
         ),
         const SizedBox(width: 11),
@@ -1120,7 +1154,16 @@ class ClubMessageGroup extends StatelessWidget {
         textDirection: mine ? TextDirection.rtl : TextDirection.ltr,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 30, child: head && !mine ? avatar : null),
+          SizedBox(
+            width: 30,
+            child: head && !mine
+                ? GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onOpenSender,
+                    child: avatar,
+                  )
+                : null,
+          ),
           const SizedBox(width: 8),
           Flexible(
             child: Column(
@@ -1135,14 +1178,18 @@ class ClubMessageGroup extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: Text(
-                            sender.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                              color: t.red,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: onOpenSender,
+                            child: Text(
+                              sender.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: t.red,
+                              ),
                             ),
                           ),
                         ),
@@ -1221,7 +1268,11 @@ class ClubMessageGroup extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            avatar,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpenSender,
+              child: avatar,
+            ),
             const SizedBox(width: 9),
             Expanded(
               child: Column(

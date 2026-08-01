@@ -233,6 +233,7 @@ Deno.serve(async (request) => {
               notification: copy,
               data: {
                 notification_id: notification.id,
+                recipient_user_id: notification.user_id,
                 type: notification.type,
                 target_type: notification.target_type,
                 target_id: notification.target_id,

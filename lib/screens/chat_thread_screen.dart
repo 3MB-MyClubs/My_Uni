@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/user.dart';
+import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
@@ -25,6 +26,7 @@ import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/shared_post_message_card.dart';
+import '../widgets/sent_message_entrance.dart';
 import 'club_community_screen.dart';
 import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
@@ -59,6 +61,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _scrollController = ScrollController();
   final Set<String> _requestedParticipantProfileIds = {};
   ClubCommunityInfoController? _communityInfo;
+  String? _animatingSentMessageId;
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -244,16 +247,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _markVisibleMessagesSeen();
   }
 
-  /// Sends the current composer draft.
-  void _send() {
+  /// Sends the composer draft, or [text] when a starter chip was tapped.
+  void _send({String? text}) {
     final sent = chatStore.sendMessage(
       threadId: widget.threadId,
       senderId: _myId,
-      content: _inputController.text,
+      content: text ?? _inputController.text,
     );
     if (sent == null) return;
-    _inputController.clear();
+    if (text == null) _inputController.clear();
+    if (text == null && mounted) {
+      setState(() => _animatingSentMessageId = sent.id);
+    }
     _scrollToLatest();
+  }
+
+  void _finishSentMessageEntrance(String messageId) {
+    if (!mounted || _animatingSentMessageId != messageId) return;
+    setState(() => _animatingSentMessageId = null);
   }
 
   void _scrollToLatest() {
@@ -262,8 +273,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 440),
+          curve: const Cubic(0.20, 0.72, 0.24, 1),
         );
       }
     });
@@ -393,6 +404,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     if (sent == null) return;
     _inputController.clear();
+    if (mounted) setState(() => _animatingSentMessageId = sent.id);
     _scrollToLatest();
   }
 
@@ -536,11 +548,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _openHeaderProfile() {
+    if (_isClubInbox) {
+      final conversation = _clubInbox;
+      if (conversation != null && conversation.profileId != _myId) {
+        _openUserProfileById(conversation.profileId);
+        return;
+      }
+    }
     final club = _club;
     if (club != null) {
       Navigator.push(
         context,
-        MaterialPageRoute(
+        ChatPageRoute(
           builder: (_) =>
               ClubProfileScreen(club: club, color: _colorForClub(club.id)),
         ),
@@ -550,7 +569,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_isGroup) {
       Navigator.push(
         context,
-        MaterialPageRoute(
+        ChatPageRoute(
           builder: (_) =>
               GroupInfoScreen(threadId: widget.threadId, myId: _myId),
         ),
@@ -567,9 +586,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer != null) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => UserProfileScreen(user: peer)),
+        ChatPageRoute(builder: (_) => UserProfileScreen(user: peer)),
       ).then((_) => _markVisibleMessagesSeen());
     }
+  }
+
+  void _openUserProfileById(String userId) {
+    final user = _userForId(userId);
+    if (user == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
+    ).then((_) => _markVisibleMessagesSeen());
   }
 
   // ── Build ───────────────────────────────────────────────────────────────────
@@ -740,52 +768,67 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
             const SizedBox(width: 4),
           ],
-          if (showingStudent)
-            PresenceAvatar(
-              userId: conversation.profileId,
-              name: title,
-              size: 40,
-              fontSize: 15,
-              online: appPresenceService.onlineUserIds.contains(
-                conversation.profileId,
-              ),
-            )
-          else if (club != null)
-            ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
-              color: _colorForClub(club.id),
-              imageUrl: club.logoUrl,
-              size: 40,
-              fontSize: 15,
-            ),
-          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
-                  ),
+            child: InkWell(
+              key: const ValueKey('club-inbox-profile-header'),
+              onTap: _openHeaderProfile,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    if (showingStudent)
+                      PresenceAvatar(
+                        userId: conversation.profileId,
+                        name: title,
+                        size: 40,
+                        fontSize: 15,
+                        online: appPresenceService.onlineUserIds.contains(
+                          conversation.profileId,
+                        ),
+                      )
+                    else if (club != null)
+                      ClubAvatar(
+                        clubId: club.id,
+                        clubName: club.name,
+                        color: _colorForClub(club.id),
+                        imageUrl: club.logoUrl,
+                        size: 40,
+                        fontSize: 15,
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: AppColors.secondaryText,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: AppColors.secondaryText,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Icon(Icons.lock_rounded, size: 17, color: AppColors.secondaryText),
         ],
       ),
@@ -1178,7 +1221,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           next.senderId != m.senderId ||
           !_sameDay(next.createdAt, m.createdAt);
       items.add(
-        _buildBubbleRow(m, firstOfRun: firstOfRun, lastOfRun: lastOfRun),
+        SentMessageEntrance(
+          key: ValueKey('sent-message-entrance-${m.id}'),
+          animate: m.id == _animatingSentMessageId,
+          onCompleted: () => _finishSentMessageEntrance(m.id),
+          child: _buildBubbleRow(
+            m,
+            firstOfRun: firstOfRun,
+            lastOfRun: lastOfRun,
+          ),
+        ),
       );
     }
     return items;
@@ -1195,6 +1247,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isMultiParticipant = _isClub || _isGroup;
     final showHeader = isMultiParticipant && !mine;
     final showAvatar = isMultiParticipant;
+    final VoidCallback? openSenderProfile =
+        !mine && !senderIsAdmin && _userForId(m.senderId) != null
+        ? () => _openUserProfileById(m.senderId)
+        : null;
     final senderAvatar = Container(
       key: _isGroup ? ValueKey('group-message-avatar-${m.id}') : null,
       width: 32,
@@ -1316,7 +1372,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             Padding(
               // Keep the sender identity beside every incoming message.
               padding: const EdgeInsets.only(right: 8, bottom: 15),
-              child: senderAvatar,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: openSenderProfile,
+                child: senderAvatar,
+              ),
             ),
           Flexible(
             child: Column(
@@ -1331,18 +1391,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: Text(
-                            senderName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              // Each speaker keeps a stable accent so a busy
-                              // group stays readable at a glance.
-                              color: senderIsAdmin
-                                  ? AppColors.primaryRed
-                                  : _accentForUser(m.senderId),
+                          child: GestureDetector(
+                            key: ValueKey('chat-sender-profile-name-${m.id}'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: openSenderProfile,
+                            child: Text(
+                              senderName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                // Each speaker keeps a stable accent so a busy
+                                // group stays readable at a glance.
+                                color: senderIsAdmin
+                                    ? AppColors.primaryRed
+                                    : _accentForUser(m.senderId),
+                              ),
                             ),
                           ),
                         ),

@@ -1,47 +1,59 @@
 # Design QA
 
-- Source visual truth: user-provided Instagram mobile-feed screenshot in the conversation (600 x 1324 px).
-- Implementation screenshot: `/tmp/clubup-feed-edge-to-edge.png` (1290 x 2796 px).
-- Intended viewport: iPhone mobile feed, portrait.
-- State: Home feed with a photo post.
-- Density normalization: not possible; the implementation capture showed the iOS Home Screen rather than ClubUp's authenticated Home feed.
+- Source visual truth: user-provided notification-center reference image in the conversation (displayed at 720 x 1436 px; no local source path was exposed).
+- Implementation screenshot: unavailable.
+- Intended viewport: mobile portrait; responsive widget behavior exercised at Flutter's default widget-test viewport.
+- Density normalization: unavailable because neither the conversation attachment nor a rendered implementation capture could be opened as a local image pair.
+- State: populated notification center in light and dark themes.
 
 ## Full-view comparison evidence
 
-The source clearly establishes an edge-to-edge, square-corner post image with padded controls above and below. The implementation could not be visually compared in the same authenticated feed state because the running simulator was on the iOS Home Screen.
+The implementation follows the reference hierarchy in code: title and unread pill, mark-all-read action, collapsible follow-request strip, unread `NEW` section, chronological groups, avatar/type badges, follow buttons, content previews, and read/unread row treatment. A same-state screenshot comparison could not be completed.
 
 ## Focused region comparison evidence
 
-Blocked for the same reason. Code inspection confirms that the post media now expands from the card's padded width to `MediaQuery.sizeOf(context).width`, is centered in an `OverflowBox`, and no longer has the previous 16 px clipping radius.
+Blocked. No Flutter simulator or physical device was available. The Flutter web build compiled and served locally, but the in-app browser reported no available browser backend, so it could not be opened or captured.
 
-## Findings
+## Automated interaction evidence
 
-- [P2] Rendered authenticated feed evidence is unavailable.
-  - Location: Home feed photo post.
-  - Evidence: source shows viewport-flush media; simulator capture did not show the app.
-  - Impact: exact safe-area/device rendering cannot be visually signed off.
-  - Fix: cold-launch ClubUp, enter the Home feed, capture a photo post at the same viewport, and compare it with the reference.
+- Home bell exists, exposes a notification semantic label and unread badge, and opens `NotificationsScreen`.
+- Mark-all-read and individual-row read state pass.
+- Follow-request collapse, expand, confirm, and delete pass.
+- Follow, Following, and Requested accessory states pass.
+- Pull-to-refresh confirmation passes.
+- Light and dark theme surface assertions pass.
+- Thirty-day retention behavior passes.
+- `flutter analyze` passes with no issues.
 
 ## Fidelity surfaces
 
-- Fonts and typography: intentionally unchanged; the request concerns media alignment only.
-- Spacing and layout rhythm: code now uses full viewport width for post media and retains padded header/actions/caption.
-- Colors and visual tokens: intentionally unchanged.
-- Image quality and asset fidelity: existing uploaded media and `BoxFit.cover` behavior are preserved.
-- Copy and content: intentionally unchanged.
+- Fonts and typography: source hierarchy is represented with matching heavy title/name weights, compact timestamps, and uppercase group labels; screenshot-level comparison is blocked.
+- Spacing and layout rhythm: responsive row, section, header, and action spacing is implemented; screenshot-level comparison is blocked.
+- Colors and visual tokens: KU burgundy, warm light surfaces, and warm near-black dark surfaces use the app's theme tokens; both theme states pass widget assertions.
+- Image quality and asset fidelity: real user/club avatars and real post/event thumbnails are used when available; standard Material icons are used for notification types. Screenshot-level comparison is blocked.
+- Copy and content: English and Turkish notification-center copy is generated from ARB localization files.
+
+## Findings
+
+- [P2] Rendered visual comparison is unavailable.
+  - Location: complete notification center, light and dark states.
+  - Evidence: no Flutter device was available and the in-app browser backend list was empty.
+  - Impact: exact pixel fidelity, text wrapping, and device-specific safe-area rendering cannot be signed off from a rendered artifact.
+  - Fix: launch the app on an iOS or Android simulator, open the Home bell, capture populated light and dark states, and compare them beside the supplied reference.
 
 ## Comparison history
 
-- Initial finding: post media had 14 px horizontal card insets and 16 px rounded corners.
-- Fix made: media now overflows the padded card to the full viewport width with square corners.
-- Post-fix visual evidence: blocked because the simulator was not displaying the authenticated feed.
+- Initial implementation QA found that expanded request actions could overlap the sticky notification list in a constrained viewport.
+- Fix made: expanded request rows now participate directly in sliver layout rather than animating their size under a pinned header.
+- Post-fix evidence: confirm/delete hit testing and all notification widget tests pass; rendered visual evidence remains unavailable.
 
 ## Implementation checklist
 
-- [x] Remove horizontal media inset.
-- [x] Remove rounded media corners.
-- [x] Preserve padded surrounding controls and caption.
+- [x] Implement reference hierarchy and notification-row variants.
+- [x] Connect Home bell, unread badge, realtime inbox, and read state.
+- [x] Implement light and dark themes.
+- [x] Test core interactions and theme states.
 - [x] Pass static analysis.
-- [ ] Capture the authenticated feed for final visual comparison.
+- [ ] Capture and compare light and dark simulator screenshots.
 
 final result: blocked

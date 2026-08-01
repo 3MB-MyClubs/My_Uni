@@ -512,7 +512,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         activeIcon: Icons.calendar_today_rounded,
         label: AppLocalizations.of(context)!.events,
       ),
-      if (!_isClubAdmin && !_isPlatformModerator)
+      // Platform moderators still need campus-wide discovery so they can find
+      // the people, clubs, posts, and events they are responsible for
+      // reviewing. Ordinary club admins keep their focused club workflow.
+      if (!_isClubAdmin)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,

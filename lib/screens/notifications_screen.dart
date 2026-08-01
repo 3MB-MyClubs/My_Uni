@@ -1,30 +1,103 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui';
 
+import 'package:flutter/cupertino.dart'
+    show CupertinoSliverRefreshControl, RefreshIndicatorMode;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../l10n/app_localizations.dart';
+import '../models/chat_message.dart';
+import '../models/event.dart';
+import '../models/news_post.dart';
+import '../models/user.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/notification.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/mock_data.dart';
+import '../services/notification_inbox_service.dart';
+import '../services/people_service.dart';
+import '../services/photo_file_cache.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/chat_store.dart';
 import '../services/notification_navigation.dart';
-import '../services/supabase_config.dart';
 import '../services/push_notification_copy.dart';
+import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/event_cover_image.dart';
+import '../widgets/user_avatar.dart';
 
-/// Notification center: a single chronological feed with unread emphasis and
-/// mark-all-read. Tapping a row marks it read and opens its target. Follow
-/// requests keep their working Accept / Decline actions.
+/// Notification center — the "UniHub Notifications" design.
+///
+/// One chronological feed bucketed into New / Today / This Week / This Month /
+/// Earlier with sticky section headers, a collapsible follow-request strip
+/// pinned above it, per-row type badges, content thumbnails, stacked "and N
+/// others" faces, inline follow-back buttons, pull-to-refresh with a custom
+/// arc spinner + "Updated just now" toast, and a caught-up footer.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+// ── Notification kind → badge icon + accent ──────────────────────────────────
+enum _Kind {
+  like,
+  comment,
+  mention,
+  event,
+  poll,
+  member,
+  photo,
+  follow,
+  message,
+  system,
+}
+
+const Map<_Kind, IconData> _kindIcon = {
+  _Kind.like: Icons.favorite_rounded,
+  _Kind.comment: Icons.mode_comment_rounded,
+  _Kind.mention: Icons.alternate_email_rounded,
+  _Kind.event: Icons.event_rounded,
+  _Kind.poll: Icons.bar_chart_rounded,
+  _Kind.member: Icons.group_add_rounded,
+  _Kind.photo: Icons.photo_rounded,
+  _Kind.follow: Icons.person_add_alt_1_rounded,
+  _Kind.message: Icons.chat_bubble_rounded,
+  _Kind.system: Icons.verified_rounded,
+};
+
+const Map<_Kind, Color> _kindColorRaw = {
+  _Kind.comment: Color(0xFF1565C0),
+  _Kind.mention: Color(0xFF00838F),
+  _Kind.event: Color(0xFF2E9E5B),
+  _Kind.poll: Color(0xFF6A1B9A),
+  _Kind.member: Color(0xFF00838F),
+  _Kind.photo: Color(0xFFE65100),
+  _Kind.message: Color(0xFF1565C0),
+};
+
+Color _kindColor(_Kind kind) =>
+    _kindColorRaw[kind] ??
+    (kind == _Kind.system ? AppColors.mutedText : AppColors.primaryRed);
+
+/// The five chronological buckets, in display order.
+enum _Group { fresh, today, week, month, earlier }
+
+// Trailing content-preview tile.
+const double _thumbSize = 46;
+const BorderRadius _thumbRadius = BorderRadius.all(Radius.circular(9));
+
+class _NotificationClub {
+  final String id;
+  final String name;
+  final String? logoUrl;
+
+  const _NotificationClub({required this.id, required this.name, this.logoUrl});
 }
 
 class _NotificationGroup {
@@ -35,31 +108,40 @@ class _NotificationGroup {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final List<Map<String, dynamic>> _remoteNotificationRows = [];
-  RealtimeChannel? _notificationChannel;
+  bool _requestsOpen = false;
+  bool _toastVisible = false;
+  Timer? _toastTimer;
+
+  /// notification id → the conversation message it previews, once resolved.
+  final Map<String, ChatMessage> _previewMessages = {};
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
+  /// Follow requests are surfaced by the pinned strip, so their rows are kept
+  /// out of the chronological feed (they would otherwise appear twice).
   List<_NotificationGroup> get _allNotifs {
     final byId = <String, AppNotification>{};
+    final retentionCutoff = DateTime.now().subtract(const Duration(days: 30));
     for (final notification in [
-      ..._remoteNotificationRows.map(_remoteFromMap),
+      ...notificationInboxService.rows.map(_remoteFromMap),
       ...notifications,
       ...userState.dynamicNotifications,
     ]) {
-      if (notification.userId != _myId || notification.targetType == 'story') {
+      if (!canViewNotification(notification, currentUserId: _myId) ||
+          notification.targetType == 'story') {
         continue;
       }
-      if (ChatStore.isAdminAccountId(_myId) &&
-          notification.targetType == 'message' &&
-          notification.notificationType != 'club_channel_message' &&
-          notification.notificationType != 'club_inbox_message') {
+      if (notification.createdAt.isBefore(retentionCutoff)) continue;
+      if (notification.targetType == 'follow_request' &&
+          notification.fromId != null &&
+          userState.incomingFollowRequests.containsKey(notification.fromId)) {
         continue;
       }
+      // Remote rows are listed first and are the source of truth for server
+      // read state when the same notification was also cached locally.
       byId.putIfAbsent(notification.id, () => notification);
     }
-
     final grouped = <String, List<AppNotification>>{};
     for (final notification in byId.values) {
       final key =
@@ -81,15 +163,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
-    unawaited(_loadRemoteNotifications());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(notificationInboxService.startForCurrentUser());
+    });
   }
 
   @override
   void dispose() {
-    final channel = _notificationChannel;
-    if (channel != null && SupabaseConfig.isConfigured) {
-      unawaited(Supabase.instance.client.removeChannel(channel));
-    }
+    _toastTimer?.cancel();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     super.dispose();
@@ -127,127 +208,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Future<void> _loadRemoteNotifications() async {
-    if (!SupabaseConfig.isConfigured || _myId.isEmpty) return;
-    final client = Supabase.instance.client;
-    try {
-      final rows = await client
-          .from('notifications')
-          .select()
-          .eq('user_id', _myId)
-          .order('created_at', ascending: false)
-          .limit(100);
-      if (!mounted) return;
-      setState(() {
-        _remoteNotificationRows
-          ..clear()
-          ..addAll(rows.map((row) => Map<String, dynamic>.from(row)));
-      });
-
-      _notificationChannel = client
-          .channel('notifications:$_myId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'notifications',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'user_id',
-              value: _myId,
-            ),
-            callback: (payload) {
-              _upsertRemoteRow(payload.newRecord);
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'notifications',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'user_id',
-              value: _myId,
-            ),
-            callback: (payload) {
-              _upsertRemoteRow(payload.newRecord);
-            },
-          )
-          .subscribe();
-    } catch (_) {
-      // The mock/local notification feed remains available offline.
-    }
-  }
-
-  void _upsertRemoteRow(Map<String, dynamic> rawRow) {
+  // ── Pull to refresh ─────────────────────────────────────────────────────────
+  Future<void> _onRefresh() async {
+    await Future.wait([
+      notificationInboxService.refresh(),
+      // Keep the arc spinner on screen long enough to read as a refresh even
+      // when the request resolves (or is skipped) instantly.
+      Future<void>.delayed(const Duration(milliseconds: 850)),
+    ]);
     if (!mounted) return;
-    final row = Map<String, dynamic>.from(rawRow);
-    final id = row['id'];
-    if (id == null) return;
-    final index = _remoteNotificationRows.indexWhere(
-      (item) => item['id'] == id,
-    );
-    setState(() {
-      if (index < 0) {
-        _remoteNotificationRows.insert(0, row);
-      } else {
-        _remoteNotificationRows[index] = {
-          ..._remoteNotificationRows[index],
-          ...row,
-        };
-      }
+    setState(() => _toastVisible = true);
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _toastVisible = false);
     });
   }
 
   // ── Read state ──────────────────────────────────────────────────────────────
-  void _markRead(AppNotification n) =>
-      _markGroupRead(_NotificationGroup(latest: n, items: [n]));
-
   void _markGroupRead(_NotificationGroup group) {
     userState.markNotificationsRead(group.items);
-    final remoteIds = group.items
-        .map((n) => n.id)
-        .where((id) => _remoteNotificationRows.any((item) => item['id'] == id))
-        .toSet()
-        .toList(growable: false);
-    if (remoteIds.isEmpty) return;
-    final readAt = DateTime.now().toUtc().toIso8601String();
-    setState(() {
-      for (var index = 0; index < _remoteNotificationRows.length; index++) {
-        if (!remoteIds.contains(_remoteNotificationRows[index]['id'])) continue;
-        _remoteNotificationRows[index] = {
-          ..._remoteNotificationRows[index],
-          'read_at': readAt,
-        };
-      }
-    });
-    unawaited(
-      Supabase.instance.client
-          .from('notifications')
-          .update({'read_at': readAt})
-          .inFilter('id', remoteIds),
-    );
+    for (final notification in group.items) {
+      notificationInboxService.markRead(notification.id);
+    }
   }
 
   void _markAllRead() {
-    final all = _allNotifs;
-    userState.markNotificationsRead(all.expand((group) => group.items));
-    if (_remoteNotificationRows.isEmpty) return;
-    final readAt = DateTime.now().toUtc().toIso8601String();
-    setState(() {
-      for (var index = 0; index < _remoteNotificationRows.length; index++) {
-        _remoteNotificationRows[index] = {
-          ..._remoteNotificationRows[index],
-          'read_at': readAt,
-        };
-      }
-    });
-    unawaited(
-      Supabase.instance.client
-          .from('notifications')
-          .update({'read_at': readAt})
-          .eq('user_id', _myId)
-          .isFilter('read_at', null),
-    );
+    userState.markNotificationsRead(_allNotifs.expand((group) => group.items));
+    notificationInboxService.markAllRead();
   }
 
   // ── Time helper ───────────────────────────────────────────────────────────
@@ -263,27 +250,114 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return l10n.weeksShort(weeks);
   }
 
-  // ── Navigation (only types with a real destination) ─────────────────────────
-  /// The club a notification is "from", if any — so its uploaded profile photo
-  /// can be shown as the row avatar (clubs are visible app-wide this way).
-  dynamic _clubForNotification(AppNotification n) {
+  // ── Grouping ──────────────────────────────────────────────────────────────
+  /// Anything still unread lands in "New" regardless of age — everything else
+  /// falls into an age bucket, exactly like the design's five sections.
+  _Group _groupFor(_NotificationGroup group) {
+    if (_isUnread(group)) return _Group.fresh;
+    final now = DateTime.now();
+    final created = group.latest.createdAt;
+    if (created.year == now.year &&
+        created.month == now.month &&
+        created.day == now.day) {
+      return _Group.today;
+    }
+    final days = now.difference(created).inDays;
+    if (days < 7) return _Group.week;
+    if (days < 30) return _Group.month;
+    return _Group.earlier;
+  }
+
+  String _groupLabel(_Group group) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (group) {
+      _Group.fresh => l10n.notifGroupNew,
+      _Group.today => l10n.notifGroupToday,
+      _Group.week => l10n.notifGroupThisWeek,
+      _Group.month => l10n.notifGroupThisMonth,
+      _Group.earlier => l10n.notifGroupEarlier,
+    };
+  }
+
+  // ── Actor resolution ──────────────────────────────────────────────────────
+  User? _userForId(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final user in peopleService.cachedPeople) {
+      if (user.id == id) return user;
+    }
+    for (final user in users) {
+      if (user.id == id) return user;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _remoteRowFor(AppNotification n) {
+    for (final row in notificationInboxService.rows) {
+      if (row['id']?.toString() == n.id) return row;
+    }
+    return null;
+  }
+
+  /// The club a notification is genuinely from. A student liking or commenting
+  /// on club content remains a person notification even though its target is a
+  /// club post.
+  _NotificationClub? _clubForNotification(AppNotification n) {
+    final remoteRow = _remoteRowFor(n);
+    final hydratedClubId = remoteRow?['_actor_club_id']?.toString();
+    final type = n.notificationType?.toLowerCase() ?? '';
+    final isClubActivity =
+        hydratedClubId != null ||
+        n.targetType == 'club' ||
+        type == 'club_post' ||
+        type == 'club_event' ||
+        type == 'club_channel_message' ||
+        // Legacy/local club alerts predate notificationType. With no person
+        // actor, a post or event alert is safely attributable to its club.
+        (type.isEmpty &&
+            n.fromId == null &&
+            (n.targetType == 'post' || n.targetType == 'event'));
+    if (!isClubActivity) return null;
+
     String? clubId;
-    switch (n.targetType) {
-      case 'club':
+    clubId = hydratedClubId;
+    if (clubId == null || clubId.isEmpty) {
+      if (n.targetType == 'club' || type == 'club_channel_message') {
         clubId = n.targetId;
-      case 'post':
+      } else if (n.targetType == 'post') {
         final id = n.targetId;
         final idx = id == null ? -1 : newsPosts.indexWhere((p) => p.id == id);
         if (idx >= 0) clubId = newsPosts[idx].clubId;
-      case 'event':
+      } else if (n.targetType == 'event') {
         final id = n.targetId;
         final idx = id == null ? -1 : events.indexWhere((e) => e.id == id);
         if (idx >= 0) clubId = events[idx].clubId;
+      }
     }
-    if (clubId == null) return null;
-    return clubForId(clubId);
+    if (clubId == null || clubId.isEmpty) return null;
+
+    final localClub = clubForId(clubId);
+    if (localClub != null) {
+      return _NotificationClub(
+        id: localClub.id,
+        name: localClub.name,
+        logoUrl:
+            remoteRow?['_actor_club_logo_url']?.toString() ?? localClub.logoUrl,
+      );
+    }
+    final rawArgs = remoteRow?['localization_args'];
+    final args = rawArgs is Map ? rawArgs : const <String, dynamic>{};
+    final name =
+        remoteRow?['_actor_club_name']?.toString().trim() ??
+        args['clubName']?.toString().trim() ??
+        'Club';
+    return _NotificationClub(
+      id: clubId,
+      name: name.isEmpty ? 'Club' : name,
+      logoUrl: remoteRow?['_actor_club_logo_url']?.toString(),
+    );
   }
 
+  // ── Navigation ────────────────────────────────────────────────────────────
   void _openTarget(AppNotification n) {
     unawaited(
       openNotificationTarget(
@@ -297,43 +371,58 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _onRowTap(_NotificationGroup group) {
     final n = group.latest;
     _markGroupRead(group);
-    // Follow requests have no destination — the Accept / Decline buttons act.
+    // Follow requests have no destination — the strip's Confirm / Delete act.
     if (n.targetType == 'follow_request') return;
     _openTarget(n);
   }
 
-  // ── Type → icon-tile (icon + accent) ────────────────────────────────────────
-  (IconData, Color) _tileStyle(AppNotification n) {
+  // ── Type → badge ──────────────────────────────────────────────────────────
+  _Kind _kindFor(AppNotification n) {
     final msg = n.message.toLowerCase();
+    final type = n.notificationType?.toLowerCase() ?? '';
+    if (type == 'profile_follow' || type == 'follow_accepted') {
+      return _Kind.follow;
+    }
     switch (n.targetType) {
       case 'message':
-        return (Icons.chat_bubble_rounded, const Color(0xFF1565C0));
+        return _Kind.message;
       case 'event':
-        return (Icons.event_rounded, const Color(0xFF2E9E5B));
+        return _Kind.event;
       case 'follow_request':
-        return (Icons.person_add_alt_1_rounded, AppColors.primaryRed);
       case 'follow_accepted':
-        return (Icons.how_to_reg_rounded, AppColors.primaryRed);
       case 'user':
-        return (Icons.person_add_alt_1_rounded, const Color(0xFF6A1B9A));
+        return _Kind.follow;
       case 'club':
-        if (msg.contains('photo')) {
-          return (Icons.photo_rounded, const Color(0xFFE65100));
+        if (msg.contains('photo') || msg.contains('fotoğraf')) {
+          return _Kind.photo;
         }
-        return (Icons.groups_rounded, AppColors.primaryRed);
+        return _Kind.member;
       case 'post':
-        if (msg.contains('lik')) {
-          return (Icons.favorite_rounded, AppColors.primaryRed);
+        if (msg.contains('lik') || msg.contains('beğen')) return _Kind.like;
+        if (msg.contains('comment') ||
+            msg.contains('repl') ||
+            msg.contains('yorum') ||
+            msg.contains('yanıt')) {
+          return _Kind.comment;
         }
-        if (msg.contains('comment')) {
-          return (Icons.mode_comment_rounded, const Color(0xFF1565C0));
+        if (msg.contains('mention') ||
+            msg.contains('@') ||
+            msg.contains('bahset') ||
+            msg.contains('etiket')) {
+          return _Kind.mention;
         }
-        if (msg.contains('mention')) {
-          return (Icons.alternate_email_rounded, const Color(0xFF00838F));
+        if (msg.contains('poll') ||
+            msg.contains('anket') ||
+            msg.contains('vote') ||
+            msg.contains('oy')) {
+          return _Kind.poll;
         }
-        return (Icons.article_rounded, const Color(0xFF2E7D32));
+        if (msg.contains('photo') || msg.contains('fotoğraf')) {
+          return _Kind.photo;
+        }
+        return _Kind.comment;
     }
-    return (Icons.notifications_rounded, AppColors.secondaryText);
+    return _Kind.system;
   }
 
   // Bold the actor / club name at the start of the message.
@@ -350,10 +439,153 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return null;
   }
 
-  bool _isPending(AppNotification n) =>
-      n.targetType == 'follow_request' &&
-      (n.fromId != null) &&
-      userState.incomingFollowRequests.containsKey(n.fromId);
+  /// The secondary "snippet" line: the post being reacted to, or the event's
+  /// place and time.
+  String? _subFor(AppNotification n) {
+    switch (n.targetType) {
+      case 'post':
+        final idx = newsPosts.indexWhere((p) => p.id == n.targetId);
+        if (idx < 0) return null;
+        final text = newsPosts[idx].content.trim().replaceAll('\n', ' ');
+        return text.isEmpty ? null : '“$text”';
+      case 'event':
+        final idx = events.indexWhere((e) => e.id == n.targetId);
+        if (idx < 0) return null;
+        final event = events[idx];
+        final materialL10n = MaterialLocalizations.of(context);
+        final when =
+            '${materialL10n.formatMediumDate(event.dateTime)} '
+            '${materialL10n.formatTimeOfDay(TimeOfDay.fromDateTime(event.dateTime))}';
+        final place = event.location.trim();
+        return place.isEmpty ? when : '$place · $when';
+    }
+    return null;
+  }
+
+  /// Stacked mini-avatars for "and N others" style alerts, built from the real
+  /// likers / commenters of the target post. Empty unless there are at least
+  /// two distinct people.
+  List<String> _facesFor(AppNotification n) {
+    if (n.targetType != 'post' || n.targetId == null) return const [];
+    final kind = _kindFor(n);
+    final Iterable<String> others;
+    if (kind == _Kind.like) {
+      others = likes.where((l) => l.postId == n.targetId).map((l) => l.userId);
+    } else if (kind == _Kind.comment) {
+      others = comments
+          .where((c) => c.postId == n.targetId)
+          .map((c) => c.userId);
+    } else {
+      return const [];
+    }
+    final seen = <String>{};
+    final out = <String>[];
+    for (final id in [if (n.fromId != null) n.fromId!, ...others]) {
+      if (id == _myId || !seen.add(id)) continue;
+      if (_userForId(id) == null) continue;
+      out.add(id);
+      if (out.length == 3) break;
+    }
+    return out.length > 1 ? out : const [];
+  }
+
+  /// The person a follow-back button on this row should act on.
+  String? _followTargetFor(AppNotification n) {
+    if (!authService.isStudentSession) return null;
+    final type = n.notificationType?.toLowerCase() ?? '';
+    final isFollowAlert =
+        n.targetType == 'user' ||
+        n.targetType == 'follow_accepted' ||
+        type == 'profile_follow' ||
+        type == 'follow_accepted';
+    if (!isFollowAlert) return null;
+    final id = n.fromId ?? n.targetId;
+    if (id == null || id.isEmpty || id == _myId) return null;
+    return _userForId(id) == null ? null : id;
+  }
+
+  Future<void> _toggleFollow(String userId) async {
+    final myId = _myId;
+    final wasFollowing = userState.isFollowingUser(userId);
+    final wasPending = userState.hasPendingRequest(userId);
+
+    if (wasPending) {
+      userState.pendingFollowRequests.remove(userId);
+      userState.followedUserIds.remove(userId);
+      setState(() {});
+      userPrefsService.save(myId);
+      return;
+    }
+
+    if (wasFollowing) {
+      userState.toggleFollowUser(userId);
+    } else {
+      userState.followedUserIds.add(userId);
+    }
+    setState(() {});
+    userPrefsService.save(myId);
+    try {
+      await peopleService.setFollowing(
+        followerId: myId,
+        followingId: userId,
+        follow: !wasFollowing,
+      );
+    } catch (_) {
+      // Roll the optimistic toggle back if the write failed.
+      if (wasFollowing) {
+        userState.followedUserIds.add(userId);
+      } else {
+        userState.followedUserIds.remove(userId);
+      }
+      if (mounted) setState(() {});
+      userPrefsService.save(myId);
+    }
+  }
+
+  // ── Follow requests ───────────────────────────────────────────────────────
+  List<User> get _pendingRequesters => userState.incomingFollowRequests.keys
+      .map(_userForId)
+      .whereType<User>()
+      .toList();
+
+  String _requestMeta(User user) {
+    final l10n = AppLocalizations.of(context)!;
+    final parts = <String>[];
+    final major = userState.majors[user.id]?.trim() ?? '';
+    if (major.isNotEmpty) parts.add(major);
+    final mutual = userState.followedUserIds
+        .intersection(Set<String>.from(user.followingUserIds))
+        .length;
+    if (mutual > 0) {
+      parts.add(l10n.mutualBadgeCount(mutual > 30 ? '30+' : '$mutual'));
+    }
+    if (parts.isEmpty) {
+      final username = userState.usernameFor(user.id);
+      parts.add(username != null ? '@$username' : user.email);
+    }
+    return parts.join(' · ');
+  }
+
+  void _resolveRequest(User user, {required bool accept}) {
+    final myId = _myId;
+    final notifId = userState.incomingFollowRequests[user.id];
+    if (notifId != null) {
+      final pending = [
+        ...notifications,
+        ...userState.dynamicNotifications,
+      ].where((n) => n.id == notifId);
+      for (final n in pending) {
+        userState.markNotificationRead(n);
+      }
+    }
+    if (accept) {
+      userState.acceptFollowRequest(user.id, myId);
+    } else {
+      userState.declineFollowRequest(user.id);
+    }
+    userPrefsService.save(myId);
+    setState(() {});
+  }
 
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
@@ -361,33 +593,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
-        listenable: userState,
+        listenable: Listenable.merge([userState, notificationInboxService]),
         builder: (context, _) {
           final all = _allNotifs;
           final totalUnread = all.where(_isUnread).length;
+          final requesters = _pendingRequesters;
 
           return Column(
             children: [
               _buildHeader(totalUnread),
               Expanded(
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: all.isEmpty
-                      ? const [
-                          SliverFillRemaining(
+                child: Stack(
+                  children: [
+                    CustomScrollView(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      slivers: [
+                        CupertinoSliverRefreshControl(
+                          refreshTriggerPullDistance: 90,
+                          refreshIndicatorExtent: 56,
+                          builder: _buildRefreshIndicator,
+                          onRefresh: _onRefresh,
+                        ),
+                        if (requesters.isNotEmpty)
+                          SliverToBoxAdapter(
+                            child: _buildRequestsStrip(requesters),
+                          ),
+                        if (all.isEmpty &&
+                            requesters.isEmpty &&
+                            notificationInboxService.isLoading)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _BLoading(),
+                          )
+                        else if (all.isEmpty && requesters.isEmpty)
+                          const SliverFillRemaining(
                             hasScrollBody: false,
                             child: _BEmpty(),
-                          ),
-                        ]
-                      : [
-                          SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, i) => _row(all[i]),
-                              childCount: all.length,
-                            ),
-                          ),
-                          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                          )
+                        else ...[
+                          for (final group in _Group.values)
+                            ..._buildGroup(group, all),
+                          SliverToBoxAdapter(child: _buildFooter()),
                         ],
+                      ],
+                    ),
+                    _buildToast(),
+                  ],
                 ),
               ),
             ],
@@ -397,25 +650,74 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  List<Widget> _buildGroup(_Group group, List<_NotificationGroup> all) {
+    final rows = all.where((item) => _groupFor(item) == group).toList();
+    if (rows.isEmpty) return const [];
+    return [
+      SliverMainAxisGroup(
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _GroupHeaderDelegate(label: _groupLabel(group)),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => _row(rows[i]),
+              childCount: rows.length,
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  // ── Pull-to-refresh arc spinner ────────────────────────────────────────────
+  Widget _buildRefreshIndicator(
+    BuildContext context,
+    RefreshIndicatorMode refreshState,
+    double pulledExtent,
+    double refreshTriggerPullDistance,
+    double refreshIndicatorExtent,
+  ) {
+    final progress = (pulledExtent / refreshTriggerPullDistance).clamp(
+      0.0,
+      1.0,
+    );
+    final spinning =
+        refreshState == RefreshIndicatorMode.refresh ||
+        refreshState == RefreshIndicatorMode.armed;
+    return Center(
+      child: _PullSpinner(progress: progress, spinning: spinning),
+    );
+  }
+
   // ── Header (title + unread pill + mark-all) ─────────────────────────────────
   Widget _buildHeader(int totalUnread) {
     final canPop = Navigator.of(context).canPop();
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(bottom: BorderSide(color: AppColors.divider)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
-          child: Column(
-            children: [
-              Row(
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            // The design's `navBlur` is the page surface at 85%, not the card
+            // white — the header reads as frosted background, not a raised bar.
+            color: AppColors.background.withValues(alpha: 0.85),
+            border: Border(
+              bottom: BorderSide(
+                color: AppColors.divider.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   if (canPop)
                     Padding(
-                      padding: const EdgeInsets.only(right: 4),
+                      padding: const EdgeInsets.only(right: 8, bottom: 4),
                       child: GestureDetector(
                         onTap: () => Navigator.maybePop(context),
                         child: Icon(
@@ -425,167 +727,367 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                       ),
                     ),
-                  Text(
-                    AppLocalizations.of(context)!.notifications,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.6,
-                      color: AppColors.text,
+                  // Title and count pill share a baseline (the design aligns
+                  // them on it rather than on the box bottom), so the pill sits
+                  // on the title's baseline no matter how tall it grows.
+                  Flexible(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            AppLocalizations.of(context)!.notifications,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.6,
+                              height: 1.15,
+                              color: AppColors.text,
+                            ),
+                          ),
+                        ),
+                        if (totalUnread > 0) ...[
+                          const SizedBox(width: 9),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed,
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(99),
+                              ),
+                            ),
+                            // No line-height override: the pill is aligned by
+                            // its baseline, so the glyphs keep their natural
+                            // line box exactly as the design's span does.
+                            child: Text(
+                              '$totalUnread',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 9),
+                  const Spacer(),
                   if (totalUnread > 0)
-                    Container(
-                      constraints: const BoxConstraints(minWidth: 20),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed,
-                        borderRadius: BorderRadius.all(Radius.circular(10)),
-                      ),
-                      child: Text(
-                        '$totalUnread',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _markAllRead,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 10, bottom: 3),
+                        child: Text(
+                          AppLocalizations.of(context)!.markAllRead,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryRed,
+                          ),
                         ),
                       ),
                     ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: _markAllRead,
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: Icon(
-                        Icons.done_all_rounded,
-                        size: 19,
-                        color: AppColors.primaryRed,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── A single notification row (Style B) ─────────────────────────────────────
-  Widget _row(_NotificationGroup group) {
-    final n = group.latest;
-    final unread = _isUnread(group);
-    final (icon, accent) = _tileStyle(n);
-    final prefix = _boldPrefix(n);
-    final pending = _isPending(n);
-    final club = _clubForNotification(n);
+  // ── Follow-request strip ───────────────────────────────────────────────────
+  Widget _buildRequestsStrip(List<User> requesters) {
+    final l10n = AppLocalizations.of(context)!;
+    final first = userState.displayNameFor(
+      requesters.first.id,
+      requesters.first.name,
+    );
+    final subtitle = requesters.length > 1
+        ? '$first ${l10n.plusOthersCount(requesters.length - 1)}'
+        : first;
 
-    return InkWell(
-      onTap: () => _onRowTap(group),
-      child: Container(
-        decoration: BoxDecoration(
-          color: unread ? AppColors.card : Colors.transparent,
-          border: Border(bottom: BorderSide(color: AppColors.divider)),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider.withValues(alpha: 0.55)),
         ),
-        padding: const EdgeInsets.fromLTRB(18, 13, 18, 13),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Leading: the club's profile photo (with a type-icon badge) when
-            // the alert is from a club; otherwise a type-colored icon tile.
-            if (club != null)
-              SizedBox(
-                width: 46,
-                height: 46,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    ClubAvatar(
-                      clubId: club.id as String,
-                      clubName: club.name as String,
-                      color: accent,
-                      imageUrl: club.logoUrl,
-                      size: 46,
-                      fontSize: 20,
-                      borderRadius: 14,
-                    ),
-                    Positioned(
-                      right: -3,
-                      bottom: -3,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Container(
-                          width: 18,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: accent,
-                            shape: BoxShape.circle,
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _requestsOpen = !_requestsOpen),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 34,
+                    child: OverflowBox(
+                      maxWidth: 120,
+                      minHeight: 34,
+                      maxHeight: 34,
+                      alignment: Alignment.center,
+                      child: Center(
+                        child: _AvatarStack(
+                          userIds: requesters.take(3).map((u) => u.id).toList(),
+                          nameFor: (id) => userState.displayNameFor(
+                            id,
+                            requesters.firstWhere((u) => u.id == id).name,
                           ),
-                          child: Icon(icon, size: 11, color: Colors.white),
+                          size: 34,
+                          overlap: 16,
+                          fontSize: 11,
                         ),
                       ),
                     ),
-                  ],
-                ),
-              )
-            else
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.all(Radius.circular(14)),
-                  border: Border.all(color: accent.withValues(alpha: 0.20)),
-                ),
-                child: Icon(icon, size: 22, color: accent),
-              ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _messageText(n, prefix, unread),
-                  const SizedBox(height: 4),
-                  Text(
-                    _timeAgo(n.createdAt),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.followRequests,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.mutedText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  AnimatedRotation(
+                    turns: _requestsOpen ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
                       color: AppColors.secondaryText,
                     ),
                   ),
-                  if (pending) ...[
-                    const SizedBox(height: 10),
-                    _followActions(n),
+                ],
+              ),
+            ),
+          ),
+          // The design renders the request rows only while the strip is open,
+          // so they are built conditionally rather than cross-faded — a
+          // collapsed strip must not leave live Confirm / Delete buttons
+          // (or their focus targets) sitting in the tree.
+          if (_requestsOpen)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+              child: Column(
+                children: [for (final user in requesters) _requestRow(user)],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _requestRow(User user) {
+    final l10n = AppLocalizations.of(context)!;
+    final name = userState.displayNameFor(user.id, user.name);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          IgnorePointer(
+            child: UserAvatar(
+              userId: user.id,
+              name: name,
+              size: 42,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.text,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  _requestMeta(user),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: AppColors.mutedText),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _pillButton(
+            label: l10n.confirm,
+            filled: true,
+            onTap: () => _resolveRequest(user, accept: true),
+          ),
+          const SizedBox(width: 12),
+          _pillButton(
+            label: l10n.delete,
+            filled: false,
+            onTap: () => _resolveRequest(user, accept: false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pillButton({
+    required String label,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: filled ? AppColors.primaryRed : Colors.transparent,
+          borderRadius: const BorderRadius.all(Radius.circular(9)),
+          border: filled ? null : Border.all(color: AppColors.borderStrong),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: filled ? Colors.white : AppColors.bodyText,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── A single notification row ──────────────────────────────────────────────
+  Widget _row(_NotificationGroup group) {
+    final n = group.latest;
+    final unread = _isUnread(group);
+    final kind = _kindFor(n);
+    final accent = _kindColor(kind);
+    final prefix = _boldPrefix(n);
+    final sub = _subFor(n);
+    final faces = _facesFor(n);
+    final followTarget = _followTargetFor(n);
+    final thumb = followTarget == null ? _buildThumb(n, accent) : null;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _onRowTap(group),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        color: unread ? AppColors.lightRed : Colors.transparent,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 13, 18, 13),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _buildAvatar(n, kind, accent),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _messageText(n, prefix),
+                        if (sub != null) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                        ],
+                        if (faces.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          _AvatarStack(
+                            userIds: faces,
+                            nameFor: (id) => userState.displayNameFor(
+                              id,
+                              _userForId(id)?.name ?? '',
+                            ),
+                            size: 22,
+                            overlap: 8,
+                            fontSize: 8.5,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (followTarget != null) ...[
+                    const SizedBox(width: 12),
+                    _FollowAccessory(
+                      userId: followTarget,
+                      onTap: () => unawaited(_toggleFollow(followTarget)),
+                    ),
+                  ] else if (thumb != null) ...[
+                    const SizedBox(width: 12),
+                    thumb,
                   ],
                 ],
               ),
             ),
-            const SizedBox(width: 10),
             if (unread)
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  shape: BoxShape.circle,
+              Positioned(
+                left: 7,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -594,100 +1096,658 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _messageText(AppNotification n, String? prefix, bool unread) {
-    final baseColor = unread ? AppColors.text : AppColors.secondaryText;
-    if (prefix != null && n.message.startsWith(prefix)) {
-      final rest = n.message.substring(prefix.length);
-      return RichText(
-        text: TextSpan(
-          children: [
-            TextSpan(
-              text: prefix,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                fontWeight: FontWeight.w800,
-                color: AppColors.text,
-              ),
-            ),
-            TextSpan(
-              text: rest,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                fontWeight: FontWeight.w400,
-                color: baseColor,
-              ),
-            ),
-          ],
+  /// Actor avatar (club square-ish, person round, system bell) with the
+  /// type badge tucked into its bottom-right corner.
+  Widget _buildAvatar(AppNotification n, _Kind kind, Color accent) {
+    final club = _clubForNotification(n);
+    final user = club == null ? _userForId(n.fromId ?? n.targetId) : null;
+
+    final Widget base;
+    if (club != null) {
+      base = ClubAvatar(
+        key: ValueKey('notification-club-avatar-${n.id}'),
+        clubId: club.id,
+        clubName: club.name,
+        color: accent,
+        imageUrl: club.logoUrl,
+        size: 48,
+        fontSize: 20,
+        borderRadius: 14,
+      );
+    } else if (user != null) {
+      base = UserAvatar(
+        key: ValueKey('notification-user-avatar-${n.id}'),
+        userId: user.id,
+        name: userState.displayNameFor(user.id, user.name),
+        size: 48,
+        fontSize: 19,
+      );
+    } else {
+      // System alerts have no actor: the design fills the slot with the app's
+      // own brand avatar — a solid gradient disc, not a tinted outline.
+      base = Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.primaryRed, AppColors.darkRed],
+          ),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.notifications_rounded,
+          size: 22,
+          color: Colors.white,
         ),
       );
     }
-    return Text(
-      n.message,
-      style: TextStyle(
-        fontSize: 14,
-        height: 1.4,
-        fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
-        color: baseColor,
+
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // The design lifts every avatar on a soft shadow tinted with its own
+          // accent (`0 2px 8px accent30`).
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: club != null ? BoxShape.rectangle : BoxShape.circle,
+                  borderRadius: club != null
+                      ? const BorderRadius.all(Radius.circular(14))
+                      : null,
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.19),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          IgnorePointer(child: base),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: _kindColor(kind),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.background, width: 2),
+              ),
+              child: Icon(_kindIcon[kind], size: 11, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // Working Accept / Decline for pending follow requests.
-  Widget _followActions(AppNotification n) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: () {
-            _markRead(n);
-            userState.acceptFollowRequest(n.fromId!, _myId);
-            userPrefsService.save(_myId);
-            setState(() {});
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-            decoration: BoxDecoration(
-              color: AppColors.primaryRed,
-              borderRadius: BorderRadius.all(Radius.circular(100)),
+  Widget _messageText(AppNotification n, String? prefix) {
+    // The design keeps the timestamp on one piece (`white-space:nowrap`), so
+    // localised forms that contain a space ("5 dk", "2 gün") can't be split
+    // across lines by the wrap that follows the message.
+    final time = _timeAgo(n.createdAt).replaceAll(' ', '\u00A0');
+    final bodyStyle = TextStyle(
+      fontSize: 14.5,
+      height: 1.42,
+      fontWeight: FontWeight.w400,
+      color: AppColors.bodyText,
+    );
+    final nameStyle = TextStyle(
+      fontSize: 14.5,
+      height: 1.42,
+      fontWeight: FontWeight.w800,
+      color: AppColors.text,
+    );
+    final timeStyle = TextStyle(
+      fontSize: 14.5,
+      height: 1.42,
+      fontWeight: FontWeight.w500,
+      color: AppColors.secondaryText,
+    );
+
+    final hasPrefix = prefix != null && n.message.startsWith(prefix);
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (hasPrefix) ...[
+            TextSpan(text: prefix, style: nameStyle),
+            TextSpan(
+              text: n.message.substring(prefix.length),
+              style: bodyStyle,
             ),
-            child: Text(
-              AppLocalizations.of(context)!.accept,
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: () {
-            _markRead(n);
-            userState.declineFollowRequest(n.fromId!);
-            userPrefsService.save(_myId);
-            setState(() {});
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(100)),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: Text(
-              AppLocalizations.of(context)!.decline,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.secondaryText,
-              ),
-            ),
-          ),
-        ),
-      ],
+          ] else
+            TextSpan(text: n.message, style: bodyStyle),
+          TextSpan(text: ' $time', style: timeStyle),
+        ],
+      ),
     );
   }
+
+  /// Trailing content preview: the real post image / event cover when there is
+  /// one, otherwise the design's striped placeholder tile.
+  Widget? _buildThumb(AppNotification n, Color accent) {
+    switch (n.targetType) {
+      case 'event':
+        return _eventThumb(n.targetId, accent);
+      case 'post':
+        return _postThumb(n.targetId, accent);
+      case 'message':
+        // A post, event or photo someone sent into a conversation gets the same
+        // right-hand preview tile, so a share is recognisable from the alert
+        // without opening the thread.
+        final message = _previewableMessageFor(n);
+        if (message == null) return null;
+        if (message.sharedPostId != null) {
+          return _postThumb(message.sharedPostId, accent);
+        }
+        if (message.eventId != null) {
+          return _eventThumb(message.eventId, accent);
+        }
+        final path = message.attachmentPath;
+        return path == null ? null : _photoThumb(path, accent);
+    }
+    return null;
+  }
+
+  /// The conversation message a "sent you a message" alert was raised for, but
+  /// only when it carries something worth previewing. Local alerts are stamped
+  /// with the message's own timestamp, so the closest send from that sender is
+  /// the one that triggered it — the tolerance covers inbox rows that carry a
+  /// server-side timestamp instead.
+  ChatMessage? _previewableMessageFor(AppNotification n) {
+    final threadId = n.targetId;
+    if (threadId == null || threadId.isEmpty) return null;
+    final cached = _previewMessages[n.id];
+    if (cached != null) return cached;
+
+    ChatMessage? best;
+    Duration? bestGap;
+    for (final message in chatStore.messagesFor(threadId, viewerId: _myId)) {
+      if (message.senderId == _myId) continue;
+      if (n.fromId != null && message.senderId != n.fromId) continue;
+      if (!_hasPreview(message)) continue;
+      final gap = message.createdAt.difference(n.createdAt).abs();
+      if (gap > const Duration(minutes: 5)) continue;
+      if (bestGap == null || gap < bestGap) {
+        best = message;
+        bestGap = gap;
+      }
+    }
+    // Only hits are memoised: a message that has not synced yet must still be
+    // picked up on a later build.
+    if (best != null) _previewMessages[n.id] = best;
+    return best;
+  }
+
+  bool _hasPreview(ChatMessage message) => switch (message.kind) {
+    ChatMessageKind.postShare => message.sharedPostId != null,
+    ChatMessageKind.event => message.eventId != null,
+    ChatMessageKind.photo => message.attachmentPath != null,
+    _ => false,
+  };
+
+  Widget? _eventThumb(String? eventId, Color accent) {
+    final idx = eventId == null
+        ? -1
+        : events.indexWhere((e) => e.id == eventId);
+    if (idx < 0) return null;
+    final Event event = events[idx];
+    return ClipRRect(
+      borderRadius: _thumbRadius,
+      child: IgnorePointer(
+        child: EventCoverImage(
+          event: event,
+          color: accent,
+          width: _thumbSize,
+          height: _thumbSize,
+          borderRadius: _thumbRadius,
+        ),
+      ),
+    );
+  }
+
+  Widget? _postThumb(String? postId, Color accent) {
+    final idx = postId == null
+        ? -1
+        : newsPosts.indexWhere((p) => p.id == postId);
+    if (idx < 0) return null;
+    final NewsPost post = newsPosts[idx];
+    final path = post.imagePath;
+    if (path != null && path.isNotEmpty && !path.startsWith('tpl:')) {
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        return ClipRRect(
+          borderRadius: _thumbRadius,
+          child: AppNetworkImage(
+            url: path,
+            width: _thumbSize,
+            height: _thumbSize,
+            cacheWidth: 140,
+            fit: BoxFit.cover,
+            placeholderBuilder: (_) =>
+                _StripeTile(accent: accent, icon: _kindIcon[_Kind.photo]!),
+            errorBuilder: (_) =>
+                _StripeTile(accent: accent, icon: _kindIcon[_Kind.photo]!),
+          ),
+        );
+      }
+      if (photoFileCache.existsSync(path)) return _photoThumb(path, accent);
+    }
+    return _StripeTile(accent: accent, icon: _kindIcon[_Kind.comment]!);
+  }
+
+  Widget _photoThumb(String path, Color accent) {
+    return ClipRRect(
+      borderRadius: _thumbRadius,
+      child: Image.file(
+        File(path),
+        width: _thumbSize,
+        height: _thumbSize,
+        // Decoded at tile size rather than at the full camera resolution.
+        cacheWidth: 140,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) =>
+            _StripeTile(accent: accent, icon: _kindIcon[_Kind.photo]!),
+      ),
+    );
+  }
+
+  // ── "Updated just now" toast ───────────────────────────────────────────────
+  Widget _buildToast() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 14,
+      child: IgnorePointer(
+        // The design slides the toast by a flat 8px, so the travel is tweened
+        // in logical pixels rather than as a fraction of the pill's height.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: _toastVisible ? 0 : 8),
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          builder: (context, dy, child) =>
+              Transform.translate(offset: Offset(0, dy), child: child),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: _toastVisible ? 1 : 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.text,
+                  borderRadius: const BorderRadius.all(Radius.circular(99)),
+                ),
+                child: Text(
+                  AppLocalizations.of(context)!.updatedJustNow,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.background,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Caught-up footer ───────────────────────────────────────────────────────
+  Widget _buildFooter() {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 26, 18, 34),
+      child: Column(
+        children: [
+          Text(
+            l10n.allCaughtUp,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            l10n.notificationsAutoCleared,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.4,
+              color: AppColors.secondaryText.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sticky group header ───────────────────────────────────────────────────────
+class _GroupHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final String label;
+
+  const _GroupHeaderDelegate({required this.label});
+
+  @override
+  double get minExtent => 30;
+
+  @override
+  double get maxExtent => 30;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          height: 30,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.fromLTRB(18, 9, 18, 7),
+          color: AppColors.background.withValues(alpha: 0.85),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.9,
+              height: 1.0,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _GroupHeaderDelegate oldDelegate) =>
+      oldDelegate.label != label;
+}
+
+// ── Overlapping avatar stack (request strip + "and N others" faces) ───────────
+class _AvatarStack extends StatelessWidget {
+  final List<String> userIds;
+  final String Function(String id) nameFor;
+  final double size;
+  final double overlap;
+  final double fontSize;
+
+  const _AvatarStack({
+    required this.userIds,
+    required this.nameFor,
+    required this.size,
+    required this.overlap,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (userIds.isEmpty) return const SizedBox.shrink();
+    final step = size - overlap;
+    final width = size + step * (userIds.length - 1);
+    return SizedBox(
+      width: width,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = userIds.length - 1; i >= 0; i--)
+            Positioned(
+              left: i * step,
+              child: Container(
+                width: size,
+                height: size,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  shape: BoxShape.circle,
+                ),
+                child: IgnorePointer(
+                  child: UserAvatar(
+                    userId: userIds[i],
+                    name: nameFor(userIds[i]),
+                    size: size - 4,
+                    fontSize: fontSize,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Follow / Following accessory button ───────────────────────────────────────
+class _FollowAccessory extends StatelessWidget {
+  final String userId;
+  final VoidCallback onTap;
+
+  const _FollowAccessory({required this.userId, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final isPending = userState.hasPendingRequest(userId);
+    final isFollowing = userState.isFollowingUser(userId);
+    final label = isPending
+        ? l10n.requested
+        : isFollowing
+        ? l10n.following
+        : l10n.follow;
+    final filled = !isFollowing && !isPending;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: const BoxConstraints(minWidth: 88),
+        height: 36,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: filled ? AppColors.primaryRed : Colors.transparent,
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
+          border: filled ? null : Border.all(color: AppColors.borderStrong),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            color: filled ? Colors.white : AppColors.bodyText,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Striped content-preview placeholder ───────────────────────────────────────
+class _StripeTile extends StatelessWidget {
+  final Color accent;
+  final IconData icon;
+
+  const _StripeTile({required this.accent, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(9)),
+        border: Border.all(color: accent.withValues(alpha: 0.133)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: CustomPaint(
+        painter: _StripePainter(accent: accent),
+        child: Center(
+          child: Icon(icon, size: 15, color: accent.withValues(alpha: 0.45)),
+        ),
+      ),
+    );
+  }
+}
+
+class _StripePainter extends CustomPainter {
+  final Color accent;
+
+  const _StripePainter({required this.accent});
+
+  /// `repeating-linear-gradient(135deg, accent14 0 7px, accent07 7px 14px)`:
+  /// bands measured along a 135° axis, so they read as "/" stripes with a 7px
+  /// band inside a 14px period — and because the band width is measured
+  /// perpendicular to a 45° line, the horizontal step has to be 14·√2 for the
+  /// gaps to come out the same 7px as the stripes.
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = accent.withValues(alpha: 0.027),
+    );
+    final stripe = Paint()
+      ..color = accent.withValues(alpha: 0.078)
+      ..strokeWidth = 7
+      ..style = PaintingStyle.stroke;
+    const step = 14 * math.sqrt2;
+    for (double x = -size.height; x < size.width + size.height; x += step) {
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.height, 0),
+        stripe,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StripePainter oldDelegate) =>
+      oldDelegate.accent != accent;
+}
+
+// ── Pull-to-refresh arc spinner ───────────────────────────────────────────────
+class _PullSpinner extends StatefulWidget {
+  final double progress;
+  final bool spinning;
+
+  const _PullSpinner({required this.progress, required this.spinning});
+
+  @override
+  State<_PullSpinner> createState() => _PullSpinnerState();
+}
+
+class _PullSpinnerState extends State<_PullSpinner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.spinning) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PullSpinner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.spinning && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.spinning && _controller.isAnimating) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final opacity = math.min(1.0, widget.progress * 1.6);
+    return Opacity(
+      opacity: opacity,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final turns = widget.spinning
+              ? _controller.value
+              : widget.progress * (260 / 360);
+          return Transform.rotate(
+            angle: turns * 2 * math.pi,
+            child: CustomPaint(
+              size: const Size(22, 22),
+              painter: _SpinnerPainter(
+                sweep: widget.spinning ? 0.28 : widget.progress.clamp(0.0, 1.0),
+                track: AppColors.divider,
+                accent: AppColors.primaryRed,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SpinnerPainter extends CustomPainter {
+  final double sweep;
+  final Color track;
+  final Color accent;
+
+  const _SpinnerPainter({
+    required this.sweep,
+    required this.track,
+    required this.accent,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const radius = 8.5;
+    final center = Offset(size.width / 2, size.height / 2);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = track
+        ..strokeWidth = 2.2
+        ..style = PaintingStyle.stroke,
+    );
+    if (sweep <= 0) return;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      sweep * 2 * math.pi,
+      false,
+      Paint()
+        ..color = accent
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpinnerPainter oldDelegate) =>
+      oldDelegate.sweep != sweep ||
+      oldDelegate.track != track ||
+      oldDelegate.accent != accent;
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
@@ -735,6 +1795,24 @@ class _BEmpty extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BLoading extends StatelessWidget {
+  const _BLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: AppColors.primaryRed,
         ),
       ),
     );

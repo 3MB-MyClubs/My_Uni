@@ -589,7 +589,7 @@ class AuthService {
     }
     if (SupabaseConfig.isConfigured) {
       try {
-        await pushNotificationService.unregisterCurrentDevice();
+        await pushNotificationService.deactivateCurrentUser();
       } catch (_) {
         // Device cleanup must never prevent local credential deletion.
       }

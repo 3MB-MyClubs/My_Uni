@@ -9,6 +9,7 @@ import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
+import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
@@ -35,6 +36,7 @@ import '../widgets/club_follow_button.dart';
 import '../widgets/club_stream_items.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/shared_post_message_card.dart';
+import '../widgets/sent_message_entrance.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -77,6 +79,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   ClubSheetTab? _openSheet;
   bool _showJumpButton = false;
+  String? _animatingSentMessageId;
 
   static const List<Color> _clubColors = [
     Color(0xFFB41C18),
@@ -475,7 +478,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   void _openEvent(Event event) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      ChatPageRoute(
         builder: (_) => EventDetailScreen(event: event, color: _accent),
       ),
     ).then((_) => _markVisibleMessagesSeen());
@@ -491,7 +494,13 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       mentions: mentions,
     );
     if (sent == null) return;
+    if (mounted) setState(() => _animatingSentMessageId = sent.id);
     _scrollToLatest();
+  }
+
+  void _finishSentMessageEntrance(String messageId) {
+    if (!mounted || _animatingSentMessageId != messageId) return;
+    setState(() => _animatingSentMessageId = null);
   }
 
   Future<void> _messageClubPrivately() async {
@@ -511,7 +520,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ChatThreadScreen(threadId: threadId)),
+      ChatPageRoute(builder: (_) => ChatThreadScreen(threadId: threadId)),
     );
   }
 
@@ -557,8 +566,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
         0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 440),
+        curve: const Cubic(0.20, 0.72, 0.24, 1),
       );
     });
   }
@@ -601,6 +610,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
     if (sent == null) return;
     _inputController.clear();
+    if (mounted) setState(() => _animatingSentMessageId = sent.id);
     _scrollToLatest();
   }
 
@@ -1089,17 +1099,33 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   }
 
   void _openProfile(String userId) {
-    final index = peopleService.cachedPeople.indexWhere(
-      (user) => user.id == userId,
+    final currentUser = authService.currentUser;
+    User? user = currentUser?.id == userId ? currentUser : null;
+    final memberIndex = _memberUsers.indexWhere(
+      (person) => person.id == userId,
     );
-    if (index == -1) return;
+    if (user == null && memberIndex != -1) user = _memberUsers[memberIndex];
+    final cachedIndex = peopleService.cachedPeople.indexWhere(
+      (person) => person.id == userId,
+    );
+    if (user == null && cachedIndex != -1) {
+      user = peopleService.cachedPeople[cachedIndex];
+    }
+    final knownIndex = users.indexWhere((person) => person.id == userId);
+    if (user == null && knownIndex != -1) user = users[knownIndex];
+    if (user == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) =>
-            UserProfileScreen(user: peopleService.cachedPeople[index]),
-      ),
+      ChatPageRoute(builder: (_) => UserProfileScreen(user: user!)),
     ).then((_) => _markVisibleMessagesSeen());
+  }
+
+  void _openParticipantProfile(ClubPerson person) {
+    if (person.isClubAccount) {
+      _openClubProfile();
+      return;
+    }
+    _openProfile(person.id);
   }
 
   void _openClubProfile() {
@@ -1107,7 +1133,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (club == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(
+      ChatPageRoute(
         builder: (_) => ClubProfileScreen(club: club, color: _accent),
       ),
     ).then((_) => _markVisibleMessagesSeen());
@@ -1942,6 +1968,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               seenCount: chatStore.seenCountFor(message),
               timeLabel: _timeLabel(message.createdAt),
               onLongPress: () => _showMessageActions(message),
+              onOpenAuthor: () => _openParticipantProfile(author),
               reactions: message.reactions.isEmpty
                   ? null
                   : _reactionsFor(message, t),
@@ -1964,6 +1991,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 optionIndex: index,
               ),
               onLongPress: () => _showMessageActions(message),
+              onOpenAuthor: () => _openParticipantProfile(author),
             ),
           );
         case ChatMessageKind.event:
@@ -2030,38 +2058,44 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         message.mentions.isNotEmpty ||
         !_sameDay(previous.createdAt, message.createdAt);
 
-    return ClubMessageGroup(
-      key: ValueKey('club-message-${message.id}'),
-      message: message,
-      sender: sender,
-      avatar: _avatarFor(sender, 30),
-      mine: mine,
-      head: head,
-      style: style,
-      showRoles: showRoles,
-      timeLabel: _timeLabel(message.createdAt),
-      flagged: message.mentionsUser(_myId) && !mine,
-      t: t,
-      onLongPress: () => _showMessageActions(message),
-      statusLabel: mine
-          ? (chatStore.seenCountFor(message) > 1 ? S.seen : S.delivered)
-          : null,
-      attachments: [
-        if (message.kind == ChatMessageKind.photo &&
-            message.attachmentPath != null)
-          ClubPhotoAttachment(path: message.attachmentPath!, t: t),
-        if (message.kind == ChatMessageKind.file &&
-            message.attachmentPath != null)
-          ClubFileChip(
-            message: message,
-            t: t,
-            onOpen: () => _showMessageActions(message),
-          ),
-        if (message.kind == ChatMessageKind.postShare &&
-            message.sharedPostId != null)
-          SharedPostMessageCard(postId: message.sharedPostId!),
-      ],
-      reactions: message.reactions.isEmpty ? null : _reactionsFor(message, t),
+    return SentMessageEntrance(
+      key: ValueKey('sent-message-entrance-${message.id}'),
+      animate: message.id == _animatingSentMessageId,
+      onCompleted: () => _finishSentMessageEntrance(message.id),
+      child: ClubMessageGroup(
+        key: ValueKey('club-message-${message.id}'),
+        message: message,
+        sender: sender,
+        avatar: _avatarFor(sender, 30),
+        mine: mine,
+        head: head,
+        style: style,
+        showRoles: showRoles,
+        timeLabel: _timeLabel(message.createdAt),
+        flagged: message.mentionsUser(_myId) && !mine,
+        t: t,
+        onLongPress: () => _showMessageActions(message),
+        onOpenSender: () => _openParticipantProfile(sender),
+        statusLabel: mine
+            ? (chatStore.seenCountFor(message) > 1 ? S.seen : S.delivered)
+            : null,
+        attachments: [
+          if (message.kind == ChatMessageKind.photo &&
+              message.attachmentPath != null)
+            ClubPhotoAttachment(path: message.attachmentPath!, t: t),
+          if (message.kind == ChatMessageKind.file &&
+              message.attachmentPath != null)
+            ClubFileChip(
+              message: message,
+              t: t,
+              onOpen: () => _showMessageActions(message),
+            ),
+          if (message.kind == ChatMessageKind.postShare &&
+              message.sharedPostId != null)
+            SharedPostMessageCard(postId: message.sharedPostId!),
+        ],
+        reactions: message.reactions.isEmpty ? null : _reactionsFor(message, t),
+      ),
     );
   }
 

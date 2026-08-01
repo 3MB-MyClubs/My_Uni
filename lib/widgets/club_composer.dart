@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_strings.dart';
+import '../services/club_role_localization.dart';
 import 'club_chat_theme.dart';
 import 'club_stream_items.dart';
 
@@ -207,7 +209,10 @@ class _ClubComposerState extends State<ClubComposer> {
                                   ),
                                 ),
                                 Text(
-                                  person.role ?? S.memberRole,
+                                  localizedClubRole(
+                                    AppLocalizations.of(context)!,
+                                    person.role ?? S.memberRole,
+                                  ),
                                   style: TextStyle(fontSize: 11, color: t.sub),
                                 ),
                               ],

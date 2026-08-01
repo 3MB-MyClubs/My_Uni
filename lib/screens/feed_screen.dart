@@ -32,6 +32,7 @@ import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../models/club.dart';
+import '../models/notification.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -40,6 +41,7 @@ import '../widgets/comments_sheet.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../services/comment_store.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/mutual_followers_badge.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
@@ -47,6 +49,8 @@ import '../widgets/poll_card.dart';
 import '../widgets/post_share_sheet.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/supabase_post_service.dart';
+import '../services/notification_inbox_service.dart';
+import '../services/notification_navigation.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
@@ -178,6 +182,7 @@ class _FeedScreenState extends State<FeedScreen> {
       Object.hashAllUnordered(moderationService.blockedUserIds),
       identityHashCode(peopleService.cachedPeople),
       identityHashCode(peopleService.cachedFollowerIds),
+      peopleService.mutualFollowersRevision,
       Object.hashAllUnordered(personalizationService.interests),
       supabaseClubMemberCounts.length,
       supabasePostLikeCounts.length,
@@ -277,13 +282,35 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
     );
 
-    addAll(
-      peopleService
-          .randomProfiles(excludeId: myId)
-          .where((user) => !myFollowing.contains(user.id)),
-    );
+    final randomized = peopleService
+        .randomProfiles(excludeId: myId)
+        .where((user) => !myFollowing.contains(user.id))
+        .toList();
+    addAll(randomized);
 
-    return suggested.values.toList();
+    // Follow-backs stay first. Within each group, real mutual followers are
+    // the strongest social proof; the existing daily shuffle breaks ties so
+    // the rail does not become permanently static.
+    final fallbackRank = {
+      for (var i = 0; i < randomized.length; i++) randomized[i].id: i,
+    };
+    final result = suggested.values.toList()
+      ..sort((a, b) {
+        final aFollowsMe = myFollowers.contains(a.id);
+        final bFollowsMe = myFollowers.contains(b.id);
+        if (aFollowsMe != bFollowsMe) return aFollowsMe ? -1 : 1;
+
+        final byMutuals = peopleService
+            .mutualFollowerIdsFor(b.id)
+            .length
+            .compareTo(peopleService.mutualFollowerIdsFor(a.id).length);
+        if (byMutuals != 0) return byMutuals;
+
+        return (fallbackRank[a.id] ?? randomized.length).compareTo(
+          fallbackRank[b.id] ?? randomized.length,
+        );
+      });
+    return result;
   }
 
   // Clubs the user doesn't follow yet, ranked by how well they match the
@@ -359,6 +386,9 @@ class _FeedScreenState extends State<FeedScreen> {
     themeService.addListener(_onLocaleChanged);
     contentStore.addListener(_onContentChanged);
     moderationService.addListener(_onContentChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(notificationInboxService.startForCurrentUser());
+    });
     _loadFeedContent();
     _loadPeopleDirectory();
   }
@@ -739,25 +769,58 @@ class _FeedScreenState extends State<FeedScreen> {
             // Chats live in the bottom navigation. The bell is intentionally
             // the only shortcut in the Home top bar.
             ListenableBuilder(
-              listenable: userState,
+              listenable: Listenable.merge([
+                userState,
+                notificationInboxService,
+              ]),
               builder: (_, x) {
                 final myId =
                     authService.currentUser?.id ??
                     authService.currentAdmin?.id ??
                     '';
-                final unreadNotifs = userState.unreadNotificationCountFor(
-                  [
-                    ...notifications,
-                    ...userState.dynamicNotifications,
-                  ].where((n) => n.userId == myId && n.targetType != 'story'),
-                );
+                final unreadIds = <String>{};
+                for (final notification
+                    in [
+                      ...notifications,
+                      ...userState.dynamicNotifications,
+                    ].where(
+                      (n) =>
+                          canViewNotification(n, currentUserId: myId) &&
+                          n.targetType != 'story' &&
+                          !userState.isNotificationRead(n),
+                    )) {
+                  unreadIds.add(notification.id);
+                }
+                for (final row in notificationInboxService.rows) {
+                  final notification = AppNotification(
+                    id: row['id']?.toString() ?? '',
+                    userId: row['user_id']?.toString() ?? '',
+                    fromId: row['actor_user_id']?.toString(),
+                    message: row['body']?.toString() ?? '',
+                    createdAt:
+                        DateTime.tryParse(
+                          row['created_at']?.toString() ?? '',
+                        ) ??
+                        DateTime.fromMillisecondsSinceEpoch(0),
+                    read: row['read_at'] != null,
+                    notificationType: row['type']?.toString(),
+                    targetType: row['target_type']?.toString(),
+                    targetId: row['target_id']?.toString(),
+                  );
+                  if (row['read_at'] == null &&
+                      canViewNotification(notification, currentUserId: myId)) {
+                    unreadIds.add(notification.id);
+                  }
+                }
                 return _TopBarIconButton(
+                  key: const ValueKey('home-notifications-bell'),
                   icon: Icons.notifications_none_rounded,
+                  semanticLabel: AppLocalizations.of(context)!.notifications,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => NotificationsScreen()),
                   ),
-                  badgeCount: unreadNotifs,
+                  badgeCount: unreadIds.length,
                 );
               },
             ),
@@ -1127,57 +1190,69 @@ class _TopBarIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final int badgeCount;
+  final String semanticLabel;
 
   const _TopBarIconButton({
+    super.key,
     required this.icon,
     required this.onTap,
+    required this.semanticLabel,
     this.badgeCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: AppColors.background.withValues(alpha: 0.65),
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Center(child: Icon(icon, size: 18, color: AppColors.text)),
-            if (badgeCount > 0)
-              Positioned(
-                top: -5,
-                right: -5,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  constraints: const BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
-                    borderRadius: BorderRadius.all(Radius.circular(100)),
-                    border: Border.all(color: AppColors.card, width: 1.5),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    badgeCount > 9 ? '9+' : '$badgeCount',
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      value: badgeCount > 0 ? '$badgeCount' : null,
+      child: Tooltip(
+        message: semanticLabel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.background.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Center(child: Icon(icon, size: 18, color: AppColors.text)),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -5,
+                    right: -5,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed,
+                        borderRadius: BorderRadius.all(Radius.circular(100)),
+                        border: Border.all(color: AppColors.card, width: 1.5),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1435,31 +1510,11 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                   u.id,
                 );
 
-                final mutualIds = userState.followedUserIds.intersection(
-                  Set<String>.from(u.followingUserIds),
-                );
+                final mutualIds = peopleService.mutualFollowerIdsFor(u.id);
                 final mutualCount = mutualIds.length;
-                final mutualLabel = mutualCount > 30 ? '30+' : '$mutualCount';
-                final mutualUser = mutualCount > 0
-                    ? peopleService.peopleByIds(mutualIds.take(1)).firstOrNull
-                    : null;
-                final mutualName = mutualUser == null
-                    ? null
-                    : userState.displayNameFor(mutualUser.id, mutualUser.name);
-                final mutualText = mutualName == null
-                    ? (mutualCount == 1
-                          ? AppLocalizations.of(context)!.oneMutualFriend
-                          : AppLocalizations.of(
-                              context,
-                            )!.mutualFriendCountLabel(mutualLabel))
-                    : (mutualCount == 1
-                          ? AppLocalizations.of(
-                              context,
-                            )!.mutualFriendNamed(mutualName)
-                          : AppLocalizations.of(context)!.mutualFriendNamedPlus(
-                              mutualName,
-                              mutualCount - 1,
-                            ));
+                final mutualUsers = peopleService.peopleByIds(
+                  mutualIds.take(3),
+                );
 
                 return SizedBox(
                   width: 148,
@@ -1511,9 +1566,8 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       ),
                                     ),
                                     child: Center(
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        alignment: Alignment.bottomCenter,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           UserAvatar(
                                             userId: u.id,
@@ -1525,64 +1579,19 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                             ),
                                             textColor: color,
                                           ),
-                                          if (mutualCount > 0)
-                                            Positioned(
-                                              bottom: -10,
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 7,
-                                                      vertical: 3,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.background,
-                                                  borderRadius:
-                                                      BorderRadius.all(
-                                                        Radius.circular(20),
-                                                      ),
-                                                  border: Border.all(
-                                                    color: AppColors.divider,
-                                                  ),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    if (mutualUser != null) ...[
-                                                      UserAvatar(
-                                                        userId: mutualUser.id,
-                                                        name: mutualUser.name,
-                                                        size: 12,
-                                                        fontSize: 6,
-                                                      ),
-                                                      const SizedBox(width: 3),
-                                                    ],
-                                                    Text(
-                                                      mutualCount == 1
-                                                          ? AppLocalizations.of(
-                                                              context,
-                                                            )!.oneMutualBadge
-                                                          : AppLocalizations.of(
-                                                              context,
-                                                            )!.mutualBadgeCount(
-                                                              mutualLabel,
-                                                            ),
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
+                                          if (mutualCount > 0) ...[
+                                            const SizedBox(height: 6),
+                                            MutualFollowersBadge(
+                                              suggestedUserId: u.id,
+                                              mutualUsers: mutualUsers,
+                                              mutualCount: mutualCount,
                                             ),
+                                          ],
                                         ],
                                       ),
                                     ),
                                   ),
-                                  SizedBox(height: mutualCount > 0 ? 14 : 6),
+                                  const SizedBox(height: 8),
                                   GestureDetector(
                                     onTap: () => Navigator.push(
                                       context,
@@ -1603,43 +1612,6 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       ),
                                     ),
                                   ),
-                                  if (mutualCount > 0) ...[
-                                    const SizedBox(height: 5),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          if (mutualUser != null) ...[
-                                            UserAvatar(
-                                              userId: mutualUser.id,
-                                              name: mutualUser.name,
-                                              size: 16,
-                                              fontSize: 8,
-                                            ),
-                                            const SizedBox(width: 4),
-                                          ],
-                                          Flexible(
-                                            child: Text(
-                                              mutualText,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                fontSize: 10.5,
-                                                height: 1.2,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
                                   const Spacer(),
                                   const SizedBox(height: 8),
                                   UserFollowButton(
