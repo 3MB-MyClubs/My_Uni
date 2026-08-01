@@ -359,7 +359,16 @@ class SupabaseInteractionService {
   Future<void> deleteComment(String commentId) async {
     final client = _client;
     if (client == null || commentId.isEmpty) return;
-    await client.from('post_comments').delete().eq('id', commentId);
+    // Request the deleted row back so an RLS-filtered no-op cannot look like
+    // a successful delete to the optimistic comment store.
+    final deleted = await client
+        .from('post_comments')
+        .delete()
+        .eq('id', commentId)
+        .select('id');
+    if (deleted.isEmpty) {
+      throw StateError('Comment was not deleted: $commentId');
+    }
   }
 
   /// Subscribes to inserts, updates and deletes on [postId]'s comment thread.
