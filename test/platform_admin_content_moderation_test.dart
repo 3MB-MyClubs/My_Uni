@@ -157,4 +157,34 @@ void main() {
       );
     },
   );
+
+  testWidgets('admin dashboard logout clears the admin session', (tester) async {
+    authService.setClubAdmin(
+      AppAdmin(
+        id: 'platform-admin',
+        name: 'ClubUp Admin',
+        email: 'dev3mb@gmail.com',
+        password: '',
+        isPlatformAdmin: true,
+      ),
+    );
+    var logoutNotified = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: AdminDashboard(onLogout: () => logoutNotified = true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Log Out'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log Out'));
+    await tester.pumpAndSettle();
+
+    expect(authService.currentAdmin, isNull);
+    expect(logoutNotified, isTrue);
+  });
 }

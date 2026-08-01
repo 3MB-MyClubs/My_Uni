@@ -109,6 +109,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _confirmAndLogout() async {
     if (widget.onLogout == null) return;
     if (!await showLogoutConfirmationDialog(context) || !mounted) return;
+    await authService.logout();
+    if (!mounted) return;
     widget.onLogout!();
   }
 
