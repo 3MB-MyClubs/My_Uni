@@ -1,1 +1,44 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"clubup-58f3c","appId":"1:1037691756037:android:2a04853b562e2ca83a466c","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"clubup-58f3c","appId":"1:1037691756037:ios:dc929916c34d15c03a466c","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"clubup-58f3c","configurations":{"android":"1:1037691756037:android:2a04853b562e2ca83a466c","ios":"1:1037691756037:ios:dc929916c34d15c03a466c"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "clubup-58f3c",
+          "appId": "1:1037691756037:android:2a04853b562e2ca83a466c",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "clubup-58f3c",
+          "appId": "1:1037691756037:ios:dc929916c34d15c03a466c",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "clubup-58f3c",
+          "configurations": {
+            "android": "1:1037691756037:android:2a04853b562e2ca83a466c",
+            "ios": "1:1037691756037:ios:dc929916c34d15c03a466c"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

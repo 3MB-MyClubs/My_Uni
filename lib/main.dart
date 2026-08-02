@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -600,7 +602,95 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
+          scrollBehavior: const _ClubUpScrollBehavior(),
+          builder: (context, child) {
+            final navigator = child ?? const SizedBox.shrink();
+            if (_isLaunching || destinationKey == 'main-navigation') {
+              return navigator;
+            }
+            return _WebEntryFrame(child: navigator);
+          },
           home: visibleHome,
+        );
+      },
+    );
+  }
+}
+
+class _ClubUpScrollBehavior extends MaterialScrollBehavior {
+  const _ClubUpScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    ...super.dragDevices,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+  };
+}
+
+/// Gives the signed-out experience a focused, app-sized canvas on desktop web
+/// while preserving the original edge-to-edge layout on phones and narrow
+/// browser windows.
+class _WebEntryFrame extends StatelessWidget {
+  final Widget child;
+
+  const _WebEntryFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb) return child;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) return child;
+
+        const outerPadding = 24.0;
+        final width = (constraints.maxWidth - outerPadding * 2)
+            .clamp(0.0, 600.0)
+            .toDouble();
+        final height = (constraints.maxHeight - outerPadding * 2)
+            .clamp(0.0, constraints.maxHeight)
+            .toDouble();
+        final media = MediaQuery.of(context);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            gradient: RadialGradient(
+              center: const Alignment(-0.75, -0.8),
+              radius: 1.5,
+              colors: [
+                AppColors.primaryRed.withValues(alpha: isDark ? 0.15 : 0.08),
+                AppColors.background,
+              ],
+            ),
+          ),
+          child: Center(
+            child: Container(
+              width: width,
+              height: height,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: const BorderRadius.all(Radius.circular(24)),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.75),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.12),
+                    blurRadius: 42,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: MediaQuery(
+                data: media.copyWith(size: Size(width, height)),
+                child: child,
+              ),
+            ),
+          ),
         );
       },
     );
