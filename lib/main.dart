@@ -1,23 +1,29 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'firebase_options.dart';
+import 'l10n/app_localizations.dart';
+import 'screens/app_launch_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 // import 'screens/feed_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
-import 'screens/language_choice_screen.dart';
-import 'screens/terms_acceptance_screen.dart';
+import 'screens/onboarding_carousel_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
-import 'services/mock_data.dart';
+import 'services/mock_clubup_profile.dart';
 import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
-import 'services/notification_service.dart';
 import 'services/user_prefs_service.dart';
+import 'services/chat_store.dart';
+import 'services/club_chat_prefs.dart';
 import 'services/checkin_store.dart';
 import 'services/content_store.dart';
 import 'services/user_state.dart';
@@ -25,30 +31,51 @@ import 'services/view_tracker.dart';
 import 'services/personalization_service.dart';
 import 'services/people_service.dart';
 import 'services/poll_store.dart';
+import 'services/push_notification_service.dart';
 import 'services/theme_service.dart';
 import 'services/locale_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
-import 'services/tutorial_service.dart';
+import 'onboarding/onboarding_service.dart';
+import 'onboarding/starter_checklist_service.dart';
+import 'debug/device_preview.dart';
 import 'services/event_cleanup_service.dart';
+import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
+import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
+import 'services/onboarding_intro_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SupabaseConfig.validate();
+
+  if (PushNotificationService.isSupported) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
 
   await Future.wait([
     if (SupabaseConfig.isConfigured)
       Supabase.initialize(
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.clientKey,
+        authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
+        debug: false,
       ),
     hiveBootstrap.initialize(),
   ]);
 
-  // The first screen is always Login, which needs only the theme + locale
-  // boxes to build the MaterialApp. The other boxes don't depend on each
-  // other and nothing before login reads them, so they open in the
+  // The branded launch screen needs only the theme + locale boxes before the
+  // first destination builds. The other boxes don't depend on each other and
+  // nothing before login reads them, so they open in the
   // background; readers await appBootstrap.ready (the post-frame hydration
   // below and the login/club-admin submit handlers — a login's network
   // round-trip dwarfs that wait).
@@ -56,68 +83,105 @@ void main() async {
     themeService.initialize(),
     localeService.initialize(),
     termsAcceptanceService.initialize(),
+    onboardingIntroService.initialize(),
   ]);
   appBootstrap.ready = Future.wait([
     userPrefsService.initialize(),
+    peopleService.initialize(),
     contentStore.initialize(),
+    chatStore.initialize(),
+    clubChatPrefs.initialize(),
     checkinStore.initialize(),
     pollStore.initialize(),
     viewTracker.initialize(),
     personalizationService.initialize(),
     calendarSyncService.initialize(),
-    tutorialService.initialize(),
+    onboardingService.initialize(),
+    starterChecklistService.initialize(),
+    adminModerationService.initialize(),
   ]).then((_) => userPrefsService.loadAllPhotos());
 
-  runApp(const ProviderScope(child: MyApp()));
+  // Supabase restores its token pair from device storage. Reconstruct the
+  // matching app user/admin before the root router chooses its destination.
+  await authService.restorePersistedSession();
 
-  // The app always opens on the login screen (there's no session restore on
-  // launch), so none of this needs to finish before first paint: the
-  // notification permission prompt, materializing mock_data.dart's seed
-  // lists, and the network cleanup call are all deferred to right after.
+  runApp(
+    const ProviderScope(
+      child: DevicePreview(
+        enabled: bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
+        child: MyApp(),
+      ),
+    ),
+  );
+
+  // The app opens on the lightweight launch screen, so none of this needs to
+  // finish before first paint: push listeners, local hydration, and the
+  // network cleanup call are deferred to right after.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(
       appBootstrap.ready.then((_) {
-        unawaited(notificationService.initialize());
+        unawaited(pushNotificationService.initialize());
 
-        // Give every demo student a stable mock profile photo so avatars show
-        // up in members/board lists etc. Curated seeds and real uploads are
-        // not overridden.
-        for (final u in users) {
-          userState.mockPhotoUrls.putIfAbsent(
-            u.id,
-            () => 'https://i.pravatar.cc/150?u=${u.id}',
-          );
-        }
         contentStore.applyToLists();
         unawaited(eventCleanupService.cleanupExpiredEvents());
         contentStore.loadBoardMemberIds();
         contentStore.loadBoardMemberTitles();
         // Restore any dynamic notifications that were generated at runtime.
         final dynNotifs = contentStore.loadDynamicNotifications();
+        final removedAdminDmNotificationIds = <String>{};
         if (dynNotifs != null) {
+          final compatibleNotifications = dynNotifs.where((notification) {
+            final remove =
+                notification.targetType == 'message' &&
+                ChatStore.isAdminAccountId(notification.userId);
+            if (remove) removedAdminDmNotificationIds.add(notification.id);
+            return !remove;
+          }).toList();
           userState.dynamicNotifications
             ..clear()
-            ..addAll(dynNotifs);
+            ..addAll(compatibleNotifications);
+          if (removedAdminDmNotificationIds.isNotEmpty) {
+            unawaited(
+              contentStore.saveDynamicNotifications(compatibleNotifications),
+            );
+          }
         }
-        userState.replaceReadNotificationIds(
-          contentStore.loadReadNotificationIds(),
-        );
+        final compatibleReadNotificationIds = contentStore
+            .loadReadNotificationIds()
+            .where((id) => !removedAdminDmNotificationIds.contains(id));
+        userState.replaceReadNotificationIds(compatibleReadNotificationIds);
+        if (removedAdminDmNotificationIds.isNotEmpty) {
+          unawaited(
+            contentStore.saveReadNotificationIds(userState.readNotificationIds),
+          );
+        }
       }),
     );
   });
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  const MyApp({
+    super.key,
+    this.minimumLaunchDuration = const Duration(milliseconds: 2000),
+  });
+
+  final Duration minimumLaunchDuration;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  bool _isLaunching = true;
+  Timer? _launchTimer;
   bool _showSignUp = false;
   bool _loggedIn = false;
   String _signupEmail = '';
+
+  // Snapshotted at app construction so persisting the seen flag cannot remove
+  // the carousel mid-launch during an unrelated theme/locale rebuild.
+  bool _showIntroThisLaunch = false;
 
   // Prefs/personalization are loaded once per logged-in user (from _onLogin or
   // the first build that sees the session) — not on every theme/locale
@@ -134,16 +198,37 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _showIntroThisLaunch = !onboardingIntroService.hasSeenOnceOnDevice;
+    if (_showIntroThisLaunch) {
+      // "Shown once" means the first rendered launch counts even if the user
+      // closes the app before pressing Skip or Get started.
+      unawaited(onboardingIntroService.markSeenOnDevice());
+    }
+    if (authService.currentUser != null || authService.currentAdmin != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _activateAuthenticatedServices();
+      });
+    }
+    if (widget.minimumLaunchDuration == Duration.zero) {
+      _isLaunching = false;
+    } else {
+      _launchTimer = Timer(widget.minimumLaunchDuration, () {
+        if (mounted) setState(() => _isLaunching = false);
+      });
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _launchTimer?.cancel();
+    unawaited(appPresenceService.stop());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    appPresenceService.handleLifecycleState(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _savePrefs();
@@ -159,9 +244,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // saveAll rewrites every debounced kind, flushing any pending
     // scheduleSave along the way (pause/detach and logout both land here).
     contentStore.saveAll(userState.dynamicNotifications);
+    chatStore.saveAll();
   }
 
   void _onLogin() {
+    // Reaching an authenticated state permanently retires the intro carousel
+    // on this device — covers "signed up then logged in" and "logged in on a
+    // new device with an existing account" alike.
+    unawaited(onboardingIntroService.markCompletedOnDevice());
     final currentUserId =
         authService.currentUser?.id ?? authService.currentAdmin?.id;
     // First-time accounts are always presented in light and asked to pick a
@@ -173,7 +263,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _loggedIn = true;
       _showSignUp = false;
     });
+    _activateAuthenticatedServices();
+  }
+
+  void _activateAuthenticatedServices() {
+    final currentUserId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
+      unawaited(appPresenceService.startForAuthenticatedSession());
+      unawaited(pushNotificationService.activateForCurrentUser());
       unawaited(moderationService.activateForUser(currentUserId));
       _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
@@ -196,6 +294,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     setState(() => _showSignUp = false);
   }
 
+  Future<void> _dismissIntro({required bool showSignUp}) async {
+    // Persist before changing destinations so killing the app immediately
+    // after Skip/Get started still cannot replay the carousel next launch.
+    await onboardingIntroService.markSeenOnDevice();
+    if (!mounted) return;
+    setState(() {
+      _showIntroThisLaunch = false;
+      _showSignUp = showSignUp;
+    });
+  }
+
   ThemeData _buildTheme(bool isDark) {
     // Use raw DarkColors/LightColors (const) — AppColors getters read from
     // themeService.isDark which may differ from the isDark param here.
@@ -207,7 +316,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final ltRed = isDark ? DarkColors.lightRed : LightColors.lightRed;
     final lGray = isDark ? DarkColors.lightGray : LightColors.lightGray;
     final bright = isDark ? Brightness.dark : Brightness.light;
-    const red = AppColors.primaryRed;
+    final red = isDark ? DarkColors.primaryRed : LightColors.primaryRed;
+    final elevatedSurface = isDark
+        ? DarkColors.surfaceAlt
+        : LightColors.surfaceAlt;
 
     return ThemeData(
       brightness: bright,
@@ -244,7 +356,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         indicatorColor: ltRed,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: AppColors.primaryRed);
+            return IconThemeData(color: red);
           }
           return IconThemeData(color: sub);
         }),
@@ -283,10 +395,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           borderRadius: const BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide.none,
         ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: AppColors.primaryRed, width: 1.5),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: red, width: 1.5),
         ),
+      ),
+      dialogTheme: DialogThemeData(backgroundColor: elevatedSurface),
+      popupMenuTheme: PopupMenuThemeData(color: elevatedSurface),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: elevatedSurface,
+        modalBackgroundColor: elevatedSurface,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: ltRed,
@@ -300,6 +418,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           (s) => s.contains(WidgetState.selected) ? AppColors.darkRed : lGray,
         ),
       ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.iOS: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.macOS: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.windows: _SmoothPageTransitionsBuilder(),
+          TargetPlatform.linux: _SmoothPageTransitionsBuilder(),
+        },
+      ),
       useMaterial3: true,
     );
   }
@@ -311,18 +438,29 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
-        if (!termsAcceptanceService.hasAcceptedCurrentTerms) {
-          homeWidget = TermsAcceptanceScreen(
-            onAccepted: () async {
-              await termsAcceptanceService.accept();
-              if (mounted) setState(() {});
-            },
+        String destinationKey;
+        // No Terms gate lives in this chain. The agreement is made once, on
+        // the sign-up flow's last step, and recorded against the account by
+        // [SignupService]. The gate that used to sit here keyed off a
+        // device-local SharedPreferences flag rather than that account-level
+        // record, so signing in on a second device — or after a reinstall —
+        // re-prompted people who had already agreed.
+        if (_showIntroThisLaunch &&
+            !_showSignUp &&
+            !_loggedIn &&
+            authService.currentUser == null &&
+            authService.currentAdmin == null) {
+          // Show the intro once after installation. Get started, Skip, and Log
+          // in all persistently retire it before navigating away.
+          homeWidget = OnboardingCarouselScreen(
+            onGetStarted: () => unawaited(_dismissIntro(showSignUp: true)),
+            onLogIn: () => unawaited(_dismissIntro(showSignUp: false)),
           );
+          destinationKey = 'onboarding';
         } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
-          final isSuperAdmin = authService.currentAdmin?.id == appAdmin.id;
-          final isAdmin = isSuperAdmin;
+          final isAdmin = isClubUpAdmin(authService.currentAdmin);
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
           if (currentUserId != null && currentUserId != _prefsLoadedForUserId) {
@@ -336,17 +474,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onChoose: (dark) =>
                   themeService.markThemeChosen(currentUserId, dark),
             );
-          } else if (currentUserId != null &&
-              !localeService.hasChosenLanguage(currentUserId)) {
-            homeWidget = LanguageChoiceScreen(
-              onChoose: (code) =>
-                  localeService.markLanguageChosen(currentUserId, code),
-            );
+            destinationKey = 'theme-choice';
           } else {
             homeWidget = MainNavScreen(
               isAdmin: isAdmin,
               onLogout: () {
                 _savePrefs();
+                unawaited(appPresenceService.stop());
                 moderationService.clearActiveUser();
                 _prefsLoadedForUserId = null;
                 setState(() {
@@ -355,6 +489,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 });
               },
             );
+            destinationKey = 'main-navigation';
           }
         } else if (_showSignUp) {
           homeWidget = AnimatedSwitcher(
@@ -368,6 +503,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               child: child,
             ),
           );
+          destinationKey = 'sign-up';
         } else {
           // Root entry: the Login Screen. "Sign up" hands off to the
           // multi-step sign-up flow; club-admin sign-in is reached from its
@@ -383,16 +519,121 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             transitionBuilder: (child, animation) =>
                 FadeTransition(opacity: animation, child: child),
           );
+          destinationKey = 'login';
         }
+        final visibleHome = AnimatedSwitcher(
+          duration: widget.minimumLaunchDuration == Duration.zero
+              ? Duration.zero
+              : destinationKey == 'sign-up'
+              ? const Duration(milliseconds: 1100)
+              : const Duration(milliseconds: 650),
+          switchInCurve: Curves.easeOutQuint,
+          switchOutCurve: Curves.easeInOutCubic,
+          transitionBuilder: (child, animation) {
+            final isLaunchScreen =
+                child.key == const ValueKey<String>('app-launch');
+            if (isLaunchScreen) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 1.035, end: 1).animate(animation),
+                  child: child,
+                ),
+              );
+            }
+
+            if (child.key ==
+                const ValueKey<String>('app-destination-sign-up')) {
+              return FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: const Interval(0.08, 1, curve: Curves.easeInOutCubic),
+                ),
+                child: SlideTransition(
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0.045, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                  child: child,
+                ),
+              );
+            }
+
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.035),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.99, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: _isLaunching
+              ? const AppLaunchScreen(key: ValueKey('app-launch'))
+              : KeyedSubtree(
+                  key: ValueKey('app-destination-$destinationKey'),
+                  child: homeWidget,
+                ),
+        );
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'ClubUp',
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           theme: _lightTheme ??= _buildTheme(false),
           darkTheme: _darkTheme ??= _buildTheme(true),
-          home: homeWidget,
+          locale: Locale(localeService.languageCode),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: visibleHome,
         );
       },
+    );
+  }
+}
+
+class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (route.isFirst) return child;
+
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.045, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
+      ),
     );
   }
 }

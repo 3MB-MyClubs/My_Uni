@@ -1,31 +1,59 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/app_admin.dart';
+import 'locale_service.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
+import 'auth_session_store.dart';
 import 'supabase_config.dart';
+import 'admin_moderation_service.dart';
+
+// No BuildContext is available this deep in the service layer, so failures
+// are signaled as a code — callers resolve the localized message themselves
+// via AppLocalizations.of(context)!.
+enum ClubPasscodeAuthError {
+  missingCredentials,
+  invalidPasscodeFormat,
+  invalidCredentials,
+  notLinkedToClub,
+  linkedClubNotFound,
+  notConfigured,
+  banned,
+}
 
 class ClubPasscodeAuthResult {
   final bool success;
   final AppAdmin? admin;
-  final String? error;
+  final ClubPasscodeAuthError? errorCode;
 
   const ClubPasscodeAuthResult._({
     required this.success,
     this.admin,
-    this.error,
+    this.errorCode,
   });
 
   factory ClubPasscodeAuthResult.success(AppAdmin admin) {
     return ClubPasscodeAuthResult._(success: true, admin: admin);
   }
 
-  factory ClubPasscodeAuthResult.failure(String error) {
-    return ClubPasscodeAuthResult._(success: false, error: error);
+  factory ClubPasscodeAuthResult.failure(ClubPasscodeAuthError errorCode) {
+    return ClubPasscodeAuthResult._(success: false, errorCode: errorCode);
   }
 }
 
 class ClubPasscodeAuthService {
+  ClubPasscodeAuthService({
+    bool Function()? canUseMockAuth,
+    AdminModerationService? moderationService,
+  }) : _canUseMockAuth = canUseMockAuth ?? _defaultCanUseMockAuth,
+       _moderationService = moderationService ?? adminModerationService;
+
+  final bool Function() _canUseMockAuth;
+  final AdminModerationService _moderationService;
+
   Future<ClubPasscodeAuthResult> login({
     required String email,
     required String passcode,
@@ -35,13 +63,38 @@ class ClubPasscodeAuthService {
 
     if (normalizedEmail.isEmpty || normalizedPasscode.isEmpty) {
       return ClubPasscodeAuthResult.failure(
-        'Club email and passcode are required',
+        ClubPasscodeAuthError.missingCredentials,
       );
     }
     if (!RegExp(r'^[0-9]{8}$').hasMatch(normalizedPasscode)) {
       return ClubPasscodeAuthResult.failure(
-        'Passcode must be exactly 8 digits',
+        ClubPasscodeAuthError.invalidPasscodeFormat,
       );
+    }
+
+    if (_canUseMockAuth()) {
+      final mockAdmin = clubAdmins.firstWhere(
+        (admin) =>
+            admin.email.toLowerCase() == normalizedEmail &&
+            admin.password == normalizedPasscode,
+        orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
+      );
+      if (mockAdmin.id.isNotEmpty) {
+        if (await _moderationService.isClubBanned(
+          clubId: mockAdmin.id,
+          email: mockAdmin.email,
+        )) {
+          return ClubPasscodeAuthResult.failure(ClubPasscodeAuthError.banned);
+        }
+        return ClubPasscodeAuthResult.success(mockAdmin);
+      }
+      if (normalizedEmail == clubUpMockEmail) {
+        return normalizedPasscode == clubUpMockPasscode
+            ? ClubPasscodeAuthResult.success(ensureClubUpMockProfile())
+            : ClubPasscodeAuthResult.failure(
+                ClubPasscodeAuthError.invalidCredentials,
+              );
+      }
     }
 
     if (SupabaseConfig.isConfigured) {
@@ -54,7 +107,16 @@ class ClubPasscodeAuthService {
         final authUser = response.user;
         if (authUser == null) {
           return ClubPasscodeAuthResult.failure(
-            'Invalid club email or passcode',
+            ClubPasscodeAuthError.invalidCredentials,
+          );
+        }
+
+        // The singleton platform administrator has its own hidden entry flow.
+        // Keep this public route strictly scoped to ordinary club accounts.
+        if (await _isPlatformAdmin(client, authUser.id)) {
+          await client.auth.signOut();
+          return ClubPasscodeAuthResult.failure(
+            ClubPasscodeAuthError.invalidCredentials,
           );
         }
 
@@ -67,7 +129,7 @@ class ClubPasscodeAuthService {
         if (accounts.isEmpty) {
           await client.auth.signOut();
           return ClubPasscodeAuthResult.failure(
-            'This login is not linked to a club',
+            ClubPasscodeAuthError.notLinkedToClub,
           );
         }
 
@@ -76,7 +138,7 @@ class ClubPasscodeAuthService {
         if (clubId.isEmpty) {
           await client.auth.signOut();
           return ClubPasscodeAuthResult.failure(
-            'This login is not linked to a club',
+            ClubPasscodeAuthError.notLinkedToClub,
           );
         }
 
@@ -88,37 +150,62 @@ class ClubPasscodeAuthService {
         final linkedClubs = clubRows as List;
         if (linkedClubs.isEmpty) {
           await client.auth.signOut();
-          return ClubPasscodeAuthResult.failure('Linked club was not found');
+          return ClubPasscodeAuthResult.failure(
+            ClubPasscodeAuthError.linkedClubNotFound,
+          );
         }
 
         final club = Map<String, dynamic>.from(linkedClubs.first as Map);
-        final clubName = club['name']?.toString() ?? 'Club';
+        final clubName =
+            club['name']?.toString() ??
+            lookupAppLocalizations(
+              Locale(localeService.languageCode),
+            ).clubFallbackName;
         final clubEmail = club['email']?.toString() ?? normalizedEmail;
+        if (await _moderationService.isClubBanned(
+          clubId: clubId,
+          email: clubEmail,
+        )) {
+          await client.auth.signOut();
+          return ClubPasscodeAuthResult.failure(ClubPasscodeAuthError.banned);
+        }
+        await authSessionStore.startNewSession();
         return ClubPasscodeAuthResult.success(
           AppAdmin(id: clubId, name: clubName, email: clubEmail, password: ''),
         );
       } on AuthException {
-        return ClubPasscodeAuthResult.failure('Invalid club email or passcode');
+        return ClubPasscodeAuthResult.failure(
+          ClubPasscodeAuthError.invalidCredentials,
+        );
       } catch (error, stackTrace) {
         debugPrint('Club Supabase Auth login failed: $error');
         debugPrintStack(stackTrace: stackTrace);
         return ClubPasscodeAuthResult.failure(
-          'Club login is not ready. Check club_auth_accounts in Supabase.',
+          ClubPasscodeAuthError.notConfigured,
         );
       }
     }
 
-    final mockAdmin = clubAdmins.firstWhere(
-      (admin) =>
-          admin.email.toLowerCase() == normalizedEmail &&
-          admin.password == normalizedPasscode,
-      orElse: () => AppAdmin(id: '', name: '', email: '', password: ''),
-    );
-    if (mockAdmin.id.isNotEmpty) {
-      return ClubPasscodeAuthResult.success(mockAdmin);
+    if (!SupabaseConfig.canUseMockAuth) {
+      return ClubPasscodeAuthResult.failure(
+        ClubPasscodeAuthError.notConfigured,
+      );
     }
-    return ClubPasscodeAuthResult.failure('Invalid club email or passcode');
+    return ClubPasscodeAuthResult.failure(
+      ClubPasscodeAuthError.invalidCredentials,
+    );
+  }
+
+  Future<bool> _isPlatformAdmin(SupabaseClient client, String userId) async {
+    final rows = await client
+        .from('app_admins')
+        .select('auth_user_id')
+        .eq('auth_user_id', userId)
+        .limit(1);
+    return (rows as List).isNotEmpty;
   }
 }
 
 final clubPasscodeAuthService = ClubPasscodeAuthService();
+
+bool _defaultCanUseMockAuth() => SupabaseConfig.canUseMockAuth;

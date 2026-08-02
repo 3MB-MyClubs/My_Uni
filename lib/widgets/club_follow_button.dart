@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -70,12 +71,27 @@ class ClubFollowButton extends ConsumerWidget {
         ),
       ),
       child: Center(
-        child: Text(
-          isFollowing ? 'Following' : 'Follow',
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-            color: isFollowing ? AppColors.secondaryText : Colors.white,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            isFollowing
+                ? AppLocalizations.of(context)!.following
+                : AppLocalizations.of(context)!.follow,
+            key: ValueKey(isFollowing),
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: isFollowing ? AppColors.secondaryText : Colors.white,
+            ),
           ),
         ),
       ),

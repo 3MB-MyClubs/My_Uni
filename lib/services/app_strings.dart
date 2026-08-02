@@ -27,6 +27,7 @@ class S {
   static String get clubFeed => _t('CLUB FEED', 'KULÜp AKIŞI');
   static String get following => _t('Following', 'Takip');
   static String get all => _t('All', 'Tümü');
+  static String get forYou => _t('For You', 'Senin İçin');
   static String get latest => _t('Latest', 'Son Gönderiler');
   static String get nothingHere => _t('Nothing here yet', 'Henüz bir şey yok');
   static String get followClubs => _t(
@@ -42,17 +43,30 @@ class S {
   static String get suggestedForYou =>
       _t('Suggested for you', 'Senin için önerilenler');
   static String get followBack => _t('Follow back', 'Geri takip et');
+  static String get sharePostToChat =>
+      _t('Share post to a chat', 'Gönderiyi sohbette paylaş');
+  static String get postShared => _t('Post shared', 'Gönderi paylaşıldı');
+  static String get noStudentChatsYet => _t(
+    'Start a student chat before sharing a post.',
+    'Gönderi paylaşmadan önce bir öğrenci sohbeti başlat.',
+  );
+  static String get sharedPost => _t('Shared post', 'Paylaşılan gönderi');
   static String get clubMightLike =>
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');
   static String get tomorrow => _t('Tomorrow', 'Yarın');
+  static String likedBy(String name) => _t('Liked by $name', '$name beğendi');
+  static String likedByOthers(String name, int count) => _t(
+    'Liked by $name and $count ${count == 1 ? 'other' : 'others'}',
+    '$name ve $count diğer kişi beğendi',
+  );
 
   // ── Explore
   static String get explore => _t('Explore', 'Keşfet');
   static String get discoverClubs => _t('Discover Clubs', 'Kulüpleri Keşfet');
   static String get findPeople => _t('Find People', 'Kişileri Bul');
   static String get searchClubs => _t('Search…', 'Ara…');
-  static String get searchPeople => _t('Search…', 'Ara…');
+  static String get searchPeople => _t('Search people…', 'Kişi ara…');
   static String get allClubs => _t('All clubs', 'Tüm kulüpler');
   static String get exploreContentTab => _t('Events', 'Etkinlikler');
   static String get searchEventsPosts => _t('Search events…', 'Etkinlik ara…');
@@ -70,6 +84,23 @@ class S {
   static String get noOneMatches => _t('No one found', 'Kimse bulunamadı');
   static String get tryNameSearch =>
       _t('Try a name, surname, or email', 'İsim, soyisim veya e-posta dene');
+  static String get filterByMajor =>
+      _t('Filter by major', 'Bölüme göre filtrele');
+  static String get clearMajorFilter =>
+      _t('Clear major filter', 'Bölüm filtresini temizle');
+  static String get searchMajors => _t('Search majors', 'Bölüm ara');
+  static String get noMatchingMajor =>
+      _t('No matching major', 'Eşleşen bölüm yok');
+  static String get clearSearch => _t('Clear search', 'Aramayı temizle');
+  static String get done => _t('Done', 'Bitti');
+  static String peopleResultCount(int count) =>
+      _t(count == 1 ? '1 result' : '$count results', '$count sonuç');
+  static String get noPeopleInSelectedMajor =>
+      _t('No students found in this major', 'Bu bölümde öğrenci bulunamadı');
+  static String get tryAnotherMajorOrName => _t(
+    'Try another major or change the name search',
+    'Başka bir bölüm seç veya isim aramasını değiştir',
+  );
 
   // ── This Week
   static String get discoverEvents =>
@@ -168,6 +199,41 @@ class S {
     'Henüz yorum yok. İlk yorumu sen yap!',
   );
   static String get deleteComment => _t('Delete comment', 'Yorumu sil');
+  static String get reportComment => _t('Report comment', 'Yorumu bildir');
+  static String get whyReportComment => _t(
+    'Why are you reporting this comment?',
+    'Bu yorumu neden bildiriyorsun?',
+  );
+  static String get commentReported => _t(
+    'Comment reported and removed from your feed.',
+    'Yorum bildirildi ve akışından kaldırıldı.',
+  );
+  static String get commentHiddenOffline => _t(
+    'Comment hidden. We will send the report when you are back online.',
+    'Yorum gizlendi. Çevrimiçi olduğunda bildirim gönderilecek.',
+  );
+  static String get commentDeleted => _t('Comment deleted', 'Yorum silindi');
+  static String get commentDeleteFailed => _t(
+    'Comment could not be deleted. Please try again.',
+    'Yorum silinemedi. Lütfen tekrar dene.',
+  );
+  static String get commentFailed => _t(
+    'Comment could not be posted. Please try again.',
+    'Yorum gönderilemedi. Lütfen tekrar dene.',
+  );
+  static String commentsWithCount(int count) =>
+      _t('Comments · $count', 'Yorumlar · $count');
+  static String get commentsStudentsOnly => _t(
+    'Sign in with a student account to join the conversation.',
+    'Sohbete katılmak için öğrenci hesabınla giriş yap.',
+  );
+
+  // ── Messages
+  static String get deleteMessage => _t('Delete message', 'Mesajı sil');
+  static String get deleteMessageMsg => _t(
+    'This message will be permanently removed.',
+    'Bu mesaj kalıcı olarak kaldırılacak.',
+  );
 
   // ── Profile
   static String get posts => _t('Posts', 'Gönderiler');
@@ -300,11 +366,175 @@ class S {
     'Ayarlanmadı — yapılandırmak için dokun',
   );
   static String get replayTutorial =>
-      _t('Replay App Tutorial', 'Uygulamayı Yeniden Gez');
-  static String get replayTutorialSubtitle => _t(
-    'Take the guided tour of every area again — anytime',
-    'Uygulamanın her alanını istediğin zaman yeniden gez',
+      _t('Replay the tour', 'Turu yeniden izle');
+  static String get replayTutorialSubtitle =>
+      _t('Take the campus tour again', 'Kampüs turunu yeniden yap');
+
+  // ── Onboarding intro (first-run carousel)
+  static String get onboardingIntroDiscoverTitle =>
+      _t('Discover campus life', 'Kampüs hayatını keşfet');
+  static String get onboardingIntroDiscoverSubtitle => _t(
+    "See what's happening across campus, all in one feed.",
+    'Kampüste neler olduğunu tek bir akışta gör.',
   );
+  static String get onboardingIntroCalendarTitle =>
+      _t('RSVP in a tap', 'Tek dokunuşla LCV ver');
+  static String get onboardingIntroCalendarSubtitle => _t(
+    "Say you're going and events land on your calendar automatically.",
+    'Gidiyorum de, etkinlikler takvimine otomatik eklensin.',
+  );
+  static String get onboardingIntroClubsTitle =>
+      _t('Follow your clubs', 'Kulüplerini takip et');
+  static String get onboardingIntroClubsSubtitle => _t(
+    'Never miss an update from the clubs you love.',
+    'Sevdiğin kulüplerden hiçbir güncellemeyi kaçırma.',
+  );
+  static String get onboardingIntroReadyTitle =>
+      _t('Ready to dive in?', 'Başlamaya hazır mısın?');
+  static String get onboardingIntroReadySubtitle => _t(
+    'Join your campus community and make it yours.',
+    'Kampüs topluluğuna katıl ve burayı kendine ait kıl.',
+  );
+  static String get onboardingIntroSkip => _t('Skip', 'Atla');
+  static String get onboardingIntroGetStarted => _t('Get started', 'Başla');
+  static String get onboardingIntroLogIn => _t('Log in', 'Giriş yap');
+
+  // ── Onboarding — welcome (Act 1)
+  static String get onboardingWelcomeEyebrow =>
+      _t('YOUR CAMPUS, YOUR PEOPLE', 'KAMPÜSÜN, İNSANLARIN');
+  static String onboardingWelcomeTitle(String firstName) => firstName.isEmpty
+      ? _t('Hey! 👋', 'Selam! 👋')
+      : _t('Hey $firstName! 👋', 'Selam $firstName! 👋');
+  static String get onboardingWelcomeBody => _t(
+    'Welcome to ClubUp — this is where campus life happens. '
+        'Want a quick tour? Takes about a minute.',
+    "ClubUp'a hoş geldin — kampüs hayatı burada dönüyor. "
+        'Hızlı bir tur ister misin? Bir dakikanı alır.',
+  );
+  static String get onboardingShowMeAround =>
+      _t('Show me around', 'Bana etrafı göster');
+  static String get onboardingExploreOnMyOwn =>
+      _t("I'll explore on my own", 'Kendim keşfederim');
+
+  // ── Onboarding — tour chrome (Act 2)
+  static String get onboardingNext => _t('Next', 'İleri');
+  static String get onboardingBack => _t('Back', 'Geri');
+  static String get onboardingFinish => _t('Finish', 'Bitir');
+  static String get onboardingSkipTour => _t('Skip tour', 'Turu atla');
+  static String onboardingStepLabel(int current, int total) =>
+      _t('Step $current of $total', '$total adımın $current. adımı');
+  static String get onboardingTapHint => _t(
+    'Tip: tapping the glowing spot works too',
+    'İpucu: parlayan yere dokunmak da olur',
+  );
+
+  // ── Onboarding — student tour guide lines
+  static String get onboardingStudentHome => _t(
+    'This is your feed. Everything from clubs you follow lands here — '
+        'plus events and people you might like.',
+    'Burası senin akışın. Takip ettiğin kulüplerden her şey buraya düşer — '
+        'bir de hoşuna gidebilecek etkinlikler ve kişiler.',
+  );
+  static String get onboardingStudentFeedToggle => _t(
+    'Following shows the clubs you picked; For You mixes in things '
+        "we think you'll like. Flip between them anytime.",
+    'Takip Edilenler seçtiğin kulüpleri gösterir; Sana Özel ise '
+        'seveceğini düşündüklerimizi karıştırır. İstediğin zaman geçiş yap.',
+  );
+  static String get onboardingStudentRsvp => _t(
+    'Campus events, all in one place. See something fun? '
+        "Hit RSVP and it's on your list.",
+    'Kampüs etkinlikleri, hepsi tek yerde. Eğlenceli bir şey mi gördün? '
+        'LCV ver, listene eklensin.',
+  );
+  static String get onboardingStudentExplore => _t(
+    'Looking for your people? Search clubs, events and students here — '
+        'this is how you find your crowd.',
+    'İnsanlarını mı arıyorsun? Kulüpleri, etkinlikleri ve öğrencileri '
+        'buradan ara — çevreni böyle bulursun.',
+  );
+  static String get onboardingStudentCompose => _t(
+    "DM friends, or jump into a club's community chat. "
+        'This button starts a new conversation.',
+    'Arkadaşlarına yaz ya da bir kulübün topluluk sohbetine katıl. '
+        'Bu düğme yeni bir sohbet başlatır.',
+  );
+  static String get onboardingStudentProfile => _t(
+    "And this one's yours. Add a bio, your major and year — "
+        'make it feel like you.',
+    'Burası da senin. Bir biyografi, bölümünü ve sınıfını ekle — '
+        'burayı kendin gibi hissettir.',
+  );
+
+  // ── Onboarding — club-admin tour guide lines
+  static String get onboardingClubComposer => _t(
+    "This is your club's feed. Got news? Share an update right from here.",
+    'Burası kulübünün akışı. Haber mi var? Güncellemeyi doğrudan '
+        'buradan paylaş.',
+  );
+  static String get onboardingClubCreateEvent => _t(
+    'The + button creates events — date, cover photo, schedule, '
+        'speakers, the works.',
+    '+ düğmesi etkinlik oluşturur — tarih, kapak fotoğrafı, program, '
+        'konuşmacılar, hepsi.',
+  );
+  static String get onboardingClubProfileTabs => _t(
+    "Your club's public home: posts, events and your board, "
+        'all in one place.',
+    'Kulübünün herkese açık yüzü: gönderiler, etkinlikler '
+        've yönetim kurulu, hepsi bir arada.',
+  );
+  static String get onboardingClubChats => _t(
+    'Your community chat lives here — members can talk to each other, '
+        'and to you.',
+    'Topluluk sohbetin burada — üyeler birbirleriyle ve seninle '
+        'konuşabilir.',
+  );
+  static String get onboardingClubModeration => _t(
+    'Review reports and manage profile or club access from the moderation area.',
+    'Bildirimleri incele ve profil ya da kulüp erişimini moderasyon alanından yönet.',
+  );
+  static String get onboardingClubSettings => _t(
+    'Name, photo, categories, board members — manage all of it '
+        'from settings.',
+    'İsim, fotoğraf, kategoriler, yönetim kurulu — hepsini ayarlardan '
+        'yönet.',
+  );
+
+  // ── Onboarding — finish (Act 3)
+  static String get onboardingFinishTitle =>
+      _t("That's the tour! 🎉", 'Tur bitti! 🎉');
+  static String get onboardingFinishBody => _t(
+    "Here's how to make this place yours — three small things to get "
+        'you started.',
+    'Burayı kendine ait kılmanın yolu — başlaman için üç küçük adım.',
+  );
+  static String get onboardingFinishBodyClub => _t(
+    "You're all set. Go post something — your members are waiting.",
+    'Her şey hazır. Hadi bir şeyler paylaş — üyelerin bekliyor.',
+  );
+  static String get onboardingLetsGo => _t("Let's go", 'Hadi başlayalım');
+
+  // ── Onboarding — starter checklist
+  static String get checklistTitle => _t('Get started', 'Başlarken');
+  static String get checklistSubtitle => _t(
+    'Three small steps to make ClubUp yours',
+    "ClubUp'ı sana ait kılacak üç küçük adım",
+  );
+  static String get checklistFollowClub =>
+      _t('Follow a club you like', 'Beğendiğin bir kulübü takip et');
+  static String get checklistFollowClubAction =>
+      _t('Explore clubs', 'Kulüpleri keşfet');
+  static String get checklistRsvpEvent =>
+      _t('RSVP to an event', 'Bir etkinliğe LCV ver');
+  static String get checklistRsvpEventAction =>
+      _t('See events', 'Etkinliklere bak');
+  static String get checklistSayHi =>
+      _t('Say hi to someone', 'Birine selam ver');
+  static String get checklistSayHiAction => _t('Open chats', 'Sohbetleri aç');
+  static String get checklistDismiss => _t('Hide', 'Gizle');
+  static String get checklistAllDone =>
+      _t("You're all set! 🎉", 'Hepsi tamam! 🎉');
 
   // ── Community safety & moderation
   static String get safetyHero => _t(
@@ -485,6 +715,55 @@ class S {
   );
   static String get safetyOptions =>
       _t('Safety options', 'Güvenlik seçenekleri');
+  static String get moderation => _t('Moderation', 'Moderasyon');
+  static String get moderationCenter =>
+      _t('ClubUp moderation center', 'ClubUp moderasyon merkezi');
+  static String get moderationCenterSubtitle => _t(
+    'Review reports and manage login bans on this device.',
+    'Bildirimleri incele ve bu cihazdaki giriş yasaklarını yönet.',
+  );
+  static String get reports => _t('Reports', 'Bildirimler');
+  static String get profiles => _t('Profiles', 'Profiller');
+  static String get noReports =>
+      _t('No reports have been made yet.', 'Henüz bildirim yapılmadı.');
+  static String get noProfiles =>
+      _t('No profiles are available yet.', 'Henüz profil bulunmuyor.');
+  static String get noClubsForModeration =>
+      _t('No clubs are available yet.', 'Henüz kulüp bulunmuyor.');
+  static String get ban => _t('Ban', 'Yasakla');
+  static String get unban => _t('Unban', 'Yasağı kaldır');
+  static String get banned => _t('Banned', 'Yasaklandı');
+  static String get active => _t('Active', 'Aktif');
+  static String get banProfile => _t('Ban profile', 'Profili yasakla');
+  static String get unbanProfile =>
+      _t('Unban profile', 'Profil yasağını kaldır');
+  static String get banClub => _t('Ban club', 'Kulübü yasakla');
+  static String get unbanClub => _t('Unban club', 'Kulüp yasağını kaldır');
+  static String get banConfirmation => _t(
+    'They will no longer be able to log in with their email and password.',
+    'E-posta ve şifreleriyle artık giriş yapamayacaklar.',
+  );
+  static String get unbanConfirmation =>
+      _t('They will be able to log in again.', 'Tekrar giriş yapabilecekler.');
+  static String get moderationActionFailed => _t(
+    'This action is available only to the ClubUp profile.',
+    'Bu işlem yalnızca ClubUp profili tarafından kullanılabilir.',
+  );
+  static String get moderationAccessDenied => _t(
+    'Only the ClubUp profile can access this area.',
+    'Bu alana yalnızca ClubUp profili erişebilir.',
+  );
+  static String get reportedBy => _t('Reported by', 'Bildiren');
+  static String get reportedContent =>
+      _t('Reported content', 'Bildirilen içerik');
+  static String get reason => _t('Reason', 'Neden');
+  static String get unknownProfile =>
+      _t('Unknown profile', 'Bilinmeyen profil');
+  static String get unknownClub => _t('Unknown club', 'Bilinmeyen kulüp');
+  static String get bannedFromApp => _t(
+    'You have been banned from this app.',
+    'Bu uygulamadan yasaklandınız.',
+  );
   static String get contentSafetyRejected => _t(
     'This content cannot be published because it may violate the ClubUp Community Safety Terms.',
     'Bu içerik ClubUp Topluluk Güvenliği Koşullarını ihlal edebileceği için yayımlanamaz.',
@@ -541,10 +820,8 @@ class S {
     'Events that finished during the last 7 days.',
     'Son 7 gün içinde biten etkinlikler.',
   );
-  static String get upcomingEventsHint => _t(
-    "What's on across campus — next month.",
-    'Kampüste neler var — önümüzdeki ay.',
-  );
+  static String get upcomingEventsHint =>
+      _t("What's on across campus.", 'Kampüste neler var.');
 
   // ── Notifications
   static String get yesterday => _t('Yesterday', 'Dün');
@@ -560,5 +837,220 @@ class S {
   );
 
   // ── Profile
+  static String get prepYear => _t('Prep', 'Hazırlık');
   static String get graduate => _t('Graduate', 'Lisansüstü');
+
+  // ── Chats
+  static String get chats => _t('Chats', 'Sohbetler');
+  static String get newChat => _t('New chat', 'Yeni sohbet');
+  static String get noChatsYet =>
+      _t('No conversations yet', 'Henüz sohbet yok');
+  static String get noChatsHint => _t(
+    'Message a friend or join a club\nto start chatting.',
+    'Sohbete başlamak için bir arkadaşına yaz\nveya bir kulübe katıl.',
+  );
+  static String get typeMessage => _t('Message…', 'Mesaj…');
+  static String get startConversation =>
+      _t('Start the conversation', 'Sohbeti başlat');
+  static String get joinToChat =>
+      _t('Join the club to chat', 'Sohbet için kulübe katıl');
+  static String get joinToChatHint => _t(
+    'This chat is only for club members.\nFollow the club to join the conversation.',
+    'Bu sohbet sadece kulüp üyeleri içindir.\nSohbete katılmak için kulübü takip et.',
+  );
+  static String get clubChat => _t('Club chat', 'Kulüp sohbeti');
+  static String get clubInbox => _t('Club inbox', 'Kulüp gelen kutusu');
+  static String get privateClubMessage =>
+      _t('Private club message', 'Özel kulüp mesajı');
+  static String get messageClub => _t('Message club', 'Kulübe mesaj yaz');
+  static String get clubChannelReadOnly => _t(
+    'Only board members can post in this channel.',
+    'Bu kanalda yalnızca yönetim kurulu üyeleri paylaşım yapabilir.',
+  );
+  static String get secureChatUnavailable => _t(
+    'Messaging is not available yet. Try again shortly.',
+    'Mesajlaşma henüz kullanılamıyor. Birazdan tekrar dene.',
+  );
+  static String chatMembers(int n) => _t('$n members', '$n üye');
+  static String communityMembers(int n) =>
+      n >= 100 ? _t('100+ Members', '100+ Üye') : _t('$n Members', '$n Üye');
+  static String communityOnline(int n) => _t('$n Online', '$n Çevrimiçi');
+  static String get message => _t('Message', 'Mesaj');
+
+  /// Sits under the club name on an empty community room. The empty screen
+  /// already says there are no messages, so this line only invites.
+  static String get sayHello =>
+      _t('Say hello to your club', 'Kulübüne merhaba de');
+  static String get adminLabel => _t('Admin', 'Yönetici');
+  static String get you => _t('You', 'Sen');
+  static String get onlineNow => _t('Online now', 'Şimdi çevrimiçi');
+  static String onlineMembers(int n) => _t('$n online', '$n çevrimiçi');
+  static String get lastSeenRecently =>
+      _t('Last seen recently', 'Son görülme az önce');
+  static String get typing => _t('typing…', 'yazıyor…');
+  static String get delivered => _t('Delivered', 'Teslim edildi');
+  static String get seen => _t('Seen', 'Görüldü');
+  static String nNew(int n) => _t('$n new', '$n yeni');
+  static String get searchStudents => _t('Search students…', 'Öğrenci ara…');
+  static String get studentChats => _t('Students', 'Öğrenciler');
+  static String get clubChats => _t('Clubs', 'Kulüpler');
+  static String get searchClubChats =>
+      _t('Search club chats…', 'Kulüp sohbeti ara…');
+  static String get noStudentChats =>
+      _t('No student conversations yet', 'Henüz öğrenci sohbeti yok');
+  static String get noStudentChatsHint => _t(
+    'Start a new chat to message another student.',
+    'Başka bir öğrenciye yazmak için yeni bir sohbet başlat.',
+  );
+  static String get noClubChats =>
+      _t('No club conversations yet', 'Henüz kulüp sohbeti yok');
+  static String get noClubChatsHint => _t(
+    'Join a club to access its community chat.',
+    'Topluluk sohbetine erişmek için bir kulübe katıl.',
+  );
+  static String get messagesLabel => _t('Messages', 'Mesajlar');
+  static String get viewProfile => _t('View profile', 'Profili gör');
+
+  // ── New student chat (empty thread)
+  /// Shown under the name when there is nothing else worth saying about a
+  /// brand-new thread. Deliberately short so the empty state stays quiet.
+  static String get chatNoMessagesYet =>
+      _t('No messages yet', 'Henüz mesaj yok');
+  static String chatPeopleCount(int n) => _t('$n people', '$n kişi');
+  static String get chatCreatedByYou => _t('created by you', 'sen kurdun');
+  static String chatAlsoIn(String clubName) =>
+      _t('Also in $clubName', 'Ortak kulüp: $clubName');
+  static String chatMutualFriends(int n) => n == 1
+      ? _t('1 mutual friend', '1 ortak arkadaş')
+      : _t('$n mutual friends', '$n ortak arkadaş');
+
+  static String get attachToMessage => _t('Add to message', 'Mesaja ekle');
+
+  // ── Club community
+  static String communityActiveNow(int n) =>
+      _t('$n active now', '$n şu an aktif');
+  static String get communityMembersButton => _t('Members', 'Üyeler');
+  static String communityEventsButton(int n) =>
+      _t('Events · $n', 'Etkinlikler · $n');
+  static String get communityNotices => _t('Notices', 'Duyurular');
+  static String get announcementLabel => _t('ANNOUNCEMENT', 'DUYURU');
+  static String get pinnedLabel => _t('Pinned', 'Sabitlendi');
+  static String get pinToTop => _t('Pin to top', 'Yukarı sabitle');
+  static String get unpin => _t('Unpin', 'Sabitlemeyi kaldır');
+  static String get pollLabel => _t('POLL', 'ANKET');
+  static String pollCloses(String when) =>
+      _t('closes $when', '$when kapanıyor');
+  static String get pollClosed => _t('closed', 'kapandı');
+  static String get pollVoted => _t('voted', 'oy verdin');
+  static String goingCount(int n) => _t('$n going', '$n kişi gidiyor');
+  static String leftOffHere(int n) =>
+      _t('You left off here · $n new', 'Buradan devam · $n yeni');
+  static String typingOne(String name) =>
+      _t('$name is typing', '$name yazıyor');
+  static String typingMany(String names) =>
+      _t('$names are typing', '$names yazıyor');
+  static String get jumpToLatest => _t('Jump to latest', 'En sona git');
+  static String activeNowGroup(int n) => _t('Active now · $n', 'Aktif · $n');
+  static String offlineGroup(int n) => _t('Offline · $n', 'Çevrimdışı · $n');
+  static String get activeNowLabel => _t('Active now', 'Şu an aktif');
+  static String get offlineLabel => _t('Offline', 'Çevrimdışı');
+  static String seenCount(int n) => _t('$n seen', '$n görüntüleme');
+  static String get attachPhoto => _t('Photo', 'Fotoğraf');
+  static String get attachFile => _t('File', 'Dosya');
+  static String get attachPoll => _t('Poll', 'Anket');
+  static String get attachEvent => _t('Event', 'Etkinlik');
+  static String get mentionEveryone => _t('everyone', 'herkes');
+  static String get allMembers => _t('All members', 'Tüm üyeler');
+  static String get memberRole => _t('Member', 'Üye');
+  static String get retryMembers => _t(
+    'Could not load members. Try again',
+    'Üyeler yüklenemedi. Tekrar dene',
+  );
+  static String get communityComposerHint => _t("What's up?", 'Neler oluyor?');
+  static String get newPollTitle => _t('New poll', 'Yeni anket');
+  static String get pollQuestion => _t('Question', 'Soru');
+  static String pollOptionLabel(int n) => _t('Option $n', '$n. seçenek');
+  static String get addOption => _t('Add option', 'Seçenek ekle');
+  static String get pollClosesIn => _t('Closes in', 'Kapanış');
+  static String pollHours(int n) => _t('${n}h', '$n sa');
+  static String pollDays(int n) => _t('${n}d', '$n gün');
+  static String get shareEvent => _t('Share an event', 'Etkinlik paylaş');
+  static String get noUpcomingEvents =>
+      _t('No upcoming events', 'Yaklaşan etkinlik yok');
+  static String get postAsAnnouncement =>
+      _t('Post as announcement', 'Duyuru olarak paylaş');
+  static String get announcementTitleHint =>
+      _t('Announcement headline', 'Duyuru başlığı');
+  static String get chatDisplay => _t('Chat display', 'Sohbet görünümü');
+  static String get changeChatBackground =>
+      _t('Change chat background', 'Sohbet arka planını değiştir');
+  static String get chatBackground =>
+      _t('Chat background', 'Sohbet arka planı');
+  static String get backgroundClassic => _t('Classic', 'Klasik');
+  static String get backgroundWarm => _t('Warm', 'Sıcak');
+  static String get backgroundOcean => _t('Ocean', 'Okyanus');
+  static String get backgroundForest => _t('Forest', 'Orman');
+  static String get backgroundMidnight => _t('Midnight', 'Gece');
+  static String get messageStyle => _t('Message style', 'Mesaj biçimi');
+  static String get styleRows => _t('Rows', 'Satır');
+  static String get styleBubbles => _t('Bubbles', 'Balon');
+  static String get styleCards => _t('Cards', 'Kart');
+  static String get announcementsStyle => _t('Announcements', 'Duyurular');
+  static String get emphasisSubtle => _t('Subtle', 'Sade');
+  static String get emphasisTinted => _t('Tinted', 'Renkli');
+  static String get emphasisBold => _t('Bold', 'Belirgin');
+  static String get showRolesBadges =>
+      _t('Show roles & badges', 'Rolleri ve rozetleri göster');
+  static String get muteCommunity =>
+      _t('Mute notifications', 'Bildirimleri sustur');
+  static String get unmuteCommunity =>
+      _t('Unmute notifications', 'Bildirimleri aç');
+  static String get muted => _t('Muted', 'Susturuldu');
+  static String get react => _t('React', 'Tepki ver');
+  static String get copyText => _t('Copy text', 'Metni kopyala');
+  static String get copied => _t('Copied', 'Kopyalandı');
+  static String get clubSettings => _t('Club settings', 'Kulüp ayarları');
+  static String get openClubProfile =>
+      _t('Open club profile', 'Kulüp profilini aç');
+  static String get downloadAttachment => _t('Open', 'Aç');
+  static String activeAgo(String ago) =>
+      _t('Active $ago ago', '$ago önce aktif');
+
+  static const _weekdaysEn = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _weekdaysTr = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  static const _monthsEn = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  static const _monthsTr = [
+    'Oca',
+    'Şub',
+    'Mar',
+    'Nis',
+    'May',
+    'Haz',
+    'Tem',
+    'Ağu',
+    'Eyl',
+    'Eki',
+    'Kas',
+    'Ara',
+  ];
+
+  /// [weekday] follows [DateTime.weekday] (1 = Monday).
+  static String weekdayShort(int weekday) =>
+      _t(_weekdaysEn[(weekday - 1) % 7], _weekdaysTr[(weekday - 1) % 7]);
+
+  static String monthShort(int month) =>
+      _t(_monthsEn[(month - 1) % 12], _monthsTr[(month - 1) % 12]);
 }

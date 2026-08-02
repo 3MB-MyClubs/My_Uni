@@ -1,16 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
+import '../services/app_strings.dart';
+import '../services/locale_service.dart';
+import '../services/theme_service.dart';
+import '../l10n/app_localizations.dart';
+import '../widgets/language_toggle.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
+import 'platform_admin_auth_screen.dart';
 
 /// Combined brand + sign-in entry screen (recreated from the
-/// "Login Screen" design handoff). It is the app's root: the crest header,
-/// hero copy, focus-ring fields and gradient submit all come from the design.
-/// "Sign up" hands off to the multi-step sign-up flow, and a quiet club-admin
-/// link is preserved at the bottom.
+/// "Login Screen v2" design handoff). It is the app's root: a centered crest
+/// under a radial accent glow, the ClubUp wordmark, neutral auth fields with a
+/// fixed "@ku.edu.tr" suffix, and a bottom action stack (gradient "Log in",
+/// outlined "Sign up", quiet club-admin link). "Sign up" hands off to the
+/// multi-step sign-up flow.
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onSignUp;
@@ -30,12 +39,24 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   late final TextEditingController _emailController;
+  late final AnimationController _entranceController;
+  late final Animation<double> _brandEntrance;
+  late final Animation<double> _formEntrance;
+  late final Animation<double> _actionsEntrance;
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   String? _error;
+  bool _entranceConfigured = false;
+  double _languageContentOpacity = 1;
+  bool _isSwitchingLanguage = false;
+  int _clubAdminTapCount = 0;
+  Timer? _clubAdminTapTimer;
+
+  static const _clubAdminTapWindow = Duration(milliseconds: 700);
 
   bool get _canSubmit =>
       _emailController.text.trim().isNotEmpty &&
@@ -55,12 +76,44 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController = TextEditingController(
       text: _localPart(widget.initialEmail),
     );
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _brandEntrance = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0, 0.55, curve: Curves.easeOutCubic),
+    );
+    _formEntrance = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.18, 0.78, curve: Curves.easeOutCubic),
+    );
+    _actionsEntrance = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.42, 1, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_entranceConfigured) return;
+    _entranceConfigured = true;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _entranceController.value = 1;
+    } else {
+      _entranceController.forward();
+    }
   }
 
   @override
   void dispose() {
+    _clubAdminTapTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -69,14 +122,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final localPart = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (localPart.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please enter your email and password');
+      setState(
+        () => _error = AppLocalizations.of(context)!.enterEmailAndPassword,
+      );
       return;
     }
     // Users type only the local part (e.g. "htuncay23"); the "@ku.edu.tr"
     // domain is appended automatically. Lower-cased so any casing logs in.
     final email = '${localPart.toLowerCase()}@ku.edu.tr';
     if (!authService.isValidStudentPassword(password)) {
-      setState(() => _error = 'Student password must be exactly 6 digits.');
+      setState(
+        () =>
+            _error = AppLocalizations.of(context)!.studentPasswordMustBe6Digits,
+      );
       return;
     }
     setState(() {
@@ -93,7 +151,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       setState(() {
         _isSubmitting = false;
-        _error = 'Incorrect email or password';
+        _error = authService.lastLoginFailure == AuthLoginFailure.banned
+            ? S.bannedFromApp
+            : AppLocalizations.of(context)!.incorrectEmailOrPassword;
       });
     }
   }
@@ -125,255 +185,397 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _openPlatformAdmin() {
+    Navigator.of(context).push(
+      _fadeSlideRoute(
+        PlatformAdminAuthScreen(
+          onAdminLogin: () {
+            Navigator.of(context).pop();
+            widget.onAdminLogin();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _handleClubAdminEntryTap() {
+    _clubAdminTapCount++;
+    _clubAdminTapTimer?.cancel();
+
+    if (_clubAdminTapCount >= 5) {
+      _clubAdminTapCount = 0;
+      _clubAdminTapTimer = null;
+      HapticFeedback.selectionClick();
+      _openPlatformAdmin();
+      return;
+    }
+
+    // Wait briefly before treating the gesture as a normal club-admin tap so
+    // five quick taps can reveal the separate platform-admin entry point.
+    _clubAdminTapTimer = Timer(_clubAdminTapWindow, () {
+      if (!mounted) return;
+      _clubAdminTapCount = 0;
+      _clubAdminTapTimer = null;
+      _openClubAdmin();
+    });
+  }
+
+  Future<void> _switchLanguage(String code) async {
+    if (_isSwitchingLanguage || code == localeService.languageCode) return;
+    _isSwitchingLanguage = true;
+    setState(() => _languageContentOpacity = 0);
+    await Future<void>.delayed(const Duration(milliseconds: 140));
+    if (!mounted) return;
+    await localeService.setLanguage(code);
+    if (!mounted) return;
+    setState(() => _languageContentOpacity = 1);
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+    _isSwitchingLanguage = false;
+  }
+
+  Widget _languageTransition({required Widget child}) {
+    return AnimatedOpacity(
+      opacity: _languageContentOpacity,
+      duration: Duration(
+        milliseconds: _languageContentOpacity == 0 ? 140 : 260,
+      ),
+      curve: _languageContentOpacity == 0
+          ? Curves.easeInCubic
+          : Curves.easeOutCubic,
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = themeService.isDark;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.onBack != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: BackButton(
-                    color: AppColors.text,
-                    onPressed: widget.onBack,
-                  ),
-                )
-              else
-                const SizedBox(height: 26),
-
-              // ── Brand header ──────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'EST. 1993',
-                      style: TextStyle(
-                        fontSize: 11,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Koç University',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
-                        color: AppColors.text,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Hero ──────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 30, 28, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    RichText(
-                      text: TextSpan(
-                        style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1.2,
-                          height: 1.08,
-                          color: AppColors.text,
-                        ),
-                        children: [
-                          const TextSpan(text: 'Welcome back to\nyour '),
-                          TextSpan(
-                            text: 'campus',
-                            style: TextStyle(color: AppColors.primaryRed),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Form ──────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _AuthField(
-                      label: 'Campus email',
-                      controller: _emailController,
-                      hint: 'yourname',
-                      icon: Icons.mail_outline_rounded,
-                      keyboardType: TextInputType.text,
-                      suffixText: '@ku.edu.tr',
-                      inputFormatters: [_NoDomainFormatter()],
-                      onChanged: (_) => setState(() => _error = null),
-                      onSubmitted: (_) => _handleLogin(),
-                    ),
-                    const SizedBox(height: 12),
-                    _AuthField(
-                      label: 'Password',
-                      controller: _passwordController,
-                      hint: '6-digit PIN',
-                      icon: Icons.lock_outline_rounded,
-                      obscureText: _obscurePassword,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(6),
-                      ],
-                      onChanged: (_) => setState(() => _error = null),
-                      onSubmitted: (_) => _handleLogin(),
-                      trailing: GestureDetector(
-                        onTap: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                        child: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          size: 19,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                    ),
-
-                    // Forgot password
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _openForgotPassword,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 4,
-                          ),
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primaryRed,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Inline error
-                    if (_error != null) ...[
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline_rounded,
-                            size: 15,
-                            color: AppColors.primaryRed,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: AppColors.primaryRed,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-
-                    // Submit
-                    _SubmitButton(
-                      enabled: _canSubmit,
-                      submitting: _isSubmitting,
-                      onTap: _handleLogin,
-                    ),
-                  ],
-                ),
-              ),
-
-              // ── Footer ────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 26, 24, 8),
-                child: Column(
-                  children: [
-                    Container(height: 1, color: AppColors.divider),
-                    const SizedBox(height: 18),
-                    // Sign up → hands off to the sign-up flow
-                    GestureDetector(
-                      onTap: widget.onSignUp,
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.all(Radius.circular(15)),
-                          border: Border.all(
-                            color: AppColors.divider,
-                            width: 1.5,
-                          ),
-                        ),
-                        alignment: Alignment.center,
+      body: Container(
+        // Radial accent glow bleeding down from the top edge (design's
+        // "radial-gradient(120% 60% at 50% -10%, accentDeep, transparent)").
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0, -1.25),
+            radius: 1.3,
+            colors: [
+              AppColors.darkRed.withValues(alpha: isDark ? 0.42 : 0.18),
+              AppColors.darkRed.withValues(alpha: 0),
+            ],
+            stops: const [0, 0.62],
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              'Sign up',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.2,
+                            if (widget.onBack != null)
+                              BackButton(
                                 color: AppColors.text,
+                                onPressed: widget.onBack,
                               ),
-                            ),
-                            const SizedBox(width: 7),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 17,
-                              color: AppColors.text,
-                            ),
+                            const Spacer(),
+                            LanguageToggle(onLanguageSelected: _switchLanguage),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextButton(
-                      onPressed: _openClubAdmin,
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.secondaryText,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+
+                      // ── Brand header: crest + university + wordmark ───────
+                      _languageTransition(
+                        child: _MotionEntrance(
+                          animation: _brandEntrance,
+                          begin: const Offset(0, -0.035),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(24, 18, 24, 0),
+                            child: Column(
+                              children: [
+                                const _Crest(size: 60),
+                                const SizedBox(height: 18),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.kocUniversityWordmark,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    letterSpacing: 2,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Menlo',
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'ClubUp',
+                                  style: TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -1,
+                                    color: AppColors.text,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.signInToContinueSubtitle,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.text.withValues(
+                                      alpha: 0.76,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      child: Text(
-                        'Club admin sign in',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppColors.secondaryText,
+
+                      // ── Form ─────────────────────────────────────────────
+                      _languageTransition(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 30, 22, 0),
+                          child: _MotionEntrance(
+                            animation: _formEntrance,
+                            begin: const Offset(0, 0.045),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _AuthField(
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.campusEmailLabel,
+                                  controller: _emailController,
+                                  hint: AppLocalizations.of(
+                                    context,
+                                  )!.usernameHint,
+                                  icon: Icons.mail_outline_rounded,
+                                  keyboardType: TextInputType.text,
+                                  suffixText: '@ku.edu.tr',
+                                  inputFormatters: [_NoDomainFormatter()],
+                                  onChanged: (_) =>
+                                      setState(() => _error = null),
+                                  onSubmitted: (_) => _handleLogin(),
+                                ),
+                                const SizedBox(height: 14),
+                                _AuthField(
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.passwordFieldLabel,
+                                  controller: _passwordController,
+                                  hint: AppLocalizations.of(
+                                    context,
+                                  )!.digitPinHint(6),
+                                  icon: Icons.lock_outline_rounded,
+                                  obscureText: _obscurePassword,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(6),
+                                  ],
+                                  onChanged: (_) =>
+                                      setState(() => _error = null),
+                                  onSubmitted: (_) => _handleLogin(),
+                                  trailing: GestureDetector(
+                                    onTap: () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
+                                    child: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                      size: 19,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _openForgotPassword,
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 4,
+                                      ),
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.forgotPassword,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primaryRed,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                // Inline error (kept from the previous screen —
+                                // the design has no failure state of its own).
+                                if (_error != null) ...[
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.error_outline_rounded,
+                                        size: 15,
+                                        color: AppColors.primaryRed,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          _error!,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: AppColors.primaryRed,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+
+                      const Spacer(),
+
+                      // ── Bottom action area ───────────────────────────────
+                      _languageTransition(
+                        child: _MotionEntrance(
+                          animation: _actionsEntrance,
+                          begin: const Offset(0, 0.06),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _SubmitButton(
+                                  enabled: _canSubmit,
+                                  submitting: _isSubmitting,
+                                  onTap: _handleLogin,
+                                ),
+                                Container(
+                                  height: 1,
+                                  color: AppColors.divider,
+                                  margin: const EdgeInsets.only(
+                                    top: 22,
+                                    bottom: 16,
+                                  ),
+                                ),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.newToKocUniversity,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    color: AppColors.text.withValues(
+                                      alpha: 0.76,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                OutlinedButton(
+                                  onPressed: widget.onSignUp,
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(50),
+                                    side: BorderSide(
+                                      color: AppColors.divider,
+                                      width: 1.5,
+                                    ),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.all(
+                                        Radius.circular(15),
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        AppLocalizations.of(context)!.signUp,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.2,
+                                          color: AppColors.text,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 7),
+                                      Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 17,
+                                        color: AppColors.text,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Wrap(
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    Text(
+                                      '${AppLocalizations.of(context)!.runningAClub} ',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: AppColors.secondaryText,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      key: const ValueKey<String>(
+                                        'club-admin-sign-in-trigger',
+                                      ),
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _handleClubAdminEntryTap,
+                                      child: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.clubAdminSignIn,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.text.withValues(
+                                            alpha: 0.76,
+                                          ),
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: AppColors.text
+                                              .withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
         ),
       ),
@@ -381,7 +583,75 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ─── Focus-ring text field (label + rounded box + leading icon) ────────────────
+// ─── Gradient crest with "KU" initials (design's Crest component) ──────────────
+class _Crest extends StatelessWidget {
+  final double size;
+  const _Crest({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(size * 0.3),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primaryRed, AppColors.darkRed],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryRed.withValues(alpha: 0.4),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        'KU',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: size * 0.36,
+          letterSpacing: -0.6,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Coordinated entrance motion for the screen's visual hierarchy ───────────
+class _MotionEntrance extends StatelessWidget {
+  final Animation<double> animation;
+  final Offset begin;
+  final Widget child;
+
+  const _MotionEntrance({
+    required this.animation,
+    required this.begin,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: begin,
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+}
+
+// ─── Responsive text field (label + animated surface + leading icon) ──────────
+// Focus gently lifts and highlights the active input without shifting layout.
 class _AuthField extends StatefulWidget {
   final String label;
   final TextEditingController controller;
@@ -414,83 +684,164 @@ class _AuthField extends StatefulWidget {
 }
 
 class _AuthFieldState extends State<_AuthField> {
+  late final FocusNode _focusNode;
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode()..addListener(_handleFocusChange);
+  }
+
+  void _handleFocusChange() {
+    if (mounted) setState(() => _focused = _focusNode.hasFocus);
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChange)
+      ..dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final label = widget.label;
+    final controller = widget.controller;
+    final hint = widget.hint;
+    final icon = widget.icon;
+    final obscureText = widget.obscureText;
+    final trailing = widget.trailing;
+    final keyboardType = widget.keyboardType;
+    final suffixText = widget.suffixText;
+    final inputFormatters = widget.inputFormatters;
+    final onChanged = widget.onChanged;
+    final onSubmitted = widget.onSubmitted;
+    final isDark = themeService.isDark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.label.toUpperCase(),
+        DefaultTextStyle(
           style: TextStyle(
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.4,
             color: AppColors.secondaryText,
           ),
+          child: Text(label.toUpperCase()),
         ),
         const SizedBox(height: 7),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-            border: Border.all(color: AppColors.divider, width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Icon(widget.icon, size: 19, color: AppColors.secondaryText),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  obscureText: widget.obscureText,
-                  keyboardType: widget.keyboardType,
-                  inputFormatters: widget.inputFormatters,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  onChanged: widget.onChanged,
-                  onSubmitted: widget.onSubmitted,
-                  cursorColor: AppColors.primaryRed,
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    color: AppColors.text,
-                    letterSpacing: -0.2,
+        AnimatedScale(
+          scale: _focused ? 1.012 : 1,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            key: ValueKey<String>('login-field-$label'),
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            decoration: BoxDecoration(
+              color: _focused
+                  ? AppColors.primaryRed.withValues(
+                      alpha: isDark ? 0.10 : 0.045,
+                    )
+                  : isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.transparent,
+              borderRadius: const BorderRadius.all(Radius.circular(14)),
+              border: Border.all(
+                color: _focused ? AppColors.primaryRed : AppColors.divider,
+                width: _focused ? 1.8 : 1.5,
+              ),
+              boxShadow: _focused
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryRed.withValues(alpha: 0.13),
+                        blurRadius: 16,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(
+                    end: _focused
+                        ? AppColors.primaryRed
+                        : AppColors.secondaryText,
                   ),
-                  decoration: InputDecoration(
-                    isCollapsed: true,
-                    filled: false,
-                    fillColor: Colors.transparent,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    hintText: widget.hint,
-                    hintStyle: TextStyle(
+                  duration: const Duration(milliseconds: 180),
+                  builder: (context, color, _) =>
+                      Icon(icon, size: 19, color: color),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      focusColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      textSelectionTheme: TextSelectionThemeData(
+                        cursorColor: AppColors.text,
+                        selectionColor: Colors.transparent,
+                        selectionHandleColor: Colors.transparent,
+                      ),
+                    ),
+                    child: TextField(
+                      focusNode: _focusNode,
+                      controller: controller,
+                      obscureText: obscureText,
+                      keyboardType: keyboardType,
+                      inputFormatters: inputFormatters,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      onChanged: onChanged,
+                      onSubmitted: onSubmitted,
+                      cursorColor: AppColors.text,
+                      cursorErrorColor: AppColors.text,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        color: AppColors.text,
+                        letterSpacing: -0.2,
+                      ),
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        hintText: hint,
+                        hintStyle: TextStyle(
+                          fontSize: 15.5,
+                          color: AppColors.secondaryText,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (suffixText != null)
+                  Text(
+                    suffixText,
+                    style: TextStyle(
                       fontSize: 15.5,
                       color: AppColors.secondaryText,
                       letterSpacing: -0.2,
                     ),
                   ),
-                ),
-              ),
-              if (widget.suffixText != null)
-                Text(
-                  widget.suffixText!,
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    color: AppColors.secondaryText,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              if (widget.trailing != null) ...[
-                const SizedBox(width: 8),
-                widget.trailing!,
+                if (trailing != null) ...[const SizedBox(width: 8), trailing],
               ],
-            ],
+            ),
           ),
         ),
       ],
@@ -516,7 +867,7 @@ class _NoDomainFormatter extends TextInputFormatter {
 }
 
 // ─── Gradient submit button (enabled / disabled / submitting) ─────────────────
-class _SubmitButton extends StatelessWidget {
+class _SubmitButton extends StatefulWidget {
   final bool enabled;
   final bool submitting;
   final VoidCallback onTap;
@@ -528,62 +879,104 @@ class _SubmitButton extends StatelessWidget {
   });
 
   @override
+  State<_SubmitButton> createState() => _SubmitButtonState();
+}
+
+class _SubmitButtonState extends State<_SubmitButton> {
+  bool _pressed = false;
+
+  void _release() {
+    if (_pressed) setState(() => _pressed = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final active = enabled || submitting;
+    final active = widget.enabled || widget.submitting;
+    final interactive = widget.enabled && !widget.submitting;
     return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        width: double.infinity,
-        height: 54,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-          gradient: active
-              ? const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.darkRed, AppColors.primaryRed],
-                )
-              : null,
-          color: active ? null : AppColors.card,
-          border: Border.all(
-            color: active ? Colors.transparent : AppColors.divider,
-            width: 1.5,
-          ),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: AppColors.primaryRed.withValues(alpha: 0.30),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: submitting
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: Colors.white,
-                ),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Log in',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
-                      color: active ? Colors.white : AppColors.secondaryText,
+      onTapDown: interactive ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: interactive ? (_) => _release() : null,
+      onTapCancel: interactive ? _release : null,
+      onTap: interactive
+          ? () {
+              HapticFeedback.lightImpact();
+              widget.onTap();
+            }
+          : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.975 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          width: double.infinity,
+          height: 54,
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radius.circular(15)),
+            gradient: active
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.darkRed, AppColors.primaryRed],
+                  )
+                : null,
+            color: active ? null : AppColors.surfaceAlt,
+            border: Border.all(
+              color: active ? Colors.transparent : AppColors.divider,
+              width: 1.5,
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryRed.withValues(alpha: 0.30),
+                      blurRadius: _pressed ? 10 : 20,
+                      offset: Offset(0, _pressed ? 3 : 6),
                     ),
+                  ]
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: widget.submitting
+                ? const SizedBox(
+                    key: ValueKey('login-progress'),
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: Colors.white,
+                    ),
+                  )
+                : Row(
+                    key: const ValueKey('login-label'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.enabled) ...[
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        AppLocalizations.of(context)!.logIn,
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                          color: active
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+          ),
+        ),
       ),
     );
   }

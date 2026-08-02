@@ -1,10 +1,15 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'academic_year_options.dart';
+import '../l10n/app_localizations.dart';
 import 'auth_service.dart';
+import 'locale_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
+import 'terms_acceptance_service.dart';
 
 class SignupResult {
   final bool success;
@@ -22,6 +27,12 @@ class SignupLookupItem {
 }
 
 class SignupService {
+  // No BuildContext is available this deep in the service layer; these
+  // fallbacks never come from the server, so they're resolved here via the
+  // current locale rather than pushed up to a caller that may not exist yet.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -36,7 +47,15 @@ class SignupService {
   }
 
   Future<List<SignupLookupItem>> fetchAcademicYears() async {
-    return _fetchLookupItems('academic_years');
+    final years = await _fetchLookupItems('academic_years');
+    return ensurePrepAcademicYear(
+      years,
+      nameOf: (year) => year.name,
+      createPrep: () => const SignupLookupItem(
+        id: prepAcademicYearId,
+        name: prepAcademicYearName,
+      ),
+    );
   }
 
   Future<List<SignupLookupItem>> _fetchLookupItems(String tableName) async {
@@ -81,9 +100,7 @@ class SignupService {
     String? imagePath,
   }) async {
     if (!authService.isValidNewStudentPassword(password)) {
-      return const SignupResult.failure(
-        'Use 6 numbers with no repeated or sequential numbers side by side.',
-      );
+      return SignupResult.failure(_l10n.studentPasswordRule);
     }
 
     final result = await _invoke('complete-signup', {
@@ -94,9 +111,7 @@ class SignupService {
       'academic_year_id': academicYearId,
       'interest_ids': interestIds,
     });
-    if (!result.success || imagePath == null || imagePath.isEmpty) {
-      return result;
-    }
+    if (!result.success) return result;
 
     try {
       final client = _client;
@@ -107,17 +122,36 @@ class SignupService {
       );
       try {
         final userId = authResponse.user?.id;
-        if (userId == null || userId.isEmpty) return result;
-        await studentProfileService.uploadAvatar(
-          userId: userId,
-          bytes: await File(imagePath).readAsBytes(),
-        );
+        if (userId == null || userId.isEmpty) {
+          return SignupResult.failure(_l10n.signupRequestFailed);
+        }
+
+        // The final signup button is disabled until the Terms checkbox is
+        // selected. Persist that acceptance while this new account is
+        // authenticated, even when the student did not choose an avatar.
+        await termsAcceptanceService.accept(requireAuthenticatedRecord: true);
+
+        if (imagePath != null && imagePath.isNotEmpty) {
+          try {
+            await studentProfileService.uploadAvatar(
+              userId: userId,
+              bytes: await File(imagePath).readAsBytes(),
+            );
+          } catch (_) {
+            // The account and its Terms acceptance are already durable. The
+            // optional avatar can be added later from Edit Profile.
+          }
+        }
       } finally {
-        await client.auth.signOut();
+        try {
+          await client.auth.signOut();
+        } catch (_) {
+          // Do not turn a completed signup into a failure solely because the
+          // temporary upload/acceptance session could not be cleared.
+        }
       }
     } catch (_) {
-      // The account is already created. Do not block signup if the optional
-      // avatar upload fails; the user can add it later from Edit Profile.
+      return SignupResult.failure(_l10n.signupRequestFailed);
     }
     return result;
   }
@@ -128,9 +162,7 @@ class SignupService {
   ) async {
     final client = _client;
     if (client == null) {
-      return const SignupResult.failure(
-        'Supabase is not configured. Start the app with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.',
-      );
+      return SignupResult.failure(_l10n.signupServerNotConfigured);
     }
 
     try {
@@ -146,12 +178,10 @@ class SignupService {
         return SignupResult.failure(details['error'].toString());
       }
       return SignupResult.failure(
-        error.reasonPhrase ?? 'Signup request failed.',
+        error.reasonPhrase ?? _l10n.signupRequestFailed,
       );
     } catch (_) {
-      return const SignupResult.failure(
-        'Could not reach the signup server. Please try again.',
-      );
+      return SignupResult.failure(_l10n.couldNotReachSignupServer);
     }
   }
 }

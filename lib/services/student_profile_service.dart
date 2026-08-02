@@ -2,9 +2,25 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'academic_year_options.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
+
+/// Supabase Storage object paths are stable across avatar replacements. A
+/// changing query value gives Flutter's image cache and the storage CDN a new
+/// identity for the new bytes while preserving the underlying public object.
+String versionedAvatarUrl(String publicUrl, {String? version}) {
+  final uri = Uri.parse(publicUrl);
+  return uri
+      .replace(
+        queryParameters: {
+          ...uri.queryParameters,
+          'v': version ?? DateTime.now().microsecondsSinceEpoch.toString(),
+        },
+      )
+      .toString();
+}
 
 class StudentProfileData {
   final String id;
@@ -236,8 +252,16 @@ class StudentProfileService {
     return _fetchLookupItems('majors');
   }
 
-  Future<List<ProfileLookupItem>> fetchAcademicYears() {
-    return _fetchLookupItems('academic_years');
+  Future<List<ProfileLookupItem>> fetchAcademicYears() async {
+    final years = await _fetchLookupItems('academic_years');
+    return ensurePrepAcademicYear(
+      years,
+      nameOf: (year) => year.name,
+      createPrep: () => const ProfileLookupItem(
+        id: prepAcademicYearId,
+        name: prepAcademicYearName,
+      ),
+    );
   }
 
   Future<List<ProfileLookupItem>> fetchInterests() {
@@ -329,10 +353,13 @@ class StudentProfileService {
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'image/jpeg',
+            cacheControl: '0',
           ),
         );
 
-    final publicUrl = client.storage.from('avatars').getPublicUrl(path);
+    final publicUrl = versionedAvatarUrl(
+      client.storage.from('avatars').getPublicUrl(path),
+    );
 
     await client
         .from('profiles')
@@ -342,7 +369,10 @@ class StudentProfileService {
         })
         .eq('id', userId);
 
-    userState.setProfilePhotoUrl(userId, publicUrl);
+    // Profile editors have already written and selected the new local file.
+    // Keep it as the immediate source of truth on this device; signup (which
+    // has no local entry for the new UUID) naturally falls back to this URL.
+    userState.setProfilePhotoUrl(userId, publicUrl, preserveLocal: true);
     return publicUrl;
   }
 

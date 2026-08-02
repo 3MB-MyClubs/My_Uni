@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_colors.dart';
-import '../services/app_links.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
+import 'widgets/terms_content.dart';
 
 class TermsAcceptanceScreen extends StatefulWidget {
   final Future<void> Function() onAccepted;
@@ -19,23 +18,24 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   bool _agreed = false;
   bool _saving = false;
 
-  Future<void> _open(String url) async {
-    final opened = await launchUrl(
-      Uri.parse(url),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.couldNotOpenThisPage)));
-    }
-  }
-
   Future<void> _continue() async {
     if (!_agreed || _saving) return;
     setState(() => _saving = true);
-    await widget.onAccepted();
-    if (mounted) setState(() => _saving = false);
+    try {
+      await widget.onAccepted();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+            ),
+          );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -100,7 +100,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               ),
               const SizedBox(height: 26),
               Text(
-                S.safetyHero,
+                AppLocalizations.of(context)!.safetyHero,
                 style: TextStyle(
                   color: AppColors.text,
                   fontSize: 27,
@@ -111,7 +111,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                S.safetyIntro,
+                AppLocalizations.of(context)!.safetyIntro,
                 style: TextStyle(
                   color: AppColors.secondaryText,
                   fontSize: 15,
@@ -127,65 +127,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                     borderRadius: const BorderRadius.all(Radius.circular(18)),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          S.communitySafetyTerms,
-                          style: TextStyle(
-                            color: AppColors.primaryRed,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.9,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _term(
-                          Icons.shield_outlined,
-                          S.zeroTolerance,
-                          S.zeroToleranceBody,
-                        ),
-                        _term(
-                          Icons.flag_outlined,
-                          S.reportHarmfulContent,
-                          S.reportHarmfulContentBody,
-                        ),
-                        _term(
-                          Icons.block_rounded,
-                          S.blockAbusiveUsers,
-                          S.blockAbusiveUsersBody,
-                        ),
-                        _term(
-                          Icons.gavel_rounded,
-                          S.enforcement,
-                          S.enforcementBody,
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            TextButton(
-                              onPressed: () => _open(
-                                localeService.languageCode == 'tr'
-                                    ? AppLinks.termsOfUseTurkish
-                                    : AppLinks.termsOfUse,
-                              ),
-                              child: Text(S.readFullTerms),
-                            ),
-                            TextButton(
-                              onPressed: () => _open(
-                                localeService.languageCode == 'tr'
-                                    ? AppLinks.privacyPolicyTurkish
-                                    : AppLinks.privacyPolicy,
-                              ),
-                              child: Text(S.privacyPolicy),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  child: const SingleChildScrollView(
+                    padding: EdgeInsets.all(18),
+                    child: TermsContent(),
                   ),
                 ),
               ),
@@ -208,7 +152,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(top: 11),
                           child: Text(
-                            S.agreeToSafetyTerms,
+                            AppLocalizations.of(context)!.agreeToSafetyTerms,
                             style: TextStyle(
                               color: AppColors.text,
                               fontSize: 14,
@@ -237,7 +181,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                           ),
                         )
                       : Text(
-                          S.agreeAndContinue,
+                          AppLocalizations.of(context)!.agreeAndContinue,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -248,38 +192,6 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _term(IconData icon, String title, String body) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.primaryRed, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  body,
-                  style: TextStyle(color: AppColors.secondaryText, height: 1.4),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

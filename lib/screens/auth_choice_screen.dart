@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/app_colors.dart';
 import '../services/app_links.dart';
+import '../l10n/app_localizations.dart';
 import 'club_admin_auth_screen.dart';
 
 class AuthChoiceScreen extends StatelessWidget {
@@ -37,7 +38,7 @@ class AuthChoiceScreen extends StatelessWidget {
                     children: [
                       _buildWordmark(),
                       SizedBox(height: heroGap),
-                      _buildHeroCopy(),
+                      _buildHeroCopy(context),
                       const SizedBox(height: 28),
                       _buildActions(context),
                       const SizedBox(height: 18),
@@ -45,7 +46,9 @@ class AuthChoiceScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             Text(
-                              'By continuing you acknowledge our',
+                              AppLocalizations.of(
+                                context,
+                              )!.byContinuingAcknowledge,
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 11.5,
@@ -64,9 +67,9 @@ class AuthChoiceScreen extends StatelessWidget {
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 foregroundColor: AppColors.primaryRed,
                               ),
-                              child: const Text(
-                                'Privacy Policy',
-                                style: TextStyle(
+                              child: Text(
+                                AppLocalizations.of(context)!.privacyPolicy,
+                                style: const TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
                                   decoration: TextDecoration.underline,
@@ -97,7 +100,7 @@ class AuthChoiceScreen extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            'Club admin sign in',
+                            AppLocalizations.of(context)!.clubAdminSignIn,
                             style: TextStyle(
                               fontSize: 12.5,
                               color: AppColors.secondaryText,
@@ -123,7 +126,11 @@ class AuthChoiceScreen extends StatelessWidget {
     );
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the Privacy Policy.')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)!.couldNotOpenPrivacyPolicy,
+          ),
+        ),
       );
     }
   }
@@ -177,12 +184,12 @@ class AuthChoiceScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeroCopy() {
+  Widget _buildHeroCopy(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Your campus,',
+          AppLocalizations.of(context)!.heroCampusLine1,
           style: TextStyle(
             fontSize: 30,
             height: 1.05,
@@ -192,7 +199,7 @@ class AuthChoiceScreen extends StatelessWidget {
           ),
         ),
         Text(
-          'in your pocket.',
+          AppLocalizations.of(context)!.heroCampusLine2,
           style: TextStyle(
             fontSize: 30,
             height: 1.05,
@@ -205,7 +212,7 @@ class AuthChoiceScreen extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 320),
           child: Text(
-            'Class schedules, dining, events, and the people who make Koç University home.',
+            AppLocalizations.of(context)!.heroSubtext,
             style: TextStyle(
               fontSize: 15.5,
               height: 1.45,
@@ -233,9 +240,9 @@ class AuthChoiceScreen extends StatelessWidget {
                 borderRadius: BorderRadius.all(Radius.circular(15)),
               ),
             ),
-            child: const Text(
-              'Create account',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            child: Text(
+              AppLocalizations.of(context)!.createAccount,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -253,7 +260,7 @@ class AuthChoiceScreen extends StatelessWidget {
               ),
             ),
             child: Text(
-              'I already have one',
+              AppLocalizations.of(context)!.alreadyHaveAccount,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,

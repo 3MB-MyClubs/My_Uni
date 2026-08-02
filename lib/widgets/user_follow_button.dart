@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
@@ -41,10 +42,10 @@ class UserFollowButton extends ConsumerWidget {
     );
 
     final String label = isPending
-        ? 'Requested'
+        ? AppLocalizations.of(context)!.requested
         : isFollowing
-        ? 'Following'
-        : (followLabel ?? 'Follow');
+        ? AppLocalizations.of(context)!.following
+        : (followLabel ?? AppLocalizations.of(context)!.follow);
 
     final bool filled = !isFollowing && !isPending;
 
@@ -79,12 +80,25 @@ class UserFollowButton extends ConsumerWidget {
                 : AppColors.secondaryText.withValues(alpha: 0.4),
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-            color: filled ? Colors.white : AppColors.secondaryText,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            label,
+            key: ValueKey(label),
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+              color: filled ? Colors.white : AppColors.secondaryText,
+            ),
           ),
         ),
       ),

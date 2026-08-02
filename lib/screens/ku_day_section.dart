@@ -20,6 +20,7 @@ import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'ku_day_onboarding_sheet.dart';
 import 'user_profile_screen.dart';
+import '../l10n/app_localizations.dart';
 
 // ── Color palette matching the rest of the app ───────────────────────────────
 const _kColors = [
@@ -38,11 +39,17 @@ Color _colorFor(String id) {
 }
 
 // ── Section header labels ─────────────────────────────────────────────────────
-const _slotLabel = {
-  RecType.happeningNow: 'Happening Now',
-  RecType.bestThisWeek: 'Best for You This Week',
-  RecType.suggestFollow: 'You Might Like',
-};
+String _slotLabelFor(BuildContext context, RecType type) {
+  final l10n = AppLocalizations.of(context)!;
+  switch (type) {
+    case RecType.happeningNow:
+      return l10n.happeningNowHeader;
+    case RecType.bestThisWeek:
+      return l10n.bestForYouThisWeek;
+    case RecType.suggestFollow:
+      return l10n.youMightLike;
+  }
+}
 
 const _slotIcon = {
   RecType.happeningNow: Icons.radio_button_on_rounded,
@@ -115,7 +122,7 @@ class _KuDaySectionState extends State<KuDaySection> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      'Your KU Day',
+                      AppLocalizations.of(context)!.yourKuDay,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -131,7 +138,7 @@ class _KuDaySectionState extends State<KuDaySection> {
                 onTap: () =>
                     showKuDayOnboarding(context).then((_) => setState(() {})),
                 child: Text(
-                  'Tune',
+                  AppLocalizations.of(context)!.tune,
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.primaryRed,
@@ -192,10 +199,11 @@ class _DigestStrip extends StatelessWidget {
         )
         .length;
 
+    final l10n = AppLocalizations.of(context)!;
     final parts = <String>[];
-    if (liveCount > 0) parts.add('$liveCount live now');
-    if (todayCount > 0) parts.add('$todayCount today');
-    if (weekCount > 0) parts.add('$weekCount this week');
+    if (liveCount > 0) parts.add(l10n.liveNowCount(liveCount));
+    if (todayCount > 0) parts.add(l10n.todayEventsCount(todayCount));
+    if (weekCount > 0) parts.add(l10n.thisWeekEventsCount(weekCount));
 
     if (parts.isEmpty) return const SizedBox.shrink();
 
@@ -216,7 +224,7 @@ class _DigestStrip extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Campus today: ${parts.join(' · ')}',
+              l10n.campusTodaySummary(parts.join(' · ')),
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.text,
@@ -254,7 +262,7 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Tell us your interests and we\'ll personalise this for you.',
+                AppLocalizations.of(context)!.tellUsInterests,
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.secondaryText,
@@ -275,7 +283,7 @@ class _EmptyState extends StatelessWidget {
                   borderRadius: BorderRadius.all(Radius.circular(10)),
                 ),
                 child: Text(
-                  'Set up',
+                  AppLocalizations.of(context)!.setUp,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -353,7 +361,7 @@ class _RecCardState extends State<_RecCard> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    _slotLabel[rec.type]!,
+                    _slotLabelFor(context, rec.type),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -473,16 +481,17 @@ class _EventBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final isLive = !event.dateTime.isAfter(now) && event.endTime.isAfter(now);
     final daysAway = event.dateTime.difference(now).inDays;
     final timeLabel = isLive
-        ? 'Happening now'
+        ? l10n.happeningNowInline
         : daysAway == 0
-        ? 'Today'
+        ? l10n.today
         : daysAway == 1
-        ? 'Tomorrow'
-        : 'In $daysAway days';
+        ? l10n.tomorrow
+        : l10n.inNDays(daysAway);
 
     final club = clubForId(event.clubId);
     if (club == null) return const SizedBox.shrink();
@@ -557,7 +566,9 @@ class _EventBody extends StatelessWidget {
                       return Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
-                          '${event.attendeeUserIds.length} attending',
+                          AppLocalizations.of(
+                            context,
+                          )!.attendingCount(event.attendeeUserIds.length),
                           style: TextStyle(
                             fontSize: 11,
                             color: color.withValues(alpha: 0.8),
@@ -629,7 +640,7 @@ class _ClubBody extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$memberCount members',
+                  AppLocalizations.of(context)!.membersCount(memberCount),
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.secondaryText,
@@ -803,7 +814,9 @@ class _EventActionsState extends State<_EventActions> {
           compact: true,
         ),
         _ActionChip(
-          label: _reminded ? 'Remind ✓' : 'Remind me',
+          label: _reminded
+              ? AppLocalizations.of(context)!.remindedLabel
+              : AppLocalizations.of(context)!.remindMeLabel,
           icon: _reminded
               ? Icons.notifications_active_rounded
               : Icons.notifications_outlined,
@@ -860,7 +873,9 @@ class _ClubActionsState extends State<_ClubActions> {
       runSpacing: 8,
       children: [
         _ActionChip(
-          label: _following ? 'Following ✓' : 'Follow',
+          label: _following
+              ? AppLocalizations.of(context)!.followingCheckLabel
+              : AppLocalizations.of(context)!.follow,
           icon: _following
               ? Icons.favorite_rounded
               : Icons.favorite_border_rounded,
@@ -869,7 +884,7 @@ class _ClubActionsState extends State<_ClubActions> {
           onTap: _toggleFollow,
         ),
         _ActionChip(
-          label: 'View',
+          label: AppLocalizations.of(context)!.view,
           icon: Icons.open_in_new_rounded,
           color: widget.color,
           filled: false,
@@ -932,7 +947,9 @@ class _PersonActionsState extends State<_PersonActions> {
       children: [
         if (canInteractWithStudent) ...[
           _ActionChip(
-            label: _following ? 'Following ✓' : 'Follow',
+            label: _following
+                ? AppLocalizations.of(context)!.followingCheckLabel
+                : AppLocalizations.of(context)!.follow,
             icon: _following ? Icons.person_rounded : Icons.person_add_outlined,
             color: widget.color,
             filled: _following,
@@ -940,7 +957,7 @@ class _PersonActionsState extends State<_PersonActions> {
           ),
         ],
         _ActionChip(
-          label: 'Profile',
+          label: AppLocalizations.of(context)!.profile,
           icon: Icons.open_in_new_rounded,
           color: widget.color,
           filled: false,

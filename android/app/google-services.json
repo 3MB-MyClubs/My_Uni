@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1037691756037",
+    "project_id": "clubup-58f3c",
+    "storage_bucket": "clubup-58f3c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1037691756037:android:2a04853b562e2ca83a466c",
+        "android_client_info": {
+          "package_name": "com.threemb.clupup"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDe3fk07xCMGilgV6ryJazmG3EXNMJuGMU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

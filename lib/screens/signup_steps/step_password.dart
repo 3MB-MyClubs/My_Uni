@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
 import 'signup_theme.dart';
 
@@ -49,14 +50,13 @@ class _StepPasswordState extends State<StepPassword> {
     final password = _passwordController.text.trim();
     final confirm = _confirmController.text.trim();
     if (!authService.isValidNewStudentPassword(password)) {
-      setState(
-        () => _error =
-            'Use 6 numbers with no repeated or sequential numbers side by side.',
-      );
+      setState(() => _error = AppLocalizations.of(context)!.passwordRulesError);
       return;
     }
     if (password != confirm) {
-      setState(() => _error = 'Passwords do not match.');
+      setState(
+        () => _error = AppLocalizations.of(context)!.passwordsDoNotMatch,
+      );
       return;
     }
     setState(() => _error = null);
@@ -88,7 +88,7 @@ class _StepPasswordState extends State<StepPassword> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Create a password.',
+                  AppLocalizations.of(context)!.createPasswordTitle,
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -99,7 +99,7 @@ class _StepPasswordState extends State<StepPassword> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  "Choose a 6-digit PIN — numbers only, no letters or symbols.",
+                  AppLocalizations.of(context)!.choose6DigitPinHint,
                   style: TextStyle(
                     fontSize: 15,
                     color: SC.body,
@@ -129,8 +129,8 @@ class _StepPasswordState extends State<StepPassword> {
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
-                    label: 'Password',
-                    hint: '6-digit PIN',
+                    label: AppLocalizations.of(context)!.passwordFieldLabel,
+                    hint: AppLocalizations.of(context)!.digitPinHint(6),
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -168,8 +168,10 @@ class _StepPasswordState extends State<StepPassword> {
                   onChanged: (_) => setState(() => _error = null),
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
-                    label: 'Confirm password',
-                    hint: 'Re-enter 6-digit PIN',
+                    label: AppLocalizations.of(
+                      context,
+                    )!.confirmCredentialLabel('password'),
+                    hint: AppLocalizations.of(context)!.reenterDigitPinHint(6),
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -195,14 +197,24 @@ class _StepPasswordState extends State<StepPassword> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _RuleRow(label: 'Exactly 6 digits', passed: _isExactlySix),
-                _RuleRow(label: 'Numbers only', passed: _hasOnlyNumbers),
                 _RuleRow(
-                  label: 'No same numbers side by side',
+                  label: AppLocalizations.of(context)!.exactlyNDigits(6),
+                  passed: _isExactlySix,
+                ),
+                _RuleRow(
+                  label: AppLocalizations.of(context)!.numbersOnly,
+                  passed: _hasOnlyNumbers,
+                ),
+                _RuleRow(
+                  label: AppLocalizations.of(
+                    context,
+                  )!.noRepeatedNumbersSideBySide,
                   passed: _hasNoRepeatedNeighbors,
                 ),
                 _RuleRow(
-                  label: 'No sequential numbers side by side',
+                  label: AppLocalizations.of(
+                    context,
+                  )!.noSequentialNumbersSideBySide,
                   passed: _hasNoSequentialNeighbors,
                 ),
               ],
@@ -217,7 +229,7 @@ class _StepPasswordState extends State<StepPassword> {
             child: ElevatedButton(
               onPressed: _submit,
               style: SC.primaryButtonStyle(),
-              child: Text('Set password'),
+              child: Text(AppLocalizations.of(context)!.setPasswordButton),
             ),
           ),
         ),

@@ -12,7 +12,7 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/tutorial_service.dart';
+import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 
 /// Drives the profile → Edit Profile flow as Hakan (u5):
@@ -27,18 +27,19 @@ void main() {
     await binding.takeScreenshot(name);
   }
 
-  testWidgets('Edit profile — dedicated screen with majors/minors/interests',
-      (tester) async {
+  testWidgets('Edit profile — dedicated screen with majors/minors/interests', (
+    tester,
+  ) async {
     await hiveBootstrap.initialize();
     await userPrefsService.initialize();
     await contentStore.initialize();
     await viewTracker.initialize();
     await personalizationService.initialize();
     await themeService.initialize();
-    await tutorialService.initialize();
+    await onboardingService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(false);
-    authService.login('htuncay23@ku.edu.tr'); // Hakan (u5)
+    authService.login('htuncay23@ku.edu.tr', '111111'); // Hakan (u5)
 
     // Pre-seed academic info so the display + editor-load are verified
     // deterministically (interactive adds are exercised below as a bonus).
@@ -79,11 +80,16 @@ void main() {
     await shot(tester, 'ep-02-edit-screen');
 
     // Add another double major interactively to prove the editor works.
-    final dmField =
-        find.widgetWithText(TextField, 'Add a double major program');
+    final dmField = find.widgetWithText(
+      TextField,
+      'Add a double major program',
+    );
     if (dmField.evaluate().isNotEmpty) {
-      await tester.scrollUntilVisible(dmField.first, 200,
-          scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(
+        dmField.first,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.enterText(dmField.first, 'Mathematics');
       await tester.pump(const Duration(milliseconds: 200));
       await tester.tap(find.byIcon(Icons.add_rounded).first);

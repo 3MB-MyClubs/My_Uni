@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../services/app_strings.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/notification.dart';
@@ -8,48 +11,85 @@ import '../services/auth_service.dart';
 import '../services/mock_data.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-import '../services/tutorial_anchors.dart';
+import '../services/chat_store.dart';
+import '../services/notification_navigation.dart';
+import '../services/supabase_config.dart';
+import '../services/push_notification_copy.dart';
 import '../widgets/club_avatar.dart';
-import 'club_profile_screen.dart';
-import 'event_detail_screen.dart';
-import 'post_detail_screen.dart';
-import 'user_profile_screen.dart';
 
 /// Notification center: a single chronological feed with unread emphasis and
 /// mark-all-read. Tapping a row marks it read and opens its target. Follow
 /// requests keep their working Accept / Decline actions.
 class NotificationsScreen extends StatefulWidget {
-  /// True only for the instance hosted in the main nav bar's IndexedStack, so
-  /// the app tour's "mark all read" anchor attaches to a single widget — this
-  /// screen is also pushed as a route from the feed bell.
-  final bool isTutorialHost;
-
-  const NotificationsScreen({super.key, this.isTutorialHost = false});
+  const NotificationsScreen({super.key});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
+class _NotificationGroup {
+  const _NotificationGroup({required this.latest, required this.items});
+
+  final AppNotification latest;
+  final List<AppNotification> items;
+}
+
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final List<Map<String, dynamic>> _remoteNotificationRows = [];
+  RealtimeChannel? _notificationChannel;
+
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
-  List<AppNotification> get _allNotifs =>
-      [
-          ...notifications,
-          ...userState.dynamicNotifications,
-        ].where((n) => n.userId == _myId && n.targetType != 'story').toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  List<_NotificationGroup> get _allNotifs {
+    final byId = <String, AppNotification>{};
+    for (final notification in [
+      ..._remoteNotificationRows.map(_remoteFromMap),
+      ...notifications,
+      ...userState.dynamicNotifications,
+    ]) {
+      if (notification.userId != _myId || notification.targetType == 'story') {
+        continue;
+      }
+      if (ChatStore.isAdminAccountId(_myId) &&
+          notification.targetType == 'message' &&
+          notification.notificationType != 'club_channel_message' &&
+          notification.notificationType != 'club_inbox_message') {
+        continue;
+      }
+      byId.putIfAbsent(notification.id, () => notification);
+    }
+
+    final grouped = <String, List<AppNotification>>{};
+    for (final notification in byId.values) {
+      final key =
+          notificationConversationKey(notification) ??
+          'notification:${notification.id}';
+      grouped.putIfAbsent(key, () => <AppNotification>[]).add(notification);
+    }
+
+    final result = grouped.values.map((items) {
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return _NotificationGroup(latest: items.first, items: items);
+    }).toList();
+    result.sort((a, b) => b.latest.createdAt.compareTo(a.latest.createdAt));
+    return result;
+  }
 
   @override
   void initState() {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
+    unawaited(_loadRemoteNotifications());
   }
 
   @override
   void dispose() {
+    final channel = _notificationChannel;
+    if (channel != null && SupabaseConfig.isConfigured) {
+      unawaited(Supabase.instance.client.removeChannel(channel));
+    }
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     super.dispose();
@@ -59,42 +99,171 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (mounted) setState(() {});
   }
 
-  bool _isUnread(AppNotification n) => !userState.isNotificationRead(n);
+  bool _isUnread(_NotificationGroup group) =>
+      group.items.any((n) => !n.read && !userState.isNotificationRead(n));
 
-  // ── Read state ──────────────────────────────────────────────────────────────
-  void _markRead(AppNotification n) {
-    userState.markNotificationRead(n);
+  AppNotification _remoteFromMap(Map<String, dynamic> row) {
+    final rawArgs = row['localization_args'];
+    final args = rawArgs is Map
+        ? Map<String, dynamic>.from(rawArgs)
+        : <String, dynamic>{};
+    final copy = localizedPushNotificationCopy(
+      type: row['type']?.toString() ?? '',
+      args: args,
+      languageCode: localeService.languageCode,
+      fallbackTitle: row['title']?.toString() ?? '',
+      fallbackBody: row['body']?.toString() ?? '',
+    );
+    return AppNotification(
+      id: row['id'] as String,
+      userId: row['user_id'] as String,
+      fromId: row['actor_user_id'] as String?,
+      message: copy.body,
+      createdAt: DateTime.parse(row['created_at'] as String),
+      read: row['read_at'] != null,
+      notificationType: row['type'] as String?,
+      targetType: row['target_type'] as String?,
+      targetId: row['target_id'] as String?,
+    );
   }
 
-  void _markAllRead() => userState.markNotificationsRead(_allNotifs);
+  Future<void> _loadRemoteNotifications() async {
+    if (!SupabaseConfig.isConfigured || _myId.isEmpty) return;
+    final client = Supabase.instance.client;
+    try {
+      final rows = await client
+          .from('notifications')
+          .select()
+          .eq('user_id', _myId)
+          .order('created_at', ascending: false)
+          .limit(100);
+      if (!mounted) return;
+      setState(() {
+        _remoteNotificationRows
+          ..clear()
+          ..addAll(rows.map((row) => Map<String, dynamic>.from(row)));
+      });
+
+      _notificationChannel = client
+          .channel('notifications:$_myId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: _myId,
+            ),
+            callback: (payload) {
+              _upsertRemoteRow(payload.newRecord);
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: _myId,
+            ),
+            callback: (payload) {
+              _upsertRemoteRow(payload.newRecord);
+            },
+          )
+          .subscribe();
+    } catch (_) {
+      // The mock/local notification feed remains available offline.
+    }
+  }
+
+  void _upsertRemoteRow(Map<String, dynamic> rawRow) {
+    if (!mounted) return;
+    final row = Map<String, dynamic>.from(rawRow);
+    final id = row['id'];
+    if (id == null) return;
+    final index = _remoteNotificationRows.indexWhere(
+      (item) => item['id'] == id,
+    );
+    setState(() {
+      if (index < 0) {
+        _remoteNotificationRows.insert(0, row);
+      } else {
+        _remoteNotificationRows[index] = {
+          ..._remoteNotificationRows[index],
+          ...row,
+        };
+      }
+    });
+  }
+
+  // ── Read state ──────────────────────────────────────────────────────────────
+  void _markRead(AppNotification n) =>
+      _markGroupRead(_NotificationGroup(latest: n, items: [n]));
+
+  void _markGroupRead(_NotificationGroup group) {
+    userState.markNotificationsRead(group.items);
+    final remoteIds = group.items
+        .map((n) => n.id)
+        .where((id) => _remoteNotificationRows.any((item) => item['id'] == id))
+        .toSet()
+        .toList(growable: false);
+    if (remoteIds.isEmpty) return;
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    setState(() {
+      for (var index = 0; index < _remoteNotificationRows.length; index++) {
+        if (!remoteIds.contains(_remoteNotificationRows[index]['id'])) continue;
+        _remoteNotificationRows[index] = {
+          ..._remoteNotificationRows[index],
+          'read_at': readAt,
+        };
+      }
+    });
+    unawaited(
+      Supabase.instance.client
+          .from('notifications')
+          .update({'read_at': readAt})
+          .inFilter('id', remoteIds),
+    );
+  }
+
+  void _markAllRead() {
+    final all = _allNotifs;
+    userState.markNotificationsRead(all.expand((group) => group.items));
+    if (_remoteNotificationRows.isEmpty) return;
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    setState(() {
+      for (var index = 0; index < _remoteNotificationRows.length; index++) {
+        _remoteNotificationRows[index] = {
+          ..._remoteNotificationRows[index],
+          'read_at': readAt,
+        };
+      }
+    });
+    unawaited(
+      Supabase.instance.client
+          .from('notifications')
+          .update({'read_at': readAt})
+          .eq('user_id', _myId)
+          .isFilter('read_at', null),
+    );
+  }
 
   // ── Time helper ───────────────────────────────────────────────────────────
   String _timeAgo(DateTime dt) {
+    final l10n = AppLocalizations.of(context)!;
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays == 1) return S.yesterday;
-    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inMinutes < 1) return l10n.justNowShort;
+    if (diff.inMinutes < 60) return l10n.minutesShort(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.hoursShort(diff.inHours);
+    if (diff.inDays == 1) return l10n.yesterday;
+    if (diff.inDays < 7) return l10n.daysShort(diff.inDays);
     final weeks = (diff.inDays / 7).floor();
-    return '${weeks}w';
+    return l10n.weeksShort(weeks);
   }
 
   // ── Navigation (only types with a real destination) ─────────────────────────
-  static const List<Color> _clubColors = [
-    Color(0xFFB41C18),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFF6A1B9A),
-    Color(0xFFE65100),
-    Color(0xFF00838F),
-  ];
-
-  Color _colorForClub(String clubId) {
-    final idx = clubOrdinal(clubId);
-    return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
-  }
-
   /// The club a notification is "from", if any — so its uploaded profile photo
   /// can be shown as the row avatar (clubs are visible app-wide this way).
   dynamic _clubForNotification(AppNotification n) {
@@ -116,66 +285,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _openTarget(AppNotification n) {
-    final type = n.targetType;
-    final id = n.targetId;
-
-    if (type == null || id == null) return;
-    switch (type) {
-      case 'post':
-        final post = newsPosts.firstWhere(
-          (p) => p.id == id,
-          orElse: () => newsPosts.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PostDetailScreen(
-              post: post,
-              clubColor: _colorForClub(post.clubId),
-            ),
-          ),
-        );
-      case 'club':
-        final club = clubs.firstWhere(
-          (c) => c.id == id,
-          orElse: () => clubs.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ClubProfileScreen(club: club, color: _colorForClub(id)),
-          ),
-        );
-      case 'event':
-        final event = events.firstWhere(
-          (e) => e.id == id,
-          orElse: () => events.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EventDetailScreen(
-              event: event,
-              color: _colorForClub(event.clubId),
-            ),
-          ),
-        );
-      case 'user':
-      case 'follow_accepted':
-        final user = users.firstWhere(
-          (u) => u.id == id,
-          orElse: () => users.first,
-        );
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
-        );
-    }
+    unawaited(
+      openNotificationTarget(
+        context,
+        notificationTargetFor(n),
+        currentUserId: _myId,
+      ),
+    );
   }
 
-  void _onRowTap(AppNotification n) {
-    _markRead(n);
+  void _onRowTap(_NotificationGroup group) {
+    final n = group.latest;
+    _markGroupRead(group);
     // Follow requests have no destination — the Accept / Decline buttons act.
     if (n.targetType == 'follow_request') return;
     _openTarget(n);
@@ -185,6 +306,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   (IconData, Color) _tileStyle(AppNotification n) {
     final msg = n.message.toLowerCase();
     switch (n.targetType) {
+      case 'message':
+        return (Icons.chat_bubble_rounded, const Color(0xFF1565C0));
       case 'event':
         return (Icons.event_rounded, const Color(0xFF2E9E5B));
       case 'follow_request':
@@ -303,7 +426,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   Text(
-                    S.notifications,
+                    AppLocalizations.of(context)!.notifications,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -335,11 +458,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   const Spacer(),
                   GestureDetector(
-                    key: widget.isTutorialHost
-                        ? tutorialAnchors.keyFor(
-                            TutorialAnchors.alertsMarkAllRead,
-                          )
-                        : null,
                     onTap: _markAllRead,
                     child: Container(
                       width: 38,
@@ -366,15 +484,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   // ── A single notification row (Style B) ─────────────────────────────────────
-  Widget _row(AppNotification n) {
-    final unread = _isUnread(n);
+  Widget _row(_NotificationGroup group) {
+    final n = group.latest;
+    final unread = _isUnread(group);
     final (icon, accent) = _tileStyle(n);
     final prefix = _boldPrefix(n);
     final pending = _isPending(n);
     final club = _clubForNotification(n);
 
     return InkWell(
-      onTap: () => _onRowTap(n),
+      onTap: () => _onRowTap(group),
       child: Container(
         decoration: BoxDecoration(
           color: unread ? AppColors.card : Colors.transparent,
@@ -533,7 +652,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               borderRadius: BorderRadius.all(Radius.circular(100)),
             ),
             child: Text(
-              S.accept,
+              AppLocalizations.of(context)!.accept,
               style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -557,7 +676,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               border: Border.all(color: AppColors.divider),
             ),
             child: Text(
-              S.decline,
+              AppLocalizations.of(context)!.decline,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -598,7 +717,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              S.nothingHereNotif,
+              AppLocalizations.of(context)!.nothingHereNotif,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
@@ -607,7 +726,7 @@ class _BEmpty extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              S.noNotificationsFor(''),
+              AppLocalizations.of(context)!.noNotificationsFor(''),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/poll_store.dart';
 
@@ -95,7 +95,7 @@ class _PollCardState extends State<PollCard> {
                 ),
               const SizedBox(height: 2),
               Text(
-                S.pollVotes(total),
+                AppLocalizations.of(context)!.pollVotes(total),
                 style: TextStyle(
                   fontSize: 11.5,
                   color: AppColors.secondaryText,

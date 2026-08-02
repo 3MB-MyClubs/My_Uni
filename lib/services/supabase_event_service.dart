@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/event.dart';
 import 'supabase_config.dart';
@@ -104,7 +105,14 @@ class SupabaseEventService {
     final client = _client;
     if (client == null || !_looksLikeUuid(event.id)) return;
 
-    await client.from('events').delete().eq('id', event.id);
+    final deletedRows = await client
+        .from('events')
+        .delete()
+        .eq('id', event.id)
+        .select('id');
+    if (deletedRows.isEmpty) {
+      throw StateError('Event was not deleted.');
+    }
     await _deleteStoredImage(event.imagePath);
   }
 
@@ -119,12 +127,8 @@ class SupabaseEventService {
       title: data['title']?.toString() ?? fallback.title,
       description: data['description']?.toString() ?? fallback.description,
       location: data['location']?.toString() ?? fallback.location,
-      dateTime:
-          DateTime.tryParse(data['starts_at']?.toString() ?? '') ??
-          fallback.dateTime,
-      endTime:
-          DateTime.tryParse(data['ends_at']?.toString() ?? '') ??
-          fallback.endTime,
+      dateTime: tryParseEventDateTime(data['starts_at']) ?? fallback.dateTime,
+      endTime: tryParseEventDateTime(data['ends_at']) ?? fallback.endTime,
       attendeeUserIds: fallback.attendeeUserIds,
       rsvpTimestamps: fallback.rsvpTimestamps,
       imagePath:
@@ -151,8 +155,7 @@ class SupabaseEventService {
     }
 
     final bytes = await File(imagePath).readAsBytes();
-    final objectPath =
-        'events/$clubId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final objectPath = 'events/$clubId/${const Uuid().v4()}.jpg';
 
     await client.storage
         .from(_imageBucket)
@@ -160,8 +163,9 @@ class SupabaseEventService {
           objectPath,
           bytes,
           fileOptions: const FileOptions(
-            upsert: true,
+            upsert: false,
             contentType: 'image/jpeg',
+            cacheControl: '31536000',
           ),
         );
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'signup_theme.dart';
 
 class StepEmail extends StatefulWidget {
@@ -22,6 +23,8 @@ class _StepEmailState extends State<StepEmail> {
   String? _error;
   bool _isSubmitting = false;
 
+  static const _domain = '@ku.edu.tr';
+  static final _localPartRegex = RegExp(r'^[a-zA-Z0-9_.+-]+$');
   static final _emailRegex = RegExp(r'^[a-zA-Z0-9_.+-]+@ku\.edu\.tr$');
 
   @override
@@ -40,25 +43,41 @@ class _StepEmailState extends State<StepEmail> {
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
-    final val = _controller.text.trim();
-    if (val.isEmpty) {
-      setState(() => _error = 'Please enter your university email.');
+    final input = _controller.text.trim().toLowerCase();
+    if (input.isEmpty) {
+      setState(
+        () => _error = AppLocalizations.of(context)!.pleaseEnterUniversityEmail,
+      );
       return;
     }
-    if (!_emailRegex.hasMatch(val)) {
-      setState(() => _error = 'Only @ku.edu.tr addresses are accepted.');
+
+    final email = input.contains('@') ? input : '$input$_domain';
+    if (!_emailRegex.hasMatch(email) ||
+        !_localPartRegex.hasMatch(email.substring(0, email.indexOf('@')))) {
+      setState(
+        () => _error = AppLocalizations.of(context)!.onlyKuAddressesAccepted,
+      );
       return;
     }
     setState(() {
       _error = null;
       _isSubmitting = true;
     });
-    final error = await widget.onNext(val);
+    final error = await widget.onNext(email);
     if (!mounted) return;
     setState(() {
       _error = error;
       _isSubmitting = false;
     });
+  }
+
+  void _normalizePastedAddress(String value) {
+    if (!value.toLowerCase().endsWith(_domain)) return;
+    final localPart = value.substring(0, value.length - _domain.length);
+    _controller.value = TextEditingValue(
+      text: localPart,
+      selection: TextSelection.collapsed(offset: localPart.length),
+    );
   }
 
   @override
@@ -79,7 +98,7 @@ class _StepEmailState extends State<StepEmail> {
               children: [
                 // Title
                 Text(
-                  "What's your\nschool email?",
+                  AppLocalizations.of(context)!.whatsYourSchoolEmail,
                   style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -90,7 +109,7 @@ class _StepEmailState extends State<StepEmail> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  "We'll send a code to confirm you're a Koç student.",
+                  AppLocalizations.of(context)!.sendCodeToConfirmKocStudent,
                   style: TextStyle(
                     fontSize: 15,
                     color: SC.body,
@@ -106,6 +125,7 @@ class _StepEmailState extends State<StepEmail> {
                   autofocus: true,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.done,
+                  onChanged: _normalizePastedAddress,
                   onSubmitted: (_) => _submit(),
                   style: TextStyle(
                     color: SC.ink,
@@ -113,70 +133,10 @@ class _StepEmailState extends State<StepEmail> {
                     letterSpacing: -0.1,
                   ),
                   decoration: SC.fieldDecoration(
-                    label: 'University email',
-                    hint: 'you@ku.edu.tr',
-                    suffixText: '@ku.edu.tr',
+                    label: AppLocalizations.of(context)!.universityEmailLabel,
+                    hint: 'htuncay23',
+                    suffixText: _domain,
                     errorText: _error,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Info box — circular "i" icon
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: SC.burgundyTint,
-                    borderRadius: BorderRadius.all(Radius.circular(10)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: SC.burgundy,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'i',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              height: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              color: SC.burgundyDeep,
-                              fontSize: 12,
-                              height: 1.4,
-                            ),
-                            children: [
-                              TextSpan(text: 'Only '),
-                              TextSpan(
-                                text: '@ku.edu.tr',
-                                style: TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                              TextSpan(
-                                text:
-                                    " addresses are accepted. Personal emails won't work.",
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
@@ -202,7 +162,7 @@ class _StepEmailState extends State<StepEmail> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('Continue'),
+                  : Text(AppLocalizations.of(context)!.continueButton),
             ),
           ),
         ),

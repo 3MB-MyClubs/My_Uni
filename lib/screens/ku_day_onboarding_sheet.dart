@@ -7,6 +7,7 @@ import '../services/personalization_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
+import '../l10n/app_localizations.dart';
 
 /// Lightweight onboarding bottom sheet: interests → major → times → clubs.
 /// Call via [showKuDayOnboarding].
@@ -160,7 +161,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
     key: ValueKey('ku-day-skip-step-$_step'),
     onPressed: _skip,
     child: Text(
-      'Skip setup',
+      AppLocalizations.of(context)!.skipSetup,
       style: TextStyle(
         color: AppColors.secondaryText,
         fontSize: 13,
@@ -190,7 +191,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 color: AppColors.lightRed,
                 borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.auto_awesome_rounded,
                 color: AppColors.primaryRed,
                 size: 22,
@@ -202,7 +203,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Your KU Day',
+                    AppLocalizations.of(context)!.yourKuDay,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -210,7 +211,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     ),
                   ),
                   Text(
-                    'Quick setup — just 4 steps',
+                    AppLocalizations.of(context)!.quickSetupSteps,
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.secondaryText,
@@ -224,7 +225,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         ),
         const SizedBox(height: 24),
         Text(
-          'What are you into?',
+          AppLocalizations.of(context)!.whatAreYouInto,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -233,7 +234,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Pick as many as you like. We\'ll surface what matters to you.',
+          AppLocalizations.of(context)!.pickAsManyInterests,
           style: TextStyle(
             fontSize: 13,
             color: AppColors.secondaryText,
@@ -304,7 +305,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              'Next →',
+              AppLocalizations.of(context)!.nextArrow,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
@@ -338,7 +339,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'What\'s your major?',
+                AppLocalizations.of(context)!.whatsYourMajor,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -353,7 +354,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         Padding(
           padding: EdgeInsets.only(left: 30),
           child: Text(
-            'We\'ll suggest clubs that fit your field.',
+            AppLocalizations.of(context)!.suggestClubsFitField,
             style: TextStyle(
               fontSize: 13,
               color: AppColors.secondaryText,
@@ -475,7 +476,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              'Next →',
+              AppLocalizations.of(context)!.nextArrow,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
@@ -516,7 +517,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'When do you usually have time?',
+                AppLocalizations.of(context)!.whenDoYouHaveTime,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -531,7 +532,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
         Padding(
           padding: EdgeInsets.only(left: 30),
           child: Text(
-            'We\'ll prioritise events that fit your schedule.',
+            AppLocalizations.of(context)!.prioritiseEventsSchedule,
             style: TextStyle(
               fontSize: 13,
               color: AppColors.secondaryText,
@@ -605,7 +606,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              'Next →',
+              AppLocalizations.of(context)!.nextArrow,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
@@ -621,9 +622,12 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
 
     // Rank clubs by how many selected interests they match; exclude followed.
     final candidates =
-        kClubInterestMap.keys
-            .where((id) => !alreadyFollowed.contains(id))
-            .map((id) => (id, personalizationService.interestMatchCount(id)))
+        clubs
+            .where((club) => !alreadyFollowed.contains(club.id))
+            .map(
+              (club) =>
+                  (club.id, personalizationService.interestMatchCount(club.id)),
+            )
             .toList()
           ..sort((a, b) => b.$2.compareTo(a.$2));
 
@@ -668,7 +672,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Clubs picked for you',
+                    AppLocalizations.of(context)!.clubsPickedForYou,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -676,7 +680,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                     ),
                   ),
                   Text(
-                    'Follow to see their posts.',
+                    AppLocalizations.of(context)!.followToSeePosts,
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.secondaryText,
@@ -695,7 +699,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               onPressed: () =>
                   setState(() => _followedInOnboarding.addAll(recommended)),
               child: Text(
-                'Follow all',
+                AppLocalizations.of(context)!.followAll,
                 style: TextStyle(
                   color: AppColors.primaryRed,
                   fontSize: 13,
@@ -742,7 +746,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Center(
               child: Text(
-                'No new clubs to suggest — you\'re already well-connected!',
+                AppLocalizations.of(context)!.noNewClubsToSuggest,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
               ),
@@ -822,7 +826,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                                 ),
                               ),
                               child: Text(
-                                '$matchCount interest match${matchCount > 1 ? 'es' : ''}',
+                                AppLocalizations.of(
+                                  context,
+                                )!.interestMatchCount(matchCount),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: AppColors.accentGold,
@@ -861,7 +867,9 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                           ),
                         ),
                         child: Text(
-                          isFollowed ? 'Following' : 'Follow',
+                          isFollowed
+                              ? AppLocalizations.of(context)!.following
+                              : AppLocalizations.of(context)!.follow,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -892,40 +900,18 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
               elevation: 0,
             ),
             child: Text(
-              'Let\'s go →',
+              AppLocalizations.of(context)!.letsGoArrow,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ),
         ),
         const SizedBox(height: 8),
         Center(
-          child: RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: 'Following ',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-                TextSpan(
-                  text: '${_followedInOnboarding.length}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.primaryRed,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextSpan(
-                  text: ' clubs',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ],
-            ),
+          child: Text(
+            AppLocalizations.of(
+              context,
+            )!.followingClubsCount(_followedInOnboarding.length),
+            style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
           ),
         ),
       ],

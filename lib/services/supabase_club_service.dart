@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/club.dart';
 import 'supabase_config.dart';
@@ -27,7 +28,9 @@ class SupabaseClubService {
     final client = _client;
     if (client == null || !_looksLikeUuid(club.id)) return null;
 
-    final objectPath = 'clubs/${club.id}/avatar.jpg';
+    // Immutable object names let the CDN and on-device cache retain the image
+    // for a year without ever serving stale bytes after a logo replacement.
+    final objectPath = 'clubs/${club.id}/${const Uuid().v4()}.jpg';
 
     await client.storage
         .from(_logoBucket)
@@ -35,8 +38,9 @@ class SupabaseClubService {
           objectPath,
           File(imagePath),
           fileOptions: const FileOptions(
-            upsert: true,
+            upsert: false,
             contentType: 'image/jpeg',
+            cacheControl: '31536000',
           ),
         );
 

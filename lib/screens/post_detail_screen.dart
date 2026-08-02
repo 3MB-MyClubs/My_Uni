@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
-import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
+import '../services/locale_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
-import '../services/post_like_helper.dart';
-import '../services/user_state.dart';
 import '../services/moderation_service.dart';
+import '../services/post_like_helper.dart';
+import '../services/supabase_post_service.dart';
+import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/poll_card.dart';
@@ -42,18 +45,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         title: Text(
-          'Delete post?',
+          AppLocalizations.of(context)!.deletePost,
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: Text(
-          'This post will be permanently removed.',
+          AppLocalizations.of(context)!.deletePostMsg,
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(context)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -66,12 +69,28 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete'),
+            child: Text(AppLocalizations.of(context)!.delete),
           ),
         ],
       ),
-    ).then((confirmed) {
+    ).then((confirmed) async {
       if (confirmed != true || !mounted) return;
+      try {
+        await supabasePostService.deletePost(widget.post);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)!.couldNotDeletePostSupabase,
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      }
       final ok = contentStore.deletePost(widget.post.id, _currentAdminId);
       if (!mounted) return;
       if (ok) {
@@ -84,26 +103,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[dt.month - 1]} ${dt.day}';
+    if (diff.inSeconds < 60) return AppLocalizations.of(context)!.justNow;
+    if (diff.inMinutes < 60) {
+      return AppLocalizations.of(context)!.minutesAgo(diff.inMinutes);
+    }
+    if (diff.inHours < 24) {
+      return AppLocalizations.of(context)!.hoursAgo(diff.inHours);
+    }
+    if (diff.inDays == 1) return AppLocalizations.of(context)!.yesterday;
+    if (diff.inDays < 7) {
+      return AppLocalizations.of(context)!.daysAgo(diff.inDays);
+    }
+    return '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
   }
 
   void _toggleLike() {
@@ -115,7 +126,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _reportPost() async {
     final reason = await showModerationReasonSheet(
       context,
-      title: S.whyReportPost,
+      title: AppLocalizations.of(context)!.whyReportPost,
     );
     if (reason == null || !mounted) return;
 
@@ -133,7 +144,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(
-            delivered ? S.postReportedAndRemoved : S.postHiddenOffline,
+            delivered
+                ? AppLocalizations.of(context)!.postReportedAndRemoved
+                : AppLocalizations.of(context)!.postHiddenOffline,
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -164,7 +177,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         actions: [
           if (isStudent)
             IconButton(
-              tooltip: S.reportPost,
+              tooltip: AppLocalizations.of(context)!.reportPost,
               icon: Icon(Icons.flag_outlined, color: AppColors.secondaryText),
               onPressed: _reportPost,
             ),

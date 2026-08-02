@@ -31,7 +31,7 @@ void main() {
     await themeService.initialize();
     contentStore.applyToLists();
     await themeService.setDark(false);
-    authService.login('htuncay23@ku.edu.tr'); // Hakan (u5)
+    authService.login('htuncay23@ku.edu.tr', '111111'); // Hakan (u5)
 
     // Seed a pending follow request so Accept / Decline is exercised.
     userState.sendFollowRequest('u3', 'u5', 'Emir Karaarslan');

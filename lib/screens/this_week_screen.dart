@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
@@ -13,7 +15,7 @@ import '../services/moderation_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../widgets/event_cover_image.dart';
 import 'event_detail_screen.dart';
 
@@ -60,37 +62,10 @@ String _timeStr(DateTime dt) => '${_fmt2(dt.hour)}:${_fmt2(dt.minute)}';
 
 String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
-const _kMonths = [
-  '',
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-const _kWeekdays = [
-  '',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
-
-String _shortDay(DateTime d) {
-  if (_isDateToday(d)) return S.today;
-  if (_isDateTomorrow(d)) return S.tomorrow;
-  return '${_kWeekdays[d.weekday].substring(0, 3)} ${d.day}';
+String _shortDay(DateTime d, BuildContext context) {
+  if (_isDateToday(d)) return AppLocalizations.of(context)!.today;
+  if (_isDateTomorrow(d)) return AppLocalizations.of(context)!.tomorrow;
+  return '${DateFormat.E(localeService.languageCode).format(d)} ${d.day}';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,16 +150,20 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     return DateTime(n.year, n.month, n.day);
   }
 
-  // Rolling 30-day pool (1 month) — excludes fully-past events, keeps live ones.
+  // Rolling two-year pool — excludes fully-past events, keeps live ones.
   List<Event> get _eventPool {
     final now = DateTime.now();
-    final end = _today.add(const Duration(days: 30));
+    final endExclusive = DateTime(
+      _today.year + 2,
+      _today.month,
+      _today.day + 1,
+    );
     return events
         .where(
           (e) =>
               clubForId(e.clubId) != null &&
               e.endTime.isAfter(now) &&
-              e.dateTime.isBefore(end),
+              e.dateTime.isBefore(endExclusive),
         )
         .toList();
   }
@@ -200,7 +179,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     var list = _eventPool;
     final q = _query.trim().toLowerCase();
     if (q.isNotEmpty) {
-      // Search stays inside the upcoming event window.
+      // Search stays inside the two-year upcoming event window.
       list = list.where((e) => _matchesQuery(e, q)).toList();
     } else {
       if (_audience == 'following') {
@@ -332,6 +311,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     final searching = _query.trim().isNotEmpty;
     final hasFilter =
         _audience != 'all' || _dateFilters.isNotEmpty || _showLive;
+    final contextLabel = _contextLabel();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -372,7 +352,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            S.discoverEvents,
+                            AppLocalizations.of(context)!.discoverEvents,
                             style: TextStyle(
                               fontSize: 27,
                               fontWeight: FontWeight.w800,
@@ -430,7 +410,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     // Audience
                     Expanded(
                       child: _FilterPillBtn(
-                        label: _audience == 'following' ? S.following : S.all,
+                        label: _audience == 'following'
+                            ? AppLocalizations.of(context)!.following
+                            : AppLocalizations.of(context)!.all,
                         icon: _audience == 'following'
                             ? Icons.favorite_outline_rounded
                             : Icons.people_outline_rounded,
@@ -444,10 +426,15 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                     Expanded(
                       child: _FilterPillBtn(
                         label: _dateFilters.isEmpty
-                            ? S.anyDate
+                            ? AppLocalizations.of(context)!.anyDate
                             : _dateFilters.length == 1
-                            ? _shortDay(_dayKeyToDate(_dateFilters.first))
-                            : '${_dateFilters.length} days',
+                            ? _shortDay(
+                                _dayKeyToDate(_dateFilters.first),
+                                context,
+                              )
+                            : AppLocalizations.of(
+                                context,
+                              )!.daysCount(_dateFilters.length),
                         icon: Icons.calendar_today_outlined,
                         active: _dateFilters.isNotEmpty,
                         onTap: _showDateSheet,
@@ -501,7 +488,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
-                      '${results.length} ${results.length == 1 ? 'event' : 'events'}',
+                      AppLocalizations.of(context)!.eventsCount(results.length),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -509,18 +496,20 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _contextLabel(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.secondaryText,
+                    if (contextLabel.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          contextLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.secondaryText,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -554,7 +543,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                         // Anchor the tour's "RSVP" step to the first event's
                         // pill — only on the nav-hosted instance.
                         rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
-                            ? tutorialAnchors.keyFor(TutorialAnchors.eventsRsvp)
+                            ? onboardingAnchors.keyFor(
+                                OnboardingAnchors.eventsRsvp,
+                              )
                             : null,
                       ),
                     );
@@ -581,18 +572,20 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   String _contextLabel() {
     final q = _query.trim();
-    if (q.isNotEmpty) return '· "$q"';
+    if (q.isNotEmpty) return AppLocalizations.of(context)!.filterQueryLabel(q);
     final parts = <String>[];
-    if (_showLive) parts.add('live now');
-    if (_audience == 'following') parts.add('following');
+    if (_showLive) parts.add(AppLocalizations.of(context)!.liveNowFilterLabel);
+    if (_audience == 'following') {
+      parts.add(AppLocalizations.of(context)!.followingFilterLabel);
+    }
     if (_dateFilters.isNotEmpty) {
       parts.add(
         _dateFilters.length == 1
-            ? _shortDay(_dayKeyToDate(_dateFilters.first))
-            : '${_dateFilters.length} days',
+            ? _shortDay(_dayKeyToDate(_dateFilters.first), context)
+            : AppLocalizations.of(context)!.daysCount(_dateFilters.length),
       );
     }
-    if (parts.isEmpty) return '· next month';
+    if (parts.isEmpty) return '';
     return '· ${parts.join(' · ')}';
   }
 }
@@ -660,7 +653,7 @@ class _SearchBarState extends State<_SearchBar> {
                 disabledBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
-                hintText: S.searchEvents,
+                hintText: AppLocalizations.of(context)!.searchEvents,
                 hintStyle: TextStyle(
                   fontSize: 15,
                   color: AppColors.secondaryText,
@@ -804,7 +797,7 @@ class _LiveToggleBtn extends StatelessWidget {
             _PulseDot(color: active ? Colors.white : AppColors.primaryRed),
             const SizedBox(width: 6),
             Text(
-              S.live,
+              AppLocalizations.of(context)!.live,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -858,7 +851,7 @@ class _AudienceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            S.showEventsFrom,
+            AppLocalizations.of(context)!.showEventsFrom,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
@@ -868,16 +861,16 @@ class _AudienceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _AudienceOption(
-            label: S.allEvents,
-            subtitle: S.everythingOnCampus,
+            label: AppLocalizations.of(context)!.allEvents,
+            subtitle: AppLocalizations.of(context)!.everythingOnCampus,
             icon: Icons.public_outlined,
             selected: current == 'all',
             onTap: () => onPick('all'),
           ),
           const SizedBox(height: 10),
           _AudienceOption(
-            label: S.following,
-            subtitle: S.followingOnly,
+            label: AppLocalizations.of(context)!.following,
+            subtitle: AppLocalizations.of(context)!.followingOnly,
             icon: Icons.favorite_outline_rounded,
             selected: current == 'following',
             onTap: () => onPick('following'),
@@ -980,7 +973,7 @@ class _AudienceOption extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Date picker bottom sheet — 1-month calendar grid
+// Date picker bottom sheet — vertically scrolling two-year calendar
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DatePickerSheet extends StatefulWidget {
@@ -994,37 +987,16 @@ class _DatePickerSheet extends StatefulWidget {
 
 class _DatePickerSheetState extends State<_DatePickerSheet> {
   late Set<String> _temp;
-
-  // Drag-to-select-range support: a GlobalKey per day cell so we can hit-test
-  // the pointer's global position against each cell's RenderBox while
-  // dragging, plus whether that day is disabled (past).
   final Map<String, GlobalKey> _cellKeys = {};
-  final Map<String, bool> _cellPast = {};
-
-  // Cell + add-vs-remove mode captured at touch-down, but not applied yet —
-  // a plain tap also fires onPanDown, and applying immediately would double
-  // toggle that cell once the tap's own onTap runs (Pan is only confirmed,
-  // and this pending state promoted, once onPanStart actually fires).
-  String? _pendingStartKey;
-  bool? _pendingAdding;
-
-  // Mode of the in-progress (confirmed) drag, and the last cell it touched
-  // so we only act once per cell crossed.
-  bool? _dragAdding;
+  String? _pendingDragKey;
+  bool? _pendingDragAdding;
   String? _lastDragKey;
+  bool? _dragAdding;
 
   @override
   void initState() {
     super.initState();
     _temp = {...widget.selected};
-    final today = _todayDate;
-    for (final week in _weeks) {
-      for (final day in week) {
-        final key = _dayKey(day);
-        _cellKeys.putIfAbsent(key, () => GlobalKey());
-        _cellPast[key] = day.isBefore(today);
-      }
-    }
   }
 
   DateTime get _todayDate {
@@ -1032,76 +1004,93 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     return DateTime(n.year, n.month, n.day);
   }
 
-  // Monday of the current week.
-  DateTime get _weekStart {
-    final t = _todayDate;
-    return t.subtract(Duration(days: t.weekday - 1));
+  DateTime get _endDate =>
+      DateTime(_todayDate.year + 2, _todayDate.month, _todayDate.day);
+
+  List<DateTime> get _months {
+    final first = DateTime(_todayDate.year, _todayDate.month);
+    final last = DateTime(_endDate.year, _endDate.month);
+    final count = (last.year - first.year) * 12 + last.month - first.month + 1;
+    return List.generate(count, (index) {
+      return DateTime(first.year, first.month + index);
+    });
   }
 
-  // Week rows to display: from current week through the week that covers today+29.
-  List<List<DateTime>> get _weeks {
-    final end = _todayDate.add(const Duration(days: 30));
-    final List<List<DateTime>> rows = [];
-    var ws = _weekStart;
-    while (ws.isBefore(end)) {
-      rows.add(List.generate(7, (i) => ws.add(Duration(days: i))));
-      ws = ws.add(const Duration(days: 7));
-    }
-    return rows;
+  void _toggleDate(DateTime day) {
+    final key = _dayKey(day);
+    setState(() {
+      if (!_temp.add(key)) _temp.remove(key);
+    });
   }
 
   String? _dayKeyAt(Offset globalPosition) {
     for (final entry in _cellKeys.entries) {
-      final box = entry.value.currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.attached) continue;
-      final local = box.globalToLocal(globalPosition);
+      final renderObject = entry.value.currentContext?.findRenderObject();
+      if (renderObject is! RenderBox || !renderObject.attached) continue;
+      final local = renderObject.globalToLocal(globalPosition);
       if (local.dx >= 0 &&
           local.dy >= 0 &&
-          local.dx <= box.size.width &&
-          local.dy <= box.size.height) {
+          local.dx <= renderObject.size.width &&
+          local.dy <= renderObject.size.height) {
         return entry.key;
       }
     }
     return null;
   }
 
-  // onPanDown fires on every touch, including a plain tap — just remember
-  // what the drag *would* do here without mutating selection yet.
-  void _handleDragDown(Offset globalPosition) {
+  bool _isSelectableKey(String key) {
+    final date = _dateForKey(key);
+    if (date == null) return false;
+    return !date.isBefore(_todayDate) && !date.isAfter(_endDate);
+  }
+
+  DateTime? _dateForKey(String key) {
+    final parts = key.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  void _handleDateDragDown(Offset globalPosition) {
     final key = _dayKeyAt(globalPosition);
-    if (key == null || _cellPast[key] == true) {
-      _pendingStartKey = null;
-      _pendingAdding = null;
+    if (key == null || !_isSelectableKey(key)) {
+      _pendingDragKey = null;
+      _pendingDragAdding = null;
       return;
     }
-    _pendingStartKey = key;
-    _pendingAdding = !_temp.contains(key);
+    _pendingDragKey = key;
+    _pendingDragAdding = !_temp.contains(key);
   }
 
-  // onPanStart only fires once the pointer has actually moved past the pan
-  // slop, i.e. once this is confirmed to be a real drag (a plain tap never
-  // reaches this point). Promote the pending start cell now, then also
-  // handle wherever the pointer already is post-slop.
-  void _handleDragStart(Offset globalPosition) {
-    if (_pendingStartKey != null && _pendingAdding != null) {
-      _dragAdding = _pendingAdding;
-      _lastDragKey = _pendingStartKey;
-      _applyToCell(_pendingStartKey!, _dragAdding!);
-    }
-    _handleDragUpdate(globalPosition);
+  void _handleDateDragStart(Offset globalPosition) {
+    final startKey = _pendingDragKey;
+    final adding = _pendingDragAdding;
+    if (startKey == null || adding == null) return;
+    _dragAdding = adding;
+    _lastDragKey = startKey;
+    _applyDragToKey(startKey);
+    _handleDateDragUpdate(globalPosition);
   }
 
-  void _handleDragUpdate(Offset globalPosition) {
-    if (_dragAdding == null) return;
+  void _handleDateDragUpdate(Offset globalPosition) {
     final key = _dayKeyAt(globalPosition);
-    if (key == null || _cellPast[key] == true || key == _lastDragKey) return;
+    if (_dragAdding == null ||
+        key == null ||
+        key == _lastDragKey ||
+        !_isSelectableKey(key)) {
+      return;
+    }
+    final previousKey = _lastDragKey!;
     _lastDragKey = key;
-    _applyToCell(key, _dragAdding!);
+    _applyDragThroughKeys(previousKey, key);
   }
 
-  void _applyToCell(String key, bool adding) {
+  void _applyDragToKey(String key) {
     setState(() {
-      if (adding) {
+      if (_dragAdding!) {
         _temp.add(key);
       } else {
         _temp.remove(key);
@@ -1109,20 +1098,182 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
     });
   }
 
-  void _endDrag() {
-    _pendingStartKey = null;
-    _pendingAdding = null;
-    _dragAdding = null;
+  void _applyDragThroughKeys(String fromKey, String toKey) {
+    final from = _dateForKey(fromKey);
+    final to = _dateForKey(toKey);
+    if (from == null || to == null) return;
+    final first = from.isBefore(to) ? from : to;
+    final last = from.isBefore(to) ? to : from;
+
+    setState(() {
+      for (
+        var day = first;
+        !day.isAfter(last);
+        day = day.add(const Duration(days: 1))
+      ) {
+        final key = _dayKey(day);
+        if (!_isSelectableKey(key)) continue;
+        if (_dragAdding!) {
+          _temp.add(key);
+        } else {
+          _temp.remove(key);
+        }
+      }
+    });
+  }
+
+  void _endDateDrag() {
+    _pendingDragKey = null;
+    _pendingDragAdding = null;
     _lastDragKey = null;
+    _dragAdding = null;
+  }
+
+  String _monthName(BuildContext context, int month) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (month) {
+      1 => l10n.monthJanuary,
+      2 => l10n.monthFebruary,
+      3 => l10n.monthMarch,
+      4 => l10n.monthApril,
+      5 => l10n.monthMay,
+      6 => l10n.monthJune,
+      7 => l10n.monthJuly,
+      8 => l10n.monthAugust,
+      9 => l10n.monthSeptember,
+      10 => l10n.monthOctober,
+      11 => l10n.monthNovember,
+      12 => l10n.monthDecember,
+      _ => '',
+    };
+  }
+
+  Widget _buildMonth(BuildContext context, DateTime month) {
+    final today = _todayDate;
+    final endDate = _endDate;
+    final firstDay = DateTime(month.year, month.month);
+    final leadingSpaces = firstDay.weekday - 1;
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final populatedCells = leadingSpaces + daysInMonth;
+    final cellCount = ((populatedCells + 6) ~/ 7) * 7;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 8, 0, 8),
+            child: Text(
+              '${_monthName(context, month.month)} ${month.year}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.text,
+                letterSpacing: -0.25,
+              ),
+            ),
+          ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisExtent: 44,
+            ),
+            itemCount: cellCount,
+            itemBuilder: (context, index) {
+              final dayNumber = index - leadingSpaces + 1;
+              if (dayNumber < 1 || dayNumber > daysInMonth) {
+                return const SizedBox.shrink();
+              }
+
+              final day = DateTime(month.year, month.month, dayNumber);
+              final isToday = day == today;
+              final isDisabled = day.isBefore(today) || day.isAfter(endDate);
+              final dayKey = _dayKey(day);
+              final isSelected = _temp.contains(dayKey);
+
+              return Semantics(
+                label:
+                    '${_monthName(context, day.month)} ${day.day}, ${day.year}',
+                hint: 'Tap one date or drag horizontally to select a week',
+                selected: isSelected,
+                enabled: !isDisabled,
+                button: true,
+                child: GestureDetector(
+                  key: ValueKey('event-date-$dayKey'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: isDisabled ? null : () => _toggleDate(day),
+                  onHorizontalDragDown: isDisabled
+                      ? null
+                      : (details) =>
+                            _handleDateDragDown(details.globalPosition),
+                  onHorizontalDragStart: isDisabled
+                      ? null
+                      : (details) =>
+                            _handleDateDragStart(details.globalPosition),
+                  onHorizontalDragUpdate: isDisabled
+                      ? null
+                      : (details) =>
+                            _handleDateDragUpdate(details.globalPosition),
+                  onHorizontalDragEnd: isDisabled
+                      ? null
+                      : (_) => _endDateDrag(),
+                  onHorizontalDragCancel: isDisabled ? null : _endDateDrag,
+                  child: Center(
+                    child: AnimatedContainer(
+                      key: _cellKeys.putIfAbsent(dayKey, GlobalKey.new),
+                      duration: const Duration(milliseconds: 120),
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primaryRed
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                        border: isToday && !isSelected
+                            ? Border.all(
+                                color: AppColors.primaryRed,
+                                width: 1.5,
+                              )
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$dayNumber',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: isSelected || isToday
+                              ? FontWeight.w800
+                              : FontWeight.w500,
+                          color: isSelected
+                              ? Colors.white
+                              : isDisabled
+                              ? AppColors.divider
+                              : isToday
+                              ? AppColors.primaryRed
+                              : AppColors.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final today = _todayDate;
-    final weeks = _weeks;
+    final months = _months;
 
     return Container(
+      height: MediaQuery.sizeOf(context).height * 0.88,
       padding: EdgeInsets.fromLTRB(20, 10, 20, bottom + 20),
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -1136,7 +1287,6 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
         ],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           // Drag handle
           Container(
@@ -1152,7 +1302,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
           Row(
             children: [
               Text(
-                S.pickDate,
+                AppLocalizations.of(context)!.pickDate,
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -1165,7 +1315,7 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 GestureDetector(
                   onTap: () => setState(_temp.clear),
                   child: Text(
-                    S.clear,
+                    AppLocalizations.of(context)!.clear,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1197,104 +1347,16 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                 .toList(),
           ),
           const SizedBox(height: 8),
-          // Week rows. Wrapped in a single pan detector so a press-and-drag
-          // across cells range-selects them (tap-to-toggle on each cell still
-          // works independently — see _handleDragDown/_handleDragStart for
-          // why the starting cell isn't applied until the pan is confirmed).
-          GestureDetector(
-            onPanDown: (d) => _handleDragDown(d.globalPosition),
-            onPanStart: (d) => _handleDragStart(d.globalPosition),
-            onPanUpdate: (d) => _handleDragUpdate(d.globalPosition),
-            onPanEnd: (_) => _endDrag(),
-            onPanCancel: _endDrag,
-            child: Column(
-              children: [
-                for (int wi = 0; wi < weeks.length; wi++) ...[
-                  // Month label when a new month starts
-                  if (wi == 0 ||
-                      weeks[wi][0].month != weeks[wi - 1][0].month) ...[
-                    const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${_kMonths[weeks[wi][0].month]} ${weeks[wi][0].year}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.secondaryText,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                  ],
-                  Row(
-                    children: weeks[wi].map((day) {
-                      final isToday =
-                          day.year == today.year &&
-                          day.month == today.month &&
-                          day.day == today.day;
-                      final isPast = day.isBefore(today);
-                      final dayKey = _dayKey(day);
-                      final isSelected = _temp.contains(dayKey);
-
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: isPast
-                              ? null
-                              : () => setState(() {
-                                  if (!_temp.add(dayKey)) {
-                                    _temp.remove(dayKey);
-                                  }
-                                }),
-                          child: AnimatedContainer(
-                            key: _cellKeys[dayKey],
-                            duration: const Duration(milliseconds: 120),
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 3,
-                              horizontal: 1,
-                            ),
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.primaryRed
-                                  : Colors.transparent,
-                              shape: BoxShape.circle,
-                              border: isToday && !isSelected
-                                  ? Border.all(
-                                      color: AppColors.primaryRed,
-                                      width: 1.5,
-                                    )
-                                  : null,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${day.day}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: isSelected || isToday
-                                      ? FontWeight.w800
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : isPast
-                                      ? AppColors.divider
-                                      : isToday
-                                      ? AppColors.primaryRed
-                                      : AppColors.text,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
+          Expanded(
+            child: ListView.builder(
+              key: const PageStorageKey('two-year-event-date-picker'),
+              padding: const EdgeInsets.only(top: 2),
+              itemCount: months.length,
+              itemBuilder: (context, index) =>
+                  _buildMonth(context, months[index]),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           // Done button
           GestureDetector(
             onTap: () => Navigator.pop(context, _DateResult({..._temp})),
@@ -1318,8 +1380,10 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
               ),
               child: Text(
                 _temp.isEmpty
-                    ? S.showAllDates
-                    : 'Show events for ${_temp.length} selected ${_temp.length == 1 ? 'date' : 'dates'}',
+                    ? AppLocalizations.of(context)!.showAllDates
+                    : AppLocalizations.of(
+                        context,
+                      )!.showEventsForSelectedDates(_temp.length),
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -1355,15 +1419,17 @@ class _WeekEventRow extends StatelessWidget {
     this.rsvpAnchorKey,
   });
 
-  String _dateTimeChipLabel() {
-    if (_isLive(event)) return 'LIVE · ${_timeStr(event.dateTime)}';
+  String _dateTimeChipLabel(BuildContext context) {
+    if (_isLive(event)) {
+      return '${AppLocalizations.of(context)!.liveNowLabel} · ${_timeStr(event.dateTime)}';
+    }
     if (_isDateToday(event.dateTime)) {
-      return '${S.today} · ${_timeStr(event.dateTime)}';
+      return '${AppLocalizations.of(context)!.today} · ${_timeStr(event.dateTime)}';
     }
     if (_isDateTomorrow(event.dateTime)) {
-      return '${S.tomorrow} · ${_timeStr(event.dateTime)}';
+      return '${AppLocalizations.of(context)!.tomorrow} · ${_timeStr(event.dateTime)}';
     }
-    return '${_kWeekdays[event.dateTime.weekday].substring(0, 3)}. ${_timeStr(event.dateTime)}';
+    return '${DateFormat.E(localeService.languageCode).format(event.dateTime)}. ${_timeStr(event.dateTime)}';
   }
 
   @override
@@ -1445,7 +1511,7 @@ class _WeekEventRow extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        _dateTimeChipLabel(),
+                        _dateTimeChipLabel(context),
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.94),
                           fontSize: 11,
@@ -1532,7 +1598,9 @@ class _WeekEventRow extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            '${event.attendeeUserIds.length} attending',
+                            AppLocalizations.of(
+                              context,
+                            )!.attendingCount(event.attendeeUserIds.length),
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -1577,7 +1645,7 @@ class _WeekRsvpPill extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
         ),
         child: Text(
-          S.ended,
+          AppLocalizations.of(context)!.ended,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1630,7 +1698,9 @@ class _WeekRsvpPill extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      attending ? S.going : S.rsvp,
+                      attending
+                          ? AppLocalizations.of(context)!.going
+                          : AppLocalizations.of(context)!.rsvp,
                       maxLines: 1,
                       style: TextStyle(
                         fontSize: 13,
@@ -1674,10 +1744,14 @@ class _EmptyState extends StatelessWidget {
     // to reset.
     final trulyEmpty = !searching && !hasFilter;
     final active = searching || hasFilter;
-    final String title = trulyEmpty ? S.noEventsYet : S.noEventsFound;
+    final String title = trulyEmpty
+        ? AppLocalizations.of(context)!.noEventsYet
+        : AppLocalizations.of(context)!.noEventsFound;
     final String subtitle = searching
-        ? S.tryDifferentKeyword
-        : (hasFilter ? S.nothingScheduled : S.checkBackLater);
+        ? AppLocalizations.of(context)!.tryDifferentKeyword
+        : (hasFilter
+              ? AppLocalizations.of(context)!.nothingScheduled
+              : AppLocalizations.of(context)!.checkBackLater);
 
     return Center(
       child: Padding(
@@ -1735,7 +1809,7 @@ class _EmptyState extends StatelessWidget {
                     borderRadius: BorderRadius.all(Radius.circular(100)),
                   ),
                   child: Text(
-                    S.resetFilters,
+                    AppLocalizations.of(context)!.resetFilters,
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
@@ -1884,7 +1958,7 @@ class _NewEventsSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        S.newEvents,
+                        AppLocalizations.of(context)!.newEvents,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
@@ -1893,7 +1967,9 @@ class _NewEventsSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${events.length} unopened ${events.length == 1 ? 'event' : 'events'}',
+                        AppLocalizations.of(
+                          context,
+                        )!.unopenedEventsCount(events.length),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1957,7 +2033,7 @@ class _NoNewEventsState extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            S.allCaughtUp,
+            AppLocalizations.of(context)!.allCaughtUp,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w900,
@@ -1966,7 +2042,7 @@ class _NoNewEventsState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            S.newEventsHint,
+            AppLocalizations.of(context)!.newEventsHint,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -2025,7 +2101,9 @@ class _NewEventNotificationCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _kMonths[event.dateTime.month].toUpperCase(),
+                    DateFormat.MMM(
+                      localeService.languageCode,
+                    ).format(event.dateTime).toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 10,
@@ -2062,7 +2140,7 @@ class _NewEventNotificationCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _createdLabel(createdAt),
+                        _createdLabel(context, createdAt),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -2085,7 +2163,7 @@ class _NewEventNotificationCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${club.name} · ${_kWeekdays[event.dateTime.weekday].substring(0, 3)} · ${_timeStr(event.dateTime)}',
+                    '${club.name} · ${DateFormat.E(localeService.languageCode).format(event.dateTime)} · ${_timeStr(event.dateTime)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -2109,13 +2187,19 @@ class _NewEventNotificationCard extends StatelessWidget {
     );
   }
 
-  String _createdLabel(DateTime createdAt) {
+  String _createdLabel(BuildContext context, DateTime createdAt) {
     final diff = DateTime.now().difference(createdAt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return 'New';
+    if (diff.inMinutes < 1) return AppLocalizations.of(context)!.justNow;
+    if (diff.inMinutes < 60) {
+      return AppLocalizations.of(context)!.minutesAgo(diff.inMinutes);
+    }
+    if (diff.inHours < 24) {
+      return AppLocalizations.of(context)!.hoursAgo(diff.inHours);
+    }
+    if (diff.inDays < 7) {
+      return AppLocalizations.of(context)!.daysAgo(diff.inDays);
+    }
+    return AppLocalizations.of(context)!.newLabel;
   }
 }
 

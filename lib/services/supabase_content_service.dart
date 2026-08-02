@@ -1,23 +1,36 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
+import 'locale_service.dart';
 import 'mock_data.dart';
+import 'mock_clubup_profile.dart';
 import 'poll_store.dart';
 import 'supabase_config.dart';
 import 'supabase_club_service.dart';
 import 'user_state.dart';
 
 class SupabaseContentService {
+  bool _hasAppliedRemoteContent = false;
+
+  // No BuildContext is available this deep in the service layer; these
+  // fallback labels are resolved here via the current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
   }
 
-  Future<void> refreshPublicContent() async {
+  Future<bool> refreshPublicContent({bool Function()? shouldApply}) async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) return true;
+    final preservedMockClub = clubUpMockClub;
+    final includeModerationArchive = await _isPlatformAdmin(client);
 
     // Events older than EventCleanupService's 24h-past-end retention window
     // are already permanently deleted, so this cutoff (with margin for
@@ -27,44 +40,71 @@ class SupabaseContentService {
         .subtract(const Duration(days: 2))
         .toIso8601String();
     final results = await Future.wait([
-      client.from('clubs').select('*, club_categories(name)'),
       client
-          .from('events')
-          .select()
-          .gte('starts_at', eventsCutoff)
-          .order('starts_at', ascending: true)
-          .limit(500),
-      client
-          .from('club_posts')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(500),
+          .from('clubs')
+          .select(
+            'id, name, short_name, description, logo_url, category_id, email, club_categories(name)',
+          ),
+      if (includeModerationArchive)
+        _fetchAllRows(
+          client,
+          table: 'events',
+          columns:
+              'id, club_id, title, description, location, image_url, starts_at, ends_at, image_path, created_by_user_id, tags, registration_url, schedule, speakers',
+        )
+      else
+        client
+            .from('events')
+            .select(
+              'id, club_id, title, description, location, image_url, starts_at, ends_at, image_path, created_by_user_id, tags, registration_url, schedule, speakers',
+            )
+            .gte('starts_at', eventsCutoff)
+            .order('starts_at', ascending: true)
+            .limit(500),
+      if (includeModerationArchive)
+        _fetchAllRows(
+          client,
+          table: 'club_posts',
+          columns: 'id, club_id, content, image_url, image_path, created_at',
+        )
+      else
+        client
+            .from('club_posts')
+            .select('id, club_id, content, image_url, image_path, created_at')
+            .order('created_at', ascending: false)
+            .limit(500),
     ]);
 
-    final nextClubs = (results[0] as List)
+    final nextClubs = results[0]
         .map((row) => _clubFromRow(Map<String, dynamic>.from(row as Map)))
         .where((club) => club.id.isNotEmpty)
         .toList();
-    final visibleClubIds = nextClubs.map((club) => club.id).toSet();
     await _hydrateBoardMembers(client, nextClubs);
-    final nextEvents = (results[1] as List)
+    if (isClubUpMockProfileRegistered && preservedMockClub != null) {
+      nextClubs.removeWhere((club) => club.id == preservedMockClub.id);
+      nextClubs.add(preservedMockClub);
+    }
+    final visibleClubIds = nextClubs.map((club) => club.id).toSet();
+    final nextEvents = results[1]
         .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
         .where(
           (event) =>
               event.id.isNotEmpty && visibleClubIds.contains(event.clubId),
         )
         .toList();
-    var nextPosts = (results[2] as List)
+    var nextPosts = results[2]
         .map((row) => _postFromRow(Map<String, dynamic>.from(row as Map)))
         .where(
           (post) => post.id.isNotEmpty && visibleClubIds.contains(post.clubId),
         )
         .toList();
-    nextPosts = await _attachPolls(client, nextPosts);
+    nextPosts = await _attachPolls(client, nextPosts, shouldApply: shouldApply);
 
-    // A successful empty response is authoritative. Keeping the previous/mock
-    // rows here could retain content that RLS intentionally filtered out and
-    // later make an orphan event appear under an unrelated fallback club.
+    if (shouldApply != null && !shouldApply()) return false;
+
+    // A successful empty response is authoritative for remote rows. The one
+    // development-only mock profile was reattached explicitly above; keeping
+    // any other previous rows could retain content that RLS filtered out.
     clubs
       ..clear()
       ..addAll(nextClubs);
@@ -74,11 +114,53 @@ class SupabaseContentService {
     newsPosts
       ..clear()
       ..addAll(nextPosts);
+    _hasAppliedRemoteContent = true;
+    return true;
   }
 
-  Future<void> refreshEngagementCounts() async {
+  Future<bool> _isPlatformAdmin(SupabaseClient client) async {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return false;
+    try {
+      final rows = await client
+          .from('app_admins')
+          .select('auth_user_id')
+          .eq('auth_user_id', userId)
+          .limit(1);
+      return rows.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Platform moderation must not inherit the public feed's 500-row cap.
+  /// UUID keyset pagination keeps each page indexed and avoids OFFSET scans.
+  Future<List<dynamic>> _fetchAllRows(
+    SupabaseClient client, {
+    required String table,
+    required String columns,
+  }) async {
+    const pageSize = 500;
+    final result = <dynamic>[];
+    String? cursor;
+
+    while (true) {
+      var query = client.from(table).select(columns);
+      if (cursor != null) query = query.gt('id', cursor);
+      final rows = await query.order('id').limit(pageSize);
+      result.addAll(rows);
+      if (rows.length < pageSize) break;
+
+      final nextCursor = (rows.last as Map)['id']?.toString();
+      if (nextCursor == null || nextCursor == cursor) break;
+      cursor = nextCursor;
+    }
+    return result;
+  }
+
+  Future<bool> refreshEngagementCounts({bool Function()? shouldApply}) async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) return true;
 
     final nextMemberCounts = <String, int>{};
     final nextPostLikeCounts = <String, int>{};
@@ -151,6 +233,8 @@ class SupabaseContentService {
       }
     }
 
+    if (shouldApply != null && !shouldApply()) return false;
+
     for (final event in events) {
       final attendeeIds = nextEventRsvpIds[event.id];
       if (attendeeIds == null) continue;
@@ -165,6 +249,21 @@ class SupabaseContentService {
     supabasePostLikeCounts
       ..clear()
       ..addAll(nextPostLikeCounts);
+    return true;
+  }
+
+  /// Removes only snapshots that came from Supabase.
+  ///
+  /// RLS-filtered rows from one authenticated account cannot remain visible
+  /// while another account signs in.
+  void clearSessionContent() {
+    if (!_hasAppliedRemoteContent) return;
+    clubs.clear();
+    events.clear();
+    newsPosts.clear();
+    supabaseClubMemberCounts.clear();
+    supabasePostLikeCounts.clear();
+    _hasAppliedRemoteContent = false;
   }
 
   Club _clubFromRow(Map<String, dynamic> row) {
@@ -173,7 +272,7 @@ class SupabaseContentService {
     if (adminIds.isEmpty && id.isNotEmpty) adminIds.add(id);
     return Club(
       id: id,
-      name: _string(row, ['name', 'title'], fallback: 'Club'),
+      name: _string(row, ['name', 'title'], fallback: _l10n.clubFallbackName),
       shortName: _nullableString(row, ['short_name', 'shortName']),
       description: _string(row, ['description', 'bio']),
       logoUrl: supabaseClubService.publicLogoUrl(
@@ -249,9 +348,14 @@ class SupabaseContentService {
     return Event(
       id: _string(row, ['id']),
       clubId: _string(row, ['club_id', 'clubId']),
-      title: _string(row, ['title', 'name'], fallback: 'Event'),
+      title: _string(row, [
+        'title',
+        'name',
+      ], fallback: _l10n.eventFallbackTitle),
       description: _string(row, ['description']),
-      location: _string(row, ['location'], fallback: 'Campus'),
+      location: _string(row, [
+        'location',
+      ], fallback: _l10n.campusFallbackLocation),
       dateTime: start ?? DateTime.now(),
       endTime: end ?? DateTime.now().add(const Duration(hours: 2)),
       attendeeUserIds: _stringList(
@@ -341,14 +445,22 @@ class SupabaseContentService {
   /// Supabase project) degrades gracefully to poll-less posts.
   Future<List<NewsPost>> _attachPolls(
     SupabaseClient client,
-    List<NewsPost> posts,
-  ) async {
+    List<NewsPost> posts, {
+    bool Function()? shouldApply,
+  }) async {
     if (posts.isEmpty) return posts;
     try {
-      final rows = await client
-          .from('polls')
-          .select('id, post_id, question, options')
-          .inFilter('post_id', posts.map((p) => p.id).toList());
+      final rows = <dynamic>[];
+      final postIds = posts.map((post) => post.id).toList();
+      for (var start = 0; start < postIds.length; start += 200) {
+        final end = (start + 200).clamp(0, postIds.length);
+        rows.addAll(
+          await client
+              .from('polls')
+              .select('id, post_id, question, options')
+              .inFilter('post_id', postIds.sublist(start, end)),
+        );
+      }
 
       final pollsByPostId = <String, PollData>{};
       for (final row in rows) {
@@ -366,7 +478,7 @@ class SupabaseContentService {
 
       // One batched poll_votes query for every poll on the feed, instead of
       // two queries per poll card at render time.
-      await _seedPollVotes(client, pollsByPostId);
+      await _seedPollVotes(client, pollsByPostId, shouldApply: shouldApply);
 
       return [
         for (final post in posts)
@@ -396,8 +508,9 @@ class SupabaseContentService {
   /// hydrate queries. Degrades independently of poll attachment.
   Future<void> _seedPollVotes(
     SupabaseClient client,
-    Map<String, PollData> pollsByPostId,
-  ) async {
+    Map<String, PollData> pollsByPostId, {
+    bool Function()? shouldApply,
+  }) async {
     try {
       final postIdByPollId = <String, String>{
         for (final entry in pollsByPostId.entries)
@@ -405,10 +518,17 @@ class SupabaseContentService {
       };
       if (postIdByPollId.isEmpty) return;
 
-      final rows = await client
-          .from('poll_votes')
-          .select('poll_id, profile_id, option_index')
-          .inFilter('poll_id', postIdByPollId.keys.toList());
+      final rows = <dynamic>[];
+      final pollIds = postIdByPollId.keys.toList();
+      for (var start = 0; start < pollIds.length; start += 200) {
+        final end = (start + 200).clamp(0, pollIds.length);
+        rows.addAll(
+          await client
+              .from('poll_votes')
+              .select('poll_id, profile_id, option_index')
+              .inFilter('poll_id', pollIds.sublist(start, end)),
+        );
+      }
 
       final votesByPostId = <String, Map<String, int>>{
         for (final postId in pollsByPostId.keys) postId: {},
@@ -423,6 +543,7 @@ class SupabaseContentService {
         }
         votesByPostId[postId]![profileId] = optionIndex;
       }
+      if (shouldApply != null && !shouldApply()) return;
       pollStore.seedRemoteVotes(votesByPostId);
     } catch (_) {
       // Poll cards fall back to their own lazy hydrate.
@@ -463,7 +584,7 @@ class SupabaseContentService {
 
   DateTime? _date(Map<String, dynamic> row, List<String> keys) {
     final value = _nullableString(row, keys);
-    return value == null ? null : DateTime.tryParse(value);
+    return tryParseEventDateTime(value);
   }
 
   List<String> _stringList(dynamic raw) {

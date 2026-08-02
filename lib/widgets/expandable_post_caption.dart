@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+
 class ExpandablePostCaption extends StatefulWidget {
   final String authorName;
   final String caption;
@@ -45,6 +47,7 @@ class _ExpandablePostCaptionState extends State<ExpandablePostCaption> {
     final visibleCaption = canExpand && !_isExpanded
         ? words.take(widget.collapsedWordCount).join(' ')
         : widget.caption;
+    final l10n = AppLocalizations.of(context)!;
 
     return Text.rich(
       TextSpan(
@@ -55,16 +58,16 @@ class _ExpandablePostCaptionState extends State<ExpandablePostCaption> {
           if (canExpand && !_isExpanded) ...[
             TextSpan(text: '\u2026 ', style: widget.captionStyle),
             _captionControl(
-              label: 'more',
-              semanticsLabel: 'Show full caption',
+              label: l10n.moreLabel,
+              semanticsLabel: l10n.showFullCaptionSemantic,
               onTap: () => setState(() => _isExpanded = true),
             ),
           ],
           if (canExpand && _isExpanded) ...[
             TextSpan(text: ' ', style: widget.captionStyle),
             _captionControl(
-              label: 'less',
-              semanticsLabel: 'Show less caption',
+              label: l10n.lessLabel,
+              semanticsLabel: l10n.showLessCaptionSemantic,
               onTap: () => setState(() => _isExpanded = false),
             ),
           ],

@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
+import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../services/content_store.dart';
@@ -11,13 +14,14 @@ import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/lazy_content_loader.dart';
+import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/view_tracker.dart';
-import '../services/tutorial_anchors.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/event_cover_image.dart';
@@ -32,14 +36,17 @@ import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
+import '../widgets/comments_sheet.dart';
+import '../widgets/moderation_reason_sheet.dart';
+import '../services/comment_store.dart';
 import '../widgets/user_avatar.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
+import '../widgets/post_share_sheet.dart';
 import '../services/supabase_interaction_service.dart';
-import '../services/moderation_service.dart';
-import '../widgets/moderation_reason_sheet.dart';
+import '../services/supabase_post_service.dart';
 import 'notifications_screen.dart';
 import 'this_week_screen.dart';
 import 'event_detail_screen.dart';
@@ -86,10 +93,44 @@ class _FeedCache {
   List<Event>? railShown;
 }
 
+/// Controls actions on the already-mounted Home feed from the main nav.
+class FeedController extends ChangeNotifier {
+  void scrollToTop() => notifyListeners();
+}
+
+/// A restrained iOS-style edge bounce for both ends of the Home feed.
+///
+/// It keeps the same ballistic behavior as [BouncingScrollPhysics], including
+/// recovery after slow drags and fast flings, but applies more resistance once
+/// the content is out of range. The lightly elastic spring always settles back
+/// on the real content extent, so overscroll can never become a resting state.
+class _FeedBouncePhysics extends BouncingScrollPhysics {
+  const _FeedBouncePhysics({super.parent});
+
+  @override
+  _FeedBouncePhysics applyTo(ScrollPhysics? ancestor) {
+    return _FeedBouncePhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double frictionFactor(double overscrollFraction) {
+    return super.frictionFactor(overscrollFraction) * 0.62;
+  }
+
+  @override
+  SpringDescription get spring => SpringDescription.withDampingRatio(
+    mass: 0.45,
+    stiffness: 110,
+    ratio: 0.92,
+  );
+}
+
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  final FeedController? controller;
+
+  const FeedScreen({super.key, this.controller});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -104,6 +145,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // Only render the blur once content has actually scrolled under the bar —
   // pixel-identical in both states (the translucent fill is the same).
   bool _scrolledUnder = false;
+  final ScrollController _scrollController = ScrollController();
 
   _FeedCache? _feedCache;
 
@@ -118,8 +160,11 @@ class _FeedScreenState extends State<FeedScreen> {
   int _feedSignature() {
     return Object.hash(
       newsPosts.length,
-      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.first),
-      newsPosts.isEmpty ? 0 : identityHashCode(newsPosts.last),
+      Object.hashAll(
+        newsPosts.map(
+          (post) => Object.hash(post.id, post.clubId, post.createdAt),
+        ),
+      ),
       events.length,
       events.isEmpty ? 0 : identityHashCode(events.first),
       clubs.length,
@@ -274,33 +319,33 @@ class _FeedScreenState extends State<FeedScreen> {
     return eligible.first;
   }
 
-  // Builds the mixed feed:
-  //   every 10 posts → People You Might Know (friend suggestions)
-  //   every 15 posts → a trending event suggestion
-  //   every 20 posts → a "club you should follow" suggestion (interest-ranked,
-  //                    cycling through candidates so it isn't always the same)
+  // Builds the mixed feed. Each recommendation type is inserted at most once;
+  // repeating tall rails buried club posts and caused large scroll corrections
+  // when several copies disappeared after one follow action.
   // Tapping any suggestion opens that person, event, or club.
   List<dynamic> _buildMixedFeed(List<_FeedItem> posts) {
     final result = <dynamic>[];
     final peopleSuggestions = _suggestedUsers();
     final clubSuggestions = _suggestedClubs();
     final trendingEv = _trendingEvent();
-    int clubIdx = 0;
+    var addedPeople = false;
+    var addedEvent = false;
+    var addedClub = false;
 
     for (int i = 0; i < posts.length; i++) {
       result.add(posts[i]);
       final n = i + 1;
-      if (n % 10 == 0 && peopleSuggestions.isNotEmpty) {
+      if (!addedPeople && n >= 10 && peopleSuggestions.isNotEmpty) {
         result.add(peopleSuggestions);
+        addedPeople = true;
       }
-      if (n % 15 == 0 && trendingEv != null) {
+      if (!addedEvent && n >= 15 && trendingEv != null) {
         result.add(_EventSuggestion(trendingEv));
+        addedEvent = true;
       }
-      if (n % 20 == 0 && clubSuggestions.isNotEmpty) {
-        result.add(
-          _ClubSuggestion(clubSuggestions[clubIdx % clubSuggestions.length]),
-        );
-        clubIdx++;
+      if (!addedClub && n >= 20 && clubSuggestions.isNotEmpty) {
+        result.add(_ClubSuggestion(clubSuggestions.first));
+        addedClub = true;
       }
     }
     return result;
@@ -309,6 +354,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    widget.controller?.addListener(_scrollToTop);
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
     contentStore.addListener(_onContentChanged);
@@ -319,6 +365,8 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   void dispose() {
+    widget.controller?.removeListener(_scrollToTop);
+    _scrollController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     contentStore.removeListener(_onContentChanged);
@@ -326,19 +374,34 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
+  void _scrollToTop() {
+    if (!_scrollController.hasClients || _scrollController.offset <= 0) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   void _onLocaleChanged() {
     if (mounted) setState(() {});
   }
 
   void _onContentChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // The mixed feed and events rail retain Event instances. An edit replaces
+    // the Event in the global list, so a rebuild alone is not enough: discard
+    // the cached instances before rebuilding the Home visuals.
+    _feedCache = null;
+    setState(() {});
   }
 
   void _hydrateVisiblePostViews({bool force = false}) {
-    viewTracker.hydratePostViewCounts(
-      newsPosts.map((post) => post.id),
-      force: force,
-    );
+    final postIds = newsPosts.map((post) => post.id).toList();
+    viewTracker.hydratePostViewCounts(postIds, force: force);
+    // One bulk query for every card's comment badge, so opening a post is not
+    // the only way its count becomes correct.
+    unawaited(commentStore.hydrateCounts(postIds, force: force));
   }
 
   Future<void> _onRefresh() async {
@@ -358,7 +421,7 @@ class _FeedScreenState extends State<FeedScreen> {
       await lazyContentLoader.ensureContentLoaded();
       _hydrateVisiblePostViews();
     } catch (_) {
-      // Keep local seed data visible if Supabase content is unreachable.
+      // Keep currently visible data if Supabase is temporarily unreachable.
     } finally {
       if (mounted) setState(() => _loadingFeedContent = false);
     }
@@ -403,7 +466,10 @@ class _FeedScreenState extends State<FeedScreen> {
             return false;
           },
           child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            controller: _scrollController,
+            physics: const _FeedBouncePhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             slivers: [
               _buildTopBar(),
               _buildGreeting(),
@@ -424,7 +490,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           const _EmptyFeedArt(),
                           const SizedBox(height: 18),
                           Text(
-                            S.nothingHere,
+                            AppLocalizations.of(context)!.nothingHere,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -433,7 +499,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            S.followClubs,
+                            AppLocalizations.of(context)!.followClubs,
                             style: TextStyle(
                               fontSize: 14,
                               color: AppColors.secondaryText,
@@ -460,7 +526,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             ),
                             icon: Icon(Icons.explore_rounded, size: 18),
                             label: Text(
-                              S.exploreClubs,
+                              AppLocalizations.of(context)!.exploreClubs,
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
@@ -479,7 +545,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     child: Row(
                       children: [
                         Text(
-                          S.latest,
+                          AppLocalizations.of(context)!.latest,
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -495,43 +561,61 @@ class _FeedScreenState extends State<FeedScreen> {
                     final item = mixed[i];
                     if (item is List<User>) {
                       return _PeopleSuggestionCard(
+                        key: const ValueKey('home-people-suggestions'),
                         suggestions: item,
                         onFollowed: () => setState(() {}),
                       );
                     }
                     if (item is _EventSuggestion) {
                       return _TrendingEventCard(
+                        key: ValueKey('home-event-suggestion-${item.event.id}'),
                         event: item.event,
                         onUpdate: () => setState(() {}),
                       );
                     }
                     if (item is _ClubSuggestion) {
                       return _ClubSuggestionCard(
+                        key: ValueKey('home-club-suggestion-${item.club.id}'),
                         club: item.club,
                         onUpdate: () => setState(() {}),
                       );
                     }
-                    return _buildFeedCard(item as _FeedItem, i);
+                    final feedItem = item as _FeedItem;
+                    return KeyedSubtree(
+                      key: ValueKey('home-feed-item-${feedItem.id}'),
+                      child: _buildFeedCard(feedItem, i),
+                    );
                   }, childCount: mixed.length),
                 ),
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Center(
-                      child: Text(
-                        S.endOfFeed,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText,
+                  child: Semantics(
+                    key: const ValueKey('home-feed-end'),
+                    container: true,
+                    child: SizedBox(
+                      height: 56,
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: AppColors.primaryRed,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              AppLocalizations.of(context)!.endOfFeed,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: MediaQuery.paddingOf(context).bottom + 112,
                   ),
                 ),
               ],
@@ -652,18 +736,28 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
             const Spacer(),
-            // Bell button with unread-count badge
+            // Chats live in the bottom navigation. The bell is intentionally
+            // the only shortcut in the Home top bar.
             ListenableBuilder(
               listenable: userState,
               builder: (_, x) {
-                final unread = userState.unreadNotifications;
+                final myId =
+                    authService.currentUser?.id ??
+                    authService.currentAdmin?.id ??
+                    '';
+                final unreadNotifs = userState.unreadNotificationCountFor(
+                  [
+                    ...notifications,
+                    ...userState.dynamicNotifications,
+                  ].where((n) => n.userId == myId && n.targetType != 'story'),
+                );
                 return _TopBarIconButton(
                   icon: Icons.notifications_none_rounded,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => NotificationsScreen()),
                   ),
-                  badgeCount: unread,
+                  badgeCount: unreadNotifs,
                 );
               },
             ),
@@ -684,12 +778,12 @@ class _FeedScreenState extends State<FeedScreen> {
   SliverToBoxAdapter _buildGreeting() {
     final h = DateTime.now().hour;
     final greet = h < 5
-        ? S.stillUp
+        ? AppLocalizations.of(context)!.stillUp
         : h < 12
-        ? S.goodMorning
+        ? AppLocalizations.of(context)!.goodMorning
         : h < 17
-        ? S.goodAfternoon
-        : S.goodEvening;
+        ? AppLocalizations.of(context)!.goodAfternoon
+        : AppLocalizations.of(context)!.goodEvening;
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
@@ -709,7 +803,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   TextSpan(text: '$greet, '),
                   TextSpan(
                     text: _greetingName,
-                    style: const TextStyle(color: AppColors.primaryRed),
+                    style: TextStyle(color: AppColors.primaryRed),
                   ),
                   const TextSpan(text: ' 👋'),
                 ],
@@ -747,7 +841,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          S.thisWeek,
+                          AppLocalizations.of(context)!.thisWeek,
                           style: TextStyle(
                             fontSize: 10.5,
                             color: AppColors.secondaryText,
@@ -757,7 +851,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          S.eventsOnCampus,
+                          AppLocalizations.of(context)!.eventsOnCampus,
                           style: TextStyle(
                             fontSize: 19,
                             color: AppColors.text,
@@ -779,7 +873,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            S.seeAll,
+                            AppLocalizations.of(context)!.seeAll,
                             style: TextStyle(
                               fontSize: 12.5,
                               color: AppColors.primaryRed,
@@ -808,7 +902,8 @@ class _FeedScreenState extends State<FeedScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: shown.length,
                 separatorBuilder: (_, i) => const SizedBox(width: 12),
-                itemBuilder: (ctx, i) => _EventRailCard(event: shown[i]),
+                itemBuilder: (ctx, i) =>
+                    _EventRailCard(key: ValueKey(shown[i].id), event: shown[i]),
               ),
             ),
           ],
@@ -824,7 +919,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
           child: Text(
-            S.clubFeed,
+            AppLocalizations.of(context)!.clubFeed,
             style: TextStyle(
               fontSize: 10,
               color: AppColors.secondaryText,
@@ -836,14 +931,14 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // tab 0 = Following, tab 1 = All — pill segmented control with a sliding
+    // tab 0 = Following, tab 1 = For You — pill segmented control with a sliding
     // maroon thumb (300ms ease-out) behind the active label.
-    final labels = [S.following, S.all];
+    final labels = [S.following, S.forYou];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
         child: Container(
-          key: tutorialAnchors.keyFor(TutorialAnchors.homeFeedToggle),
+          key: onboardingAnchors.keyFor(OnboardingAnchors.homeFeedToggle),
           height: 42,
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
@@ -924,7 +1019,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
     return SliverToBoxAdapter(
       child: Padding(
-        key: tutorialAnchors.keyFor(TutorialAnchors.clubQuickComposer),
+        key: onboardingAnchors.keyFor(OnboardingAnchors.clubQuickComposer),
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
         child: _QuickPostComposer(
           club: club,
@@ -938,6 +1033,7 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _buildFeedCard(_FeedItem item, int rank) {
     if (item.isEvent) {
       return _EventCard(
+        key: ValueKey(item.id),
         event: item.data as Event,
         score: item.score,
         rank: rank,
@@ -1094,7 +1190,7 @@ class _FeedPostSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(
@@ -1104,40 +1200,39 @@ class _FeedPostSkeleton extends StatelessWidget {
           ),
         ),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SkeletonBox.circle(size: 44),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(
-                  width: 128,
-                  height: 14,
-                  borderRadius: BorderRadius.all(Radius.circular(7)),
-                ),
-                const SizedBox(height: 8),
-                SkeletonBox(
-                  width: double.infinity,
-                  height: 12,
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                ),
-                const SizedBox(height: 6),
-                SkeletonBox(
-                  width: MediaQuery.sizeOf(context).width * 0.46,
-                  height: 12,
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                ),
-                const SizedBox(height: 12),
-                SkeletonBox(
-                  width: double.infinity,
-                  height: 176,
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                ),
-              ],
-            ),
+          Row(
+            children: [
+              const SkeletonBox.circle(size: 44),
+              const SizedBox(width: 11),
+              SkeletonBox(
+                width: 128,
+                height: 14,
+                borderRadius: BorderRadius.all(Radius.circular(7)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SkeletonBox(
+            width: double.infinity,
+            height: (MediaQuery.sizeOf(context).width * 0.78)
+                .clamp(280.0, 340.0)
+                .toDouble(),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          const SizedBox(height: 10),
+          SkeletonBox(
+            width: double.infinity,
+            height: 12,
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+          ),
+          const SizedBox(height: 6),
+          SkeletonBox(
+            width: MediaQuery.sizeOf(context).width * 0.58,
+            height: 12,
+            borderRadius: BorderRadius.all(Radius.circular(6)),
           ),
         ],
       ),
@@ -1217,7 +1312,7 @@ class _QuickPostComposer extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      S.whatsHappeningAtClub,
+                      AppLocalizations.of(context)!.whatsHappeningAtClub,
                       style: TextStyle(
                         fontSize: 15,
                         color: secondaryTextColor,
@@ -1241,6 +1336,7 @@ class _PeopleSuggestionCard extends StatefulWidget {
   final List<User> suggestions;
   final VoidCallback onFollowed;
   const _PeopleSuggestionCard({
+    super.key,
     required this.suggestions,
     required this.onFollowed,
   });
@@ -1261,6 +1357,21 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
 
   final Set<String> _dismissedIds = {};
   final Set<String> _followingTransitionIds = {};
+  bool _isClosing = false;
+
+  bool _hasAnotherSuggestion(String removedId) => widget.suggestions.any(
+    (user) =>
+        user.id != removedId &&
+        !userState.isFollowingUser(user.id) &&
+        !_dismissedIds.contains(user.id),
+  );
+
+  Future<void> _closeSection() async {
+    if (_isClosing) return;
+    setState(() => _isClosing = true);
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    if (mounted) widget.onFollowed();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1278,7 +1389,8 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
 
     if (shown.isEmpty) return const SizedBox.shrink();
 
-    return Container(
+    final content = Container(
+      key: const ValueKey('people-suggestion-content'),
       margin: const EdgeInsets.symmetric(vertical: 6),
       color: AppColors.card,
       child: Column(
@@ -1295,7 +1407,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  S.suggestedForYou,
+                  AppLocalizations.of(context)!.suggestedForYou,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -1336,11 +1448,18 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                     : userState.displayNameFor(mutualUser.id, mutualUser.name);
                 final mutualText = mutualName == null
                     ? (mutualCount == 1
-                          ? '1 mutual friend'
-                          : '$mutualLabel mutual friends')
+                          ? AppLocalizations.of(context)!.oneMutualFriend
+                          : AppLocalizations.of(
+                              context,
+                            )!.mutualFriendCountLabel(mutualLabel))
                     : (mutualCount == 1
-                          ? 'Mutual friend: $mutualName'
-                          : 'Mutual friend: $mutualName + ${mutualCount - 1} more');
+                          ? AppLocalizations.of(
+                              context,
+                            )!.mutualFriendNamed(mutualName)
+                          : AppLocalizations.of(context)!.mutualFriendNamedPlus(
+                              mutualName,
+                              mutualCount - 1,
+                            ));
 
                 return SizedBox(
                   width: 148,
@@ -1440,8 +1559,14 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                                     ],
                                                     Text(
                                                       mutualCount == 1
-                                                          ? '1 mutual'
-                                                          : '$mutualLabel mutuals',
+                                                          ? AppLocalizations.of(
+                                                              context,
+                                                            )!.oneMutualBadge
+                                                          : AppLocalizations.of(
+                                                              context,
+                                                            )!.mutualBadgeCount(
+                                                              mutualLabel,
+                                                            ),
                                                       style: TextStyle(
                                                         fontSize: 10,
                                                         fontWeight:
@@ -1521,7 +1646,9 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                     userId: u.id,
                                     size: 'small',
                                     followLabel: followsMe
-                                        ? S.followBack
+                                        ? AppLocalizations.of(
+                                            context,
+                                          )!.followBack
                                         : null,
                                     onTap: () async {
                                       final myId = authService.isStudentSession
@@ -1548,11 +1675,15 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                             const Duration(milliseconds: 260),
                                           );
                                           if (mounted) {
-                                            setState(
-                                              () => _followingTransitionIds
-                                                  .remove(u.id),
-                                            );
-                                            widget.onFollowed();
+                                            if (_hasAnotherSuggestion(u.id)) {
+                                              setState(
+                                                () => _followingTransitionIds
+                                                    .remove(u.id),
+                                              );
+                                              widget.onFollowed();
+                                            } else {
+                                              await _closeSection();
+                                            }
                                           }
                                         } else {
                                           widget.onFollowed();
@@ -1585,8 +1716,13 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                 top: -2,
                                 right: -2,
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _dismissedIds.add(u.id)),
+                                  onTap: () {
+                                    if (_hasAnotherSuggestion(u.id)) {
+                                      setState(() => _dismissedIds.add(u.id));
+                                    } else {
+                                      _closeSection();
+                                    }
+                                  },
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
@@ -1618,6 +1754,27 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
         ],
       ),
     );
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1,
+            child: child,
+          ),
+        ),
+        child: _isClosing
+            ? const SizedBox(key: ValueKey('people-suggestion-closed'))
+            : content,
+      ),
+    );
   }
 }
 
@@ -1636,7 +1793,11 @@ class _TrendingEventCard extends StatelessWidget {
     Color(0xFF00838F),
   ];
 
-  const _TrendingEventCard({required this.event, required this.onUpdate});
+  const _TrendingEventCard({
+    super.key,
+    required this.event,
+    required this.onUpdate,
+  });
 
   void _showDetail(BuildContext context, Color color) {
     Navigator.push(
@@ -1654,26 +1815,12 @@ class _TrendingEventCard extends StatelessWidget {
     final idx = clubOrdinal(club.id);
     final color = _colors[idx % _colors.length];
     final dt = event.dateTime;
-    const mo = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
     final daysAway = dt.difference(DateTime.now()).inDays;
     final timeLabel = daysAway == 0
-        ? S.today
+        ? AppLocalizations.of(context)!.today
         : daysAway == 1
-        ? S.tomorrow
-        : '${mo[dt.month - 1]} ${dt.day}';
+        ? AppLocalizations.of(context)!.tomorrow
+        : '${DateFormat.MMM(localeService.languageCode).format(dt)} ${dt.day}';
     return GestureDetector(
       onTap: () => _showDetail(context, color),
       child: Container(
@@ -1769,7 +1916,7 @@ class _TrendingEventCard extends StatelessWidget {
                     children: [
                       const Spacer(),
                       Text(
-                        S.tapForDetails,
+                        AppLocalizations.of(context)!.tapForDetails,
                         style: TextStyle(
                           fontSize: 11,
                           color: color,
@@ -1797,7 +1944,11 @@ class _ClubSuggestionCard extends StatefulWidget {
   final dynamic club;
   final VoidCallback onUpdate;
 
-  const _ClubSuggestionCard({required this.club, required this.onUpdate});
+  const _ClubSuggestionCard({
+    super.key,
+    required this.club,
+    required this.onUpdate,
+  });
 
   @override
   State<_ClubSuggestionCard> createState() => _ClubSuggestionCardState();
@@ -1822,7 +1973,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
     final matches = personalizationService.interestMatchCount(c.id as String);
     final desc = (c.description as String).isNotEmpty
         ? c.description as String
-        : 'Discover what this club is all about.';
+        : AppLocalizations.of(context)!.discoverClubDescriptionFallback;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1846,7 +1997,7 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                   Icon(Icons.explore_rounded, size: 18, color: color),
                   const SizedBox(width: 6),
                   Text(
-                    S.clubMightLike,
+                    AppLocalizations.of(context)!.clubMightLike,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -1918,8 +2069,12 @@ class _ClubSuggestionCardState extends State<_ClubSuggestionCard> {
                               Expanded(
                                 child: Text(
                                   matches > 0
-                                      ? '$memberCount members · matches your interests'
-                                      : '$memberCount members',
+                                      ? AppLocalizations.of(
+                                          context,
+                                        )!.membersMatchInterests(memberCount)
+                                      : AppLocalizations.of(
+                                          context,
+                                        )!.membersCount(memberCount),
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: color,
@@ -1987,7 +2142,7 @@ class _PeopleEngagementSheet extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${people.length} ${people.length == 1 ? 'person' : 'people'}',
+                  AppLocalizations.of(context)!.peopleCount(people.length),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -2218,10 +2373,177 @@ class _ViewersSheetState extends State<_ViewersSheet> {
               )
             : _PeopleEngagementSheet(
                 icon: Icons.remove_red_eye_outlined,
-                emptyText: 'No views yet',
+                emptyText: AppLocalizations.of(context)!.noViewsYet,
                 people: _viewers,
                 scrollController: scrollController,
               ),
+      ),
+    );
+  }
+}
+
+List<User> _localPostLikers(String postId) {
+  final likerIds = likes
+      .where((like) => like.postId == postId)
+      .map((like) => like.userId)
+      .toSet();
+  return users.where((user) => likerIds.contains(user.id)).toList();
+}
+
+final Map<String, List<User>> _likerPreviewCache = {};
+
+class _LikedByRow extends StatefulWidget {
+  final String postId;
+  final int likeCount;
+  final VoidCallback onTap;
+
+  const _LikedByRow({
+    required this.postId,
+    required this.likeCount,
+    required this.onTap,
+  });
+
+  @override
+  State<_LikedByRow> createState() => _LikedByRowState();
+}
+
+class _LikedByRowState extends State<_LikedByRow> {
+  List<User> _likers = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshPreview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LikedByRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.likeCount != widget.likeCount) {
+      _refreshPreview();
+    }
+  }
+
+  void _refreshPreview() {
+    final local = _localPostLikers(widget.postId);
+    if (local.isNotEmpty) {
+      _likers = local;
+      return;
+    }
+
+    final cached = _likerPreviewCache[widget.postId];
+    if (cached != null) {
+      _likers = cached;
+      return;
+    }
+
+    unawaited(_loadRemotePreview());
+  }
+
+  Future<void> _loadRemotePreview() async {
+    try {
+      final remote = await supabaseInteractionService.fetchPostLikers(
+        widget.postId,
+      );
+      _likerPreviewCache[widget.postId] = remote;
+      if (mounted && remote.isNotEmpty) setState(() => _likers = remote);
+    } catch (_) {
+      // A count-only fallback remains available while offline.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.likeCount <= 0) return const SizedBox.shrink();
+
+    final liker = _likers.isEmpty ? null : _likers.first;
+    final displayName = liker == null
+        ? null
+        : userState.displayNameFor(liker.id, liker.name);
+    final remaining = math.max(0, widget.likeCount - 1);
+
+    return Semantics(
+      button: true,
+      label: AppLocalizations.of(context)!.likesCount(widget.likeCount),
+      child: GestureDetector(
+        key: ValueKey('post-liked-by-${widget.postId}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.divider),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: liker == null
+                      ? ColoredBox(
+                          color: AppColors.lightRed,
+                          child: Icon(
+                            Icons.favorite_rounded,
+                            size: 14,
+                            color: AppColors.primaryRed,
+                          ),
+                        )
+                      : IgnorePointer(
+                          child: UserAvatar(
+                            userId: liker.id,
+                            name: displayName!,
+                            size: 24,
+                            fontSize: 10,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: Text(
+                    key: ValueKey('${liker?.id}-${widget.likeCount}'),
+                    displayName == null
+                        ? AppLocalizations.of(
+                            context,
+                          )!.likesCount(widget.likeCount)
+                        : remaining > 0
+                        ? S.likedByOthers(displayName, remaining)
+                        : S.likedBy(displayName),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.secondaryText,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2243,18 +2565,13 @@ class _LikersSheetState extends State<_LikersSheet> {
   @override
   void initState() {
     super.initState();
-    _loadLikers();
+    _likers = _localPostLikers(widget.postId);
+    _loading = _likers.isEmpty;
+    unawaited(_loadLikers());
   }
 
   Future<void> _loadLikers() async {
-    var likers = users
-        .where((user) {
-          return likes.any(
-            (like) => like.postId == widget.postId && like.userId == user.id,
-          );
-        })
-        .toList()
-        .cast<User>();
+    var likers = _localPostLikers(widget.postId);
 
     try {
       final remote = await supabaseInteractionService.fetchPostLikers(
@@ -2279,9 +2596,17 @@ class _LikersSheetState extends State<_LikersSheet> {
       minChildSize: 0.3,
       maxChildSize: 0.9,
       builder: (_, scrollController) => Container(
+        key: ValueKey('post-likers-sheet-${widget.postId}'),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 28,
+              offset: Offset(0, -8),
+            ),
+          ],
         ),
         child: _loading
             ? _PeopleEngagementSkeleton(
@@ -2290,7 +2615,7 @@ class _LikersSheetState extends State<_LikersSheet> {
               )
             : _PeopleEngagementSheet(
                 icon: Icons.favorite_rounded,
-                emptyText: 'No likes yet',
+                emptyText: AppLocalizations.of(context)!.noLikesYet,
                 people: _likers,
                 scrollController: scrollController,
               ),
@@ -2315,11 +2640,12 @@ Color _colorForClub(String clubId) {
   return _clubColors[(idx < 0 ? 0 : idx) % _clubColors.length];
 }
 
-String _timeAgo(DateTime dt) {
+String _timeAgo(BuildContext context, DateTime dt) {
+  final l10n = AppLocalizations.of(context)!;
   final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  return '${diff.inDays}d ago';
+  if (diff.inMinutes < 60) return l10n.minutesAgoSuffix(diff.inMinutes);
+  if (diff.inHours < 24) return l10n.hoursAgoSuffix(diff.inHours);
+  return l10n.daysAgoSuffix(diff.inDays);
 }
 
 /// Copies a deep link for the post/event to the clipboard and records the
@@ -2359,8 +2685,8 @@ void _openShareSheet(
       SnackBar(
         content: Text(
           isEvent
-              ? 'Event link copied to clipboard'
-              : 'Post link copied to clipboard',
+              ? AppLocalizations.of(context)!.eventLinkCopied
+              : AppLocalizations.of(context)!.postLinkCopied,
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -2416,10 +2742,16 @@ class _PostCardState extends State<_PostCard>
             _heartController.reset();
           }
         });
-    // Record this user as having seen the post
-    final userId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    viewTracker.recordView(widget.post.id, userId, syncRemote: true);
+    // Recording a view notifies the engagement bars that are already mounted.
+    // Defer that notification until this sliver's first frame is complete;
+    // notifying synchronously while sibling cards are still mounting causes
+    // Flutter's "setState() or markNeedsBuild() called during build" failure.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final userId =
+          authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+      viewTracker.recordView(widget.post.id, userId, syncRemote: true);
+    });
   }
 
   @override
@@ -2439,6 +2771,47 @@ class _PostCardState extends State<_PostCard>
     if (!authService.isStudentSession) return;
     togglePostLike(widget.post.id);
     setState(() {});
+  }
+
+  void _showLikersSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useSafeArea: true,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 420),
+        reverseDuration: Duration(milliseconds: 260),
+      ),
+      builder: (_) => _LikersSheet(postId: widget.post.id),
+    );
+  }
+
+  Future<void> _sharePostToChat() async {
+    final currentUser = authService.currentUser;
+    if (!authService.isStudentSession || currentUser == null) return;
+    final threadId = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => PostShareSheet(
+        post: widget.post,
+        currentUserId: currentUser.id,
+        onShared: () {
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+    if (!mounted || threadId == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(S.postShared),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   void _showPostOptions() {
@@ -2493,13 +2866,13 @@ class _PostCardState extends State<_PostCard>
               if (canDelete)
                 tile(
                   icon: Icons.delete_outline_rounded,
-                  label: 'Delete post',
+                  label: AppLocalizations.of(sheetContext)!.deletePostAction,
                   color: Colors.red,
                   onTap: _confirmDeletePost,
                 ),
               tile(
                 icon: Icons.flag_outlined,
-                label: S.reportPost,
+                label: AppLocalizations.of(context)!.reportPost,
                 color: AppColors.primaryRed,
                 onTap: _reportPost,
               ),
@@ -2517,18 +2890,18 @@ class _PostCardState extends State<_PostCard>
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.card,
         title: Text(
-          'Delete post?',
+          AppLocalizations.of(dialogContext)!.deletePost,
           style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'This post will be removed from the home feed.',
+          AppLocalizations.of(dialogContext)!.deletePostFeedBody,
           style: TextStyle(color: AppColors.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(dialogContext)!.cancel,
               style: TextStyle(color: AppColors.secondaryText),
             ),
           ),
@@ -2540,8 +2913,26 @@ class _PostCardState extends State<_PostCard>
                 borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext);
+              try {
+                await supabasePostService.deletePost(widget.post);
+              } catch (_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(
+                          context,
+                        )!.couldNotDeletePostSupabase,
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                return;
+              }
               final deleted = contentStore.deletePost(
                 widget.post.id,
                 authService.currentAdmin?.id ?? '',
@@ -2553,14 +2944,18 @@ class _PostCardState extends State<_PostCard>
                   SnackBar(
                     content: Text(
                       deleted
-                          ? 'Post deleted'
-                          : 'Only the club that owns this post can delete it.',
+                          ? AppLocalizations.of(
+                              context,
+                            )!.postDeletedConfirmation
+                          : AppLocalizations.of(
+                              context,
+                            )!.onlyOwningClubCanDelete,
                     ),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
             },
-            child: const Text('Delete'),
+            child: Text(AppLocalizations.of(dialogContext)!.delete),
           ),
         ],
       ),
@@ -2570,7 +2965,7 @@ class _PostCardState extends State<_PostCard>
   Future<void> _reportPost() async {
     final reason = await showModerationReasonSheet(
       context,
-      title: S.whyReportPost,
+      title: AppLocalizations.of(context)!.whyReportPost,
     );
     if (reason == null || !mounted) return;
 
@@ -2586,7 +2981,9 @@ class _PostCardState extends State<_PostCard>
       ..showSnackBar(
         SnackBar(
           content: Text(
-            delivered ? S.postReportedAndRemoved : S.postHiddenOffline,
+            delivered
+                ? AppLocalizations.of(context)!.postReportedAndRemoved
+                : AppLocalizations.of(context)!.postHiddenOffline,
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -2605,9 +3002,27 @@ class _PostCardState extends State<_PostCard>
     final ownContent = _isOwnerOfClub(widget.post.clubId);
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
+    final mediaHeight = (MediaQuery.sizeOf(context).width * 0.78)
+        .clamp(280.0, 340.0)
+        .toDouble();
+    final caption = ExpandablePostCaption(
+      key: ValueKey('home-feed-caption-${widget.post.id}'),
+      authorName: '',
+      caption: widget.post.content,
+      captionStyle: TextStyle(
+        color: AppColors.text,
+        fontSize: 14.5,
+        height: 1.45,
+      ),
+      moreStyle: TextStyle(
+        color: AppColors.primaryRed,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+      ),
+    );
 
-    // ── Twitter / X-style row: avatar gutter on the left, everything else in a
-    //    right-hand column, posts separated by a hairline divider. ──
+    // Keep the identity in a compact header so Home-feed media can use the
+    // full card width. Captions for photo posts deliberately follow the media.
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -2618,253 +3033,275 @@ class _PostCardState extends State<_PostCard>
           ),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Avatar gutter ──
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ClubProfileScreen(club: club, color: clubColor),
+          // Header: avatar + club identity + time, with follow + more.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClubProfileScreen(club: club, color: clubColor),
+                  ),
+                ),
+                child: ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: clubColor,
+                  imageUrl: club.logoUrl,
+                  size: 44,
+                  fontSize: 18,
+                  shape: 'circle',
+                ),
               ),
-            ),
-            child: ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
-              color: clubColor,
-              imageUrl: club.logoUrl,
-              size: 44,
-              fontSize: 18,
-              shape: 'circle',
-            ),
-          ),
-          const SizedBox(width: 11),
-          // ── Body column ──
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header: club identity + time, with follow + more on the right
-                Row(
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ClubProfileScreen(
-                                        club: club,
-                                        color: clubColor,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    club.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14.5,
-                                      color: AppColors.text,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 1),
-                          Text(
-                            _timeAgo(widget.post.createdAt),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (isStudent)
-                      ClubFollowButton(clubId: club.id, size: 'small'),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: _showPostOptions,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 4, top: 2),
-                        child: Icon(
-                          Icons.more_horiz,
-                          size: 18,
-                          color: AppColors.secondaryText,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ClubProfileScreen(club: club, color: clubColor),
                         ),
+                      ),
+                      child: Text(
+                        club.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14.5,
+                          color: AppColors.text,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      _timeAgo(context, widget.post.createdAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.secondaryText,
                       ),
                     ),
                   ],
                 ),
-                // ── Announcement banner ──
-                if (widget.post.isAnnouncement) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+              ),
+              const SizedBox(width: 8),
+              if (isStudent) ClubFollowButton(clubId: club.id, size: 'small'),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _showPostOptions,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4, top: 2),
+                  child: Icon(
+                    Icons.more_horiz,
+                    size: 18,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // ── Announcement banner ──
+          if (widget.post.isAnnouncement) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: clubColor.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+                border: Border.all(color: clubColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.campaign_rounded, size: 15, color: clubColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    S.announcement.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: clubColor,
                     ),
-                    decoration: BoxDecoration(
-                      color: clubColor.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.all(Radius.circular(10)),
-                      border: Border.all(
-                        color: clubColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ),
+                ],
+              ),
+            ),
+          ],
+          // Text-only posts keep their copy directly below the header.
+          if (!hasImage && widget.post.content.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            caption,
+          ],
+          // ── Poll ──
+          if (widget.post.poll != null)
+            PollCard(post: widget.post, accent: clubColor),
+          // ── Media (full-card width on Home) ──
+          if (hasImage) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: mediaHeight,
+              child: OverflowBox(
+                alignment: Alignment.center,
+                minWidth: MediaQuery.sizeOf(context).width,
+                maxWidth: MediaQuery.sizeOf(context).width,
+                child: GestureDetector(
+                  key: ValueKey('home-feed-photo-${widget.post.id}'),
+                  onDoubleTap: isStudent ? _doubleTapLike : null,
+                  child: SizedBox(
+                    width: MediaQuery.sizeOf(context).width,
+                    height: mediaHeight,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      alignment: Alignment.center,
                       children: [
-                        Icon(
-                          Icons.campaign_rounded,
-                          size: 15,
-                          color: clubColor,
+                        buildPostBanner(
+                          imagePath: widget.post.imagePath,
+                          fallbackColor: clubColor,
+                          fallbackLetter: club.name[0],
+                          height: mediaHeight,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          S.announcement.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
-                            color: clubColor,
+                        if (_showHeart)
+                          ScaleTransition(
+                            scale: Tween(begin: 0.5, end: 1.4).animate(
+                              CurvedAnimation(
+                                parent: _heartController,
+                                curve: Curves.elasticOut,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.favorite,
+                              color: Colors.white,
+                              size: 72,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
+                ),
+              ),
+            ),
+            if (widget.post.content.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              caption,
+            ],
+          ],
+          // ── Engagement stats (own-club admin only) ──
+          if (ownContent) ...[
+            const SizedBox(height: 10),
+            ListenableBuilder(
+              listenable: viewTracker,
+              builder: (context, _) => _EngagementBar(
+                likes: likeCount,
+                shares: shareCount,
+                score: widget.score,
+                views: viewTracker.viewCount(widget.post.id),
+                onViewTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => _ViewersSheet(
+                    contentId: widget.post.id,
+                    title: 'Post Viewers',
+                  ),
+                ),
+                onLikeTap: _showLikersSheet,
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          // ── Action row (X-style) ──
+          // Club admins get no like/share controls on their own posts, but
+          // they still need to read the discussion underneath them, so the
+          // comment button appears for them too.
+          if (isStudent || ownContent)
+            Row(
+              children: [
+                if (isStudent) ...[
+                  _twAction(
+                    icon: isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    count: null,
+                    color: isLiked
+                        ? AppColors.primaryRed
+                        : AppColors.secondaryText,
+                    onTap: _toggleLike,
+                  ),
+                  const SizedBox(width: 18),
                 ],
-                // ── Content ──
-                if (widget.post.content.trim().isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  ExpandablePostCaption(
-                    authorName: '',
-                    caption: widget.post.content,
-                    captionStyle: TextStyle(
-                      color: AppColors.text,
-                      fontSize: 14.5,
-                      height: 1.45,
-                    ),
-                    moreStyle: TextStyle(
-                      color: AppColors.primaryRed,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                    ),
+                // Scoped to the badge: commentStore notifies whenever any
+                // post's comments load, and rebuilding the whole card for a
+                // number would undo the feed's scroll work.
+                ListenableBuilder(
+                  listenable: commentStore,
+                  builder: (context, _) {
+                    final count = commentStore.countFor(widget.post.id);
+                    return _twAction(
+                      key: ValueKey('home-feed-comment-${widget.post.id}'),
+                      icon: Icons.mode_comment_outlined,
+                      count: count > 0 ? '$count' : null,
+                      color: AppColors.secondaryText,
+                      onTap: _openComments,
+                    );
+                  },
+                ),
+                if (isStudent) ...[
+                  const SizedBox(width: 18),
+                  _twAction(
+                    icon: Icons.send_outlined,
+                    count: null,
+                    color: AppColors.secondaryText,
+                    onTap: _sharePostToChat,
                   ),
                 ],
-                // ── Poll ──
-                if (widget.post.poll != null)
-                  PollCard(post: widget.post, accent: clubColor),
-                // ── Media (indented, rounded) ──
-                if (hasImage) ...[
-                  const SizedBox(height: 10),
-                  GestureDetector(
-                    onDoubleTap: isStudent ? _doubleTapLike : null,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.all(Radius.circular(16)),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          buildPostBanner(
-                            imagePath: widget.post.imagePath,
-                            fallbackColor: clubColor,
-                            fallbackLetter: club.name[0],
-                            height: 230,
-                          ),
-                          if (_showHeart)
-                            ScaleTransition(
-                              scale: Tween(begin: 0.5, end: 1.4).animate(
-                                CurvedAnimation(
-                                  parent: _heartController,
-                                  curve: Curves.elasticOut,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.favorite,
-                                color: Colors.white,
-                                size: 72,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                // ── Engagement stats (own-club admin only) ──
-                if (ownContent) ...[
-                  const SizedBox(height: 10),
-                  ListenableBuilder(
-                    listenable: viewTracker,
-                    builder: (context, _) => _EngagementBar(
-                      likes: likeCount,
-                      shares: shareCount,
-                      score: widget.score,
-                      views: viewTracker.viewCount(widget.post.id),
-                      onViewTap: () => showModalBottomSheet<void>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => _ViewersSheet(
-                          contentId: widget.post.id,
-                          title: 'Post Viewers',
-                        ),
-                      ),
-                      onLikeTap: () => showModalBottomSheet<void>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => _LikersSheet(postId: widget.post.id),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 4),
-                // ── Action row (X-style) ──
-                if (isStudent)
-                  Row(
-                    children: [
-                      _twAction(
-                        icon: isLiked
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        count: null,
-                        color: isLiked
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
-                        onTap: _toggleLike,
-                      ),
-                    ],
-                  ),
               ],
             ),
-          ),
+          if (likeCount > 0)
+            _LikedByRow(
+              postId: widget.post.id,
+              likeCount: likeCount,
+              onTap: _showLikersSheet,
+            ),
         ],
+      ),
+    );
+  }
+
+  void _openComments() {
+    unawaited(
+      showCommentsSheet(
+        context,
+        post: widget.post,
+        onChanged: () {
+          if (mounted) setState(() {});
+        },
       ),
     );
   }
 
   // X-style action: an icon with an optional count beside it.
   Widget _twAction({
+    Key? key,
     required IconData icon,
     String? count,
     required Color color,
     required VoidCallback onTap,
   }) {
     return InkWell(
+      key: key,
       onTap: onTap,
       borderRadius: BorderRadius.all(Radius.circular(20)),
       child: Padding(
@@ -2900,6 +3337,7 @@ class _EventCard extends StatefulWidget {
   final VoidCallback onUpdate;
 
   const _EventCard({
+    super.key,
     required this.event,
     required this.score,
     required this.rank,
@@ -2924,7 +3362,10 @@ class _EventCardState extends State<_EventCard> {
     );
     _lastAttending = rsvpStore.isAttending(widget.event.id);
     rsvpStore.addListener(_onRsvpChanged);
-    viewTracker.recordView(widget.event.id, userId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      viewTracker.recordView(widget.event.id, userId);
+    });
   }
 
   @override
@@ -2962,10 +3403,10 @@ class _EventCardState extends State<_EventCard> {
 
     final daysAway = dt.difference(DateTime.now()).inDays;
     final daysLabel = daysAway == 0
-        ? S.today
+        ? AppLocalizations.of(context)!.today
         : daysAway == 1
-        ? S.tomorrow
-        : 'In $daysAway days';
+        ? AppLocalizations.of(context)!.tomorrow
+        : AppLocalizations.of(context)!.inDaysCount(daysAway);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -3195,7 +3636,7 @@ class _EventCardState extends State<_EventCard> {
                       isScrollControlled: true,
                       builder: (_) => _ViewersSheet(
                         contentId: widget.event.id,
-                        title: 'Event Viewers',
+                        title: AppLocalizations.of(context)!.eventViewersTitle,
                       ),
                     ),
                   ),
@@ -3233,20 +3674,8 @@ class _EventCardState extends State<_EventCard> {
     );
   }
 
-  String _monthAbbr(int m) => [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ][m - 1];
+  String _monthAbbr(int m) =>
+      DateFormat.MMM(localeService.languageCode).format(DateTime(2024, m));
 
   String _fmt12(DateTime dt) {
     final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
@@ -3292,7 +3721,7 @@ class _EngagementBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 3),
                 Text(
-                  '$views view${views == 1 ? '' : 's'}',
+                  AppLocalizations.of(context)!.viewsCount(views),
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.secondaryText,
@@ -3313,7 +3742,7 @@ class _EngagementBar extends StatelessWidget {
                 Icon(Icons.favorite, size: 13, color: Colors.pink),
                 const SizedBox(width: 3),
                 Text(
-                  '$likes likes',
+                  AppLocalizations.of(context)!.likesCount(likes),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -3332,7 +3761,7 @@ class _EngagementBar extends StatelessWidget {
           Icon(Icons.send, size: 13, color: Color(0xFF2E7D32)),
           const SizedBox(width: 3),
           Text(
-            '$shares share${shares == 1 ? '' : 's'}',
+            AppLocalizations.of(context)!.sharesCount(shares),
             style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
           ),
         ],
@@ -3369,7 +3798,7 @@ class _ActionBtn extends StatelessWidget {
 
 class _EventRailCard extends StatefulWidget {
   final Event event;
-  const _EventRailCard({required this.event});
+  const _EventRailCard({super.key, required this.event});
 
   @override
   State<_EventRailCard> createState() => _EventRailCardState();
@@ -3397,7 +3826,7 @@ class _EventRailCardState extends State<_EventRailCard> {
     final now = DateTime.now();
     final isLive = ev.dateTime.isBefore(now) && ev.endTime.isAfter(now);
     final dateTimeLabel = isLive
-        ? 'LIVE · ${_time24(ev.dateTime)}'
+        ? '${AppLocalizations.of(context)!.liveNowLabel} · ${_time24(ev.dateTime)}'
         : '${_weekdayShort(ev.dateTime)}. ${_time24(ev.dateTime)}';
 
     return GestureDetector(
@@ -3542,7 +3971,7 @@ class _EventRailCardState extends State<_EventRailCard> {
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   String _weekdayShort(DateTime dt) =>
-      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dt.weekday - 1];
+      DateFormat.E(localeService.languageCode).format(dt);
 }
 
 // ─── Pulsing dot (live indicator) ─────────────────────────────────────────────

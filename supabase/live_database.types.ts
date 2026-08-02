@@ -806,6 +806,24 @@ export type Database = {
           },
         ]
       }
+      terms_acceptances: {
+        Row: {
+          accepted_at: string
+          terms_version: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          terms_version: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string
+          terms_version?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_blocks: {
         Row: {
           blocked_id: string
@@ -894,6 +912,10 @@ export type Database = {
         Returns: boolean
       }
       restrict_signup_to_ku: { Args: { event: Json }; Returns: Json }
+      record_terms_acceptance: {
+        Args: { p_terms_version: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

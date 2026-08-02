@@ -34,15 +34,19 @@ class UserAvatar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds when one of these three values actually changes for this
     // user, instead of on any unrelated UserState mutation app-wide.
-    final (photoPath, mockUrl, displayName) = ref.watch(
+    final avatarState = ref.watch(
       userStateProvider.select(
         (s) => (
           s.profilePhotoPaths[userId],
-          s.mockPhotoUrls[userId],
+          s.remotePhotoUrls[userId],
           s.displayNameFor(userId, name),
+          s.profilePhotoRevisionFor(userId),
         ),
       ),
     );
+    final photoPath = avatarState.$1;
+    final remoteUrl = avatarState.$2;
+    final displayName = avatarState.$3;
     final bg = backgroundColor ?? AppColors.lightRed;
     final fg = textColor ?? AppColors.primaryRed;
     final isCircle = borderRadius == null;
@@ -84,9 +88,8 @@ class UserAvatar extends ConsumerWidget {
       }
     }
 
-    // Fall back to mock network photo for demo users
-    if (mockUrl != null) {
-      final imageProvider = CachedNetworkImageProvider(mockUrl);
+    if (remoteUrl != null) {
+      final imageProvider = CachedNetworkImageProvider(remoteUrl);
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => showProfilePhotoViewer(
@@ -117,6 +120,7 @@ class UserAvatar extends ConsumerWidget {
   }
 
   Widget _initial(Color bg, Color fg, bool isCircle, String displayName) {
+    if (displayName.trim().isEmpty) return _skeleton(isCircle);
     return Container(
       width: size,
       height: size,

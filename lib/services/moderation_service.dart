@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/comment.dart';
 import '../models/news_post.dart';
+import 'admin_moderation_service.dart';
 import 'auth_service.dart';
 import 'supabase_config.dart';
 
@@ -18,11 +20,13 @@ class ModerationService extends ChangeNotifier {
   );
 
   final Set<String> _hiddenPostIds = {};
+  final Set<String> _hiddenCommentIds = {};
   final Set<String> _blockedUserIds = {};
   final Set<String> _blockedClubIds = {};
   String? _activeUserId;
 
   Set<String> get hiddenPostIds => Set.unmodifiable(_hiddenPostIds);
+  Set<String> get hiddenCommentIds => Set.unmodifiable(_hiddenCommentIds);
   Set<String> get blockedUserIds => Set.unmodifiable(_blockedUserIds);
   Set<String> get blockedClubIds => Set.unmodifiable(_blockedClubIds);
 
@@ -39,6 +43,8 @@ class ModerationService extends ChangeNotifier {
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   String _hiddenKey(String userId) => 'moderation_hidden_posts_$userId';
+  String _hiddenCommentsKey(String userId) =>
+      'moderation_hidden_comments_$userId';
   String _blockedKey(String userId) => 'moderation_blocked_users_$userId';
   String _blockedClubsKey(String userId) => 'moderation_blocked_clubs_$userId';
 
@@ -46,6 +52,10 @@ class ModerationService extends ChangeNotifier {
       _hiddenPostIds.contains(post.id) ||
       _blockedClubIds.contains(post.clubId) ||
       (post.authorId.isNotEmpty && _blockedUserIds.contains(post.authorId));
+
+  bool isCommentHidden(Comment comment) =>
+      _hiddenCommentIds.contains(comment.id) ||
+      (comment.userId.isNotEmpty && _blockedUserIds.contains(comment.userId));
 
   bool isUserBlocked(String userId) => _blockedUserIds.contains(userId);
   bool isClubBlocked(String clubId) => _blockedClubIds.contains(clubId);
@@ -58,6 +68,11 @@ class ModerationService extends ChangeNotifier {
     _hiddenPostIds
       ..clear()
       ..addAll(preferences.getStringList(_hiddenKey(userId)) ?? const []);
+    _hiddenCommentIds
+      ..clear()
+      ..addAll(
+        preferences.getStringList(_hiddenCommentsKey(userId)) ?? const [],
+      );
     _blockedUserIds
       ..clear()
       ..addAll(preferences.getStringList(_blockedKey(userId)) ?? const []);
@@ -97,6 +112,7 @@ class ModerationService extends ChangeNotifier {
   void clearActiveUser() {
     _activeUserId = null;
     _hiddenPostIds.clear();
+    _hiddenCommentIds.clear();
     _blockedUserIds.clear();
     _blockedClubIds.clear();
     notifyListeners();
@@ -111,8 +127,24 @@ class ModerationService extends ChangeNotifier {
       targetType: 'post',
       targetId: post.id,
       reportedUserId: post.authorId,
+      reportedClubId: post.clubId,
       reason: reason,
       snapshot: post.content,
+    );
+  }
+
+  /// Queues a comment report and removes the comment from this user's view
+  /// now, matching the immediate-removal guarantee made for reported posts.
+  Future<void> reportComment(Comment comment, {required String reason}) async {
+    _hiddenCommentIds.add(comment.id);
+    await _persist();
+    notifyListeners();
+    await _submitReport(
+      targetType: 'comment',
+      targetId: comment.id,
+      reportedUserId: comment.userId,
+      reason: reason,
+      snapshot: comment.content,
     );
   }
 
@@ -210,6 +242,7 @@ class ModerationService extends ChangeNotifier {
     await _submitReport(
       targetType: 'club',
       targetId: clubId,
+      reportedClubId: clubId,
       reason: reason,
       source: 'block',
     );
@@ -247,11 +280,23 @@ class ModerationService extends ChangeNotifier {
     required String targetId,
     required String reason,
     String? reportedUserId,
+    String? reportedClubId,
     String? snapshot,
     String source = 'report',
   }) async {
-    final client = _client;
     final actorId = _actorId;
+    await adminModerationService.recordReport(
+      reporterId: actorId,
+      targetType: targetType,
+      targetId: targetId,
+      reason: reason,
+      source: source,
+      reportedUserId: reportedUserId,
+      reportedClubId: reportedClubId,
+      contentSnapshot: snapshot,
+    );
+
+    final client = _client;
     if (client == null || !_uuidPattern.hasMatch(actorId)) return;
 
     final payload = <String, dynamic>{
@@ -285,6 +330,10 @@ class ModerationService extends ChangeNotifier {
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.setStringList(_hiddenKey(userId), _hiddenPostIds.toList()),
+      preferences.setStringList(
+        _hiddenCommentsKey(userId),
+        _hiddenCommentIds.toList(),
+      ),
       preferences.setStringList(_blockedKey(userId), _blockedUserIds.toList()),
       preferences.setStringList(
         _blockedClubsKey(userId),
