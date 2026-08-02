@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_pressable.dart';
 
 import '../models/chat_message.dart';
 import '../l10n/app_localizations.dart';
@@ -237,7 +238,7 @@ class _ClubComposerState extends State<ClubComposer> {
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: GestureDetector(
+                          child: AppPressable(
                             onTap: () {
                               setState(() => _attachOpen = false);
                               widget.onAttach(entry.$1);
@@ -278,7 +279,7 @@ class _ClubComposerState extends State<ClubComposer> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  GestureDetector(
+                  AppPressable(
                     key: const ValueKey('club-attach-button'),
                     onTap: widget.enabled
                         ? () => setState(() => _attachOpen = !_attachOpen)
@@ -345,7 +346,7 @@ class _ClubComposerState extends State<ClubComposer> {
                               ),
                             ),
                           ),
-                          GestureDetector(
+                          AppPressable(
                             key: const ValueKey('club-mention-button'),
                             onTap: widget.enabled ? _insertMentionToken : null,
                             child: SizedBox(
@@ -363,8 +364,9 @@ class _ClubComposerState extends State<ClubComposer> {
                     ),
                   ),
                   const SizedBox(width: 9),
-                  GestureDetector(
+                  AppPressable(
                     onTap: hasDraft ? _send : null,
+                    pressedScale: 0.92,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       width: 44,

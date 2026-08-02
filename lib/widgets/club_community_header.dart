@@ -6,6 +6,7 @@ import 'club_avatar.dart';
 import 'club_chat_theme.dart';
 import 'club_community_sheet.dart';
 import 'club_stream_items.dart';
+import 'app_pressable.dart';
 
 /// Identity + live community information header for every club chat.
 ///
@@ -66,8 +67,7 @@ class ClubCommunityHeader extends StatelessWidget {
           Expanded(
             child: Semantics(
               button: true,
-              label:
-                  '${club.name}, ${S.communityMembers(memberCount)}',
+              label: '${club.name}, ${S.communityMembers(memberCount)}',
               child: GestureDetector(
                 onTap: onOpenClub,
                 behavior: HitTestBehavior.opaque,
@@ -170,7 +170,7 @@ class ClubHeaderIconButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: GestureDetector(
+      child: AppPressable(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Stack(

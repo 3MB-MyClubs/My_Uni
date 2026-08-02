@@ -192,6 +192,40 @@ void main() {
     expect(inbox.chatThreadIdFor('club-admin'), 'clubdm:inbox-1');
   });
 
+  test(
+    'maps canonical chat threads to current and legacy native group keys',
+    () {
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'dm:user-a|user-b',
+          currentUserId: 'user-a',
+        ),
+        {'direct_message:user-b', 'direct:user-b'},
+      );
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'group:group-1',
+          currentUserId: 'user-a',
+        ),
+        {'group_message:group-1', 'group:group-1'},
+      );
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'club:club-1',
+          currentUserId: 'user-a',
+        ),
+        {'club_channel_message:club-1', 'club:club-1'},
+      );
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'clubdm:inbox-1',
+          currentUserId: 'club-admin',
+        ),
+        {'club_inbox_message:inbox-1', 'club_inbox:inbox-1'},
+      );
+    },
+  );
+
   test('localizes club post copy in English and Turkish', () {
     final args = {'clubName': 'KU Music', 'content': 'Concert tonight'};
     final english = localizedPushNotificationCopy(

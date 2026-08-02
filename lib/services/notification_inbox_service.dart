@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/notification.dart';
 import 'auth_service.dart';
 import 'supabase_club_service.dart';
 import 'supabase_config.dart';
@@ -34,7 +35,9 @@ class NotificationInboxService extends ChangeNotifier {
     if (!SupabaseConfig.isConfigured || userId.isEmpty) {
       return Future.value();
     }
-    if (_activeUserId == userId && _channel != null) {
+    // A matching user may already be mid-refresh before its realtime channel
+    // is attached. Reuse that work instead of recursively switching users.
+    if (_activeUserId == userId) {
       return _loading ?? Future.value();
     }
     return _switchUser(userId);
@@ -351,6 +354,67 @@ class NotificationInboxService extends ChangeNotifier {
           .from('notifications')
           .update({'read_at': readAt})
           .eq('id', notificationId);
+    } catch (_) {
+      // Preserve the optimistic local read state while offline.
+    }
+  }
+
+  /// Marks every remote notification row belonging to the open chat as read.
+  /// Other conversations and non-message notifications are left unchanged.
+  Future<void> markChatThreadRead({
+    required String threadId,
+    required String userId,
+  }) async {
+    final conversationKey = notificationConversationKeyForThread(
+      threadId: threadId,
+      userId: userId,
+    );
+    if (conversationKey == null) return;
+
+    await startForCurrentUser();
+    if (_activeUserId != userId) return;
+
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    final notificationIds = <String>[];
+    for (var index = 0; index < _rows.length; index++) {
+      final row = _rows[index];
+      if (row['read_at'] != null || row['target_type'] != 'message') continue;
+      final notification = AppNotification(
+        id: row['id']?.toString() ?? '',
+        userId: row['user_id']?.toString() ?? '',
+        message: row['body']?.toString() ?? '',
+        createdAt:
+            DateTime.tryParse(row['created_at']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        notificationType: row['type']?.toString(),
+        targetType: row['target_type']?.toString(),
+        targetId: row['target_id']?.toString(),
+        fromId: row['actor_user_id']?.toString(),
+      );
+      if (notificationConversationKey(notification) != conversationKey) {
+        continue;
+      }
+      final notificationId = notification.id;
+      if (notificationId.isEmpty) continue;
+      notificationIds.add(notificationId);
+      _rows[index] = {...row, 'read_at': readAt};
+    }
+    if (notificationIds.isEmpty) return;
+    notifyListeners();
+    await _persistChatThreadRead(userId, notificationIds, readAt);
+  }
+
+  Future<void> _persistChatThreadRead(
+    String userId,
+    List<String> notificationIds,
+    String readAt,
+  ) async {
+    try {
+      await Supabase.instance.client
+          .from('notifications')
+          .update({'read_at': readAt})
+          .eq('user_id', userId)
+          .inFilter('id', notificationIds);
     } catch (_) {
       // Preserve the optimistic local read state while offline.
     }

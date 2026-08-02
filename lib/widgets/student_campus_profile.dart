@@ -7,6 +7,7 @@ import '../services/club_role_localization.dart';
 import '../services/theme_service.dart';
 import 'club_avatar.dart';
 import 'user_avatar.dart';
+import 'app_pressable.dart';
 
 /// Campus ID reference-design palette. The ID card itself keeps its fixed
 /// burgundy/white branding in both themes; the surrounding page chrome
@@ -594,7 +595,7 @@ class StudentProfileTextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
@@ -879,12 +880,28 @@ class _CampusStat extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                '$value',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.2),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  '$value',
+                  key: ValueKey(value),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(width: 5),

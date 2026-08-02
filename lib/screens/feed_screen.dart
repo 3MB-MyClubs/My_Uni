@@ -47,6 +47,7 @@ import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../widgets/post_share_sheet.dart';
+import '../widgets/app_pressable.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/supabase_post_service.dart';
 import '../services/notification_inbox_service.dart';
@@ -1208,7 +1209,7 @@ class _TopBarIconButton extends StatelessWidget {
       value: badgeCount > 0 ? '$badgeCount' : null,
       child: Tooltip(
         message: semanticLabel,
-        child: GestureDetector(
+        child: AppPressable(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(

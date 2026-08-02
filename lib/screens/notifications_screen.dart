@@ -29,6 +29,7 @@ import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/app_pressable.dart';
 
 /// Notification center — the "UniHub Notifications" design.
 ///
@@ -133,6 +134,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         continue;
       }
       if (notification.createdAt.isBefore(retentionCutoff)) continue;
+      // Opening a conversation consumes its chat alert. Keep read activity
+      // history, but remove stale message rows from the notification center.
+      if (notification.targetType == 'message' &&
+          userState.isNotificationRead(notification)) {
+        continue;
+      }
       if (notification.targetType == 'follow_request' &&
           notification.fromId != null &&
           userState.incomingFollowRequests.containsKey(notification.fromId)) {
@@ -979,9 +986,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     required bool filled,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
+    return AppPressable(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      pressedScale: 0.96,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
@@ -1548,9 +1556,10 @@ class _FollowAccessory extends StatelessWidget {
         : l10n.follow;
     final filled = !isFollowing && !isPending;
 
-    return GestureDetector(
+    return AppPressable(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      pressedScale: 0.96,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         constraints: const BoxConstraints(minWidth: 88),
@@ -1562,12 +1571,25 @@ class _FollowAccessory extends StatelessWidget {
           borderRadius: const BorderRadius.all(Radius.circular(10)),
           border: filled ? null : Border.all(color: AppColors.borderStrong),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: filled ? Colors.white : AppColors.bodyText,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            label,
+            key: ValueKey(label),
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: filled ? Colors.white : AppColors.bodyText,
+            ),
           ),
         ),
       ),

@@ -320,6 +320,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final elevatedSurface = isDark
         ? DarkColors.surfaceAlt
         : LightColors.surfaceAlt;
+    const buttonMotion = Duration(milliseconds: 160);
+    final buttonOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.pressed)) {
+        return (isDark ? Colors.white : red).withValues(alpha: 0.14);
+      }
+      if (states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused)) {
+        return (isDark ? Colors.white : red).withValues(alpha: 0.08);
+      }
+      return null;
+    });
+    final sharedButtonMotion = ButtonStyle(
+      animationDuration: buttonMotion,
+      overlayColor: buttonOverlay,
+      splashFactory: InkRipple.splashFactory,
+      enableFeedback: true,
+    );
 
     return ThemeData(
       brightness: bright,
@@ -385,8 +402,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           textStyle: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        ).merge(sharedButtonMotion),
       ),
+      filledButtonTheme: FilledButtonThemeData(style: sharedButtonMotion),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: sharedButtonMotion),
+      textButtonTheme: TextButtonThemeData(style: sharedButtonMotion),
+      iconButtonTheme: IconButtonThemeData(style: sharedButtonMotion),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: lGray,
@@ -427,6 +448,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           TargetPlatform.linux: _SmoothPageTransitionsBuilder(),
         },
       ),
+      splashFactory: InkRipple.splashFactory,
       useMaterial3: true,
     );
   }
@@ -618,7 +640,9 @@ class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    if (route.isFirst) return child;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (route.isFirst || reduceMotion) return child;
 
     final curved = CurvedAnimation(
       parent: animation,

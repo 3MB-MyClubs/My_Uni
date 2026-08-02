@@ -1250,6 +1250,9 @@ class ChatStore extends ChangeNotifier {
         if (local.content != merged.content ||
             local.kind != merged.kind ||
             local.title != merged.title ||
+            local.replyToMessageId != merged.replyToMessageId ||
+            local.replyToSenderId != merged.replyToSenderId ||
+            local.replyToPreview != merged.replyToPreview ||
             local.sharedPostId != merged.sharedPostId ||
             local.attachmentPath != merged.attachmentPath ||
             local.attachmentName != merged.attachmentName ||
@@ -2241,6 +2244,7 @@ class ChatStore extends ChangeNotifier {
     String? eventId,
     String? sharedPostId,
     bool pinned = false,
+    String? replyToMessageId,
   }) {
     if (_box == null) return null;
     final text = content.trim();
@@ -2257,6 +2261,16 @@ class ChatStore extends ChangeNotifier {
     if (text.isEmpty && !carriesPayload) return null;
     if (!canWriteThread(threadId, senderId)) return null;
 
+    ChatMessage? repliedMessage;
+    if (replyToMessageId != null) {
+      final replyIndex = _messages.indexWhere(
+        (message) =>
+            message.id == replyToMessageId && message.threadId == threadId,
+      );
+      if (replyIndex == -1) return null;
+      repliedMessage = _messages[replyIndex];
+    }
+
     if (isDirectThread(threadId)) _directThreadIds.add(threadId);
 
     final now = DateTime.now();
@@ -2267,6 +2281,11 @@ class ChatStore extends ChangeNotifier {
       content: text,
       createdAt: now,
       deliveredAt: now,
+      replyToMessageId: repliedMessage?.id,
+      replyToSenderId: repliedMessage?.senderId,
+      replyToPreview: repliedMessage == null
+          ? null
+          : replyPreviewFor(repliedMessage),
       kind: kind,
       title: title,
       mentions: mentions.where((id) => id.isNotEmpty).toSet().toList(),
@@ -2302,6 +2321,24 @@ class ChatStore extends ChangeNotifier {
     }
     if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;
+  }
+
+  static String replyPreviewFor(ChatMessage message) {
+    final content = message.content.trim();
+    if (content.isNotEmpty) return content;
+    final title = message.title?.trim() ?? '';
+    if (title.isNotEmpty) return title;
+    final attachmentName = message.attachmentName?.trim() ?? '';
+    if (attachmentName.isNotEmpty) return attachmentName;
+    return switch (message.kind) {
+      ChatMessageKind.photo => 'Photo',
+      ChatMessageKind.file => 'File',
+      ChatMessageKind.poll => 'Poll',
+      ChatMessageKind.event => 'Event',
+      ChatMessageKind.postShare => 'Shared post',
+      ChatMessageKind.announcement => 'Announcement',
+      ChatMessageKind.system || ChatMessageKind.text => 'Message',
+    };
   }
 
   // ── Community stream (announcements, polls, reactions, pins, typing) ─────────
@@ -2371,28 +2408,7 @@ class ChatStore extends ChangeNotifier {
     if (users.isEmpty) reactions.remove(emoji);
     return _replaceMessage(
       messageId,
-      (message) => ChatMessage(
-        id: message.id,
-        threadId: message.threadId,
-        senderId: message.senderId,
-        content: message.content,
-        createdAt: message.createdAt,
-        deliveredAt: message.deliveredAt,
-        seenAt: message.seenAt,
-        kind: message.kind,
-        title: message.title,
-        mentions: message.mentions,
-        reactions: reactions,
-        attachmentPath: message.attachmentPath,
-        attachmentName: message.attachmentName,
-        attachmentSize: message.attachmentSize,
-        pollOptions: message.pollOptions,
-        pollVotes: message.pollVotes,
-        pollClosesAt: message.pollClosesAt,
-        eventId: message.eventId,
-        sharedPostId: message.sharedPostId,
-        pinned: message.pinned,
-      ),
+      (message) => message.copyWith(reactions: reactions),
     );
   }
 

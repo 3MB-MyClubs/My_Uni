@@ -17,6 +17,8 @@ import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
 import '../services/mock_data.dart';
+import '../services/notification_inbox_service.dart';
+import '../services/notification_service.dart';
 import '../services/people_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
@@ -25,6 +27,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import 'club_community_screen.dart';
@@ -58,10 +61,12 @@ class ChatThreadScreen extends StatefulWidget {
 class _ChatThreadScreenState extends State<ChatThreadScreen>
     with WidgetsBindingObserver {
   final _inputController = TextEditingController();
+  final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
   final Set<String> _requestedParticipantProfileIds = {};
   ClubCommunityInfoController? _communityInfo;
   String? _animatingSentMessageId;
+  ChatMessage? _replyingTo;
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -131,6 +136,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.addListener(_onEnvChanged);
     localeService.addListener(_onEnvChanged);
     chatStore.addListener(_onStoreChanged);
+    notificationInboxService.addListener(_onNotificationInboxChanged);
     // Post-frame: both can notifyListeners, which is illegal while this
     // route is still mounting mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -165,8 +171,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.removeListener(_onEnvChanged);
     localeService.removeListener(_onEnvChanged);
     chatStore.removeListener(_onStoreChanged);
+    notificationInboxService.removeListener(_onNotificationInboxChanged);
     _communityInfo?.dispose();
     _inputController.dispose();
+    _inputFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -177,8 +185,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isDirect) {
           final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
-          if (peerId != null && _userForId(peerId) == null) {
-            unawaited(_hydratePeerProfile(peerId));
+          if (peerId != null) {
+            if (_userForId(peerId) == null) {
+              unawaited(_hydratePeerProfile(peerId));
+            } else {
+              unawaited(
+                appPresenceService.hydrateLastSeenForUsers([
+                  peerId,
+                ], force: true),
+              );
+            }
           }
         } else {
           _requestedParticipantProfileIds.removeWhere(
@@ -200,6 +216,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) return;
     chatStore.markThreadRead(widget.threadId, _myId);
+    _dismissVisibleChatNotifications();
+  }
+
+  void _onNotificationInboxChanged() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+    _dismissVisibleChatNotifications();
+  }
+
+  void _dismissVisibleChatNotifications() {
+    final userId = _myId;
+    if (userId.isEmpty) return;
+    userState.markChatThreadNotificationsRead(
+      threadId: widget.threadId,
+      userId: userId,
+    );
+    unawaited(
+      notificationInboxService.markChatThreadRead(
+        threadId: widget.threadId,
+        userId: userId,
+      ),
+    );
+    unawaited(
+      notificationService.cancelChatNotifications(
+        threadId: widget.threadId,
+        currentUserId: userId,
+      ),
+    );
   }
 
   void _onEnvChanged() {
@@ -207,7 +252,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _hydratePeerProfile(String peerId) async {
-    await peopleService.hydrateProfilesByIds([peerId]);
+    await Future.wait([
+      peopleService.hydrateProfilesByIds([peerId]),
+      appPresenceService.hydrateLastSeenForUsers([peerId]),
+    ]);
     if (mounted) setState(() {});
   }
 
@@ -253,11 +301,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       threadId: widget.threadId,
       senderId: _myId,
       content: text ?? _inputController.text,
+      replyToMessageId: _replyingTo?.id,
     );
     if (sent == null) return;
     if (text == null) _inputController.clear();
-    if (text == null && mounted) {
-      setState(() => _animatingSentMessageId = sent.id);
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+        if (text == null) _animatingSentMessageId = sent.id;
+      });
     }
     _scrollToLatest();
   }
@@ -401,10 +453,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       attachmentPath: file.path,
       attachmentName: file.name,
       attachmentSize: size,
+      replyToMessageId: _replyingTo?.id,
     );
     if (sent == null) return;
     _inputController.clear();
-    if (mounted) setState(() => _animatingSentMessageId = sent.id);
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+        _animatingSentMessageId = sent.id;
+      });
+    }
     _scrollToLatest();
   }
 
@@ -494,9 +552,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
               ],
             ),
+            const SizedBox(height: 8),
+            Divider(color: AppColors.divider),
+            if (chatStore.canWriteThread(widget.threadId, _myId))
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  key: ValueKey('chat-reply-message-${message.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.reply_rounded,
+                    color: AppColors.primaryRed,
+                  ),
+                  title: Text(
+                    S.reply,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _beginReply(message);
+                  },
+                ),
+              ),
             if (chatStore.isMessageOwner(message, _myId)) ...[
-              const SizedBox(height: 8),
-              Divider(color: AppColors.divider),
               Material(
                 color: Colors.transparent,
                 child: ListTile(
@@ -524,6 +605,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
     );
+  }
+
+  void _beginReply(ChatMessage message) {
+    setState(() => _replyingTo = message);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _inputFocusNode.requestFocus();
+    });
   }
 
   // ── Sender identity ─────────────────────────────────────────────────────────
@@ -705,7 +793,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const SizedBox(width: 5),
           ],
           Text(
-            online ? S.activeNowLabel : S.lastSeenRecently,
+            online
+                ? S.activeNowLabel
+                : S.lastOnlineLabel(
+                    appPresenceService.lastSeenAtFor(peerId ?? ''),
+                  ),
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
@@ -1215,10 +1307,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final next = i < messages.length - 1 ? messages[i + 1] : null;
       final newDay = prev == null || !_sameDay(prev.createdAt, m.createdAt);
       if (newDay) items.add(_DateChip(label: _dayLabel(m.createdAt)));
-      final firstOfRun = newDay || prev.senderId != m.senderId;
+      final firstOfRun =
+          newDay || prev.senderId != m.senderId || m.replyToMessageId != null;
       final lastOfRun =
           next == null ||
           next.senderId != m.senderId ||
+          next.replyToMessageId != null ||
           !_sameDay(next.createdAt, m.createdAt);
       items.add(
         SentMessageEntrance(
@@ -1328,36 +1422,38 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ],
       ),
-      child: m.kind == ChatMessageKind.postShare && m.sharedPostId != null
-          ? SharedPostMessageCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (m.replyToMessageId != null)
+            _messageReplyQuote(m, mine: mine, hasMedia: hasMedia),
+          if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
+            SharedPostMessageCard(
               postId: m.sharedPostId!,
               onDarkBackground: mine,
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (photoPath != null) _photoAttachment(photoPath),
-                if (filePath != null) _fileAttachment(m, mine: mine),
-                if (hasText)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      hasMedia ? 8 : 0,
-                      hasMedia ? 7 : 0,
-                      hasMedia ? 8 : 0,
-                      hasMedia ? 3 : 0,
-                    ),
-                    child: Text(
-                      m.content,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        height: 1.45,
-                        letterSpacing: -0.1,
-                        color: mine ? Colors.white : AppColors.text,
-                      ),
-                    ),
-                  ),
-              ],
             ),
+          if (photoPath != null) _photoAttachment(photoPath),
+          if (filePath != null) _fileAttachment(m, mine: mine),
+          if (hasText)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                hasMedia ? 8 : 0,
+                hasMedia ? 7 : 0,
+                hasMedia ? 8 : 0,
+                hasMedia ? 3 : 0,
+              ),
+              child: Text(
+                m.content,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.45,
+                  letterSpacing: -0.1,
+                  color: mine ? Colors.white : AppColors.text,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
 
     return Padding(
@@ -1501,6 +1597,64 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Color _accentForUser(String userId) {
     if (userId.isEmpty) return AppColors.secondaryText;
     return _senderAccents[userId.hashCode.abs() % _senderAccents.length];
+  }
+
+  Widget _messageReplyQuote(
+    ChatMessage message, {
+    required bool mine,
+    required bool hasMedia,
+  }) {
+    final repliedSenderId = message.replyToSenderId ?? '';
+    final repliedSenderName = repliedSenderId == _myId
+        ? S.you
+        : _senderInfo(repliedSenderId).$1;
+    final foreground = mine ? Colors.white : AppColors.text;
+    return Container(
+      key: ValueKey('chat-reply-quote-${message.id}'),
+      width: double.infinity,
+      margin: EdgeInsets.only(
+        bottom: hasMedia || message.content.isNotEmpty ? 7 : 0,
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 7, 9, 7),
+      decoration: BoxDecoration(
+        color: mine
+            ? Colors.black.withValues(alpha: 0.16)
+            : AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(
+            color: mine ? Colors.white : AppColors.primaryRed,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            repliedSenderName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: mine ? Colors.white : AppColors.primaryRed,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message.replyToPreview ?? S.message,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.25,
+              color: foreground.withValues(alpha: 0.82),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Tapping a chip toggles your own reaction; long-pressing the bubble opens
@@ -1709,133 +1863,209 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: SafeArea(
         top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // "+" — photo or camera.
-            _composerCircleButton(
-              key: const ValueKey('chat-attach-button'),
-              size: 40,
-              icon: Icons.add_rounded,
-              iconSize: 21,
-              iconColor: AppColors.primaryRed,
-              onTap: enabled ? _openAttachSheet : null,
-              semanticLabel: S.attachToMessage,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 44),
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: const BorderRadius.all(Radius.circular(22)),
-                  border: Border.all(color: AppColors.divider),
+            if (_replyingTo case final replied?) ...[
+              _composerReplyPreview(replied),
+              const SizedBox(height: 9),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // "+" — photo or camera.
+                _composerCircleButton(
+                  key: const ValueKey('chat-attach-button'),
+                  size: 40,
+                  icon: Icons.add_rounded,
+                  iconSize: 21,
+                  iconColor: AppColors.primaryRed,
+                  onTap: enabled ? _openAttachSheet : null,
+                  semanticLabel: S.attachToMessage,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _inputController,
-                        enabled: enabled,
-                        minLines: 1,
-                        maxLines: 1,
-                        textInputAction: TextInputAction.send,
-                        textAlignVertical: TextAlignVertical.center,
-                        textCapitalization: TextCapitalization.sentences,
-                        onSubmitted: enabled ? (_) => _send() : null,
-                        style: TextStyle(fontSize: 14.5, color: AppColors.text),
-                        decoration: InputDecoration(
-                          hintText: S.typeMessage,
-                          hintStyle: TextStyle(
-                            fontSize: 14.5,
-                            color: AppColors.secondaryText,
-                          ),
-                          isDense: true,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            16,
-                            0,
-                            4,
-                            0,
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      borderRadius: const BorderRadius.all(Radius.circular(22)),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inputController,
+                            focusNode: _inputFocusNode,
+                            enabled: enabled,
+                            minLines: 1,
+                            maxLines: 1,
+                            textInputAction: TextInputAction.send,
+                            textAlignVertical: TextAlignVertical.center,
+                            textCapitalization: TextCapitalization.sentences,
+                            onSubmitted: enabled ? (_) => _send() : null,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              color: AppColors.text,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: S.typeMessage,
+                              hintStyle: TextStyle(
+                                fontSize: 14.5,
+                                color: AppColors.secondaryText,
+                              ),
+                              isDense: true,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                16,
+                                0,
+                                4,
+                                0,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    // Quick camera capture, docked inside the pill.
-                    _composerCircleButton(
-                      key: const ValueKey('chat-camera-button'),
-                      size: 34,
-                      icon: Icons.photo_camera_outlined,
-                      iconSize: 19,
-                      iconColor: AppColors.secondaryText,
-                      filled: false,
-                      onTap: enabled
-                          ? () => _pickAttachment(_ChatAttachment.camera)
-                          : null,
-                      semanticLabel: S.takePhoto,
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 9),
-            // Send once there is a draft. The disabled send affordance keeps
-            // the composer layout stable without offering voice notes.
-            ListenableBuilder(
-              listenable: _inputController,
-              builder: (context, _) {
-                final hasDraft =
-                    enabled && _inputController.text.trim().isNotEmpty;
-                return GestureDetector(
-                  key: const ValueKey('chat-send-button'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: enabled && hasDraft ? _send : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: hasDraft ? null : AppColors.surfaceAlt,
-                      gradient: hasDraft
-                          ? LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [AppColors.primaryRed, AppColors.darkRed],
-                            )
-                          : null,
-                      shape: BoxShape.circle,
-                      border: hasDraft
-                          ? null
-                          : Border.all(color: AppColors.divider),
-                      boxShadow: hasDraft
-                          ? [
-                              BoxShadow(
-                                color: AppColors.primaryRed.withValues(
-                                  alpha: 0.33,
-                                ),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Icon(
-                      Icons.send_rounded,
-                      size: 21,
-                      color: hasDraft ? Colors.white : AppColors.secondaryText,
+                        // Quick camera capture, docked inside the pill.
+                        _composerCircleButton(
+                          key: const ValueKey('chat-camera-button'),
+                          size: 34,
+                          icon: Icons.photo_camera_outlined,
+                          iconSize: 19,
+                          iconColor: AppColors.secondaryText,
+                          filled: false,
+                          onTap: enabled
+                              ? () => _pickAttachment(_ChatAttachment.camera)
+                              : null,
+                          semanticLabel: S.takePhoto,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+                const SizedBox(width: 9),
+                // Send once there is a draft. The disabled send affordance keeps
+                // the composer layout stable without offering voice notes.
+                ListenableBuilder(
+                  listenable: _inputController,
+                  builder: (context, _) {
+                    final hasDraft =
+                        enabled && _inputController.text.trim().isNotEmpty;
+                    return AppPressable(
+                      key: const ValueKey('chat-send-button'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: enabled && hasDraft ? _send : null,
+                      pressedScale: 0.92,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: hasDraft ? null : AppColors.surfaceAlt,
+                          gradient: hasDraft
+                              ? LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppColors.primaryRed,
+                                    AppColors.darkRed,
+                                  ],
+                                )
+                              : null,
+                          shape: BoxShape.circle,
+                          border: hasDraft
+                              ? null
+                              : Border.all(color: AppColors.divider),
+                          boxShadow: hasDraft
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primaryRed.withValues(
+                                      alpha: 0.33,
+                                    ),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Icon(
+                          Icons.send_rounded,
+                          size: 21,
+                          color: hasDraft
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _composerReplyPreview(ChatMessage message) {
+    final senderName = message.senderId == _myId
+        ? S.you
+        : _senderInfo(message.senderId).$1;
+    return Container(
+      key: const ValueKey('chat-reply-composer-preview'),
+      padding: const EdgeInsets.fromLTRB(11, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: AppColors.primaryRed, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  S.replyingTo(senderName),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryRed,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ChatStore.replyPreviewFor(message),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('chat-cancel-reply'),
+            tooltip: S.cancelReply,
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _replyingTo = null),
+            icon: Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1853,7 +2083,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Semantics(
       button: true,
       label: semanticLabel,
-      child: GestureDetector(
+      child: AppPressable(
         key: key,
         behavior: HitTestBehavior.opaque,
         onTap: onTap,

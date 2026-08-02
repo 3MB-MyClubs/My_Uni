@@ -57,6 +57,7 @@ void main() {
       final badge = tester.widget<Container>(badgeFinder);
       final decoration = badge.decoration! as BoxDecoration;
       final label = tester.widget<Text>(find.text('4 mutuals'));
+      final mutualName = tester.widget<Text>(find.text('Student mutual-1'));
 
       expect(
         decoration.color,
@@ -65,6 +66,17 @@ void main() {
       expect(
         label.style!.color,
         brightness == Brightness.light ? LightColors.text : DarkColors.text,
+      );
+      expect(mutualName.style!.fontSize, 8.5);
+      expect(
+        mutualName.style!.color,
+        brightness == Brightness.light
+            ? LightColors.secondaryText
+            : DarkColors.secondaryText,
+      );
+      expect(
+        find.byKey(const ValueKey('mutual-preview-name-suggestion')),
+        findsOneWidget,
       );
       expect(
         find.descendant(of: badgeFinder, matching: find.byType(UserAvatar)),

@@ -1,4 +1,5 @@
 import 'locale_service.dart';
+import 'presence_status.dart';
 
 class S {
   S._();
@@ -887,9 +888,36 @@ class S {
   static String onlineMembers(int n) => _t('$n online', '$n çevrimiçi');
   static String get lastSeenRecently =>
       _t('Last seen recently', 'Son görülme az önce');
+  static String lastOnlineLabel(DateTime? lastSeenAt, {DateTime? now}) {
+    final relative = relativeLastSeen(lastSeenAt, now: now);
+    return switch (relative.period) {
+      LastSeenPeriod.unknown => lastSeenRecently,
+      LastSeenPeriod.justNow => _t(
+        'Last online just now',
+        'Son çevrimiçi: az önce',
+      ),
+      LastSeenPeriod.minutes => _t(
+        'Last online ${relative.value} min ago',
+        'Son çevrimiçi: ${relative.value} dk önce',
+      ),
+      LastSeenPeriod.hours => _t(
+        'Last online ${relative.value} ${relative.value == 1 ? 'hour' : 'hours'} ago',
+        'Son çevrimiçi: ${relative.value} saat önce',
+      ),
+      LastSeenPeriod.days => _t(
+        'Last online ${relative.value} ${relative.value == 1 ? 'day' : 'days'} ago',
+        'Son çevrimiçi: ${relative.value} gün önce',
+      ),
+    };
+  }
+
   static String get typing => _t('typing…', 'yazıyor…');
   static String get delivered => _t('Delivered', 'Teslim edildi');
   static String get seen => _t('Seen', 'Görüldü');
+  static String get reply => _t('Reply', 'Yanıtla');
+  static String replyingTo(String name) =>
+      _t('Replying to $name', '$name adlı kişiye yanıt');
+  static String get cancelReply => _t('Cancel reply', 'Yanıtı iptal et');
   static String nNew(int n) => _t('$n new', '$n yeni');
   static String get searchStudents => _t('Search students…', 'Öğrenci ara…');
   static String get studentChats => _t('Students', 'Öğrenciler');

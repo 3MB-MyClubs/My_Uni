@@ -80,6 +80,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   ClubSheetTab? _openSheet;
   bool _showJumpButton = false;
   String? _animatingSentMessageId;
+  ChatMessage? _replyingTo;
 
   static const List<Color> _clubColors = [
     Color(0xFFB41C18),
@@ -492,9 +493,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       senderId: _myId,
       content: text,
       mentions: mentions,
+      replyToMessageId: _replyingTo?.id,
     );
     if (sent == null) return;
-    if (mounted) setState(() => _animatingSentMessageId = sent.id);
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+        _animatingSentMessageId = sent.id;
+      });
+    }
     _scrollToLatest();
   }
 
@@ -607,10 +614,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       attachmentPath: file.path,
       attachmentName: file.name,
       attachmentSize: size,
+      replyToMessageId: _replyingTo?.id,
     );
     if (sent == null) return;
     _inputController.clear();
-    if (mounted) setState(() => _animatingSentMessageId = sent.id);
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+        _animatingSentMessageId = sent.id;
+      });
+    }
     _scrollToLatest();
   }
 
@@ -1049,6 +1062,17 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               ],
             ),
             const SizedBox(height: 8),
+            if (chatStore.canWriteThread(widget.threadId, _myId))
+              _ActionRow(
+                key: ValueKey('club-reply-message-${message.id}'),
+                icon: Icons.reply_rounded,
+                label: S.reply,
+                t: t,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  setState(() => _replyingTo = message);
+                },
+              ),
             if (message.content.isNotEmpty)
               _ActionRow(
                 icon: Icons.copy_rounded,
@@ -1649,6 +1673,57 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   // ── Build ───────────────────────────────────────────────────────────────────
 
+  Widget _clubComposerReplyPreview(ChatMessage message, ClubChatTheme t) {
+    final sender = _personFor(message.senderId).name;
+    return Container(
+      key: const ValueKey('club-reply-composer-preview'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: t.body,
+        border: Border(
+          top: BorderSide(color: t.hair),
+          left: BorderSide(color: t.red, width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  S.replyingTo(sender),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: t.red,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ChatStore.replyPreviewFor(message),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, color: t.sub),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('club-cancel-reply'),
+            tooltip: S.cancelReply,
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _replyingTo = null),
+            icon: Icon(Icons.close_rounded, size: 18, color: t.sub),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = _t;
@@ -1681,17 +1756,24 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   _buildPinnedStrip(t),
                   Expanded(child: _buildStream(t)),
                   if (_canModerate)
-                    ClubComposer(
-                      controller: _inputController,
-                      t: t,
-                      hintText: S.communityComposerHint,
-                      people: _members,
-                      avatarBuilder: _avatarFor,
-                      onSend: _send,
-                      onAttach: (attachment) =>
-                          unawaited(_handleAttachment(attachment)),
-                      onTypingChanged: () =>
-                          chatStore.setTyping(widget.threadId, _myId),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_replyingTo case final replied?)
+                          _clubComposerReplyPreview(replied, t),
+                        ClubComposer(
+                          controller: _inputController,
+                          t: t,
+                          hintText: S.communityComposerHint,
+                          people: _members,
+                          avatarBuilder: _avatarFor,
+                          onSend: _send,
+                          onAttach: (attachment) =>
+                              unawaited(_handleAttachment(attachment)),
+                          onTypingChanged: () =>
+                              chatStore.setTyping(widget.threadId, _myId),
+                        ),
+                      ],
                     )
                   else
                     _buildFollowerActions(t),
@@ -2055,6 +2137,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         previous.senderId != message.senderId ||
         previous.kind != ChatMessageKind.text ||
         message.kind != ChatMessageKind.text ||
+        message.replyToMessageId != null ||
         message.mentions.isNotEmpty ||
         !_sameDay(previous.createdAt, message.createdAt);
 
@@ -2074,6 +2157,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         timeLabel: _timeLabel(message.createdAt),
         flagged: message.mentionsUser(_myId) && !mine,
         t: t,
+        replySenderName: message.replyToSenderId == null
+            ? null
+            : _personFor(message.replyToSenderId!).name,
         onLongPress: () => _showMessageActions(message),
         onOpenSender: () => _openParticipantProfile(sender),
         statusLabel: mine

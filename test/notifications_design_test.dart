@@ -433,6 +433,49 @@ void main() {
     await tester.runAsync(chatStore.saveAll);
   });
 
+  testWidgets('opening one chat removes only that conversation alert', (
+    tester,
+  ) async {
+    final openedThread = chatStore.ensureDirectThread(myId, liker.$1)!;
+    final otherThread = chatStore.ensureDirectThread(myId, follower.$1)!;
+    await tester.runAsync(chatStore.saveAll);
+    userState.dynamicNotifications.addAll([
+      AppNotification(
+        id: 'opened-chat-alert',
+        userId: myId,
+        fromId: liker.$1,
+        message: 'Alert from the opened conversation',
+        createdAt: DateTime.now(),
+        notificationType: 'direct_message',
+        targetType: 'message',
+        targetId: openedThread,
+      ),
+      AppNotification(
+        id: 'other-chat-alert',
+        userId: myId,
+        fromId: follower.$1,
+        message: 'Alert from another conversation',
+        createdAt: DateTime.now(),
+        notificationType: 'direct_message',
+        targetType: 'message',
+        targetId: otherThread,
+      ),
+    ]);
+
+    userState.markChatThreadNotificationsRead(
+      threadId: openedThread,
+      userId: myId,
+    );
+    await pumpScreen(tester);
+
+    expect(find.text('Alert from the opened conversation'), findsNothing);
+    // The normal two unread setup rows plus the untouched other-chat alert.
+    expect(find.text('3'), findsOneWidget);
+    expect(userState.readNotificationIds, contains('opened-chat-alert'));
+    expect(userState.readNotificationIds, isNot(contains('other-chat-alert')));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'club activity uses the club photo while reactions use the student photo',
     (tester) async {

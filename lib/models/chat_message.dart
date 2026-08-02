@@ -30,6 +30,13 @@ class ChatMessage {
   final DateTime deliveredAt;
   final DateTime? seenAt;
 
+  /// Stable snapshot of the message this one replies to. Keeping the sender
+  /// and preview beside the id lets the quote remain useful if the original
+  /// message is later deleted or is not present in the local cache yet.
+  final String? replyToMessageId;
+  final String? replyToSenderId;
+  final String? replyToPreview;
+
   // ── Community extras ───────────────────────────────────────────────────────
   // All optional and defaulted, so messages stored before these existed (and
   // messages arriving from the direct/group Supabase sync, which only carries
@@ -95,6 +102,9 @@ class ChatMessage {
     required this.createdAt,
     DateTime? deliveredAt,
     this.seenAt,
+    this.replyToMessageId,
+    this.replyToSenderId,
+    this.replyToPreview,
     this.kind = ChatMessageKind.text,
     this.title,
     List<String>? mentions,
@@ -127,6 +137,9 @@ class ChatMessage {
     DateTime? createdAt,
     DateTime? deliveredAt,
     DateTime? seenAt,
+    String? replyToMessageId,
+    String? replyToSenderId,
+    String? replyToPreview,
     ChatMessageKind? kind,
     String? title,
     List<String>? mentions,
@@ -148,6 +161,9 @@ class ChatMessage {
     createdAt: createdAt ?? this.createdAt,
     deliveredAt: deliveredAt ?? this.deliveredAt,
     seenAt: seenAt ?? this.seenAt,
+    replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+    replyToSenderId: replyToSenderId ?? this.replyToSenderId,
+    replyToPreview: replyToPreview ?? this.replyToPreview,
     kind: kind ?? this.kind,
     title: title ?? this.title,
     mentions: mentions ?? this.mentions,
@@ -171,6 +187,9 @@ class ChatMessage {
     'createdAt': createdAt.toIso8601String(),
     'deliveredAt': deliveredAt.toIso8601String(),
     'seenAt': seenAt?.toIso8601String(),
+    if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+    if (replyToSenderId != null) 'replyToSenderId': replyToSenderId,
+    if (replyToPreview != null) 'replyToPreview': replyToPreview,
     if (kind != ChatMessageKind.text) 'kind': kind.name,
     if (title != null) 'title': title,
     if (mentions.isNotEmpty) 'mentions': mentions,
@@ -199,6 +218,9 @@ class ChatMessage {
         ? null
         : DateTime.parse(m['deliveredAt'] as String),
     seenAt: m['seenAt'] == null ? null : DateTime.parse(m['seenAt'] as String),
+    replyToMessageId: m['replyToMessageId']?.toString(),
+    replyToSenderId: m['replyToSenderId']?.toString(),
+    replyToPreview: m['replyToPreview']?.toString(),
     kind: _kindFromName(m['kind']),
     title: m['title']?.toString(),
     mentions: (m['mentions'] as List? ?? const [])

@@ -131,8 +131,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   Future<void> _hydrateDmProfiles() async {
     final memberIds = <String>{};
+    final directPeerIds = <String>{};
     for (final thread in chatStore.threadsFor(_myId)) {
-      if (thread.peerId case final peerId?) memberIds.add(peerId);
+      if (thread.peerId case final peerId?) {
+        memberIds.add(peerId);
+        directPeerIds.add(peerId);
+      }
       if (thread.isGroup) {
         memberIds.addAll(
           chatStore
@@ -144,10 +148,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     memberIds
       ..removeWhere((id) => _userForId(id) != null)
       ..removeAll(_requestedProfileIds);
-    if (memberIds.isEmpty) return;
-    _requestedProfileIds.addAll(memberIds);
-    await peopleService.hydrateProfilesByIds(memberIds);
-    _requestedProfileIds.removeAll(memberIds);
+    if (memberIds.isNotEmpty) _requestedProfileIds.addAll(memberIds);
+    await Future.wait([
+      if (memberIds.isNotEmpty) peopleService.hydrateProfilesByIds(memberIds),
+      if (directPeerIds.isNotEmpty)
+        appPresenceService.hydrateLastSeenForUsers(directPeerIds),
+    ]);
+    if (memberIds.isNotEmpty) _requestedProfileIds.removeAll(memberIds);
     if (mounted) setState(() {});
   }
 
@@ -204,6 +211,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
       return '$senderName: $body';
     }
     return body;
+  }
+
+  String _threadSubtitle(ChatThreadSummary thread) {
+    final preview = _preview(thread);
+    if (!ChatStore.isDirectThread(thread.threadId)) return preview;
+    final peerId = thread.peerId ?? '';
+    final status = appPresenceService.onlineUserIds.contains(peerId)
+        ? S.activeNowLabel
+        : S.lastOnlineLabel(appPresenceService.lastSeenAtFor(peerId));
+    return preview.isEmpty ? status : '$status · $preview';
   }
 
   void _openThread(String threadId, {User? recipient}) {
@@ -1125,7 +1142,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              _preview(t),
+                              _threadSubtitle(t),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

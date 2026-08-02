@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
+import '../widgets/app_pressable.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 
@@ -163,8 +164,9 @@ class _ThemePreviewCard extends StatelessWidget {
     final text = dark ? _darkText : _lightText;
     final sub = dark ? _darkSub : _lightSub;
 
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
+      pressedScale: 0.98,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(5),

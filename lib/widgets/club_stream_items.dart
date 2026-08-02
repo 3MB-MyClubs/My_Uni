@@ -1012,6 +1012,7 @@ class ClubMessageGroup extends StatelessWidget {
     required this.flagged,
     required this.t,
     required this.onLongPress,
+    this.replySenderName,
     this.onOpenSender,
     this.statusLabel,
     this.attachments = const [],
@@ -1033,6 +1034,7 @@ class ClubMessageGroup extends StatelessWidget {
   final bool flagged;
   final ClubChatTheme t;
   final VoidCallback onLongPress;
+  final String? replySenderName;
   final VoidCallback? onOpenSender;
   final String? statusLabel;
   final List<Widget> attachments;
@@ -1042,12 +1044,56 @@ class ClubMessageGroup extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
+      if (message.replyToMessageId != null) _replyQuote(onDark: onDark),
       if (message.content.isNotEmpty)
         ClubMessageText(text: message.content, t: t, onDark: onDark),
       ...attachments,
       ?reactions,
     ],
   );
+
+  Widget _replyQuote({required bool onDark}) {
+    final foreground = onDark ? Colors.white : t.text;
+    return Container(
+      key: ValueKey('club-reply-quote-${message.id}'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.fromLTRB(9, 7, 8, 7),
+      decoration: BoxDecoration(
+        color: onDark ? Colors.black.withValues(alpha: 0.16) : t.solid,
+        borderRadius: BorderRadius.circular(9),
+        border: Border(
+          left: BorderSide(color: onDark ? Colors.white : t.red, width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            replySenderName ?? S.message,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: onDark ? Colors.white : t.red,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message.replyToPreview ?? S.message,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.25,
+              color: foreground.withValues(alpha: 0.82),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _nameRow() => Padding(
     padding: const EdgeInsets.only(bottom: 3),
