@@ -14,6 +14,7 @@ import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
+import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_chat_prefs.dart';
@@ -204,6 +205,13 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
+    if (chatStore.takeAttachmentUploadFailure()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
+        );
+    }
   }
 
   void _onScroll() {
@@ -573,7 +581,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           imageQuality: 88,
         );
         if (picked == null) return;
-        _sendAttachment(picked, ChatMessageKind.photo);
+        await _sendAttachment(picked, ChatMessageKind.photo);
       case ClubAttachment.poll:
         await _composePoll();
       case ClubAttachment.event:
@@ -581,12 +589,22 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
   }
 
-  void _sendAttachment(XFile file, ChatMessageKind kind) {
+  Future<void> _sendAttachment(XFile file, ChatMessageKind kind) async {
     var size = 0;
     try {
       size = File(file.path).lengthSync();
     } on FileSystemException {
       size = 0;
+    }
+    late final String stagedPath;
+    try {
+      stagedPath = await stageChatAttachment(file.path, sourceName: file.name);
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(S.couldNotAttachPhoto)));
+      return;
     }
     final draft = _inputController.text.trim();
     final sent = chatStore.sendMessage(
@@ -595,7 +613,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       content: draft,
       kind: kind,
       mentions: ClubComposer.resolveMentions(draft, _members),
-      attachmentPath: file.path,
+      attachmentPath: stagedPath,
       attachmentName: file.name,
       attachmentSize: size,
     );

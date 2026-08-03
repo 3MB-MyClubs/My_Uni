@@ -956,6 +956,12 @@ class S {
   static String get offlineLabel => _t('Offline', 'Çevrimdışı');
   static String seenCount(int n) => _t('$n seen', '$n görüntüleme');
   static String get attachPhoto => _t('Photo', 'Fotoğraf');
+  static String get couldNotAttachPhoto =>
+      _t('Could not attach that photo.', 'Fotoğraf eklenemedi.');
+  static String get photoSavedLocallyUploadFailed => _t(
+    'Photo saved locally, but upload failed.',
+    'Fotoğraf cihaza kaydedildi ama yükleme başarısız oldu.',
+  );
   static String get attachFile => _t('File', 'Dosya');
   static String get attachPoll => _t('Poll', 'Anket');
   static String get attachEvent => _t('Event', 'Etkinlik');

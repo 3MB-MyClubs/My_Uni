@@ -11,6 +11,7 @@ import '../models/chat_group.dart';
 import '../models/notification.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
+import 'image_cache_service.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
@@ -69,6 +70,11 @@ class ChatStore extends ChangeNotifier {
   final Map<String, ClubInboxConversation> _clubInboxes = {};
   final Set<String> _pendingRemoteClubInboxMessageIds = {};
 
+  /// Set when a photo remains in the local outbox because Storage or the
+  /// following message-row insert failed. The active chat screen consumes this
+  /// to show the user that the photo is queued locally and will be retried.
+  bool _attachmentUploadFailed = false;
+
   /// Group id → user id for groups an admin deleted locally and still needs
   /// to delete from Supabase.
   final Map<String, String> _pendingRemoteGroupDeleteActorIds = {};
@@ -84,6 +90,24 @@ class ChatStore extends ChangeNotifier {
 
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
+
+  bool takeAttachmentUploadFailure() {
+    final failed = _attachmentUploadFailed;
+    _attachmentUploadFailed = false;
+    return failed;
+  }
+
+  void _recordAttachmentUploadFailure(
+    ChatMessage message,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    if (message.kind != ChatMessageKind.photo) return;
+    _attachmentUploadFailed = true;
+    debugPrint('Chat photo upload failed for ${message.id}: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    notifyListeners();
+  }
 
   // ── Thread identity ──────────────────────────────────────────────────────────
 
@@ -1292,9 +1316,8 @@ class ChatStore extends ChangeNotifier {
 
   Future<ChatMessage?> _prepareMessageForRemote(
     SupabaseClient client,
-    ChatMessage message, {
-    required String storageOwnerId,
-  }) async {
+    ChatMessage message,
+  ) async {
     final attachmentPath = message.attachmentPath?.trim() ?? '';
     if (message.kind != ChatMessageKind.photo || attachmentPath.isEmpty) {
       return message;
@@ -1314,12 +1337,16 @@ class ChatStore extends ChangeNotifier {
     final file = File(attachmentPath);
     if (!await file.exists()) return null;
     final bytes = await file.readAsBytes();
-    if (bytes.isEmpty || storageOwnerId.isEmpty) return null;
+    final authUserId = client.auth.currentUser?.id ?? '';
+    if (bytes.isEmpty || authUserId.isEmpty) return null;
 
     final extension = _attachmentExtension(
       message.attachmentName ?? attachmentPath,
     );
-    final objectPath = '$storageOwnerId/${message.id}.$extension';
+    // Storage RLS keys the first path segment to auth.uid(). Do not use the
+    // in-app actor/profile id here: club accounts deliberately have a
+    // different actor id from their Supabase auth id.
+    final objectPath = '$authUserId/${message.id}.$extension';
     await client.storage
         .from(_chatAttachmentBucket)
         .uploadBinary(
@@ -1457,11 +1484,14 @@ class ChatStore extends ChangeNotifier {
                     fileOptions: const FileOptions(
                       upsert: true,
                       contentType: 'image/jpeg',
+                      cacheControl: '31536000',
                     ),
                   );
-              final publicUrl = client.storage
-                  .from('group-chat-photos')
-                  .getPublicUrl(objectPath);
+              final publicUrl = versionedStorageUrl(
+                client.storage
+                    .from('group-chat-photos')
+                    .getPublicUrl(objectPath),
+              );
               await client
                   .from('group_chats')
                   .update({'photo_url': publicUrl})
@@ -1508,12 +1538,13 @@ class ChatStore extends ChangeNotifier {
         final groupId = groupIdOf(message.threadId);
         if (groupId == null) continue;
         try {
-          final remoteMessage = await _prepareMessageForRemote(
-            client,
-            message,
-            storageOwnerId: userId,
-          );
+          final remoteMessage = await _prepareMessageForRemote(client, message);
           if (remoteMessage == null) {
+            _recordAttachmentUploadFailure(
+              message,
+              StateError('The local chat photo is no longer available.'),
+              StackTrace.current,
+            );
             failed = true;
             continue;
           }
@@ -1527,13 +1558,15 @@ class ChatStore extends ChangeNotifier {
             'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
           });
           _pendingRemoteGroupMessageIds.remove(remoteMessage.id);
-        } on PostgrestException catch (error) {
+        } on PostgrestException catch (error, stackTrace) {
           if (error.code == '23505') {
             _pendingRemoteGroupMessageIds.remove(message.id);
           } else {
+            _recordAttachmentUploadFailure(message, error, stackTrace);
             failed = true;
           }
-        } catch (_) {
+        } catch (error, stackTrace) {
+          _recordAttachmentUploadFailure(message, error, stackTrace);
           failed = true;
         }
       }
@@ -1547,12 +1580,13 @@ class ChatStore extends ChangeNotifier {
         final receiverId = dmPeerOf(message.threadId, userId);
         if (receiverId == null) continue;
         try {
-          final remoteMessage = await _prepareMessageForRemote(
-            client,
-            message,
-            storageOwnerId: userId,
-          );
+          final remoteMessage = await _prepareMessageForRemote(client, message);
           if (remoteMessage == null) {
+            _recordAttachmentUploadFailure(
+              message,
+              StateError('The local chat photo is no longer available.'),
+              StackTrace.current,
+            );
             failed = true;
             continue;
           }
@@ -1567,13 +1601,15 @@ class ChatStore extends ChangeNotifier {
             'delivered_at': remoteMessage.deliveredAt.toUtc().toIso8601String(),
           });
           _pendingRemoteMessageIds.remove(remoteMessage.id);
-        } on PostgrestException catch (error) {
+        } on PostgrestException catch (error, stackTrace) {
           if (error.code == '23505') {
             _pendingRemoteMessageIds.remove(message.id);
           } else {
+            _recordAttachmentUploadFailure(message, error, stackTrace);
             failed = true;
           }
-        } catch (_) {
+        } catch (error, stackTrace) {
+          _recordAttachmentUploadFailure(message, error, stackTrace);
           failed = true;
         }
       }
@@ -1626,6 +1662,7 @@ class ChatStore extends ChangeNotifier {
     final actorId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     if (client == null || authId.isEmpty || actorId.isEmpty) return;
+    var failed = false;
     final pending = _messages
         .where((message) {
           return _pendingRemoteClubMessageIds.contains(message.id) &&
@@ -1639,12 +1676,16 @@ class ChatStore extends ChangeNotifier {
         continue;
       }
       try {
-        final remoteMessage = await _prepareMessageForRemote(
-          client,
-          message,
-          storageOwnerId: authId,
-        );
-        if (remoteMessage == null) continue;
+        final remoteMessage = await _prepareMessageForRemote(client, message);
+        if (remoteMessage == null) {
+          _recordAttachmentUploadFailure(
+            message,
+            StateError('The local chat photo is no longer available.'),
+            StackTrace.current,
+          );
+          failed = true;
+          continue;
+        }
         await client.from('club_channel_messages').insert({
           'id': remoteMessage.id,
           'club_id': clubId,
@@ -1657,16 +1698,22 @@ class ChatStore extends ChangeNotifier {
           'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
         });
         _pendingRemoteClubMessageIds.remove(remoteMessage.id);
-      } on PostgrestException catch (error) {
+      } on PostgrestException catch (error, stackTrace) {
         if (error.code == '23505') {
           _pendingRemoteClubMessageIds.remove(message.id);
+        } else {
+          _recordAttachmentUploadFailure(message, error, stackTrace);
+          failed = true;
         }
-      } catch (_) {
+      } catch (error, stackTrace) {
+        _recordAttachmentUploadFailure(message, error, stackTrace);
+        failed = true;
         // The local outbox retains the message and retries on the next sync.
       }
     }
     await _flushRemoteDeletes();
     scheduleSave();
+    if (failed) _scheduleSyncRetry();
   }
 
   Future<void> _flushClubInboxMessages() async {
@@ -1675,6 +1722,7 @@ class ChatStore extends ChangeNotifier {
     final actorId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     if (client == null || authId.isEmpty || actorId.isEmpty) return;
+    var failed = false;
     final pending = _messages
         .where((message) {
           return _pendingRemoteClubInboxMessageIds.contains(message.id) &&
@@ -1688,12 +1736,16 @@ class ChatStore extends ChangeNotifier {
         continue;
       }
       try {
-        final remoteMessage = await _prepareMessageForRemote(
-          client,
-          message,
-          storageOwnerId: authId,
-        );
-        if (remoteMessage == null) continue;
+        final remoteMessage = await _prepareMessageForRemote(client, message);
+        if (remoteMessage == null) {
+          _recordAttachmentUploadFailure(
+            message,
+            StateError('The local chat photo is no longer available.'),
+            StackTrace.current,
+          );
+          failed = true;
+          continue;
+        }
         final sendingAsClub =
             authService.currentAdmin != null ||
             (clubForId(conversation.clubId)?.boardMemberIds.contains(actorId) ??
@@ -1715,16 +1767,22 @@ class ChatStore extends ChangeNotifier {
             .update({'updated_at': DateTime.now().toUtc().toIso8601String()})
             .eq('id', conversation.id);
         _pendingRemoteClubInboxMessageIds.remove(remoteMessage.id);
-      } on PostgrestException catch (error) {
+      } on PostgrestException catch (error, stackTrace) {
         if (error.code == '23505') {
           _pendingRemoteClubInboxMessageIds.remove(message.id);
+        } else {
+          _recordAttachmentUploadFailure(message, error, stackTrace);
+          failed = true;
         }
-      } catch (_) {
+      } catch (error, stackTrace) {
+        _recordAttachmentUploadFailure(message, error, stackTrace);
+        failed = true;
         // Retained for retry.
       }
     }
     await _flushRemoteDeletes();
     scheduleSave();
+    if (failed) _scheduleSyncRetry();
   }
 
   static String _databaseKind(ChatMessageKind kind) => switch (kind) {
@@ -2294,11 +2352,14 @@ class ChatStore extends ChangeNotifier {
     scheduleSave();
     notifyListeners();
     if (isDirectThread(threadId) || isGroupThread(threadId)) {
-      unawaited(_flushRemoteChanges());
+      // The composer can be used before the route's post-frame sync startup
+      // has completed. Starting sync here guarantees the outbox gets a real
+      // authenticated client instead of returning early with no upload.
+      unawaited(startDirectMessageSync(senderId));
     } else if (isClubThread(threadId)) {
-      unawaited(_flushClubMessages());
+      unawaited(startClubMessageSync(senderId));
     } else if (isClubInboxThread(threadId)) {
-      unawaited(_flushClubInboxMessages());
+      unawaited(startClubMessageSync(senderId));
     }
     if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;

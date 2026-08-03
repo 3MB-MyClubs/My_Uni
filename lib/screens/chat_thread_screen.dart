@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -11,12 +12,14 @@ import '../services/app_colors.dart';
 import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
+import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/image_cache_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
@@ -242,6 +245,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
+    if (chatStore.takeAttachmentUploadFailure()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
+        );
+    }
   }
 
   /// Sends the current composer draft.
@@ -372,22 +382,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     };
     if (picked == null || !mounted) return;
-    _sendAttachment(picked, ChatMessageKind.photo);
+    await _sendAttachment(picked, ChatMessageKind.photo);
   }
 
-  void _sendAttachment(XFile file, ChatMessageKind kind) {
+  Future<void> _sendAttachment(XFile file, ChatMessageKind kind) async {
     var size = 0;
     try {
       size = File(file.path).lengthSync();
     } on FileSystemException {
       size = 0;
     }
+    late final String stagedPath;
+    try {
+      stagedPath = await stageChatAttachment(file.path, sourceName: file.name);
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(S.couldNotAttachPhoto)));
+      return;
+    }
     final sent = chatStore.sendMessage(
       threadId: widget.threadId,
       senderId: _myId,
       content: _inputController.text.trim(),
       kind: kind,
-      attachmentPath: file.path,
+      attachmentPath: stagedPath,
       attachmentName: file.name,
       attachmentSize: size,
     );
@@ -1491,8 +1511,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isRemote = path.startsWith('http://') || path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
-    final imageProvider = isRemote
-        ? NetworkImage(path) as ImageProvider
+    final ImageProvider imageProvider = isRemote
+        ? CachedNetworkImageProvider(
+            path,
+            cacheKey: stableSupabaseSignedUrlCacheKey(path),
+          )
         : FileImage(file!);
     return GestureDetector(
       key: ValueKey('chat-photo-$path'),

@@ -1,10 +1,12 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
 import '../services/app_strings.dart';
 import '../services/club_chat_prefs.dart';
+import '../services/image_cache_service.dart';
 import 'club_chat_theme.dart';
 
 /// One participant of a club community, as the stream and sheets need them.
@@ -1373,8 +1375,11 @@ class ClubPhotoAttachment extends StatelessWidget {
     final isRemote = path.startsWith('http://') || path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
-    final imageProvider = isRemote
-        ? NetworkImage(path) as ImageProvider
+    final ImageProvider imageProvider = isRemote
+        ? CachedNetworkImageProvider(
+            path,
+            cacheKey: stableSupabaseSignedUrlCacheKey(path),
+          )
         : FileImage(file!);
     return Padding(
       padding: const EdgeInsets.only(top: 9),

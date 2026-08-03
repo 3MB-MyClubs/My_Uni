@@ -353,7 +353,9 @@ class StudentProfileService {
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'image/jpeg',
-            cacheControl: '0',
+            // The public URL is versioned below, so a long browser/CDN TTL is
+            // safe and avoids re-downloading unchanged avatars.
+            cacheControl: '31536000',
           ),
         );
 
