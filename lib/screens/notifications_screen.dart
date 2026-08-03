@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart'
     show CupertinoSliverRefreshControl, RefreshIndicatorMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/chat_message.dart';
 import '../models/event.dart';
@@ -30,6 +31,8 @@ import '../widgets/club_avatar.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/app_pressable.dart';
+import '../widgets/app_motion.dart';
+import '../widgets/loading_skeleton.dart';
 
 /// Notification center — the "UniHub Notifications" design.
 ///
@@ -111,7 +114,14 @@ class _NotificationGroup {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _requestsOpen = false;
   bool _toastVisible = false;
+  bool _refreshSucceeded = false;
+  bool _markAllReadInProgress = false;
   Timer? _toastTimer;
+  Timer? _refreshSuccessTimer;
+  Completer<void>? _refreshSuccessCompleter;
+  final Map<String, Timer> _followPulseTimers = {};
+  final Set<String> _visuallyReadGroups = {};
+  final Set<String> _followPulseUserIds = {};
 
   /// notification id → the conversation message it previews, once resolved.
   final Map<String, ChatMessage> _previewMessages = {};
@@ -178,6 +188,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void dispose() {
     _toastTimer?.cancel();
+    _refreshSuccessTimer?.cancel();
+    if (!(_refreshSuccessCompleter?.isCompleted ?? true)) {
+      _refreshSuccessCompleter!.complete();
+    }
+    for (final timer in _followPulseTimers.values) {
+      timer.cancel();
+    }
+    _followPulseTimers.clear();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
     super.dispose();
@@ -189,6 +207,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   bool _isUnread(_NotificationGroup group) =>
       group.items.any((n) => !n.read && !userState.isNotificationRead(n));
+
+  String _groupKey(_NotificationGroup group) =>
+      notificationConversationKey(group.latest) ??
+      'notification:${group.latest.id}';
+
+  bool _isVisuallyUnread(_NotificationGroup group) =>
+      _isUnread(group) && !_visuallyReadGroups.contains(_groupKey(group));
 
   AppNotification _remoteFromMap(Map<String, dynamic> row) {
     final rawArgs = row['localization_args'];
@@ -224,11 +249,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       Future<void>.delayed(const Duration(milliseconds: 850)),
     ]);
     if (!mounted) return;
-    setState(() => _toastVisible = true);
+    setState(() {
+      _refreshSucceeded = true;
+      _toastVisible = true;
+    });
     _toastTimer?.cancel();
     _toastTimer = Timer(const Duration(milliseconds: 1800), () {
       if (mounted) setState(() => _toastVisible = false);
     });
+    _refreshSuccessTimer?.cancel();
+    if (!(_refreshSuccessCompleter?.isCompleted ?? true)) {
+      _refreshSuccessCompleter!.complete();
+    }
+    final successCompleter = Completer<void>();
+    _refreshSuccessCompleter = successCompleter;
+    _refreshSuccessTimer = Timer(const Duration(milliseconds: 380), () {
+      if (mounted) setState(() => _refreshSucceeded = false);
+      if (!successCompleter.isCompleted) successCompleter.complete();
+    });
+    await successCompleter.future;
   }
 
   // ── Read state ──────────────────────────────────────────────────────────────
@@ -239,9 +278,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _markAllRead() {
-    userState.markNotificationsRead(_allNotifs.expand((group) => group.items));
+  Future<void> _markAllRead() async {
+    if (_markAllReadInProgress) return;
+    final unreadGroups = _allNotifs.where(_isUnread).toList();
+    if (unreadGroups.isEmpty) return;
+    final notificationsToRead = unreadGroups
+        .expand((group) => group.items)
+        .toList(growable: false);
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      userState.markNotificationsRead(notificationsToRead);
+      notificationInboxService.markAllRead();
+      return;
+    }
+
+    setState(() => _markAllReadInProgress = true);
+    final delayMs = math.max(
+      36,
+      math.min(90, (360 / unreadGroups.length).round()),
+    );
+    for (var index = 0; index < unreadGroups.length; index++) {
+      if (mounted) {
+        setState(() => _visuallyReadGroups.add(_groupKey(unreadGroups[index])));
+      }
+      if (index != unreadGroups.length - 1) {
+        await Future<void>.delayed(Duration(milliseconds: delayMs));
+      }
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    userState.markNotificationsRead(notificationsToRead);
     notificationInboxService.markAllRead();
+    HapticFeedback.selectionClick();
+    if (mounted) {
+      setState(() {
+        _visuallyReadGroups.clear();
+        _markAllReadInProgress = false;
+      });
+    }
   }
 
   // ── Time helper ───────────────────────────────────────────────────────────
@@ -528,6 +602,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       userState.toggleFollowUser(userId);
     } else {
       userState.followedUserIds.add(userId);
+      HapticFeedback.lightImpact();
+      _followPulseUserIds.add(userId);
+      _followPulseTimers[userId]?.cancel();
+      _followPulseTimers[userId] = Timer(const Duration(milliseconds: 260), () {
+        _followPulseTimers.remove(userId);
+        if (mounted) setState(() => _followPulseUserIds.remove(userId));
+      });
     }
     setState(() {});
     userPrefsService.save(myId);
@@ -603,7 +684,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         listenable: Listenable.merge([userState, notificationInboxService]),
         builder: (context, _) {
           final all = _allNotifs;
-          final totalUnread = all.where(_isUnread).length;
+          final totalUnread = all.where(_isVisuallyUnread).length;
           final requesters = _pendingRequesters;
 
           return Column(
@@ -646,6 +727,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ],
                       ],
                     ),
+                    _buildRefreshSuccessOverlay(),
                     _buildToast(),
                   ],
                 ),
@@ -694,7 +776,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         refreshState == RefreshIndicatorMode.refresh ||
         refreshState == RefreshIndicatorMode.armed;
     return Center(
-      child: _PullSpinner(progress: progress, spinning: spinning),
+      child: _PullSpinner(
+        progress: progress,
+        spinning: spinning,
+        success: _refreshSucceeded,
+      ),
+    );
+  }
+
+  Widget _buildRefreshSuccessOverlay() {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 12,
+      child: IgnorePointer(
+        child: Center(
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.65, end: 1).animate(animation),
+                child: child,
+              ),
+            ),
+            child: _refreshSucceeded
+                ? DecoratedBox(
+                    key: const ValueKey('pull-refresh-success'),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(3),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        size: 24,
+                        color: AppColors.primaryRed,
+                      ),
+                    ),
+                  )
+                : const SizedBox(
+                    key: ValueKey('pull-refresh-success-idle'),
+                    width: 30,
+                    height: 30,
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -787,17 +919,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                   const Spacer(),
                   if (totalUnread > 0)
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _markAllRead,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 10, bottom: 3),
-                        child: Text(
-                          AppLocalizations.of(context)!.markAllRead,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryRed,
+                    AnimatedOpacity(
+                      opacity: _markAllReadInProgress ? 0.55 : 1,
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _markAllReadInProgress ? null : _markAllRead,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 10, bottom: 3),
+                          child: Text(
+                            AppLocalizations.of(context)!.markAllRead,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryRed,
+                            ),
                           ),
                         ),
                       ),
@@ -1012,7 +1150,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // ── A single notification row ──────────────────────────────────────────────
   Widget _row(_NotificationGroup group) {
     final n = group.latest;
-    final unread = _isUnread(group);
+    final unread = _isVisuallyUnread(group);
     final kind = _kindFor(n);
     final accent = _kindColor(kind);
     final prefix = _boldPrefix(n);
@@ -1025,7 +1163,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: () => _onRowTap(group),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        key: ValueKey('notification-row-${n.id}'),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
         color: unread ? AppColors.lightRed : Colors.transparent,
         child: Stack(
           children: [
@@ -1082,22 +1224,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ],
               ),
             ),
-            if (unread)
-              Positioned(
-                left: 7,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryRed,
-                      shape: BoxShape.circle,
+            Positioned(
+              left: 7,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: AnimatedScale(
+                  key: ValueKey('notification-unread-dot-${n.id}'),
+                  scale: unread ? 1 : 0,
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedOpacity(
+                    opacity: unread ? 1 : 0,
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 150),
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -1179,7 +1334,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
           ),
-          IgnorePointer(child: base),
+          if (user != null && _followPulseUserIds.contains(user.id))
+            Positioned(
+              left: -2,
+              top: -2,
+              child: IgnorePointer(
+                child: FollowAvatarPulse(
+                  active: true,
+                  color: AppColors.primaryRed,
+                  child: base,
+                ),
+              ),
+            )
+          else
+            IgnorePointer(child: base),
           Positioned(
             right: -2,
             bottom: -2,
@@ -1397,13 +1565,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   color: AppColors.text,
                   borderRadius: const BorderRadius.all(Radius.circular(99)),
                 ),
-                child: Text(
-                  AppLocalizations.of(context)!.updatedJustNow,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.background,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_rounded,
+                      key: const ValueKey('refresh-success-check'),
+                      size: 15,
+                      color: AppColors.background,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      AppLocalizations.of(context)!.updatedJustNow,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.background,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1663,8 +1843,13 @@ class _StripePainter extends CustomPainter {
 class _PullSpinner extends StatefulWidget {
   final double progress;
   final bool spinning;
+  final bool success;
 
-  const _PullSpinner({required this.progress, required this.spinning});
+  const _PullSpinner({
+    required this.progress,
+    required this.spinning,
+    required this.success,
+  });
 
   @override
   State<_PullSpinner> createState() => _PullSpinnerState();
@@ -1680,13 +1865,15 @@ class _PullSpinnerState extends State<_PullSpinner>
   @override
   void initState() {
     super.initState();
-    if (widget.spinning) _controller.repeat();
+    if (widget.spinning && !widget.success) _controller.repeat();
   }
 
   @override
   void didUpdateWidget(covariant _PullSpinner oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.spinning && !_controller.isAnimating) {
+    if (widget.success) {
+      _controller.stop();
+    } else if (widget.spinning && !_controller.isAnimating) {
       _controller.repeat();
     } else if (!widget.spinning && _controller.isAnimating) {
       _controller.stop();
@@ -1702,27 +1889,49 @@ class _PullSpinnerState extends State<_PullSpinner>
 
   @override
   Widget build(BuildContext context) {
-    final opacity = math.min(1.0, widget.progress * 1.6);
+    final opacity = widget.success ? 1.0 : math.min(1.0, widget.progress * 1.6);
     return Opacity(
       opacity: opacity,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final turns = widget.spinning
-              ? _controller.value
-              : widget.progress * (260 / 360);
-          return Transform.rotate(
-            angle: turns * 2 * math.pi,
-            child: CustomPaint(
-              size: const Size(22, 22),
-              painter: _SpinnerPainter(
-                sweep: widget.spinning ? 0.28 : widget.progress.clamp(0.0, 1.0),
-                track: AppColors.divider,
-                accent: AppColors.primaryRed,
+      child: AnimatedSwitcher(
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 220),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.65, end: 1).animate(animation),
+            child: child,
+          ),
+        ),
+        child: widget.success
+            ? Icon(
+                Icons.check_circle_rounded,
+                key: const ValueKey('pull-refresh-indicator-check'),
+                size: 24,
+                color: AppColors.primaryRed,
+              )
+            : AnimatedBuilder(
+                key: const ValueKey('pull-refresh-spinner'),
+                animation: _controller,
+                builder: (context, _) {
+                  final turns = widget.spinning
+                      ? _controller.value
+                      : widget.progress * (260 / 360);
+                  return Transform.rotate(
+                    angle: turns * 2 * math.pi,
+                    child: CustomPaint(
+                      size: const Size(22, 22),
+                      painter: _SpinnerPainter(
+                        sweep: widget.spinning
+                            ? 0.28
+                            : widget.progress.clamp(0.0, 1.0),
+                        track: AppColors.divider,
+                        accent: AppColors.primaryRed,
+                      ),
+                    ),
+                  );
+                },
               ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -1784,17 +1993,19 @@ class _BEmpty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.lightRed,
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-              ),
-              child: Icon(
-                Icons.done_all_rounded,
-                size: 36,
-                color: AppColors.primaryRed,
+            GentleFloat(
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.lightRed,
+                  borderRadius: BorderRadius.all(Radius.circular(24)),
+                ),
+                child: Icon(
+                  Icons.done_all_rounded,
+                  size: 36,
+                  color: AppColors.primaryRed,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -1828,14 +2039,43 @@ class _BLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.5,
-          color: AppColors.primaryRed,
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        children: [
+          for (var index = 0; index < 4; index++)
+            StaggeredEntrance(
+              index: index,
+              child: const _NotificationSkeletonRow(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationSkeletonRow extends StatelessWidget {
+  const _NotificationSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      child: Row(
+        children: [
+          const SkeletonBox.circle(size: 48),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                SkeletonBox(width: double.infinity, height: 12),
+                SizedBox(height: 8),
+                SkeletonBox(width: 170, height: 10),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

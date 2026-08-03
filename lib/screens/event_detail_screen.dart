@@ -26,6 +26,7 @@ import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/rsvp_button.dart';
+import '../widgets/app_motion.dart';
 import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
 import 'user_profile_screen.dart';
@@ -2383,6 +2384,7 @@ class _StickyCtaState extends State<_StickyCta> {
   bool _remind = false;
 
   void _toggleRemind() {
+    HapticFeedback.selectionClick();
     setState(() => _remind = !_remind);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -2441,11 +2443,10 @@ class _StickyCtaState extends State<_StickyCta> {
                           width: 1.5,
                         ),
                       ),
-                      child: Icon(
-                        _remind
-                            ? Icons.notifications_active_rounded
-                            : Icons.notifications_none_rounded,
-                        color: _remind ? accent : AppColors.text,
+                      child: AnimatedReminderBell(
+                        active: _remind,
+                        color: accent,
+                        inactiveColor: AppColors.text,
                         size: 22,
                       ),
                     ),

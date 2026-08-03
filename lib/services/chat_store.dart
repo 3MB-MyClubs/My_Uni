@@ -6,8 +6,9 @@ import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/chat_message.dart';
 import '../models/chat_group.dart';
+import '../models/chat_media_selection.dart';
+import '../models/chat_message.dart';
 import '../models/notification.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
@@ -15,6 +16,10 @@ import 'mock_data.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
+
+/// The two lanes of a club room, per the Club Board + Chat handoff: `board` is
+/// the official notice area, `chat` is the room where the conversation lives.
+enum ClubChatLane { board, chat }
 
 /// Local-first messaging: 1:1 direct messages, student-created groups, plus
 /// one members-only community chat per club.
@@ -88,6 +93,11 @@ class ChatStore extends ChangeNotifier {
 
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
+
+  /// userId → `threadId|lane` → last time that user opened one lane of a club
+  /// room. The Board + Chat design gives each segment its own count, so a
+  /// reader who only opens the Board keeps the Chat count they left behind.
+  final Map<String, Map<String, DateTime>> _lastReadLanes = {};
 
   // ── Thread identity ──────────────────────────────────────────────────────────
 
@@ -194,6 +204,15 @@ class ChatStore extends ChangeNotifier {
         final inner = Map<String, dynamic>.from(entry.value as Map);
         _lastRead[entry.key.toString()] = inner.map(
           (threadId, iso) => MapEntry(threadId, DateTime.parse(iso as String)),
+        );
+      }
+    }
+    final rawLastReadLanes = box.get('lastReadLanes');
+    if (rawLastReadLanes is Map) {
+      for (final entry in rawLastReadLanes.entries) {
+        final inner = Map<String, dynamic>.from(entry.value as Map);
+        _lastReadLanes[entry.key.toString()] = inner.map(
+          (laneKey, iso) => MapEntry(laneKey, DateTime.parse(iso as String)),
         );
       }
     }
@@ -1446,7 +1465,11 @@ class ChatStore extends ChangeNotifier {
     required String storageOwnerId,
   }) async {
     final attachmentPath = message.attachmentPath?.trim() ?? '';
-    if (message.kind != ChatMessageKind.photo || attachmentPath.isEmpty) {
+    final isPhoto = message.kind == ChatMessageKind.photo;
+    final isVideo =
+        message.kind == ChatMessageKind.file &&
+        isVideoMediaPath(message.attachmentName ?? attachmentPath);
+    if ((!isPhoto && !isVideo) || attachmentPath.isEmpty) {
       return message;
     }
     if (attachmentPath.startsWith(_chatAttachmentReferencePrefix)) {
@@ -1463,8 +1486,10 @@ class ChatStore extends ChangeNotifier {
 
     final file = File(attachmentPath);
     if (!await file.exists()) return null;
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty || storageOwnerId.isEmpty) return null;
+    final size = await file.length();
+    if (size <= 0 || size > maxChatMediaFileBytes || storageOwnerId.isEmpty) {
+      return null;
+    }
 
     final extension = _attachmentExtension(
       message.attachmentName ?? attachmentPath,
@@ -1472,9 +1497,9 @@ class ChatStore extends ChangeNotifier {
     final objectPath = '$storageOwnerId/${message.id}.$extension';
     await client.storage
         .from(_chatAttachmentBucket)
-        .uploadBinary(
+        .upload(
           objectPath,
-          bytes,
+          file,
           fileOptions: FileOptions(
             upsert: true,
             contentType: _attachmentContentType(extension),
@@ -1515,6 +1540,13 @@ class ChatStore extends ChangeNotifier {
       'gif',
       'heic',
       'heif',
+      'mp4',
+      'mov',
+      'm4v',
+      'avi',
+      'webm',
+      'mkv',
+      '3gp',
     ]) {
       if (lower.endsWith('.$extension')) return extension;
     }
@@ -1527,6 +1559,13 @@ class ChatStore extends ChangeNotifier {
     'gif' => 'image/gif',
     'heic' => 'image/heic',
     'heif' => 'image/heif',
+    'mp4' => 'video/mp4',
+    'mov' => 'video/quicktime',
+    'm4v' => 'video/x-m4v',
+    'avi' => 'video/x-msvideo',
+    'webm' => 'video/webm',
+    'mkv' => 'video/x-matroska',
+    '3gp' => 'video/3gpp',
     _ => 'image/jpeg',
   };
 
@@ -2033,13 +2072,20 @@ class ChatStore extends ChangeNotifier {
         managedClubForAdmin(userId)?.id == clubId;
   }
 
-  /// Read membership and posting authority are intentionally separate for
-  /// club channels: every follower reads, while only board or club accounts
-  /// may publish. DMs and student-created groups remain conversational.
-  bool canWriteThread(String threadId, String userId) {
-    if (!canAccessThread(threadId, userId)) return false;
-    if (isClubInboxThread(threadId)) return true;
-    if (!isClubThread(threadId)) return true;
+  /// Reading and talking are the same right in every conversation: a club room
+  /// is a room, so each of its members may post in the Chat lane. Publishing a
+  /// notice on the Board lane is the narrower right — see [canPostNotice].
+  bool canWriteThread(String threadId, String userId) =>
+      canAccessThread(threadId, userId);
+
+  /// Who may publish a notice on a club Board: members holding a role in that
+  /// club (President / VP / Officers), its admin ids, and the linked club
+  /// account. Members without a role never see a disabled composer — the Board
+  /// offers them the route into Chat instead.
+  bool canPostNotice(String threadId, String userId) {
+    if (!isClubThread(threadId) || !canAccessThread(threadId, userId)) {
+      return false;
+    }
     final clubId = clubIdOf(threadId);
     final club = clubId == null ? null : clubForId(clubId);
     if (club == null) return false;
@@ -2214,11 +2260,142 @@ class ChatStore extends ChangeNotifier {
           .where((m) => m.senderId != userId && m.seenAt == null)
           .length;
     }
+    // A club room carries two counts, one per segment; the inbox row shows the
+    // sum, so the two lanes are added here rather than measured separately.
+    if (isClubThread(threadId)) {
+      return _unreadInLane(
+            threadId,
+            userId,
+            ClubChatLane.board,
+            within: candidates,
+          ) +
+          _unreadInLane(
+            threadId,
+            userId,
+            ClubChatLane.chat,
+            within: candidates,
+          );
+    }
     final lastRead = _lastRead[userId]?[threadId];
     return candidates.where((m) {
       if (m.senderId == userId) return false;
       return lastRead == null || m.createdAt.isAfter(lastRead);
     }).length;
+  }
+
+  /// Unread notices on a club Board (`board`) or unread messages in its Chat
+  /// lane (`chat`). Returns 0 for anything that is not a club room.
+  int unreadInClubLane(String threadId, String userId, ClubChatLane lane) {
+    if (_box == null || userId.isEmpty || !isClubThread(threadId)) return 0;
+    if (!canAccessThread(threadId, userId)) return 0;
+    return _unreadInLane(threadId, userId, lane);
+  }
+
+  int _unreadInLane(
+    String threadId,
+    String userId,
+    ClubChatLane lane, {
+    Iterable<ChatMessage>? within,
+  }) => _unreadMessagesInLane(threadId, userId, lane, within: within).length;
+
+  /// Ids of the messages still unread in one lane of a club room, oldest first.
+  /// The screen snapshots these when it opens so the Board's dots and the Chat
+  /// divider survive the lane being marked read a frame later.
+  List<String> unreadIdsInClubLane(
+    String threadId,
+    String userId,
+    ClubChatLane lane,
+  ) {
+    if (_box == null || userId.isEmpty || !isClubThread(threadId)) {
+      return const [];
+    }
+    if (!canAccessThread(threadId, userId)) return const [];
+    final unread = _unreadMessagesInLane(threadId, userId, lane).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return unread.map((message) => message.id).toList(growable: false);
+  }
+
+  Iterable<ChatMessage> _unreadMessagesInLane(
+    String threadId,
+    String userId,
+    ClubChatLane lane, {
+    Iterable<ChatMessage>? within,
+  }) {
+    final cutoff = _laneCutoff(threadId, userId, lane);
+    final candidates = within ?? _messages.where((m) => m.threadId == threadId);
+    return candidates.where((message) {
+      if (message.threadId != threadId) return false;
+      if (message.senderId == userId) return false;
+      if (laneOf(message) != lane) return false;
+      return cutoff == null || message.createdAt.isAfter(cutoff);
+    });
+  }
+
+  /// The last moment [userId] saw [lane] — whichever is later, the whole-thread
+  /// receipt or this lane's own one. Marking the thread read (a notification
+  /// tap, a legacy call site) therefore still clears both lanes.
+  DateTime? _laneCutoff(String threadId, String userId, ClubChatLane lane) {
+    final thread = _lastRead[userId]?[threadId];
+    final laneRead = _lastReadLanes[userId]?[_laneKey(threadId, lane)];
+    if (thread == null) return laneRead;
+    if (laneRead == null) return thread;
+    return laneRead.isAfter(thread) ? laneRead : thread;
+  }
+
+  static String _laneKey(String threadId, ClubChatLane lane) =>
+      '$threadId|${lane.name}';
+
+  /// Which lane a club-room message belongs to: notices are the Board's own
+  /// object, everything else — chat, polls, photos, system lines — is the room.
+  static ClubChatLane laneOf(ChatMessage message) =>
+      message.kind == ChatMessageKind.announcement
+      ? ClubChatLane.board
+      : ClubChatLane.chat;
+
+  /// Notices on a club Board: pinned first ("Always here"), then newest first.
+  List<ChatMessage> noticesIn(String threadId) {
+    final list = announcementsIn(threadId).toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    return List.unmodifiable(list);
+  }
+
+  /// How many messages in the Chat lane quote [messageId] — the reply count a
+  /// notice shows instead of a seen count.
+  int replyCountFor(String messageId) {
+    if (messageId.isEmpty) return 0;
+    return _messages
+        .where((message) => message.replyToMessageId == messageId)
+        .length;
+  }
+
+  /// The newest message in a club room's Chat lane. The Messages inbox previews
+  /// Chat, so a notice on the Board never becomes the row's preview line.
+  ChatMessage? lastChatLaneMessageIn(String threadId) {
+    ChatMessage? last;
+    for (final message in _messages) {
+      if (message.threadId != threadId) continue;
+      if (laneOf(message) != ClubChatLane.chat) continue;
+      if (last == null || message.createdAt.isAfter(last.createdAt)) {
+        last = message;
+      }
+    }
+    return last;
+  }
+
+  /// Records that [userId] has seen one lane of a club room. The other lane
+  /// keeps its count, which is what gives the segments their own badges.
+  void markClubLaneRead(String threadId, String userId, ClubChatLane lane) {
+    if (_box == null || userId.isEmpty || !isClubThread(threadId)) return;
+    if (!canAccessThread(threadId, userId)) return;
+    if (_unreadInLane(threadId, userId, lane) == 0) return;
+    (_lastReadLanes[userId] ??= {})[_laneKey(threadId, lane)] = DateTime.now();
+    // Written straight through: a debounced save can be lost when the app is
+    // closed right after the room is opened, which would resurrect the badge.
+    unawaited(saveAll());
+    notifyListeners();
   }
 
   int totalUnreadFor(String userId) {
@@ -2468,6 +2645,13 @@ class ChatStore extends ChangeNotifier {
             pollOptions.isNotEmpty);
     if (text.isEmpty && !carriesPayload) return null;
     if (!canWriteThread(threadId, senderId)) return null;
+    // A notice — and the pin that goes with it — is the Board's own object, so
+    // the narrower authority is enforced here and not only in the UI.
+    if ((kind == ChatMessageKind.announcement || pinned) &&
+        isClubThread(threadId) &&
+        !canPostNotice(threadId, senderId)) {
+      return null;
+    }
 
     ChatMessage? repliedMessage;
     if (replyToMessageId != null) {
@@ -2743,10 +2927,20 @@ class ChatStore extends ChangeNotifier {
   /// "N seen" figure on an announcement. The author always counts.
   int seenCountFor(ChatMessage message) {
     var count = 1;
-    for (final entry in _lastRead.entries) {
-      if (entry.key == message.senderId) continue;
-      final lastRead = entry.value[message.threadId];
-      if (lastRead != null && !lastRead.isBefore(message.createdAt)) count++;
+    // A club room is read one lane at a time, so a reader counts when either
+    // their whole-thread receipt or the lane this message lives in is current.
+    final laneKey = isClubThread(message.threadId)
+        ? _laneKey(message.threadId, laneOf(message))
+        : null;
+    final readerIds = {..._lastRead.keys, ..._lastReadLanes.keys};
+    for (final readerId in readerIds) {
+      if (readerId == message.senderId) continue;
+      final thread = _lastRead[readerId]?[message.threadId];
+      final lane = laneKey == null ? null : _lastReadLanes[readerId]?[laneKey];
+      final seen =
+          (thread != null && !thread.isBefore(message.createdAt)) ||
+          (lane != null && !lane.isBefore(message.createdAt));
+      if (seen) count++;
     }
     return count;
   }
@@ -2904,6 +3098,13 @@ class ChatStore extends ChangeNotifier {
       box.put('messages', _messages.map((m) => m.toMap()).toList()),
       box.put('lastRead', {
         for (final entry in _lastRead.entries)
+          entry.key: {
+            for (final inner in entry.value.entries)
+              inner.key: inner.value.toIso8601String(),
+          },
+      }),
+      box.put('lastReadLanes', {
+        for (final entry in _lastReadLanes.entries)
           entry.key: {
             for (final inner in entry.value.entries)
               inner.key: inner.value.toIso8601String(),

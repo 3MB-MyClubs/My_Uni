@@ -7,6 +7,7 @@ import '../services/app_strings.dart';
 import '../services/club_role_localization.dart';
 import '../l10n/app_localizations.dart';
 import '../services/club_chat_prefs.dart';
+import 'chat_video_player.dart';
 import 'club_chat_theme.dart';
 
 /// One participant of a club community, as the stream and sheets need them.
@@ -398,8 +399,12 @@ class ClubReactionsRow extends StatelessWidget {
   }
 }
 
-/// Officer broadcast card. [ClubAnnouncementEmphasis] switches between the
-/// design's subtle / tinted / bold treatments.
+/// A notice as it appears in the Chat lane, so the conversation around it still
+/// makes sense. [ClubAnnouncementEmphasis] switches between the design's
+/// subtle / tinted / bold treatments.
+///
+/// No seen count: the Board + Chat design replaced read receipts on notices
+/// with the reply count, which is the signal that a notice landed.
 class ClubAnnouncementCard extends StatelessWidget {
   const ClubAnnouncementCard({
     super.key,
@@ -409,9 +414,10 @@ class ClubAnnouncementCard extends StatelessWidget {
     required this.t,
     required this.emphasis,
     required this.showRoles,
-    required this.seenCount,
     required this.timeLabel,
     required this.onLongPress,
+    this.replyCount = 0,
+    this.onReplyInChat,
     this.onOpenAuthor,
     this.reactions,
   });
@@ -422,9 +428,12 @@ class ClubAnnouncementCard extends StatelessWidget {
   final ClubChatTheme t;
   final ClubAnnouncementEmphasis emphasis;
   final bool showRoles;
-  final int seenCount;
   final String timeLabel;
   final VoidCallback onLongPress;
+
+  /// Messages in this room quoting the notice.
+  final int replyCount;
+  final VoidCallback? onReplyInChat;
   final VoidCallback? onOpenAuthor;
   final Widget? reactions;
 
@@ -576,8 +585,23 @@ class ClubAnnouncementCard extends StatelessWidget {
                       onBoldSurface: bold,
                     ),
                     const Spacer(),
+                    if (replyCount > 0) ...[
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onReplyInChat,
+                        child: Text(
+                          S.boardReplyCount(replyCount),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: bold ? Colors.white : t.red,
+                          ),
+                        ),
+                      ),
+                      Text(' · ', style: TextStyle(fontSize: 11, color: soft)),
+                    ],
                     Text(
-                      '${S.seenCount(seenCount)} · $timeLabel',
+                      timeLabel,
                       style: TextStyle(fontSize: 11, color: soft),
                     ),
                   ],
@@ -1521,4 +1545,29 @@ class ClubPhotoAttachment extends StatelessWidget {
     color: t.solid,
     child: Icon(Icons.image_outlined, color: t.sub, size: 22),
   );
+}
+
+/// Inline playable video attachment using the same geometry as a club photo.
+class ClubVideoAttachment extends StatelessWidget {
+  const ClubVideoAttachment({super.key, required this.path, required this.t});
+
+  final String path;
+  final ClubChatTheme t;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 9),
+      child: ClipRRect(
+        key: ValueKey('club-video-$path'),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 230,
+          width: double.infinity,
+          decoration: BoxDecoration(border: Border.all(color: t.border)),
+          child: ChatVideoPlayer(path: path),
+        ),
+      ),
+    );
+  }
 }

@@ -972,6 +972,39 @@ class S {
   static String communityEventsButton(int n) =>
       _t('Events · $n', 'Etkinlikler · $n');
   static String get communityNotices => _t('Notices', 'Duyurular');
+
+  // ── Club Board + Chat (two lanes of one club room)
+  /// The official notice area — the lane a club room lands on.
+  static String get clubBoardTab => _t('Board', 'Pano');
+
+  /// The room itself, where every reply lives.
+  static String get clubChatTab => _t('Chat', 'Sohbet');
+  static String get boardGroupPinned => _t('Pinned', 'Sabitlenen');
+  static String boardGroupNew(int n) => _t('New · $n', 'Yeni · $n');
+  static String get boardGroupEarlier => _t('Earlier', 'Daha önce');
+  static String get boardPostNotice => _t('Post a notice', 'Duyuru paylaş');
+  static String get boardOnlyBoardPosts =>
+      _t('Only the board posts here', 'Burada yalnızca yönetim paylaşır');
+  static String get boardSayItInChat => _t('Say it in chat', 'Sohbette söyle');
+  static String get boardReplyInChat => _t('Reply in chat', 'Sohbette yanıtla');
+  static String boardRepliesInChat(int n) =>
+      _t('$n replies in chat', 'Sohbette $n yanıt');
+  static String get boardReplyingToNotice =>
+      _t('REPLYING TO NOTICE', 'DUYURUYA YANIT');
+  static String get boardEmptyTitle => _t('No notices yet', 'Henüz duyuru yok');
+  static String get boardEmptyHintStaff => _t(
+    'Post a notice and every member sees it here — replies happen in chat.',
+    'Bir duyuru paylaş, tüm üyeler burada görsün — yanıtlar sohbette olur.',
+  );
+  static String get boardEmptyHintMember => _t(
+    "The club's notices will appear here. Until then, the room is in chat.",
+    'Kulübün duyuruları burada görünecek. O zamana kadar sohbete geç.',
+  );
+  static String boardReplyCount(int n) =>
+      n == 1 ? _t('1 reply', '1 yanıt') : _t('$n replies', '$n yanıt');
+  static String get noticeLabel => _t('NOTICE', 'DUYURU');
+  static String get boardExpandNotice => _t('Open notice', 'Duyuruyu aç');
+  static String get boardCollapseNotice => _t('Close notice', 'Duyuruyu kapat');
   static String get announcementLabel => _t('ANNOUNCEMENT', 'DUYURU');
   static String get pinnedLabel => _t('Pinned', 'Sabitlendi');
   static String get pinToTop => _t('Pin to top', 'Yukarı sabitle');
@@ -994,8 +1027,35 @@ class S {
   static String get activeNowLabel => _t('Active now', 'Şu an aktif');
   static String get offlineLabel => _t('Offline', 'Çevrimdışı');
   static String seenCount(int n) => _t('$n seen', '$n görüntüleme');
+  static String get attachMedia =>
+      _t('Photos & videos', 'Fotoğraf ve videolar');
   static String get attachPhoto => _t('Photo', 'Fotoğraf');
+  static String get attachVideo => _t('Video', 'Video');
   static String get attachFile => _t('File', 'Dosya');
+  static String get mediaCaptionHint => _t('Add a caption…', 'Açıklama ekle…');
+  static String get mediaSend => _t('Send media', 'Medyayı gönder');
+  static String get mediaPreviewRemove => _t('Remove', 'Kaldır');
+  static String get mediaPreviewEmpty =>
+      _t('No media selected', 'Medya seçilmedi');
+  static String mediaPreviewPosition(int current, int total) =>
+      _t('$current of $total', '$current / $total');
+  static String mediaSelectionRejected(int count) => count == 1
+      ? _t(
+          '1 item could not be added. Media must be available and smaller than 100 MB.',
+          '1 öğe eklenemedi. Medya erişilebilir ve 100 MB\'tan küçük olmalı.',
+        )
+      : _t(
+          '$count items could not be added. Media must be available and smaller than 100 MB.',
+          '$count öğe eklenemedi. Medya erişilebilir ve 100 MB\'tan küçük olmalı.',
+        );
+  static String get mediaSelectionFailed => _t(
+    'Could not open your media library. Please try again.',
+    'Medya arşivi açılamadı. Lütfen tekrar dene.',
+  );
+  static String get mediaSendFailed => _t(
+    'The media could not be sent. Please try again.',
+    'Medya gönderilemedi. Lütfen tekrar dene.',
+  );
   static String get attachPoll => _t('Poll', 'Anket');
   static String get attachEvent => _t('Event', 'Etkinlik');
   static String get mentionEveryone => _t('everyone', 'herkes');

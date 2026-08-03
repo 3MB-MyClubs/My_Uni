@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
@@ -103,7 +104,10 @@ class ClubFollowButton extends ConsumerWidget {
     }
 
     return AppPressable(
-      onTap: () => handleFollowTap(context, clubId, () {}),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        handleFollowTap(context, clubId, () {});
+      },
       pressedScale: 0.96,
       child: button,
     );

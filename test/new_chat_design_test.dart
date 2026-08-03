@@ -195,7 +195,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('chat attachment sheet only offers photos and camera', (
+  testWidgets('chat attachment sheet offers gallery media and camera', (
     tester,
   ) async {
     final threadId = ChatStore.dmThreadId(myId, second.$1);

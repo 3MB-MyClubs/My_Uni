@@ -40,20 +40,72 @@ void main() {
 
   setUp(userState.followedClubIds.clear);
 
-  test('club followers read while board members publish polls', () {
+  test('club members talk in Chat while only the board posts notices', () {
     final threadId = ChatStore.clubThreadId(club.id);
     userState.followedClubIds.add(club.id);
 
+    // The Chat lane is a room: every member of the club may talk in it.
     expect(store.canAccessThread(threadId, 'regular-follower'), isTrue);
-    expect(store.canWriteThread(threadId, 'regular-follower'), isFalse);
+    expect(store.canWriteThread(threadId, 'regular-follower'), isTrue);
     expect(
       store.sendMessage(
         threadId: threadId,
         senderId: 'regular-follower',
-        content: 'followers cannot broadcast',
+        content: 'see you at the build session',
+      ),
+      isNotNull,
+    );
+
+    // The Board lane is the notice area: a member without a role cannot
+    // publish one, nor pin anything, however the UI is driven.
+    expect(store.canPostNotice(threadId, 'regular-follower'), isFalse);
+    expect(
+      store.sendMessage(
+        threadId: threadId,
+        senderId: 'regular-follower',
+        content: 'lab hours extended',
+        kind: ChatMessageKind.announcement,
+        title: 'Not an officer',
       ),
       isNull,
     );
+    expect(
+      store.sendMessage(
+        threadId: threadId,
+        senderId: 'regular-follower',
+        content: 'pin me',
+        pinned: true,
+      ),
+      isNull,
+    );
+
+    expect(store.canPostNotice(threadId, 'board-member'), isTrue);
+    final notice = store.sendMessage(
+      threadId: threadId,
+      senderId: 'board-member',
+      content: 'Lab hours are extended to 22:00 all week.',
+      kind: ChatMessageKind.announcement,
+      title: 'Build sprint starts Monday',
+      pinned: true,
+    );
+    expect(notice, isNotNull);
+    expect(ChatStore.laneOf(notice!), ClubChatLane.board);
+    expect(
+      store.noticesIn(threadId).map((message) => message.id),
+      contains(notice.id),
+    );
+
+    // Replies never live under a notice: "Reply in chat" quotes it in the room,
+    // and that count is the signal the Board shows.
+    final reply = store.sendMessage(
+      threadId: threadId,
+      senderId: 'regular-follower',
+      content: 'I can take the camera rig',
+      replyToMessageId: notice.id,
+    );
+    expect(reply, isNotNull);
+    expect(ChatStore.laneOf(reply!), ClubChatLane.chat);
+    expect(store.replyCountFor(notice.id), 1);
 
     expect(store.canWriteThread(threadId, 'board-member'), isTrue);
     final poll = store.sendMessage(
@@ -88,6 +140,72 @@ void main() {
       isTrue,
     );
     expect(store.messageById(poll.id)!.pollVotes, isEmpty);
+  });
+
+  test('a club room counts its two lanes separately', () async {
+    final other = Club(
+      id: 'club-lane-fixture',
+      name: 'Lane Club',
+      description: 'Board + Chat fixture',
+      adminUserIds: const ['club-account'],
+      boardMemberIds: const ['board-member'],
+    );
+    clubs.add(other);
+    addTearDown(() => clubs.remove(other));
+
+    final threadId = ChatStore.clubThreadId(other.id);
+    userState.followedClubIds.add(other.id);
+    const reader = 'lane-reader';
+
+    store.sendMessage(
+      threadId: threadId,
+      senderId: 'board-member',
+      content: 'Bring your own goggles.',
+      kind: ChatMessageKind.announcement,
+      title: 'Build sprint starts Monday',
+    );
+    store.sendMessage(
+      threadId: threadId,
+      senderId: 'other-member',
+      content: 'servo order arrived',
+    );
+    store.sendMessage(
+      threadId: threadId,
+      senderId: 'other-member',
+      content: 'unboxing in B-14 now',
+    );
+
+    expect(
+      store.unreadInClubLane(threadId, reader, ClubChatLane.board),
+      1,
+    );
+    expect(store.unreadInClubLane(threadId, reader, ClubChatLane.chat), 2);
+    // The inbox row shows the sum of the two segments.
+    expect(store.unreadCountFor(threadId, reader), 3);
+
+    // Reading the Board leaves what is waiting in Chat exactly where it was.
+    store.markClubLaneRead(threadId, reader, ClubChatLane.board);
+    expect(
+      store.unreadInClubLane(threadId, reader, ClubChatLane.board),
+      0,
+    );
+    expect(store.unreadInClubLane(threadId, reader, ClubChatLane.chat), 2);
+    expect(store.unreadCountFor(threadId, reader), 2);
+
+    store.markClubLaneRead(threadId, reader, ClubChatLane.chat);
+    expect(store.unreadCountFor(threadId, reader), 0);
+
+    // The Messages row previews Chat, never the Board's own object.
+    expect(
+      store.lastChatLaneMessageIn(threadId)?.content,
+      'unboxing in B-14 now',
+    );
+
+    // Lane receipts survive a restart the same way thread receipts do.
+    await store.saveAll();
+    final reopened = ChatStore();
+    await reopened.initialize();
+    expect(reopened.unreadCountFor(threadId, reader), 0);
   });
 
   test('shared posts survive message model serialization', () {

@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
@@ -1408,16 +1409,48 @@ class _CreateSheetAction extends StatelessWidget {
 
 // ─── Center Add Button ────────────────────────────────────────────────────────
 
-class _CenterAddButton extends StatelessWidget {
+class _CenterAddButton extends StatefulWidget {
   final VoidCallback onTap;
   const _CenterAddButton({super.key, required this.onTap});
+
+  @override
+  State<_CenterAddButton> createState() => _CenterAddButtonState();
+}
+
+class _CenterAddButtonState extends State<_CenterAddButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 360),
+  );
+
+  late final Animation<double> _turns = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 0, end: 0.125), weight: 42),
+    TweenSequenceItem(tween: Tween(begin: 0.125, end: -0.025), weight: 28),
+    TweenSequenceItem(tween: Tween(begin: -0.025, end: 0), weight: 30),
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+  void _handleTap() {
+    if (_controller.isAnimating) return;
+    HapticFeedback.lightImpact();
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _controller.forward(from: 0);
+    }
+    widget.onTap();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Center(
         child: AppPressable(
-          onTap: onTap,
+          onTap: _handleTap,
           pressedScale: 0.92,
           child: Container(
             width: 52,
@@ -1438,7 +1471,15 @@ class _CenterAddButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
+            child: RotationTransition(
+              key: const ValueKey('center-add-icon-motion'),
+              turns: _turns,
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
           ),
         ),
       ),

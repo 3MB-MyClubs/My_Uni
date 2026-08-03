@@ -550,6 +550,12 @@ void main() {
     );
     await tester.pump();
 
+    // A club room lands on the Board; the conversation is one segment away.
+    expect(find.byKey(const ValueKey('club-lane-switch')), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('club-lane-chat')));
+    await tester.pumpAndSettle();
+
     expect(find.byType(TextField), findsOneWidget);
     expectNoVisibleFocusedBorder(
       tester.widget<TextField>(find.byType(TextField)),
@@ -591,7 +597,10 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('club-members-button')));
+    // Members moved behind the ••• menu.
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('club-open-members')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('club-member-row-u1')), findsOneWidget);
     expect(
@@ -787,7 +796,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(S.postAsAnnouncement));
+    await tester.tap(find.text(S.boardPostNotice));
     await tester.pumpAndSettle();
 
     for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
@@ -804,9 +813,13 @@ void main() {
     await tester.tap(find.text(S.post));
     await tester.pumpAndSettle();
 
-    // The default pinned announcement appears both in the stream and in the
-    // pinned strip above it.
-    expect(find.text(title), findsWidgets);
+    // The notice is one object: a row on the Board the author lands back on,
+    // and the same record as a card in Chat.
+    expect(find.text(title), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('club-lane-chat')));
+    await tester.pumpAndSettle();
+    expect(find.text(title), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('club-attach-button')));
     await tester.pump();
@@ -822,16 +835,11 @@ void main() {
 
     expect(find.text(question), findsOneWidget);
 
+    // Events left this surface: the composer offers a photo and a poll only.
     await tester.tap(find.byKey(const ValueKey('club-attach-button')));
     await tester.pump();
-    await tester.tap(find.text(S.attachEvent));
-    await tester.pumpAndSettle();
-
-    expect(find.text(S.shareEvent), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('club-event-ev3')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Uludağ Kış Tırmanışı'), findsOneWidget);
+    expect(find.text(S.attachMedia), findsOneWidget);
+    expect(find.text(S.attachEvent), findsNothing);
     await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });

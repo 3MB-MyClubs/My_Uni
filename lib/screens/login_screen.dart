@@ -10,6 +10,7 @@ import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/app_motion.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
 import 'platform_admin_auth_screen.dart';
@@ -50,6 +51,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   String? _error;
+  int _errorShakeTrigger = 0;
   bool _entranceConfigured = false;
   double _languageContentOpacity = 1;
   bool _isSwitchingLanguage = false;
@@ -68,6 +70,13 @@ class _LoginScreenState extends State<LoginScreen>
   static String _localPart(String email) {
     final at = email.indexOf('@');
     return at < 0 ? email : email.substring(0, at);
+  }
+
+  void _showError(String message) {
+    setState(() {
+      _error = message;
+      _errorShakeTrigger++;
+    });
   }
 
   @override
@@ -122,19 +131,14 @@ class _LoginScreenState extends State<LoginScreen>
     final localPart = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (localPart.isEmpty || password.isEmpty) {
-      setState(
-        () => _error = AppLocalizations.of(context)!.enterEmailAndPassword,
-      );
+      _showError(AppLocalizations.of(context)!.enterEmailAndPassword);
       return;
     }
     // Users type only the local part (e.g. "htuncay23"); the "@ku.edu.tr"
     // domain is appended automatically. Lower-cased so any casing logs in.
     final email = '${localPart.toLowerCase()}@ku.edu.tr';
     if (!authService.isValidStudentPassword(password)) {
-      setState(
-        () =>
-            _error = AppLocalizations.of(context)!.studentPasswordMustBe6Digits,
-      );
+      _showError(AppLocalizations.of(context)!.studentPasswordMustBe6Digits);
       return;
     }
     setState(() {
@@ -154,6 +158,7 @@ class _LoginScreenState extends State<LoginScreen>
         _error = authService.lastLoginFailure == AuthLoginFailure.banned
             ? S.bannedFromApp
             : AppLocalizations.of(context)!.incorrectEmailOrPassword;
+        _errorShakeTrigger++;
       });
     }
   }
@@ -345,114 +350,117 @@ class _LoginScreenState extends State<LoginScreen>
                       _languageTransition(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(22, 30, 22, 0),
-                          child: _MotionEntrance(
-                            animation: _formEntrance,
-                            begin: const Offset(0, 0.045),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _AuthField(
-                                  label: AppLocalizations.of(
-                                    context,
-                                  )!.campusEmailLabel,
-                                  controller: _emailController,
-                                  hint: AppLocalizations.of(
-                                    context,
-                                  )!.usernameHint,
-                                  icon: Icons.mail_outline_rounded,
-                                  keyboardType: TextInputType.text,
-                                  suffixText: '@ku.edu.tr',
-                                  inputFormatters: [_NoDomainFormatter()],
-                                  onChanged: (_) =>
-                                      setState(() => _error = null),
-                                  onSubmitted: (_) => _handleLogin(),
-                                ),
-                                const SizedBox(height: 14),
-                                _AuthField(
-                                  label: AppLocalizations.of(
-                                    context,
-                                  )!.passwordFieldLabel,
-                                  controller: _passwordController,
-                                  hint: AppLocalizations.of(
-                                    context,
-                                  )!.digitPinHint(6),
-                                  icon: Icons.lock_outline_rounded,
-                                  obscureText: _obscurePassword,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(6),
-                                  ],
-                                  onChanged: (_) =>
-                                      setState(() => _error = null),
-                                  onSubmitted: (_) => _handleLogin(),
-                                  trailing: GestureDetector(
-                                    onTap: () => setState(
-                                      () =>
-                                          _obscurePassword = !_obscurePassword,
-                                    ),
-                                    child: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_outlined
-                                          : Icons.visibility_off_outlined,
-                                      size: 19,
-                                      color: AppColors.secondaryText,
-                                    ),
+                          child: ShakeOnChange(
+                            trigger: _errorShakeTrigger,
+                            child: _MotionEntrance(
+                              animation: _formEntrance,
+                              begin: const Offset(0, 0.045),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _AuthField(
+                                    label: AppLocalizations.of(
+                                      context,
+                                    )!.campusEmailLabel,
+                                    controller: _emailController,
+                                    hint: AppLocalizations.of(
+                                      context,
+                                    )!.usernameHint,
+                                    icon: Icons.mail_outline_rounded,
+                                    keyboardType: TextInputType.text,
+                                    suffixText: '@ku.edu.tr',
+                                    inputFormatters: [_NoDomainFormatter()],
+                                    onChanged: (_) =>
+                                        setState(() => _error = null),
+                                    onSubmitted: (_) => _handleLogin(),
                                   ),
-                                ),
-                                const SizedBox(height: 10),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: _openForgotPassword,
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 4,
+                                  const SizedBox(height: 14),
+                                  _AuthField(
+                                    label: AppLocalizations.of(
+                                      context,
+                                    )!.passwordFieldLabel,
+                                    controller: _passwordController,
+                                    hint: AppLocalizations.of(
+                                      context,
+                                    )!.digitPinHint(6),
+                                    icon: Icons.lock_outline_rounded,
+                                    obscureText: _obscurePassword,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(6),
+                                    ],
+                                    onChanged: (_) =>
+                                        setState(() => _error = null),
+                                    onSubmitted: (_) => _handleLogin(),
+                                    trailing: GestureDetector(
+                                      onTap: () => setState(
+                                        () => _obscurePassword =
+                                            !_obscurePassword,
                                       ),
-                                      minimumSize: const Size(0, 0),
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      )!.forgotPassword,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primaryRed,
+                                      child: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined,
+                                        size: 19,
+                                        color: AppColors.secondaryText,
                                       ),
                                     ),
                                   ),
-                                ),
-
-                                // Inline error (kept from the previous screen —
-                                // the design has no failure state of its own).
-                                if (_error != null) ...[
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.error_outline_rounded,
-                                        size: 15,
-                                        color: AppColors.primaryRed,
+                                  const SizedBox(height: 10),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: _openForgotPassword,
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 4,
+                                        ),
+                                        minimumSize: const Size(0, 0),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
                                       ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          _error!,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            color: AppColors.primaryRed,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      child: Text(
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.forgotPassword,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.primaryRed,
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
+
+                                  // Inline error (kept from the previous screen —
+                                  // the design has no failure state of its own).
+                                  if (_error != null) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.error_outline_rounded,
+                                          size: 15,
+                                          color: AppColors.primaryRed,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            _error!,
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              color: AppColors.primaryRed,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/event.dart';
 import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
@@ -27,13 +30,65 @@ class RsvpButton extends StatefulWidget {
   State<RsvpButton> createState() => _RsvpButtonState();
 }
 
-class _RsvpButtonState extends State<RsvpButton> {
+class _RsvpButtonState extends State<RsvpButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _confirmationController;
+  late final Animation<double> _confirmationPulse;
+  late final Animation<double> _confirmationIconScale;
+  bool? _lastAttending;
+
   String get _userId =>
       authService.isStudentSession ? authService.currentUser?.id ?? '' : '';
+
+  @override
+  void initState() {
+    super.initState();
+    _confirmationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 440),
+      value: 1,
+    );
+    _confirmationPulse =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 1, end: 1.055), weight: 34),
+          TweenSequenceItem(tween: Tween(begin: 1.055, end: 0.985), weight: 28),
+          TweenSequenceItem(tween: Tween(begin: 0.985, end: 1), weight: 38),
+        ]).animate(
+          CurvedAnimation(
+            parent: _confirmationController,
+            curve: Curves.easeOut,
+          ),
+        );
+    _confirmationIconScale =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 0.55, end: 1.16), weight: 58),
+          TweenSequenceItem(tween: Tween(begin: 1.16, end: 1), weight: 42),
+        ]).animate(
+          CurvedAnimation(
+            parent: _confirmationController,
+            curve: Curves.easeOut,
+          ),
+        );
+  }
 
   void _syncCalendar(BuildContext context) {
     if (widget.event == null) return;
     syncRsvpToDeviceCalendar(context, widget.event!);
+  }
+
+  void _playConfirmationMotion() {
+    if (!mounted ||
+        _confirmationController.isAnimating ||
+        MediaQuery.disableAnimationsOf(context)) {
+      return;
+    }
+    _confirmationController.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _confirmationController.dispose();
+    super.dispose();
   }
 
   @override
@@ -45,20 +100,41 @@ class _RsvpButtonState extends State<RsvpButton> {
       builder: (ctx, _) {
         final attending = rsvpStore.isAttending(widget.eventId);
         final pending = rsvpStore.isPending(widget.eventId);
+        final newlyConfirmed = _lastAttending == false && attending;
+        _lastAttending = attending;
+        if (newlyConfirmed) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && rsvpStore.isAttending(widget.eventId)) {
+              _playConfirmationMotion();
+            }
+          });
+        }
 
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: ScaleTransition(
-              scale: Tween<double>(
-                begin: 0.97,
-                end: 1.0,
-              ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
-              child: child,
+        return AnimatedBuilder(
+          animation: _confirmationPulse,
+          child: AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(
+                scale: Tween<double>(
+                  begin: 0.97,
+                  end: 1.0,
+                ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+                child: child,
+              ),
             ),
+            child: _build(ctx, attending, pending),
           ),
-          child: _build(ctx, attending, pending),
+          builder: (context, child) => Transform.scale(
+            key: const ValueKey('rsvp-confirmation-pulse'),
+            scale: MediaQuery.disableAnimationsOf(context)
+                ? 1
+                : _confirmationPulse.value,
+            child: child,
+          ),
         );
       },
     );
@@ -67,7 +143,13 @@ class _RsvpButtonState extends State<RsvpButton> {
   Widget _build(BuildContext context, bool attending, bool pending) {
     void onToggle() {
       final wasAttending = rsvpStore.isAttending(widget.eventId);
-      rsvpStore.toggle(widget.eventId, _userId);
+      if (!wasAttending) {
+        HapticFeedback.lightImpact();
+        _playConfirmationMotion();
+      } else {
+        HapticFeedback.selectionClick();
+      }
+      unawaited(rsvpStore.toggle(widget.eventId, _userId));
       if (!wasAttending && widget.event != null) {
         _syncCalendar(context);
       }
@@ -163,14 +245,19 @@ class _RsvpButtonState extends State<RsvpButton> {
                     ),
                   ],
                 ),
-                child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        color: Colors.white,
-                        size: 19,
+                      ScaleTransition(
+                        key: const ValueKey('rsvp-confirmation-check'),
+                        scale: _confirmationIconScale,
+                        child: const Icon(
+                          Icons.check_circle_rounded,
+                          color: Colors.white,
+                          size: 19,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -214,12 +301,16 @@ class _RsvpButtonState extends State<RsvpButton> {
                         color: AppColors.secondaryText,
                       ),
                       const SizedBox(width: 5),
-                      Text(
-                        AppLocalizations.of(context)!.cancel,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText,
+                      Flexible(
+                        child: Text(
+                          AppLocalizations.of(context)!.cancel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.secondaryText,
+                          ),
                         ),
                       ),
                     ],
