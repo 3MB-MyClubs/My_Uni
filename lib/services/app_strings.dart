@@ -716,6 +716,9 @@ class S {
   );
   static String get safetyOptions =>
       _t('Safety options', 'Güvenlik seçenekleri');
+
+  /// Settings group heading for the blocked-accounts entry.
+  static String get privacySection => _t('Privacy', 'Gizlilik');
   static String get moderation => _t('Moderation', 'Moderasyon');
   static String get moderationCenter =>
       _t('ClubUp moderation center', 'ClubUp moderasyon merkezi');
