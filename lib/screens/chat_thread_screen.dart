@@ -503,6 +503,216 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  void _openMessageInfo(ChatMessage originalMessage) {
+    final message =
+        chatStore.messageById(originalMessage.id) ?? originalMessage;
+    final readReceipts =
+        message.receipts
+            .where(
+              (receipt) =>
+                  receipt.userId != message.senderId && receipt.seenAt != null,
+            )
+            .toList(growable: false)
+          ..sort((a, b) => b.seenAt!.compareTo(a.seenAt!));
+    final deliveredReceipts =
+        message.receipts
+            .where(
+              (receipt) =>
+                  receipt.userId != message.senderId &&
+                  receipt.seenAt == null &&
+                  receipt.deliveredAt != null,
+            )
+            .toList(growable: false)
+          ..sort((a, b) => b.deliveredAt!.compareTo(a.deliveredAt!));
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        key: const ValueKey('chat-message-info-sheet'),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                S.messageInfo,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (_isDirect) ...[
+                _directReceiptRow(
+                  icon: Icons.done_all_rounded,
+                  label: S.deliveredAt(_receiptTimestamp(message.deliveredAt)),
+                  color: AppColors.secondaryText,
+                ),
+                if (message.seenAt case final seenAt?)
+                  _directReceiptRow(
+                    icon: Icons.done_all_rounded,
+                    label: S.readAt(_receiptTimestamp(seenAt)),
+                    color: AppColors.primaryRed,
+                  ),
+              ] else if (_isGroup) ...[
+                _receiptSection(
+                  title: S.readBy,
+                  receipts: readReceipts,
+                  timestampFor: (receipt) => receipt.seenAt!,
+                ),
+                const SizedBox(height: 14),
+                _receiptSection(
+                  title: S.deliveredTo,
+                  receipts: deliveredReceipts,
+                  timestampFor: (receipt) => receipt.deliveredAt!,
+                ),
+              ],
+              Divider(height: 28, color: AppColors.divider),
+              if (chatStore.canWriteThread(widget.threadId, _myId))
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.reply_rounded,
+                    color: AppColors.primaryRed,
+                  ),
+                  title: Text(
+                    S.reply,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _beginReply(message);
+                  },
+                ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.primaryRed,
+                ),
+                title: Text(
+                  S.deleteMessage,
+                  style: TextStyle(
+                    color: AppColors.primaryRed,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_confirmDeleteMessage(message));
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _directReceiptRow({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: color),
+      title: Text(
+        label,
+        style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _receiptSection({
+    required String title,
+    required List<MessageReceipt> receipts,
+    required DateTime Function(MessageReceipt receipt) timestampFor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: AppColors.secondaryText,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        for (final receipt in receipts)
+          Builder(
+            builder: (context) {
+              final name = _senderInfo(receipt.userId).$1;
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: UserAvatar(
+                  userId: receipt.userId,
+                  name: name.isEmpty ? receipt.userId : name,
+                  size: 38,
+                  fontSize: 14,
+                ),
+                title: Text(
+                  name.isEmpty ? receipt.userId : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                trailing: Text(
+                  _receiptTimestamp(timestampFor(receipt)),
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  void _openMessageLongPress(ChatMessage message) {
+    if (chatStore.isMessageOwner(message, _myId) && (_isDirect || _isGroup)) {
+      _openMessageInfo(message);
+      return;
+    }
+    _openReactionPicker(message);
+  }
+
   void _openReactionPicker(ChatMessage message) {
     showModalBottomSheet<void>(
       context: context,
@@ -1541,12 +1751,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 GestureDetector(
                   key: ValueKey('chat-message-${m.id}'),
                   behavior: HitTestBehavior.opaque,
-                  onLongPress: () => _openReactionPicker(m),
+                  onLongPress: () => _openMessageLongPress(m),
                   child: bubble,
                 ),
                 if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
-                // Every outgoing DM carries a delivery receipt. Incoming and
-                // group messages keep the compact timestamp-only treatment.
+                // Outgoing student messages expose a compact delivery state;
+                // long-pressing the bubble opens the exact receipt timestamps.
                 Padding(
                   padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
                   child: Row(
@@ -1560,15 +1770,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           color: AppColors.secondaryText,
                         ),
                       ),
-                      if (mine && _isDirect) ...[
+                      if (mine && (_isDirect || _isGroup)) ...[
                         const SizedBox(width: 5),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 180),
                           child: _MessageTicks(
                             key: ValueKey(
-                              'message-status-${m.id}-${m.status.name}',
+                              'message-status-${m.id}-${chatStore.deliveryStatusFor(m).name}',
                             ),
-                            seen: m.status == MessageDeliveryStatus.seen,
+                            status: chatStore.deliveryStatusFor(m),
                           ),
                         ),
                       ],
@@ -2144,6 +2354,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _timeLabel(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  String _receiptTimestamp(DateTime value) {
+    final dt = value.toLocal();
+    final now = DateTime.now();
+    final time = _timeLabel(dt);
+    if (_sameDay(dt, now)) return time;
+    final today = DateTime(now.year, now.month, now.day);
+    final startOfWeek = today.subtract(Duration(days: now.weekday - 1));
+    final date = DateTime(dt.year, dt.month, dt.day);
+    if (!date.isBefore(startOfWeek) && !date.isAfter(today)) {
+      return '${S.weekdayShort(dt.weekday)} $time';
+    }
+    return '${dt.day.toString().padLeft(2, '0')} ${S.monthShort(dt.month)} $time';
+  }
 }
 
 /// The design's day marker: a hairline rule on each side of a small caps label.
@@ -2178,20 +2402,27 @@ class _DateChip extends StatelessWidget {
   }
 }
 
-/// Double check-mark receipt: muted once delivered, red once seen.
+/// One check while sent, two muted checks once delivered, two red once seen.
 class _MessageTicks extends StatelessWidget {
-  final bool seen;
+  final MessageDeliveryStatus status;
 
-  const _MessageTicks({super.key, required this.seen});
+  const _MessageTicks({super.key, required this.status});
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: seen ? S.seen : S.delivered,
+      label: switch (status) {
+        MessageDeliveryStatus.sent => S.sent,
+        MessageDeliveryStatus.delivered => S.delivered,
+        MessageDeliveryStatus.seen => S.seen,
+      },
       child: CustomPaint(
         size: const Size(17, 11),
         painter: _TicksPainter(
-          color: seen ? AppColors.primaryRed : AppColors.secondaryText,
+          color: status == MessageDeliveryStatus.seen
+              ? AppColors.primaryRed
+              : AppColors.secondaryText,
+          tickCount: status == MessageDeliveryStatus.sent ? 1 : 2,
         ),
       ),
     );
@@ -2200,8 +2431,9 @@ class _MessageTicks extends StatelessWidget {
 
 class _TicksPainter extends CustomPainter {
   final Color color;
+  final int tickCount;
 
-  const _TicksPainter({required this.color});
+  const _TicksPainter({required this.color, required this.tickCount});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2217,12 +2449,12 @@ class _TicksPainter extends CustomPainter {
       ..lineTo((4 + dx) * scale, 9 * scale)
       ..lineTo((10 + dx) * scale, 2 * scale);
     canvas.drawPath(tick(0), paint);
-    canvas.drawPath(tick(6.5), paint);
+    if (tickCount == 2) canvas.drawPath(tick(6.5), paint);
   }
 
   @override
   bool shouldRepaint(covariant _TicksPainter oldDelegate) =>
-      color != oldDelegate.color;
+      color != oldDelegate.color || tickCount != oldDelegate.tickCount;
 }
 
 /// The student thread canvas: a flat body under the design's campus wallpaper

@@ -1,4 +1,35 @@
-enum MessageDeliveryStatus { delivered, seen }
+enum MessageDeliveryStatus { sent, delivered, seen }
+
+class MessageReceipt {
+  final String userId;
+  final DateTime? deliveredAt;
+  final DateTime? seenAt;
+
+  const MessageReceipt({required this.userId, this.deliveredAt, this.seenAt});
+
+  Map<String, dynamic> toMap() => {
+    'userId': userId,
+    'deliveredAt': deliveredAt?.toIso8601String(),
+    'seenAt': seenAt?.toIso8601String(),
+  };
+
+  factory MessageReceipt.fromMap(Map<String, dynamic> map) => MessageReceipt(
+    userId: map['userId']?.toString() ?? '',
+    deliveredAt: DateTime.tryParse(map['deliveredAt']?.toString() ?? ''),
+    seenAt: DateTime.tryParse(map['seenAt']?.toString() ?? ''),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MessageReceipt &&
+          userId == other.userId &&
+          deliveredAt == other.deliveredAt &&
+          seenAt == other.seenAt;
+
+  @override
+  int get hashCode => Object.hash(userId, deliveredAt, seenAt);
+}
 
 /// What a message renders as in a community stream. Plain [text] is the
 /// default and keeps every existing (direct / group) message unchanged.
@@ -29,6 +60,7 @@ class ChatMessage {
   final DateTime createdAt;
   final DateTime deliveredAt;
   final DateTime? seenAt;
+  final List<MessageReceipt> receipts;
 
   /// Stable snapshot of the message this one replies to. Keeping the sender
   /// and preview beside the id lets the quote remain useful if the original
@@ -78,6 +110,24 @@ class ChatMessage {
       ? MessageDeliveryStatus.delivered
       : MessageDeliveryStatus.seen;
 
+  /// Group delivery is aggregated across every current recipient. The sender
+  /// is excluded because receipt rows represent devices that received the
+  /// message, matching WhatsApp-style group status semantics.
+  MessageDeliveryStatus groupStatusForMembers(Iterable<String> memberIds) {
+    final recipientIds = memberIds
+        .where((userId) => userId.isNotEmpty && userId != senderId)
+        .toSet();
+    if (recipientIds.isEmpty) return MessageDeliveryStatus.sent;
+    final byUser = {for (final receipt in receipts) receipt.userId: receipt};
+    if (recipientIds.every((userId) => byUser[userId]?.seenAt != null)) {
+      return MessageDeliveryStatus.seen;
+    }
+    if (recipientIds.every((userId) => byUser[userId]?.deliveredAt != null)) {
+      return MessageDeliveryStatus.delivered;
+    }
+    return MessageDeliveryStatus.sent;
+  }
+
   bool get mentionsEveryone => mentions.contains(everyoneMention);
 
   bool mentionsUser(String userId) =>
@@ -102,6 +152,7 @@ class ChatMessage {
     required this.createdAt,
     DateTime? deliveredAt,
     this.seenAt,
+    List<MessageReceipt>? receipts,
     this.replyToMessageId,
     this.replyToSenderId,
     this.replyToPreview,
@@ -119,6 +170,7 @@ class ChatMessage {
     this.sharedPostId,
     this.pinned = false,
   }) : deliveredAt = deliveredAt ?? createdAt,
+       receipts = List.unmodifiable(receipts ?? const []),
        mentions = List.unmodifiable(mentions ?? const []),
        reactions = Map.unmodifiable({
          for (final entry
@@ -137,6 +189,7 @@ class ChatMessage {
     DateTime? createdAt,
     DateTime? deliveredAt,
     DateTime? seenAt,
+    List<MessageReceipt>? receipts,
     String? replyToMessageId,
     String? replyToSenderId,
     String? replyToPreview,
@@ -161,6 +214,7 @@ class ChatMessage {
     createdAt: createdAt ?? this.createdAt,
     deliveredAt: deliveredAt ?? this.deliveredAt,
     seenAt: seenAt ?? this.seenAt,
+    receipts: receipts ?? this.receipts,
     replyToMessageId: replyToMessageId ?? this.replyToMessageId,
     replyToSenderId: replyToSenderId ?? this.replyToSenderId,
     replyToPreview: replyToPreview ?? this.replyToPreview,
@@ -187,6 +241,8 @@ class ChatMessage {
     'createdAt': createdAt.toIso8601String(),
     'deliveredAt': deliveredAt.toIso8601String(),
     'seenAt': seenAt?.toIso8601String(),
+    if (receipts.isNotEmpty)
+      'receipts': receipts.map((receipt) => receipt.toMap()).toList(),
     if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
     if (replyToSenderId != null) 'replyToSenderId': replyToSenderId,
     if (replyToPreview != null) 'replyToPreview': replyToPreview,
@@ -218,6 +274,13 @@ class ChatMessage {
         ? null
         : DateTime.parse(m['deliveredAt'] as String),
     seenAt: m['seenAt'] == null ? null : DateTime.parse(m['seenAt'] as String),
+    receipts: (m['receipts'] as List? ?? const [])
+        .map(
+          (receipt) =>
+              MessageReceipt.fromMap(Map<String, dynamic>.from(receipt as Map)),
+        )
+        .where((receipt) => receipt.userId.isNotEmpty)
+        .toList(growable: false),
     replyToMessageId: m['replyToMessageId']?.toString(),
     replyToSenderId: m['replyToSenderId']?.toString(),
     replyToPreview: m['replyToPreview']?.toString(),

@@ -915,8 +915,16 @@ class S {
   }
 
   static String get typing => _t('typing…', 'yazıyor…');
+  static String get sent => _t('Sent', 'Gönderildi');
   static String get delivered => _t('Delivered', 'Teslim edildi');
   static String get seen => _t('Seen', 'Görüldü');
+  static String get read => _t('Read', 'Okundu');
+  static String get messageInfo => _t('Message info', 'Mesaj bilgisi');
+  static String get readBy => _t('Read by', 'Okuyanlar');
+  static String get deliveredTo => _t('Delivered to', 'Teslim edilenler');
+  static String deliveredAt(String time) =>
+      _t('Delivered $time', '$time teslim edildi');
+  static String readAt(String time) => _t('Read $time', '$time okundu');
   static String get reply => _t('Reply', 'Yanıtla');
   static String replyingTo(String name) =>
       _t('Replying to $name', '$name adlı kişiye yanıt');

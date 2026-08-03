@@ -47,7 +47,10 @@ class ChatStore extends ChangeNotifier {
   /// Local-first outbox. IDs remain here until Supabase acknowledges storage.
   final Set<String> _pendingRemoteMessageIds = {};
 
-  /// DM threads whose incoming delivered messages were seen while offline.
+  /// DM/group threads with receipt changes waiting to reach Supabase.
+  ///
+  /// Group delivery and read rows intentionally reuse this durable queue so
+  /// there is one retry mechanism for every student-chat receipt.
   final Set<String> _pendingSeenThreadIds = {};
 
   RealtimeChannel? _directMessageChannel;
@@ -57,6 +60,7 @@ class ChatStore extends ChangeNotifier {
   String? _clubSyncedActorId;
   Timer? _syncRetry;
   bool _flushingRemote = false;
+  bool _flushRemoteAgain = false;
 
   /// Direct-message threads that have been opened, including conversations
   /// that do not have a first message yet.
@@ -455,6 +459,12 @@ class ChatStore extends ChangeNotifier {
           table: 'group_messages',
           callback: (payload) =>
               unawaited(_handleGroupMessageChange(payload, userId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'group_message_receipts',
+          callback: (payload) => unawaited(_handleGroupReceiptChange(payload)),
         );
     _groupMessageChannel = channel;
     channel.subscribe((status, error) {
@@ -952,11 +962,41 @@ class ChatStore extends ChangeNotifier {
           (membersByGroup[groupId] ??= []).add(memberId);
         }
       }
+      final messageIds = results[2]
+          .map((row) => row['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
+      var receiptRows = <Map<String, dynamic>>[];
+      if (messageIds.isNotEmpty) {
+        try {
+          final remoteReceipts = await client
+              .from('group_message_receipts')
+              .select('message_id, user_id, delivered_at, seen_at')
+              .inFilter('message_id', messageIds);
+          receiptRows = remoteReceipts
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(growable: false);
+        } catch (_) {
+          // Messages remain usable while a newly deployed receipts migration
+          // is still propagating. The existing sync retry will fetch them.
+        }
+      }
+      final receiptsByMessage = <String, List<MessageReceipt>>{};
+      for (final row in receiptRows) {
+        final messageId = row['message_id']?.toString() ?? '';
+        final receipt = _receiptFromRemoteRow(row);
+        if (messageId.isNotEmpty && receipt != null) {
+          (receiptsByMessage[messageId] ??= []).add(receipt);
+        }
+      }
       // Do not expose a group message until its sender's real profile name and
       // avatar have been resolved. This also preloads identities used by the
       // automatic group title and avatar stack.
       await peopleService.hydrateProfilesByIds(
-        membersByGroup.values.expand((memberIds) => memberIds),
+        <String>{
+          ...membersByGroup.values.expand((memberIds) => memberIds),
+          ...receiptRows.map((row) => row['user_id']?.toString() ?? ''),
+        }.where((id) => id.isNotEmpty),
       );
       for (final raw in results[0]) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -990,9 +1030,11 @@ class ChatStore extends ChangeNotifier {
         );
       }
       for (final raw in results[2]) {
+        final row = Map<String, dynamic>.from(raw as Map);
         await _mergeRemoteGroupMessage(
-          Map<String, dynamic>.from(raw as Map),
+          row,
           userId,
+          receipts: receiptsByMessage[row['id']?.toString() ?? ''] ?? const [],
           notifyRecipient: false,
         );
       }
@@ -1007,6 +1049,7 @@ class ChatStore extends ChangeNotifier {
   Future<void> _mergeRemoteGroupMessage(
     Map<String, dynamic> row,
     String viewerId, {
+    List<MessageReceipt> receipts = const [],
     bool notifyRecipient = true,
   }) async {
     final id = row['id']?.toString() ?? '';
@@ -1021,7 +1064,7 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     if (_pendingRemoteDeleteThreadIds.containsKey(id)) return;
-    final message = await _messageFromRemotePayload(
+    final remoteMessage = await _messageFromRemotePayload(
       row: row,
       id: id,
       threadId: groupThreadId(groupId),
@@ -1029,19 +1072,45 @@ class ChatStore extends ChangeNotifier {
       createdAt: createdAt,
       deliveredAt: createdAt,
     );
-    if (message == null) return;
+    if (remoteMessage == null) return;
     final existingIndex = _messages.indexWhere(
       (candidate) => candidate.id == id,
     );
-    if (existingIndex != -1) {
-      if (_messages[existingIndex].attachmentPath != message.attachmentPath) {
-        _messages[existingIndex] = _messages[existingIndex].copyWith(
-          attachmentPath: message.attachmentPath,
+    final localReceipts = existingIndex == -1
+        ? const <MessageReceipt>[]
+        : _messages[existingIndex].receipts;
+    var mergedReceipts = _mergeRemoteReceiptLists(localReceipts, receipts);
+    var queuedDelivery = false;
+    if (senderId != viewerId) {
+      final viewerReceipt = _receiptFor(mergedReceipts, viewerId);
+      if (viewerReceipt?.deliveredAt == null) {
+        mergedReceipts = _withLocalReceipt(
+          mergedReceipts,
+          userId: viewerId,
+          deliveredAt: DateTime.now(),
         );
+        _pendingSeenThreadIds.add(groupThreadId(groupId));
+        queuedDelivery = true;
+      }
+    }
+    final message = remoteMessage.copyWith(receipts: mergedReceipts);
+    if (existingIndex != -1) {
+      final local = _messages[existingIndex];
+      final pendingChanged = _pendingRemoteGroupMessageIds.remove(id);
+      if (local.attachmentPath != message.attachmentPath ||
+          !listEquals(local.receipts, mergedReceipts)) {
+        _messages[existingIndex] = local.copyWith(
+          attachmentPath: message.attachmentPath,
+          receipts: mergedReceipts,
+        );
+      }
+      if (local.attachmentPath != message.attachmentPath ||
+          !listEquals(local.receipts, mergedReceipts) ||
+          pendingChanged) {
         scheduleSave();
         notifyListeners();
       }
-      _pendingRemoteGroupMessageIds.remove(id);
+      if (queuedDelivery) unawaited(_flushRemoteChanges());
       return;
     }
     _messages.add(message);
@@ -1061,6 +1130,84 @@ class ChatStore extends ChangeNotifier {
         ),
       );
     }
+    scheduleSave();
+    notifyListeners();
+    if (queuedDelivery) unawaited(_flushRemoteChanges());
+  }
+
+  static MessageReceipt? _receiptFromRemoteRow(Map<String, dynamic> row) {
+    final userId = row['user_id']?.toString() ?? '';
+    if (userId.isEmpty) return null;
+    return MessageReceipt(
+      userId: userId,
+      deliveredAt: DateTime.tryParse(
+        row['delivered_at']?.toString() ?? '',
+      )?.toLocal(),
+      seenAt: DateTime.tryParse(row['seen_at']?.toString() ?? '')?.toLocal(),
+    );
+  }
+
+  static MessageReceipt? _receiptFor(
+    Iterable<MessageReceipt> receipts,
+    String userId,
+  ) {
+    for (final receipt in receipts) {
+      if (receipt.userId == userId) return receipt;
+    }
+    return null;
+  }
+
+  static List<MessageReceipt> _mergeRemoteReceiptLists(
+    Iterable<MessageReceipt> localReceipts,
+    Iterable<MessageReceipt> remoteReceipts,
+  ) {
+    final merged = {
+      for (final receipt in localReceipts) receipt.userId: receipt,
+    };
+    for (final remote in remoteReceipts) {
+      final local = merged[remote.userId];
+      // Realtime/reconciliation snapshots can race an optimistic offline
+      // receipt. A null remote field must never erase a local timestamp.
+      merged[remote.userId] = MessageReceipt(
+        userId: remote.userId,
+        deliveredAt: remote.deliveredAt ?? local?.deliveredAt,
+        seenAt: remote.seenAt ?? local?.seenAt,
+      );
+    }
+    return List.unmodifiable(merged.values);
+  }
+
+  static List<MessageReceipt> _withLocalReceipt(
+    Iterable<MessageReceipt> receipts, {
+    required String userId,
+    DateTime? deliveredAt,
+    DateTime? seenAt,
+  }) {
+    final merged = {for (final receipt in receipts) receipt.userId: receipt};
+    final current = merged[userId];
+    merged[userId] = MessageReceipt(
+      userId: userId,
+      deliveredAt: current?.deliveredAt ?? deliveredAt,
+      seenAt: current?.seenAt ?? seenAt,
+    );
+    return List.unmodifiable(merged.values);
+  }
+
+  Future<void> _handleGroupReceiptChange(PostgresChangePayload payload) async {
+    // Receipt rows cannot be deleted by clients. Ignore an unexpected delete
+    // rather than rolling a locally known receipt backward.
+    if (payload.newRecord.isEmpty) return;
+    final row = payload.newRecord;
+    final messageId = row['message_id']?.toString() ?? '';
+    final receipt = _receiptFromRemoteRow(row);
+    if (messageId.isEmpty || receipt == null) return;
+    await peopleService.hydrateProfilesByIds([receipt.userId]);
+    final index = _messages.indexWhere((message) => message.id == messageId);
+    if (index == -1) return;
+    final message = _messages[index];
+    final merged = _mergeRemoteReceiptLists(message.receipts, [receipt]);
+    if (listEquals(message.receipts, merged)) return;
+    _messages[index] = message.copyWith(receipts: merged);
     scheduleSave();
     notifyListeners();
   }
@@ -1265,7 +1412,7 @@ class ChatStore extends ChangeNotifier {
         }
       }
       _directThreadIds.add(remote.threadId);
-      _pendingRemoteMessageIds.remove(remote.id);
+      if (_pendingRemoteMessageIds.remove(remote.id)) changed = true;
     }
     if (!changed) return;
     scheduleSave();
@@ -1384,7 +1531,13 @@ class ChatStore extends ChangeNotifier {
   };
 
   Future<void> _flushRemoteChanges() async {
-    if (_flushingRemote) return;
+    if (_flushingRemote) {
+      // A receipt can advance from delivered to seen while the earlier value
+      // is still being uploaded. Remember the overlapping request so the
+      // durable queue is drained again after the active upload completes.
+      _flushRemoteAgain = true;
+      return;
+    }
     final userId = _syncedUserId;
     final client = _client;
     if (userId == null ||
@@ -1393,6 +1546,8 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     _flushingRemote = true;
+    final pendingMessageCountBefore =
+        _pendingRemoteMessageIds.length + _pendingRemoteGroupMessageIds.length;
     var failed = false;
     var removedLocalGroup = false;
     try {
@@ -1582,6 +1737,49 @@ class ChatStore extends ChangeNotifier {
       }
 
       for (final threadId in _pendingSeenThreadIds.toList()) {
+        // Claim this queue item before awaiting the network. If another local
+        // receipt arrives for the same thread meanwhile, markThreadRead adds
+        // it back and the newer value remains queued for the next drain.
+        _pendingSeenThreadIds.remove(threadId);
+        if (isGroupThread(threadId)) {
+          final receiptMessages = _messages
+              .where((message) {
+                if (message.threadId != threadId ||
+                    message.senderId == userId) {
+                  return false;
+                }
+                return _receiptFor(message.receipts, userId)?.deliveredAt !=
+                    null;
+              })
+              .toList(growable: false);
+          if (receiptMessages.isEmpty) continue;
+          try {
+            await client.from('group_message_receipts').upsert([
+              for (final message in receiptMessages)
+                {
+                  'message_id': message.id,
+                  'user_id': userId,
+                  'delivered_at': _receiptFor(
+                    message.receipts,
+                    userId,
+                  )!.deliveredAt!.toUtc().toIso8601String(),
+                },
+            ], onConflict: 'message_id,user_id');
+            for (final message in receiptMessages) {
+              final seenAt = _receiptFor(message.receipts, userId)?.seenAt;
+              if (seenAt == null) continue;
+              await client
+                  .from('group_message_receipts')
+                  .update({'seen_at': seenAt.toUtc().toIso8601String()})
+                  .eq('message_id', message.id)
+                  .eq('user_id', userId);
+            }
+          } catch (_) {
+            _pendingSeenThreadIds.add(threadId);
+            failed = true;
+          }
+          continue;
+        }
         final senderId = dmPeerOf(threadId, userId);
         if (senderId == null) continue;
         final seenAt = _messages
@@ -1597,10 +1795,7 @@ class ChatStore extends ChangeNotifier {
               (latest, value) =>
                   latest == null || value.isAfter(latest) ? value : latest,
             );
-        if (seenAt == null) {
-          _pendingSeenThreadIds.remove(threadId);
-          continue;
-        }
+        if (seenAt == null) continue;
         try {
           final iso = seenAt.toUtc().toIso8601String();
           await client
@@ -1609,18 +1804,30 @@ class ChatStore extends ChangeNotifier {
               .eq('sender_id', senderId)
               .eq('receiver_id', userId)
               .isFilter('seen_at', null);
-          _pendingSeenThreadIds.remove(threadId);
         } catch (_) {
+          _pendingSeenThreadIds.add(threadId);
           failed = true;
         }
       }
       await _flushRemoteDeletes();
       scheduleSave();
-      if (removedLocalGroup) notifyListeners();
+      final pendingMessageCountAfter =
+          _pendingRemoteMessageIds.length +
+          _pendingRemoteGroupMessageIds.length;
+      if (removedLocalGroup ||
+          pendingMessageCountBefore != pendingMessageCountAfter) {
+        notifyListeners();
+      }
     } finally {
       _flushingRemote = false;
     }
-    if (failed) _scheduleSyncRetry();
+    final flushAgain = _flushRemoteAgain;
+    _flushRemoteAgain = false;
+    if (failed) {
+      _scheduleSyncRetry();
+    } else if (flushAgain || _pendingSeenThreadIds.isNotEmpty) {
+      unawaited(_flushRemoteChanges());
+    }
   }
 
   Future<void> _flushClubMessages() async {
@@ -1744,6 +1951,7 @@ class ChatStore extends ChangeNotifier {
     payload.remove('createdAt');
     payload.remove('deliveredAt');
     payload.remove('seenAt');
+    payload.remove('receipts');
     return payload;
   }
 
@@ -2348,6 +2556,18 @@ class ChatStore extends ChangeNotifier {
     return index == -1 ? null : _messages[index];
   }
 
+  MessageDeliveryStatus deliveryStatusFor(ChatMessage message) {
+    if (_pendingRemoteMessageIds.contains(message.id) ||
+        _pendingRemoteGroupMessageIds.contains(message.id)) {
+      return MessageDeliveryStatus.sent;
+    }
+    if (isGroupThread(message.threadId)) {
+      return message.groupStatusForMembers(groupParticipants(message.threadId));
+    }
+    // Preserve the existing direct-message delivered/seen calculation.
+    return message.status;
+  }
+
   /// Removes one message locally and queues the same deletion for Supabase.
   /// Ownership is checked here as well as by the database policy so an
   /// optimistic UI action cannot remove somebody else's message.
@@ -2604,6 +2824,25 @@ class ChatStore extends ChangeNotifier {
           continue;
         }
         _messages[i] = message.copyWith(seenAt: now);
+        markedSeen = true;
+      }
+      if (markedSeen) _pendingSeenThreadIds.add(threadId);
+    } else if (isGroupThread(threadId)) {
+      for (var i = 0; i < _messages.length; i++) {
+        final message = _messages[i];
+        if (message.threadId != threadId || message.senderId == userId) {
+          continue;
+        }
+        final receipt = _receiptFor(message.receipts, userId);
+        if (receipt?.seenAt != null) continue;
+        _messages[i] = message.copyWith(
+          receipts: _withLocalReceipt(
+            message.receipts,
+            userId: userId,
+            deliveredAt: receipt?.deliveredAt ?? now,
+            seenAt: now,
+          ),
+        );
         markedSeen = true;
       }
       if (markedSeen) _pendingSeenThreadIds.add(threadId);
