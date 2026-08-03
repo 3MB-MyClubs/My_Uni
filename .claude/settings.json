@@ -59,7 +59,11 @@
       "PowerShell(gh pr list --state open --json number,title,headRefName,baseRefName,mergeable)",
       "Bash(git merge *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api *)",
+      "WebFetch(domain:api.github.com)"
     ],
     "additionalDirectories": [
       "/tmp",
