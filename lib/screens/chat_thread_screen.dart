@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/user.dart';
@@ -24,6 +25,7 @@ import '../services/photo_orientation.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
+import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
@@ -34,6 +36,7 @@ import '../widgets/sent_message_entrance.dart';
 import 'club_community_screen.dart';
 import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
+import 'media_preview_screen.dart';
 import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
@@ -216,7 +219,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) return;
-    chatStore.markThreadRead(widget.threadId, _myId);
+    // A club room is read one lane at a time by the ClubCommunityScreen this
+    // route delegates to; marking the whole thread here would wipe both of the
+    // Board / Chat counts the moment the room opens.
+    if (!_isClub) chatStore.markThreadRead(widget.threadId, _myId);
     _dismissVisibleChatNotifications();
   }
 
@@ -372,7 +378,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
             const SizedBox(height: 6),
             for (final (attachment, icon, label) in [
-              (_ChatAttachment.photo, Icons.image_outlined, S.attachPhoto),
+              (
+                _ChatAttachment.photo,
+                Icons.photo_library_outlined,
+                S.attachMedia,
+              ),
               (
                 _ChatAttachment.camera,
                 Icons.photo_camera_outlined,
@@ -421,53 +431,92 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickAttachment(_ChatAttachment attachment) async {
-    final XFile? picked = switch (attachment) {
-      _ChatAttachment.photo => await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 2048,
-        maxHeight: 2048,
-        imageQuality: 88,
-      ),
-      _ChatAttachment.camera => await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        maxWidth: 2048,
-        maxHeight: 2048,
-        imageQuality: 88,
-      ),
-    };
-    if (picked == null) return;
+    late final List<XFile> picked;
+    try {
+      picked = switch (attachment) {
+        _ChatAttachment.photo => await ImagePicker().pickMultipleMedia(
+          maxWidth: 2048,
+          maxHeight: 2048,
+          imageQuality: 88,
+          limit: 30,
+        ),
+        _ChatAttachment.camera => [
+          ?await ImagePicker().pickImage(
+            source: ImageSource.camera,
+            maxWidth: 2048,
+            maxHeight: 2048,
+            imageQuality: 88,
+          ),
+        ],
+      };
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(S.mediaSelectionFailed)));
+      }
+      return;
+    }
+    if (picked.isEmpty) return;
     // Front-camera captures arrive with a mirrored EXIF orientation, which
     // would send a mirror image of whatever was photographed.
     if (attachment == _ChatAttachment.camera) {
-      await unmirrorPhotoFile(picked.path);
+      await unmirrorPhotoFile(picked.single.path);
     }
     if (!mounted) return;
-    _sendAttachment(picked, ChatMessageKind.photo);
+    final inspected = await inspectChatMediaFiles(picked);
+    if (!mounted) return;
+    if (inspected.rejectedCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.mediaSelectionRejected(inspected.rejectedCount)),
+        ),
+      );
+    }
+    if (inspected.items.isEmpty) return;
+
+    final result = await Navigator.of(context).push<MediaPreviewResult>(
+      ChatPageRoute(
+        builder: (_) => MediaPreviewScreen(
+          initialMedia: inspected.items,
+          initialCaption: _inputController.text.trim(),
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    _sendAttachments(result);
   }
 
-  void _sendAttachment(XFile file, ChatMessageKind kind) {
-    var size = 0;
-    try {
-      size = File(file.path).lengthSync();
-    } on FileSystemException {
-      size = 0;
+  void _sendAttachments(MediaPreviewResult result) {
+    final sentMessages = <ChatMessage>[];
+    for (final media in result.items) {
+      if (!File(media.file.path).existsSync()) continue;
+      final isFirst = sentMessages.isEmpty;
+      final sent = chatStore.sendMessage(
+        threadId: widget.threadId,
+        senderId: _myId,
+        content: isFirst ? result.caption : '',
+        kind: media.type == ChatMediaType.image
+            ? ChatMessageKind.photo
+            : ChatMessageKind.file,
+        attachmentPath: media.file.path,
+        attachmentName: media.file.name,
+        attachmentSize: media.sizeBytes,
+        replyToMessageId: isFirst ? _replyingTo?.id : null,
+      );
+      if (sent != null) sentMessages.add(sent);
     }
-    final sent = chatStore.sendMessage(
-      threadId: widget.threadId,
-      senderId: _myId,
-      content: _inputController.text.trim(),
-      kind: kind,
-      attachmentPath: file.path,
-      attachmentName: file.name,
-      attachmentSize: size,
-      replyToMessageId: _replyingTo?.id,
-    );
-    if (sent == null) return;
+    if (sentMessages.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(S.mediaSendFailed)));
+      return;
+    }
     _inputController.clear();
     if (mounted) {
       setState(() {
         _replyingTo = null;
-        _animatingSentMessageId = sent.id;
+        _animatingSentMessageId = sentMessages.last.id;
       });
     }
     _scrollToLatest();
@@ -1600,8 +1649,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     final hasText = m.content.trim().isNotEmpty;
     final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
-    final filePath = m.kind == ChatMessageKind.file ? m.attachmentPath : null;
-    final hasMedia = photoPath != null || filePath != null;
+    final attachedFilePath = m.kind == ChatMessageKind.file
+        ? m.attachmentPath
+        : null;
+    final videoPath =
+        attachedFilePath != null &&
+            isVideoMediaPath(m.attachmentName ?? attachedFilePath)
+        ? attachedFilePath
+        : null;
+    final filePath = videoPath == null ? attachedFilePath : null;
+    final hasMedia = photoPath != null || videoPath != null || filePath != null;
 
     final bubble = Container(
       constraints: BoxConstraints(
@@ -1650,6 +1707,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onDarkBackground: mine,
             ),
           if (photoPath != null) _photoAttachment(photoPath),
+          if (videoPath != null) _videoAttachment(videoPath),
           if (filePath != null) _fileAttachment(m, mine: mine),
           if (hasText)
             Padding(
@@ -1982,6 +2040,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     alignment: Alignment.center,
     color: AppColors.surfaceAlt,
     child: Icon(Icons.image_outlined, size: 26, color: AppColors.secondaryText),
+  );
+
+  Widget _videoAttachment(String path) => ClipRRect(
+    key: ValueKey('chat-video-$path'),
+    borderRadius: BorderRadius.circular(15),
+    child: SizedBox(
+      width: 220,
+      height: 220,
+      child: ChatVideoPlayer(path: path),
+    ),
   );
 
   Widget _fileAttachment(ChatMessage m, {required bool mine}) {

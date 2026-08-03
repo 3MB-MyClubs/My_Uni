@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/event.dart';
@@ -28,6 +29,7 @@ import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/club_board_lane.dart';
 import '../widgets/club_chat_theme.dart';
 import '../widgets/club_community_header.dart';
 import '../widgets/club_community_sheet.dart';
@@ -40,19 +42,32 @@ import '../widgets/sent_message_entrance.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
+import 'media_preview_screen.dart';
 import 'user_profile_screen.dart';
 
-/// The club community: one stream carrying chat, announcements, polls, events,
-/// and attachments, with Members / Events / Notices panels behind the header.
+/// The club room, in the two lanes of the Club Board + Chat handoff.
+///
+/// **Board** is the official notice area and the landing lane: one grouped list,
+/// one row per notice, and a composer only for members holding a role in the
+/// club. **Chat** is the room — every reply, poll, photo and mention lives here,
+/// and a notice appears as a card so the conversation around it still reads.
+///
+/// A notice is one object: the record published on the Board is the same message
+/// that shows as a card in Chat. Replies never sit under a notice — "Reply in
+/// chat" carries it across the lanes as a quote instead.
 class ClubCommunityScreen extends StatefulWidget {
   const ClubCommunityScreen({
     super.key,
     required this.threadId,
     this.embedded = false,
+    this.initialLane = ClubChatLane.board,
   });
 
   final String threadId;
   final bool embedded;
+
+  /// Board is where a club room lands; deep links can open Chat directly.
+  final ClubChatLane initialLane;
 
   @override
   State<ClubCommunityScreen> createState() => _ClubCommunityScreenState();
@@ -73,11 +88,17 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   bool _membersLoadFailed = false;
 
   /// Frozen on open so the "You left off here" divider does not vanish the
-  /// moment the thread is marked read.
+  /// moment the Chat lane is marked read.
   int _unreadAtOpen = 0;
   String? _unreadAnchorMessageId;
 
-  ClubSheetTab? _openSheet;
+  /// Notices that were new when the Board was opened — the row dots survive the
+  /// lane being marked read a frame later.
+  Set<String> _unreadNoticeIds = const {};
+
+  /// Which lane is showing. Board is the landing lane.
+  late ClubChatLane _lane = widget.initialLane;
+
   bool _showJumpButton = false;
   String? _animatingSentMessageId;
   ChatMessage? _replyingTo;
@@ -117,6 +138,12 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         club.boardMemberIds.contains(id) ||
         chatStore.managedCommunityThreadId(id) == widget.threadId;
   }
+
+  /// Only members holding a role in this club get the Board's composer.
+  bool get _canPostNotice => chatStore.canPostNotice(widget.threadId, _myId);
+
+  /// Every member of the club may talk in the Chat lane.
+  bool get _canWrite => chatStore.canWriteThread(widget.threadId, _myId);
 
   /// Backgrounds affect the club's shared community identity, so board
   /// members retain moderation tools without receiving this admin setting.
@@ -219,18 +246,49 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
   }
 
+  /// Snapshots what was new in each lane before either is marked read: the
+  /// Board's row dots and the Chat lane's "You left off here" divider both need
+  /// to survive the read receipt this same open writes.
   void _captureUnreadAnchor() {
-    final unread = chatStore.unreadCountFor(widget.threadId, _myId);
-    if (unread <= 0) return;
-    final messages = chatStore.messagesFor(widget.threadId, viewerId: _myId);
-    final incoming = messages
-        .where((message) => message.senderId != _myId)
-        .toList();
-    if (incoming.length < unread) return;
+    final unreadNotices = chatStore.unreadIdsInClubLane(
+      widget.threadId,
+      _myId,
+      ClubChatLane.board,
+    );
+    final unreadChat = chatStore.unreadIdsInClubLane(
+      widget.threadId,
+      _myId,
+      ClubChatLane.chat,
+    );
     setState(() {
-      _unreadAtOpen = unread;
-      _unreadAnchorMessageId = incoming[incoming.length - unread].id;
+      _unreadNoticeIds = unreadNotices.toSet();
+      _unreadAtOpen = unreadChat.length;
+      _unreadAnchorMessageId = unreadChat.isEmpty ? null : unreadChat.first;
     });
+  }
+
+  void _switchLane(ClubChatLane lane) {
+    if (_lane == lane) return;
+    // Whatever arrived in the other lane while it was hidden is still new to
+    // this reader, so it keeps its dot / divider on the way in.
+    final incoming = chatStore.unreadIdsInClubLane(
+      widget.threadId,
+      _myId,
+      lane,
+    );
+    setState(() {
+      _lane = lane;
+      if (lane == ClubChatLane.board) {
+        _unreadNoticeIds = {..._unreadNoticeIds, ...incoming};
+      } else if (incoming.isNotEmpty) {
+        _unreadAtOpen = incoming.length;
+        _unreadAnchorMessageId = incoming.first;
+      }
+    });
+    _markVisibleMessagesSeen();
+    if (lane == ClubChatLane.chat) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revealUnread());
+    }
   }
 
   /// Brings the "left off here" divider into view when it is close enough to
@@ -256,7 +314,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) return;
-    chatStore.markThreadRead(widget.threadId, _myId);
+    // One count per segment: reading the Board never clears what is waiting in
+    // Chat, and the other way round.
+    chatStore.markClubLaneRead(widget.threadId, _myId, _lane);
   }
 
   void _hydrateVisibleParticipants() {
@@ -449,20 +509,10 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   }
 
   // ── Events ──────────────────────────────────────────────────────────────────
-
-  List<Event> get _clubEvents {
-    final club = _club;
-    if (club == null) return const [];
-    final now = DateTime.now();
-    final list =
-        events
-            .where(
-              (event) => event.clubId == club.id && event.endTime.isAfter(now),
-            )
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    return list;
-  }
+  //
+  // Events left this surface with the Board + Chat design: the club's Events tab
+  // owns them and nothing here can post one. Event cards that a club shared
+  // before the change still render, so no history disappears from the room.
 
   Event? _eventById(String? id) {
     if (id == null) return null;
@@ -531,43 +581,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
-  Widget _buildFollowerActions(ClubChatTheme t) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-      decoration: BoxDecoration(
-        color: t.sheet,
-        border: Border(top: BorderSide(color: t.hair)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              S.clubChannelReadOnly,
-              style: TextStyle(
-                color: t.sub,
-                fontSize: 11.5,
-                height: 1.3,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            key: const ValueKey('message-club-privately'),
-            onPressed: _messageClubPrivately,
-            icon: const Icon(Icons.lock_outline_rounded, size: 16),
-            label: Text(S.messageClub),
-            style: FilledButton.styleFrom(
-              backgroundColor: _accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _scrollToLatest() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -582,46 +595,82 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   Future<void> _handleAttachment(ClubAttachment attachment) async {
     switch (attachment) {
       case ClubAttachment.photo:
-        final picked = await ImagePicker().pickImage(
-          source: ImageSource.gallery,
-          maxWidth: 2048,
-          maxHeight: 2048,
-          imageQuality: 88,
+        late final List<XFile> picked;
+        try {
+          picked = await ImagePicker().pickMultipleMedia(
+            maxWidth: 2048,
+            maxHeight: 2048,
+            imageQuality: 88,
+            limit: 30,
+          );
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(S.mediaSelectionFailed)));
+          }
+          return;
+        }
+        if (picked.isEmpty) return;
+        final inspected = await inspectChatMediaFiles(picked);
+        if (!mounted) return;
+        if (inspected.rejectedCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(S.mediaSelectionRejected(inspected.rejectedCount)),
+            ),
+          );
+        }
+        if (inspected.items.isEmpty) return;
+        final result = await Navigator.of(context).push<MediaPreviewResult>(
+          ChatPageRoute(
+            builder: (_) => MediaPreviewScreen(
+              initialMedia: inspected.items,
+              initialCaption: _inputController.text.trim(),
+            ),
+          ),
         );
-        if (picked == null) return;
-        _sendAttachment(picked, ChatMessageKind.photo);
+        if (!mounted || result == null) return;
+        _sendAttachments(result);
       case ClubAttachment.poll:
         await _composePoll();
-      case ClubAttachment.event:
-        await _shareEvent();
     }
   }
 
-  void _sendAttachment(XFile file, ChatMessageKind kind) {
-    var size = 0;
-    try {
-      size = File(file.path).lengthSync();
-    } on FileSystemException {
-      size = 0;
+  void _sendAttachments(MediaPreviewResult result) {
+    final sentMessages = <ChatMessage>[];
+    for (final media in result.items) {
+      if (!File(media.file.path).existsSync()) continue;
+      final isFirst = sentMessages.isEmpty;
+      final caption = isFirst ? result.caption : '';
+      final sent = chatStore.sendMessage(
+        threadId: widget.threadId,
+        senderId: _myId,
+        content: caption,
+        kind: media.type == ChatMediaType.image
+            ? ChatMessageKind.photo
+            : ChatMessageKind.file,
+        mentions: isFirst
+            ? ClubComposer.resolveMentions(caption, _members)
+            : const [],
+        attachmentPath: media.file.path,
+        attachmentName: media.file.name,
+        attachmentSize: media.sizeBytes,
+        replyToMessageId: isFirst ? _replyingTo?.id : null,
+      );
+      if (sent != null) sentMessages.add(sent);
     }
-    final draft = _inputController.text.trim();
-    final sent = chatStore.sendMessage(
-      threadId: widget.threadId,
-      senderId: _myId,
-      content: draft,
-      kind: kind,
-      mentions: ClubComposer.resolveMentions(draft, _members),
-      attachmentPath: file.path,
-      attachmentName: file.name,
-      attachmentSize: size,
-      replyToMessageId: _replyingTo?.id,
-    );
-    if (sent == null) return;
+    if (sentMessages.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(S.mediaSendFailed)));
+      return;
+    }
     _inputController.clear();
     if (mounted) {
       setState(() {
         _replyingTo = null;
-        _animatingSentMessageId = sent.id;
+        _animatingSentMessageId = sentMessages.last.id;
       });
     }
     _scrollToLatest();
@@ -899,84 +948,24 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       title: normalizedTitle,
       pinned: pinned,
     );
-    _scrollToLatest();
-  }
-
-  Future<void> _shareEvent() async {
-    final upcoming = _clubEvents;
-    final t = _t;
-    final selected = await showModalBottomSheet<Event>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: t.sheet,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: t.borderB,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  S.shareEvent,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: t.text,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (upcoming.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    child: Text(
-                      S.noUpcomingEvents,
-                      style: TextStyle(fontSize: 13, color: t.sub),
-                    ),
-                  ),
-                for (final event in upcoming.take(6))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _eventCard(
-                      event,
-                      compact: true,
-                      onOpen: () => Navigator.of(sheetContext).pop(event),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (selected == null) return;
-    chatStore.sendMessage(
-      threadId: widget.threadId,
-      senderId: _myId,
-      content: '',
-      kind: ChatMessageKind.event,
-      eventId: selected.id,
-    );
-    _scrollToLatest();
+    // One object: the notice is now both the newest row on the Board and a card
+    // in Chat. Land the author on the Board, where they published it.
+    if (mounted) setState(() => _lane = ClubChatLane.board);
   }
 
   // ── Message actions ─────────────────────────────────────────────────────────
+
+  /// "Reply in chat": switches lanes and carries the message into the composer
+  /// as a quote, so the Board never grows a comment thread of its own.
+  void _replyInChat(ChatMessage message) {
+    if (!_canWrite) return;
+    setState(() {
+      _replyingTo = message;
+      _lane = ClubChatLane.chat;
+    });
+    _markVisibleMessagesSeen();
+    _scrollToLatest();
+  }
 
   static const _quickReactions = ['👍', '❤️', '🎉', '👏', '😂', '🙌'];
 
@@ -1062,15 +1051,17 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               ],
             ),
             const SizedBox(height: 8),
-            if (chatStore.canWriteThread(widget.threadId, _myId))
+            if (_canWrite)
               _ActionRow(
                 key: ValueKey('club-reply-message-${message.id}'),
                 icon: Icons.reply_rounded,
-                label: S.reply,
+                label: message.kind == ChatMessageKind.announcement
+                    ? S.boardReplyInChat
+                    : S.reply,
                 t: t,
                 onTap: () {
                   Navigator.of(sheetContext).pop();
-                  setState(() => _replyingTo = message);
+                  _replyInChat(message);
                 },
               ),
             if (message.content.isNotEmpty)
@@ -1190,6 +1181,18 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               ),
             ),
             const SizedBox(height: 14),
+            // Members and About moved behind this menu with the Board + Chat
+            // design — the segments own navigation now.
+            _ActionRow(
+              key: const ValueKey('club-open-members'),
+              icon: Icons.people_outline_rounded,
+              label: S.communityMembersButton,
+              t: t,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _openMembersSheet();
+              },
+            ),
             _ActionRow(
               icon: Icons.groups_2_outlined,
               label: S.openClubProfile,
@@ -1199,14 +1202,25 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 _openClubProfile();
               },
             ),
-            if (_canModerate)
+            if (_canPostNotice)
               _ActionRow(
                 icon: Icons.campaign_outlined,
-                label: S.postAsAnnouncement,
+                label: S.boardPostNotice,
                 t: t,
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   unawaited(_composeAnnouncement());
+                },
+              ),
+            if (authService.isStudentSession && !_canPostNotice)
+              _ActionRow(
+                key: const ValueKey('message-club-privately'),
+                icon: Icons.lock_outline_rounded,
+                label: S.messageClub,
+                t: t,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_messageClubPrivately());
                 },
               ),
             if (_canChangeBackground)
@@ -1418,11 +1432,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
-  void _openSheetTab(ClubSheetTab tab) {
-    setState(() => _openSheet = tab);
-    if (tab == ClubSheetTab.members) {
-      unawaited(_loadMemberDirectory(force: _membersLoadFailed));
-    }
+  void _openMembersSheet() {
+    unawaited(_loadMemberDirectory(force: _membersLoadFailed));
     final t = _t;
     showModalBottomSheet<void>(
       context: context,
@@ -1433,22 +1444,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           chatStore,
           userState,
           appPresenceService,
-          rsvpStore,
           _memberDirectoryRevision,
         ]),
         builder: (sheetContext, _) => ClubCommunitySheet(
           t: t,
-          initialTab: tab,
-          builders: {
-            ClubSheetTab.members: (context) => _membersPanel(t),
-            ClubSheetTab.events: (context) => _eventsPanel(t),
-            ClubSheetTab.notices: (context) => _noticesPanel(t),
-          },
+          title: S.communityMembersButton,
+          builder: (context) => _membersPanel(t),
         ),
       ),
-    ).whenComplete(() {
-      if (mounted) setState(() => _openSheet = null);
-    });
+    );
   }
 
   Widget _membersPanel(ClubChatTheme t) {
@@ -1575,105 +1579,20 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
-  Widget _eventsPanel(ClubChatTheme t) {
-    final upcoming = _clubEvents;
-    if (upcoming.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 30),
-        child: Center(
-          child: Text(
-            S.noUpcomingEvents,
-            style: TextStyle(fontSize: 13, color: t.sub),
-          ),
-        ),
-      );
-    }
-    return Column(
-      children: [
-        const SizedBox(height: 10),
-        for (final event in upcoming)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _eventCard(event, compact: true),
-          ),
-      ],
-    );
-  }
-
-  Widget _noticesPanel(ClubChatTheme t) {
-    final notices = chatStore.announcementsIn(widget.threadId);
-    if (notices.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 30),
-        child: Center(
-          child: Text(
-            S.nothingHere,
-            style: TextStyle(fontSize: 13, color: t.sub),
-          ),
-        ),
-      );
-    }
-    return Column(
-      children: [
-        for (final notice in notices)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: t.hair)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: t.ltRed,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    notice.pinned
-                        ? Icons.push_pin_outlined
-                        : Icons.campaign_outlined,
-                    size: 15,
-                    color: t.red,
-                  ),
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        notice.title ?? notice.content,
-                        style: TextStyle(
-                          fontSize: 14,
-                          height: 1.3,
-                          fontWeight: FontWeight.w700,
-                          color: t.text,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${_personFor(notice.senderId).name} · '
-                        '${_dayLabel(notice.createdAt)} · '
-                        '${S.seenCount(chatStore.seenCountFor(notice))}',
-                        style: TextStyle(fontSize: 11.5, color: t.sub),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
   // ── Build ───────────────────────────────────────────────────────────────────
 
   Widget _clubComposerReplyPreview(ChatMessage message, ClubChatTheme t) {
+    // A quoted notice keeps its own treatment: "Reply in chat" is a lane jump,
+    // so the composer says which notice this message is answering.
+    if (message.kind == ChatMessageKind.announcement) {
+      return ClubNoticeQuoteBar(
+        title: (message.title ?? '').trim().isEmpty
+            ? message.content
+            : message.title!,
+        t: t,
+        onClear: () => setState(() => _replyingTo = null),
+      );
+    }
     final sender = _personFor(message.senderId).name;
     return Container(
       key: const ValueKey('club-reply-composer-preview'),
@@ -1745,40 +1664,38 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           if (club == null || (!canAccess && !canOfferStudentJoin)) {
             return SafeArea(bottom: false, child: _buildUnavailable(t));
           }
+          if (!canAccess) {
+            // Non-members get no Board and no Chat — only the invitation to
+            // join, which is what the club profile offers them too.
+            return SafeArea(
+              top: false,
+              bottom: false,
+              child: Column(
+                children: [
+                  _buildHeader(club, t),
+                  Expanded(child: _buildJoinPrompt(club, t)),
+                ],
+              ),
+            );
+          }
           return SafeArea(
             top: false,
             bottom: false,
             child: Column(
               children: [
                 _buildHeader(club, t),
-                _buildContextBar(t),
-                if (canAccess) ...[
-                  _buildPinnedStrip(t),
-                  Expanded(child: _buildStream(t)),
-                  if (_canModerate)
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_replyingTo case final replied?)
-                          _clubComposerReplyPreview(replied, t),
-                        ClubComposer(
-                          controller: _inputController,
-                          t: t,
-                          hintText: S.communityComposerHint,
-                          people: _members,
-                          avatarBuilder: _avatarFor,
-                          onSend: _send,
-                          onAttach: (attachment) =>
-                              unawaited(_handleAttachment(attachment)),
-                          onTypingChanged: () =>
-                              chatStore.setTyping(widget.threadId, _myId),
-                        ),
-                      ],
-                    )
-                  else
-                    _buildFollowerActions(t),
-                ] else
-                  Expanded(child: _buildJoinPrompt(club, t)),
+                ClubLaneSwitch(
+                  lane: _lane,
+                  onLane: _switchLane,
+                  boardUnread: _laneUnread(ClubChatLane.board),
+                  chatUnread: _laneUnread(ClubChatLane.chat),
+                  t: t,
+                ),
+                Expanded(
+                  child: _lane == ClubChatLane.board
+                      ? _buildBoardLane(t)
+                      : _buildChatLane(t),
+                ),
               ],
             ),
           );
@@ -1796,7 +1713,11 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       club: club,
       avatarColor: _accent,
       memberCount: memberCount,
-      onOpenClub: _openClubProfile,
+      activeCount: _members.where((person) => person.online).length,
+      viewerRoleTitle: studentClubRoleService.roleTitleFor(club, _myId),
+      // Inside the room the identity is not a link out: tapping it opens the
+      // Chat lane. The club profile lives behind the ••• menu.
+      onOpenClub: () => _switchLane(ClubChatLane.chat),
       t: t,
       topInset: widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top,
       muted: clubChatPrefs.isMuted(widget.threadId),
@@ -1809,29 +1730,158 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
-  Widget _buildContextBar(ClubChatTheme t) {
-    return ClubContextBar(
-      t: t,
-      onlinePeople: _members.where((person) => person.online).toList(),
-      avatarBuilder: _avatarFor,
-      eventCount: _clubEvents.length,
-      noticeCount: chatStore.announcementsIn(widget.threadId).length,
-      activeTab: _openSheet,
-      onOpen: _openSheetTab,
+  /// The count on a segment: what is waiting in the lane the reader is not
+  /// looking at. The lane on screen is being read, so it shows nothing.
+  int _laneUnread(ClubChatLane lane) {
+    if (_lane == lane) return 0;
+    return chatStore.unreadInClubLane(widget.threadId, _myId, lane);
+  }
+
+  // ── Board lane ──────────────────────────────────────────────────────────────
+
+  /// One grouped list of notices — pinned ("Always here"), then new, then
+  /// earlier — with the composer or the route into Chat underneath.
+  Widget _buildBoardLane(ClubChatTheme t) {
+    final notices = chatStore.noticesIn(widget.threadId);
+    final pinned = notices.where((notice) => notice.pinned).toList();
+    final rest = notices.where((notice) => !notice.pinned).toList();
+    final fresh = rest
+        .where((notice) => _unreadNoticeIds.contains(notice.id))
+        .toList();
+    final earlier = rest
+        .where((notice) => !_unreadNoticeIds.contains(notice.id))
+        .toList();
+
+    return Column(
+      children: [
+        Expanded(
+          child: notices.isEmpty
+              ? ClubBoardEmpty(t: t, canPost: _canPostNotice)
+              : ListView(
+                  key: const ValueKey('club-board-list'),
+                  padding: const EdgeInsets.fromLTRB(14, 2, 14, 16),
+                  children: [
+                    if (pinned.isNotEmpty) ...[
+                      ClubBoardLabel(label: S.boardGroupPinned, t: t),
+                      _noticeGroup(pinned, t),
+                    ],
+                    if (fresh.isNotEmpty) ...[
+                      ClubBoardLabel(
+                        label: S.boardGroupNew(fresh.length),
+                        t: t,
+                        top: pinned.isNotEmpty,
+                      ),
+                      _noticeGroup(fresh, t),
+                    ],
+                    if (earlier.isNotEmpty) ...[
+                      ClubBoardLabel(
+                        label: S.boardGroupEarlier,
+                        t: t,
+                        top: pinned.isNotEmpty || fresh.isNotEmpty,
+                      ),
+                      _noticeGroup(earlier, t),
+                    ],
+                  ],
+                ),
+        ),
+        if (_canPostNotice)
+          ClubBoardPostBar(
+            t: t,
+            onPost: () => unawaited(_composeAnnouncement()),
+          )
+        else
+          // No disabled button for a member without a role — the strip states
+          // the rule and doubles as the doorway into Chat.
+          ClubBoardLockedStrip(
+            t: t,
+            onGoToChat: () => _switchLane(ClubChatLane.chat),
+          ),
+      ],
     );
   }
 
-  Widget _buildPinnedStrip(ClubChatTheme t) {
-    final pinned = chatStore.pinnedMessageIn(widget.threadId);
-    if (pinned == null || clubChatPrefs.isPinDismissed(pinned.id)) {
-      return const SizedBox.shrink();
-    }
-    final headline = pinned.title ?? pinned.content;
-    return ClubPinnedStrip(
-      text: headline,
+  Widget _noticeGroup(List<ChatMessage> notices, ClubChatTheme t) {
+    return ClubNoticeGroup(
       t: t,
-      onOpen: () => _openSheetTab(ClubSheetTab.notices),
-      onDismiss: () => clubChatPrefs.dismissPin(pinned.id),
+      rows: [
+        for (var i = 0; i < notices.length; i++)
+          _noticeRow(notices[i], t, last: i == notices.length - 1),
+      ],
+    );
+  }
+
+  Widget _noticeRow(ChatMessage notice, ClubChatTheme t, {required bool last}) {
+    final author = _personFor(notice.senderId);
+    return ClubNoticeRow(
+      key: ValueKey('club-notice-row-${notice.id}'),
+      message: notice,
+      author: author,
+      avatar: _avatarFor(author, 22),
+      whenLabel:
+          '${_dayLabel(notice.createdAt)} · '
+          '${_timeLabel(notice.createdAt)}',
+      unread: _unreadNoticeIds.contains(notice.id),
+      replyCount: chatStore.replyCountFor(notice.id),
+      replyEnabled: _canWrite,
+      showRoles: clubChatPrefs.showRoles,
+      last: last,
+      t: t,
+      onReplyInChat: () => _replyInChat(notice),
+      onLongPress: () => _showMessageActions(notice),
+      onOpenAuthor: () => _openParticipantProfile(author),
+      attachments: [
+        if (notice.kind == ChatMessageKind.announcement &&
+            notice.attachmentPath != null)
+          notice.attachmentName != null &&
+                  _looksLikeImage(notice.attachmentName!)
+              ? ClubPhotoAttachment(path: notice.attachmentPath!, t: t)
+              : ClubFileChip(
+                  message: notice,
+                  t: t,
+                  onOpen: () => _showMessageActions(notice),
+                ),
+      ],
+      reactions: notice.reactions.isEmpty ? null : _reactionsFor(notice, t),
+    );
+  }
+
+  static bool _looksLikeImage(String name) {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.gif') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.heic');
+  }
+
+  // ── Chat lane ───────────────────────────────────────────────────────────────
+
+  Widget _buildChatLane(ClubChatTheme t) {
+    return Column(
+      children: [
+        Expanded(child: _buildStream(t)),
+        if (_canWrite)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_replyingTo case final replied?)
+                _clubComposerReplyPreview(replied, t),
+              ClubComposer(
+                controller: _inputController,
+                t: t,
+                hintText: S.communityComposerHint,
+                people: _members,
+                avatarBuilder: _avatarFor,
+                onSend: _send,
+                onAttach: (attachment) =>
+                    unawaited(_handleAttachment(attachment)),
+                onTypingChanged: () =>
+                    chatStore.setTyping(widget.threadId, _myId),
+              ),
+            ],
+          ),
+      ],
     );
   }
 
@@ -2047,8 +2097,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               t: t,
               emphasis: clubChatPrefs.announcementEmphasis,
               showRoles: showRoles,
-              seenCount: chatStore.seenCountFor(message),
               timeLabel: _timeLabel(message.createdAt),
+              replyCount: chatStore.replyCountFor(message.id),
+              onReplyInChat: _canWrite ? () => _replyInChat(message) : null,
               onLongPress: () => _showMessageActions(message),
               onOpenAuthor: () => _openParticipantProfile(author),
               reactions: message.reactions.isEmpty
@@ -2170,7 +2221,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               message.attachmentPath != null)
             ClubPhotoAttachment(path: message.attachmentPath!, t: t),
           if (message.kind == ChatMessageKind.file &&
-              message.attachmentPath != null)
+              message.attachmentPath != null &&
+              isVideoMediaPath(
+                message.attachmentName ?? message.attachmentPath!,
+              ))
+            ClubVideoAttachment(path: message.attachmentPath!, t: t),
+          if (message.kind == ChatMessageKind.file &&
+              message.attachmentPath != null &&
+              !isVideoMediaPath(
+                message.attachmentName ?? message.attachmentPath!,
+              ))
             ClubFileChip(
               message: message,
               t: t,

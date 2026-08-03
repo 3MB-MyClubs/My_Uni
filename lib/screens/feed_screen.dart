@@ -48,6 +48,7 @@ import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
 import '../widgets/post_share_sheet.dart';
 import '../widgets/app_pressable.dart';
+import '../widgets/app_motion.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/supabase_post_service.dart';
 import '../services/notification_inbox_service.dart';
@@ -518,7 +519,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const _EmptyFeedArt(),
+                          const GentleFloat(child: _EmptyFeedArt()),
                           const SizedBox(height: 18),
                           Text(
                             AppLocalizations.of(context)!.nothingHere,
@@ -671,7 +672,8 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       SliverList(
         delegate: SliverChildBuilderDelegate(
-          (context, i) => const _FeedPostSkeleton(),
+          (context, i) =>
+              StaggeredEntrance(index: i, child: const _FeedPostSkeleton()),
           childCount: 4,
         ),
       ),
@@ -1095,20 +1097,27 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildFeedCard(_FeedItem item, int rank) {
+    final Widget card;
     if (item.isEvent) {
-      return _EventCard(
+      card = _EventCard(
         key: ValueKey(item.id),
         event: item.data as Event,
         score: item.score,
         rank: rank,
         onUpdate: () => setState(() {}),
       );
+    } else {
+      card = _PostCard(
+        key: ValueKey(item.id),
+        post: item.data as NewsPost,
+        score: item.score,
+        rank: rank,
+      );
     }
-    return _PostCard(
-      key: ValueKey(item.id),
-      post: item.data as NewsPost,
-      score: item.score,
-      rank: rank,
+    return StaggeredEntrance(
+      key: ValueKey('feed-card-entrance-${item.id}'),
+      index: rank,
+      child: card,
     );
   }
 }
@@ -1187,7 +1196,7 @@ class _EmptyFeedArt extends StatelessWidget {
 
 /// Squared glass icon button used in the ClubUp top bar (theme toggle, bell).
 /// [badgeCount] > 0 shows a maroon unread-count pill on the top-right corner.
-class _TopBarIconButton extends StatelessWidget {
+class _TopBarIconButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   final int badgeCount;
@@ -1202,16 +1211,74 @@ class _TopBarIconButton extends StatelessWidget {
   });
 
   @override
+  State<_TopBarIconButton> createState() => _TopBarIconButtonState();
+}
+
+class _TopBarIconButtonState extends State<_TopBarIconButton>
+    with SingleTickerProviderStateMixin {
+  bool _isHandlingTap = false;
+
+  late final AnimationController _bellController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+
+  late final Animation<double> _bellTurns = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 0, end: -0.075), weight: 18),
+    TweenSequenceItem(tween: Tween(begin: -0.075, end: 0.065), weight: 24),
+    TweenSequenceItem(tween: Tween(begin: 0.065, end: -0.04), weight: 22),
+    TweenSequenceItem(tween: Tween(begin: -0.04, end: 0.022), weight: 20),
+    TweenSequenceItem(tween: Tween(begin: 0.022, end: 0), weight: 16),
+  ]).animate(CurvedAnimation(parent: _bellController, curve: Curves.easeOut));
+
+  @override
+  void didUpdateWidget(covariant _TopBarIconButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.badgeCount <= oldWidget.badgeCount) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || MediaQuery.disableAnimationsOf(context)) return;
+      _bellController.forward(from: 0);
+    });
+  }
+
+  Future<void> _handleTap() async {
+    if (_isHandlingTap) return;
+    _isHandlingTap = true;
+    HapticFeedback.selectionClick();
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      widget.onTap();
+      _isHandlingTap = false;
+      return;
+    }
+
+    _bellController.forward(from: 0);
+    // Let the first swing register before the destination starts sliding in.
+    await Future<void>.delayed(const Duration(milliseconds: 140));
+    if (mounted) {
+      widget.onTap();
+      _isHandlingTap = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _bellController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       button: true,
-      label: semanticLabel,
-      value: badgeCount > 0 ? '$badgeCount' : null,
+      label: widget.semanticLabel,
+      value: widget.badgeCount > 0 ? '${widget.badgeCount}' : null,
       child: Tooltip(
-        message: semanticLabel,
+        message: widget.semanticLabel,
         child: AppPressable(
           behavior: HitTestBehavior.opaque,
-          onTap: onTap,
+          onTap: _handleTap,
           child: Container(
             width: 38,
             height: 38,
@@ -1223,30 +1290,50 @@ class _TopBarIconButton extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Center(child: Icon(icon, size: 18, color: AppColors.text)),
-                if (badgeCount > 0)
+                Center(
+                  child: AnimatedBuilder(
+                    animation: _bellTurns,
+                    child: Icon(widget.icon, size: 18, color: AppColors.text),
+                    builder: (context, child) => Transform.rotate(
+                      key: const ValueKey('top-bar-icon-motion'),
+                      angle: _bellTurns.value * math.pi * 2,
+                      child: child,
+                    ),
+                  ),
+                ),
+                if (widget.badgeCount > 0)
                   Positioned(
                     top: -5,
                     right: -5,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed,
-                        borderRadius: BorderRadius.all(Radius.circular(100)),
-                        border: Border.all(color: AppColors.card, width: 1.5),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        badgeCount > 9 ? '9+' : '$badgeCount',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1,
+                    child: TweenAnimationBuilder<double>(
+                      key: ValueKey('top-bar-badge-${widget.badgeCount}'),
+                      tween: Tween(begin: 0.55, end: 1),
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 320),
+                      curve: Curves.elasticOut,
+                      builder: (context, scale, child) =>
+                          Transform.scale(scale: scale, child: child),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryRed,
+                          borderRadius: BorderRadius.all(Radius.circular(100)),
+                          border: Border.all(color: AppColors.card, width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          widget.badgeCount > 9 ? '9+' : '${widget.badgeCount}',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1,
+                          ),
                         ),
                       ),
                     ),
@@ -1432,6 +1519,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
   ];
 
   final Set<String> _dismissedIds = {};
+  final Set<String> _followPulseIds = {};
   final Set<String> _followingTransitionIds = {};
   bool _isClosing = false;
 
@@ -1457,6 +1545,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
         .where(
           (user) =>
               (!userState.isFollowingUser(user.id) ||
+                  _followPulseIds.contains(user.id) ||
                   _followingTransitionIds.contains(user.id)) &&
               !_dismissedIds.contains(user.id),
         )
@@ -1510,6 +1599,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                 final isFollowingTransition = _followingTransitionIds.contains(
                   u.id,
                 );
+                final isFollowPulsing = _followPulseIds.contains(u.id);
 
                 final mutualIds = peopleService.mutualFollowerIdsFor(u.id);
                 final mutualCount = mutualIds.length;
@@ -1570,15 +1660,19 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          UserAvatar(
-                                            userId: u.id,
-                                            name: u.name,
-                                            size: 72,
-                                            fontSize: 27,
-                                            backgroundColor: color.withValues(
-                                              alpha: 0.15,
+                                          FollowAvatarPulse(
+                                            active: isFollowPulsing,
+                                            color: AppColors.primaryRed,
+                                            child: UserAvatar(
+                                              userId: u.id,
+                                              name: u.name,
+                                              size: 72,
+                                              fontSize: 27,
+                                              backgroundColor: color.withValues(
+                                                alpha: 0.15,
+                                              ),
+                                              textColor: color,
                                             ),
-                                            textColor: color,
                                           ),
                                           if (mutualCount > 0) ...[
                                             const SizedBox(height: 6),
@@ -1636,8 +1730,7 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       );
                                       if (follow) {
                                         setState(
-                                          () =>
-                                              _followingTransitionIds.add(u.id),
+                                          () => _followPulseIds.add(u.id),
                                         );
                                       }
                                       userState.setFollowingUser(u.id, follow);
@@ -1645,7 +1738,16 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                       try {
                                         if (follow) {
                                           await Future<void>.delayed(
-                                            const Duration(milliseconds: 260),
+                                            const Duration(milliseconds: 240),
+                                          );
+                                          if (mounted) {
+                                            setState(() {
+                                              _followPulseIds.remove(u.id);
+                                              _followingTransitionIds.add(u.id);
+                                            });
+                                          }
+                                          await Future<void>.delayed(
+                                            const Duration(milliseconds: 220),
                                           );
                                           if (mounted) {
                                             if (_hasAnotherSuggestion(u.id)) {
@@ -1674,10 +1776,12 @@ class _PeopleSuggestionCardState extends State<_PeopleSuggestionCard> {
                                         );
                                         userPrefsService.save(myId);
                                         if (mounted) {
-                                          setState(
-                                            () => _followingTransitionIds
-                                                .remove(u.id),
-                                          );
+                                          setState(() {
+                                            _followPulseIds.remove(u.id);
+                                            _followingTransitionIds.remove(
+                                              u.id,
+                                            );
+                                          });
                                           widget.onFollowed();
                                         }
                                       }
@@ -2700,6 +2804,7 @@ class _PostCard extends StatefulWidget {
 class _PostCardState extends State<_PostCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _heartController;
+  late Animation<double> _likeButtonScale;
   bool _showHeart = false;
 
   @override
@@ -2711,10 +2816,17 @@ class _PostCardState extends State<_PostCard>
           duration: const Duration(milliseconds: 700),
         )..addStatusListener((s) {
           if (s == AnimationStatus.completed) {
-            setState(() => _showHeart = false);
+            if (mounted && _showHeart) setState(() => _showHeart = false);
             _heartController.reset();
           }
         });
+    _likeButtonScale = TweenSequence<double>(
+      [
+        TweenSequenceItem(tween: Tween(begin: 1, end: 1.28), weight: 34),
+        TweenSequenceItem(tween: Tween(begin: 1.28, end: 0.92), weight: 28),
+        TweenSequenceItem(tween: Tween(begin: 0.92, end: 1), weight: 38),
+      ],
+    ).animate(CurvedAnimation(parent: _heartController, curve: Curves.easeOut));
     // Recording a view notifies the engagement bars that are already mounted.
     // Defer that notification until this sliver's first frame is complete;
     // notifying synchronously while sibling cards are still mounting causes
@@ -2736,13 +2848,23 @@ class _PostCardState extends State<_PostCard>
   void _doubleTapLike() {
     if (!authService.isStudentSession) return;
     ensurePostLiked(widget.post.id);
+    HapticFeedback.mediumImpact();
     setState(() => _showHeart = true);
-    _heartController.forward();
+    _heartController.forward(from: 0);
   }
 
   void _toggleLike() {
     if (!authService.isStudentSession) return;
+    final becomingLiked = !userState.isLiked(widget.post.id);
     togglePostLike(widget.post.id);
+    if (becomingLiked) {
+      HapticFeedback.lightImpact();
+    } else {
+      HapticFeedback.selectionClick();
+    }
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _heartController.forward(from: 0);
+    }
     setState(() {});
   }
 
@@ -3207,10 +3329,11 @@ class _PostCardState extends State<_PostCard>
                     icon: isLiked
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
-                    count: null,
+                    count: likeCount > 0 ? likeCount : null,
                     color: isLiked
                         ? AppColors.primaryRed
                         : AppColors.secondaryText,
+                    iconScale: _likeButtonScale,
                     onTap: _toggleLike,
                   ),
                   const SizedBox(width: 18),
@@ -3225,7 +3348,7 @@ class _PostCardState extends State<_PostCard>
                     return _twAction(
                       key: ValueKey('home-feed-comment-${widget.post.id}'),
                       icon: Icons.mode_comment_outlined,
-                      count: count > 0 ? '$count' : null,
+                      count: count > 0 ? count : null,
                       color: AppColors.secondaryText,
                       onTap: _openComments,
                     );
@@ -3269,10 +3392,32 @@ class _PostCardState extends State<_PostCard>
   Widget _twAction({
     Key? key,
     required IconData icon,
-    String? count,
+    int? count,
     required Color color,
     required VoidCallback onTap,
+    Animation<double>? iconScale,
   }) {
+    Widget iconWidget = AnimatedSwitcher(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.72, end: 1).animate(animation),
+          child: child,
+        ),
+      ),
+      child: Icon(icon, key: ValueKey(icon), size: 19, color: color),
+    );
+    if (iconScale != null) {
+      iconWidget = ScaleTransition(
+        key: const ValueKey('home-feed-like-heart-motion'),
+        scale: iconScale,
+        child: iconWidget,
+      );
+    }
+
     return InkWell(
       key: key,
       onTap: onTap,
@@ -3282,18 +3427,15 @@ class _PostCardState extends State<_PostCard>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 19, color: color),
-            if (count != null) ...[
-              const SizedBox(width: 6),
-              Text(
-                count,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                ),
+            iconWidget,
+            RollingCount(
+              value: count,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: color,
+                fontWeight: FontWeight.w500,
               ),
-            ],
+            ),
           ],
         ),
       ),

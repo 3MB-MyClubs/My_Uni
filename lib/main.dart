@@ -17,6 +17,7 @@ import 'screens/signup_flow_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/theme_choice_screen.dart';
+import 'screens/language_choice_screen.dart';
 import 'screens/onboarding_carousel_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
@@ -36,6 +37,7 @@ import 'services/poll_store.dart';
 import 'services/push_notification_service.dart';
 import 'services/theme_service.dart';
 import 'services/locale_service.dart';
+import 'services/account_preferences_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'onboarding/onboarding_service.dart';
@@ -105,7 +107,14 @@ void main() async {
 
   // Supabase restores its token pair from device storage. Reconstruct the
   // matching app user/admin before the root router chooses its destination.
-  await authService.restorePersistedSession();
+  final restoredSession = await authService.restorePersistedSession();
+  if (restoredSession) {
+    await _loadAccountPreferences();
+    if (accountPreferencesService.hasAuthenticatedUser &&
+        !accountPreferencesService.hasThemePreference) {
+      await themeService.setDark(false, persistToAccount: false);
+    }
+  }
 
   runApp(
     const ProviderScope(
@@ -162,6 +171,26 @@ void main() async {
   });
 }
 
+Future<void> _loadAccountPreferences() async {
+  final appUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
+  if (appUserId == null) return;
+
+  try {
+    final preferences = await accountPreferencesService.loadForCurrentUser();
+    final languageCode = preferences.languageCode;
+    if (languageCode != null) {
+      await localeService.applyAccountLanguage(appUserId, languageCode);
+    }
+    final isDark = preferences.isDark;
+    if (isDark != null) {
+      await themeService.applyAccountTheme(appUserId, isDark);
+    }
+  } catch (_) {
+    // A valid authenticated session remains usable if preferences cannot be
+    // reached. Missing choices fall back to the one-time picker flow.
+  }
+}
+
 class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
@@ -179,6 +208,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Timer? _launchTimer;
   bool _showSignUp = false;
   bool _loggedIn = false;
+  bool _isPreparingAccountPreferences = false;
   String _signupEmail = '';
 
   // Snapshotted at app construction so persisting the seen flag cannot remove
@@ -256,15 +286,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     unawaited(onboardingIntroService.markCompletedOnDevice());
     final currentUserId =
         authService.currentUser?.id ?? authService.currentAdmin?.id;
-    // First-time accounts are always presented in light and asked to pick a
-    // theme (handled in build); force light before the picker appears.
-    if (currentUserId != null && !themeService.hasChosenTheme(currentUserId)) {
-      themeService.setDark(false);
-    }
     setState(() {
       _loggedIn = true;
       _showSignUp = false;
+      _isPreparingAccountPreferences = currentUserId != null;
     });
+    unawaited(_finishLogin(currentUserId));
+  }
+
+  Future<void> _finishLogin(String? currentUserId) async {
+    if (currentUserId != null) {
+      await _loadAccountPreferences();
+      final hasSavedTheme = accountPreferencesService.hasAuthenticatedUser
+          ? accountPreferencesService.hasThemePreference
+          : themeService.hasChosenTheme(currentUserId);
+      // First-time accounts start in light before the mode picker appears.
+      if (!hasSavedTheme) {
+        await themeService.setDark(false, persistToAccount: false);
+      }
+    }
+    if (!mounted) return;
+    setState(() => _isPreparingAccountPreferences = false);
     _activateAuthenticatedServices();
   }
 
@@ -458,7 +500,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([themeService, localeService]),
+      listenable: Listenable.merge([
+        themeService,
+        localeService,
+        accountPreferencesService,
+      ]),
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
@@ -481,6 +527,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             onLogIn: () => unawaited(_dismissIntro(showSignUp: false)),
           );
           destinationKey = 'onboarding';
+        } else if (_isPreparingAccountPreferences) {
+          homeWidget = const AppLaunchScreen();
+          destinationKey = 'account-preferences-loading';
         } else if (_loggedIn ||
             authService.currentUser != null ||
             authService.currentAdmin != null) {
@@ -492,13 +541,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
           }
-          if (currentUserId != null &&
-              !themeService.hasChosenTheme(currentUserId)) {
+          final hasThemePreference =
+              accountPreferencesService.hasAuthenticatedUser
+              ? accountPreferencesService.hasThemePreference
+              : currentUserId != null &&
+                    themeService.hasChosenTheme(currentUserId);
+          final hasLanguagePreference =
+              accountPreferencesService.hasAuthenticatedUser
+              ? accountPreferencesService.hasLanguagePreference
+              : currentUserId != null &&
+                    localeService.hasChosenLanguage(currentUserId);
+          if (currentUserId != null && !hasThemePreference) {
             homeWidget = ThemeChoiceScreen(
               onChoose: (dark) =>
                   themeService.markThemeChosen(currentUserId, dark),
             );
             destinationKey = 'theme-choice';
+          } else if (currentUserId != null && !hasLanguagePreference) {
+            homeWidget = LanguageChoiceScreen(
+              onChoose: (code) =>
+                  localeService.markLanguageChosen(currentUserId, code),
+            );
+            destinationKey = 'language-choice';
           } else {
             homeWidget = MainNavScreen(
               isAdmin: isAdmin,
@@ -506,6 +570,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 _savePrefs();
                 unawaited(appPresenceService.stop());
                 moderationService.clearActiveUser();
+                accountPreferencesService.clear();
                 _prefsLoadedForUserId = null;
                 setState(() {
                   _loggedIn = false;

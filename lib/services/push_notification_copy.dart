@@ -22,6 +22,14 @@ PushNotificationCopy localizedPushNotificationCopy({
   final club = value('clubName', isTurkish ? 'Bir kulüp' : 'A club');
   final group = value('groupName', isTurkish ? 'Grup sohbeti' : 'Group chat');
   final content = value('content', '');
+  final messageKind = value('messageKind', '');
+  final messagePreview = switch (messageKind) {
+    'photo' => isTurkish ? 'Fotoğraf' : 'Photo',
+    'video' => 'Video',
+    'file' => isTurkish ? 'Dosya' : 'File',
+    'post_share' => isTurkish ? 'Bir gönderi paylaştı' : 'Shared a post',
+    _ => content.isEmpty ? (isTurkish ? 'Mesaj' : 'Message') : content,
+  };
   final rawMessageCount = args['messageCount'];
   final parsedMessageCount = rawMessageCount is num
       ? rawMessageCount.toInt()
@@ -31,7 +39,7 @@ PushNotificationCopy localizedPushNotificationCopy({
       : parsedMessageCount;
   final messageBody = messageCount > 1
       ? (isTurkish ? '$messageCount yeni mesaj' : '$messageCount new messages')
-      : '$actor: $content';
+      : '$actor: $messagePreview';
   final eventTitle = value(
     'eventTitle',
     isTurkish ? 'etkinliğin' : 'your event',
@@ -48,7 +56,7 @@ PushNotificationCopy localizedPushNotificationCopy({
       'group_message' => PushNotificationCopy(title: group, body: messageBody),
       'club_channel_message' => PushNotificationCopy(
         title: club,
-        body: messageCount > 1 ? messageBody : '$club: $content',
+        body: messageCount > 1 ? messageBody : '$club: $messagePreview',
       ),
       'club_inbox_message' => PushNotificationCopy(
         title: actor,
@@ -93,7 +101,7 @@ PushNotificationCopy localizedPushNotificationCopy({
     'group_message' => PushNotificationCopy(title: group, body: messageBody),
     'club_channel_message' => PushNotificationCopy(
       title: club,
-      body: messageCount > 1 ? messageBody : '$club: $content',
+      body: messageCount > 1 ? messageBody : '$club: $messagePreview',
     ),
     'club_inbox_message' => PushNotificationCopy(
       title: actor,

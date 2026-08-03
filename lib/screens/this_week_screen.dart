@@ -17,6 +17,7 @@ import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../widgets/event_cover_image.dart';
+import '../widgets/app_motion.dart';
 import 'event_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1759,21 +1760,23 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.all(Radius.circular(16)),
-              ),
-              child: Icon(
-                trulyEmpty
-                    ? Icons.event_available_rounded
-                    : (searching
-                          ? Icons.search_off_rounded
-                          : Icons.event_busy_rounded),
-                size: 26,
-                color: AppColors.primaryRed,
+            GentleFloat(
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+                child: Icon(
+                  trulyEmpty
+                      ? Icons.event_available_rounded
+                      : (searching
+                            ? Icons.search_off_rounded
+                            : Icons.event_busy_rounded),
+                  size: 26,
+                  color: AppColors.primaryRed,
+                ),
               ),
             ),
             const SizedBox(height: 14),

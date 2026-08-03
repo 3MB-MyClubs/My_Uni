@@ -176,7 +176,36 @@ void main() {
 
     await tester.tap(find.text(l10n.markAllRead));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
+
+    // Unread treatment clears from newest to oldest instead of vanishing as
+    // one abrupt state change.
+    expect(
+      tester
+          .widget<AnimatedScale>(
+            find.byKey(const ValueKey('notification-unread-dot-n-like')),
+          )
+          .scale,
+      0,
+    );
+    expect(
+      tester
+          .widget<AnimatedScale>(
+            find.byKey(const ValueKey('notification-unread-dot-n-follow')),
+          )
+          .scale,
+      1,
+    );
+
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      tester
+          .widget<AnimatedScale>(
+            find.byKey(const ValueKey('notification-unread-dot-n-follow')),
+          )
+          .scale,
+      0,
+    );
+    await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text(l10n.markAllRead), findsNothing);
     expect(find.text(l10n.notifGroupNew), findsNothing);
@@ -550,7 +579,9 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 180));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump();
 
+    expect(find.byKey(const ValueKey('pull-refresh-success')), findsOneWidget);
     final toastOpacity = tester.widget<AnimatedOpacity>(
       find
           .ancestor(
@@ -583,7 +614,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the Home bell opens the notification center with a badge', (
+  testWidgets('the Home bell reacts to new alerts and opens with a badge', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -601,8 +632,41 @@ void main() {
     expect(bell, findsOneWidget);
     expect(find.text('2'), findsOneWidget);
 
+    userState.addNotification(
+      AppNotification(
+        id: 'n-new-reaction',
+        userId: myId,
+        message: 'A new notification arrived',
+        createdAt: DateTime.now(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    expect(find.text('3'), findsOneWidget);
+    expect(
+      tester
+          .widget<Transform>(find.byKey(const ValueKey('top-bar-icon-motion')))
+          .transform
+          .storage[1]
+          .abs(),
+      greaterThan(0.01),
+    );
+    expect(find.byKey(const ValueKey('top-bar-badge-3')), findsOneWidget);
+
+    // Pressing while the automatic jiggle is active should still open alerts.
     await tester.tap(bell);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    final bellMotion = tester.widget<Transform>(
+      find.byKey(const ValueKey('top-bar-icon-motion')),
+    );
+    expect(bellMotion.transform.storage[1].abs(), greaterThan(0.01));
+    expect(find.byType(NotificationsScreen), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 450));
 
     expect(find.byType(NotificationsScreen), findsOneWidget);

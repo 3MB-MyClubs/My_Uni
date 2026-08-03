@@ -10,6 +10,8 @@ import '../services/event_access.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../widgets/rsvp_button.dart';
+import '../widgets/app_motion.dart';
+import '../widgets/app_pressable.dart';
 import '../services/club_follow_helper.dart';
 import '../services/personalization_service.dart';
 import '../services/recommendation_service.dart';
@@ -817,9 +819,12 @@ class _EventActionsState extends State<_EventActions> {
           label: _reminded
               ? AppLocalizations.of(context)!.remindedLabel
               : AppLocalizations.of(context)!.remindMeLabel,
-          icon: _reminded
-              ? Icons.notifications_active_rounded
-              : Icons.notifications_outlined,
+          iconWidget: AnimatedReminderBell(
+            active: _reminded,
+            color: _reminded ? Colors.white : widget.color,
+            inactiveColor: widget.color,
+            size: 13,
+          ),
           color: widget.color,
           filled: _reminded,
           onTap: _toggleRemind,
@@ -977,23 +982,26 @@ class _PersonActionsState extends State<_PersonActions> {
 
 class _ActionChip extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? iconWidget;
   final Color color;
   final bool filled;
   final VoidCallback onTap;
 
   const _ActionChip({
     required this.label,
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.color,
     required this.filled,
     required this.onTap,
-  });
+  }) : assert(icon != null || iconWidget != null);
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
+      pressedScale: 0.96,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -1007,7 +1015,8 @@ class _ActionChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: filled ? Colors.white : color),
+            iconWidget ??
+                Icon(icon, size: 13, color: filled ? Colors.white : color),
             const SizedBox(width: 5),
             Text(
               label,

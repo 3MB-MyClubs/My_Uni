@@ -8,8 +8,11 @@ import '../services/club_role_localization.dart';
 import 'club_chat_theme.dart';
 import 'club_stream_items.dart';
 
-/// What the "+" sheet can attach to a community message.
-enum ClubAttachment { photo, poll, event }
+/// What the "+" sheet can attach to a message in a club's Chat lane.
+///
+/// Events left this surface with the Board + Chat design — the club's Events tab
+/// owns them, and a notice can link to one.
+enum ClubAttachment { photo, poll }
 
 /// Community composer: attachment sheet, @-mention autocomplete, and send.
 class ClubComposer extends StatefulWidget {
@@ -231,9 +234,8 @@ class _ClubComposerState extends State<ClubComposer> {
                   key: const ValueKey('club-attach-sheet'),
                   children: [
                     for (final entry in const [
-                      (ClubAttachment.photo, Icons.image_outlined),
+                      (ClubAttachment.photo, Icons.photo_library_outlined),
                       (ClubAttachment.poll, Icons.bar_chart_rounded),
-                      (ClubAttachment.event, Icons.calendar_today_outlined),
                     ])
                       Expanded(
                         child: Padding(
@@ -406,8 +408,7 @@ class _ClubComposerState extends State<ClubComposer> {
   }
 
   String _attachLabel(ClubAttachment attachment) => switch (attachment) {
-    ClubAttachment.photo => S.attachPhoto,
+    ClubAttachment.photo => S.attachMedia,
     ClubAttachment.poll => S.attachPoll,
-    ClubAttachment.event => S.attachEvent,
   };
 }

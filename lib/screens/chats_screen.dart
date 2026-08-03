@@ -23,7 +23,6 @@ import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
-import 'club_profile_screen.dart';
 import 'create_group_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -196,11 +195,21 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   String _preview(ChatThreadSummary t) {
-    final last = t.lastMessage;
+    // A club room previews its Chat lane: a notice belongs to the Board, so it
+    // never becomes the inbox line. The badge still counts both lanes.
+    final last = ChatStore.isClubThread(t.threadId)
+        ? (chatStore.lastChatLaneMessageIn(t.threadId) ?? t.lastMessage)
+        : t.lastMessage;
     if (last == null) return '';
-    final body = last.kind == ChatMessageKind.postShare
-        ? S.sharedPost
-        : last.content;
+    final body = switch (last.kind) {
+      ChatMessageKind.postShare => S.sharedPost,
+      ChatMessageKind.photo => S.attachPhoto,
+      ChatMessageKind.file =>
+        _isVideoAttachment(last) ? S.attachVideo : S.attachFile,
+      ChatMessageKind.announcement =>
+        (last.title ?? '').trim().isEmpty ? last.content : last.title!,
+      _ => last.content,
+    };
     if (last.senderId == _myId) return '${S.you}: $body';
     if (t.isClub || t.isGroup) {
       final conversation = chatStore.clubInboxForThread(t.threadId);
@@ -211,6 +220,22 @@ class _ChatsScreenState extends State<ChatsScreen> {
       return '$senderName: $body';
     }
     return body;
+  }
+
+  static bool _isVideoAttachment(ChatMessage message) {
+    final value = (message.attachmentName ?? message.attachmentPath ?? '')
+        .toLowerCase()
+        .split('?')
+        .first;
+    return const {
+      '.mp4',
+      '.mov',
+      '.m4v',
+      '.avi',
+      '.webm',
+      '.mkv',
+      '.3gp',
+    }.any(value.endsWith);
   }
 
   String _threadSubtitle(ChatThreadSummary thread) {
@@ -246,19 +271,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  void _openClubProfile(Club? club) {
-    if (club == null) return;
-    Navigator.push(
-      context,
-      ChatPageRoute(
-        builder: (_) =>
-            ClubProfileScreen(club: club, color: _colorForClub(club.id)),
-      ),
-    );
-  }
-
   /// Opens the identity represented by a conversation title without opening
-  /// the conversation itself. Group titles still lead to the group thread.
+  /// the conversation itself. Club titles are the exception: throughout the
+  /// Chats area they always lead to their existing chat thread.
   void _openProfileForThread(ChatThreadSummary thread) {
     if (thread.isGroup) return;
     final inbox = chatStore.clubInboxForThread(thread.threadId);
@@ -268,7 +283,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
     final clubId = thread.clubId ?? inbox?.clubId;
     if (clubId != null) {
-      _openClubProfile(clubForId(clubId));
+      _openThread(thread.threadId);
       return;
     }
     _openUserProfile(_userForId(thread.peerId ?? ''));
@@ -978,7 +993,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         GestureDetector(
                           key: ValueKey('chat-online-club-name-${club.id}'),
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => _openClubProfile(club),
+                          onTap: () => _openThread(thread.threadId),
                           child: Text(
                             '${_shortClubName(club)} · ${S.onlineMembers(onlineCount)}',
                             maxLines: 1,

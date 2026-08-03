@@ -46,8 +46,8 @@ void main() {
                       body: Center(child: Text('Proceeded to the app')),
                     )
                   : ThemeChoiceScreen(
-                      onChoose: (d) {
-                        themeService.setDark(d);
+                      onChoose: (d) async {
+                        await themeService.setDark(d);
                         setHarness(() => chosen = true);
                       },
                     ),

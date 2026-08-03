@@ -274,6 +274,43 @@ void main() {
     expect(copy.body, 'Ece: See you at the library');
   });
 
+  test('message notifications label photos instead of rendering blank', () {
+    final english = localizedPushNotificationCopy(
+      type: 'direct_message',
+      args: {'actorName': 'Ece', 'content': '', 'messageKind': 'photo'},
+      languageCode: 'en',
+      fallbackTitle: '',
+      fallbackBody: '',
+    );
+    final turkish = localizedPushNotificationCopy(
+      type: 'direct_message',
+      args: {'actorName': 'Ece', 'content': '', 'messageKind': 'photo'},
+      languageCode: 'tr',
+      fallbackTitle: '',
+      fallbackBody: '',
+    );
+
+    expect(english.body, 'Ece: Photo');
+    expect(turkish.body, 'Ece: Fotoğraf');
+  });
+
+  test('message notifications identify video attachments', () {
+    final copy = localizedPushNotificationCopy(
+      type: 'group_message',
+      args: {
+        'groupName': 'Study group',
+        'actorName': 'Ece',
+        'content': '',
+        'messageKind': 'video',
+      },
+      languageCode: 'en',
+      fallbackTitle: '',
+      fallbackBody: '',
+    );
+
+    expect(copy.body, 'Ece: Video');
+  });
+
   test(
     'normalizes local and remote direct-message rows to one conversation',
     () {

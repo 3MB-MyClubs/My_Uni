@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
@@ -67,7 +68,10 @@ class UserFollowButton extends ConsumerWidget {
     };
 
     return AppPressable(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       pressedScale: 0.96,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
