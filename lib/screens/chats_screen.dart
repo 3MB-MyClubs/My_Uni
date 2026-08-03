@@ -800,6 +800,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     color: AppColors.secondaryText,
                   ),
                   isDense: true,
+                  // The search pill already paints the background; without this
+                  // the global inputDecorationTheme adds a grey fill on top.
+                  filled: false,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,

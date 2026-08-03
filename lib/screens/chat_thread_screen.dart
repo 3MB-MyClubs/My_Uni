@@ -20,6 +20,7 @@ import '../services/mock_data.dart';
 import '../services/notification_inbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/people_service.dart';
+import '../services/photo_orientation.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
@@ -434,7 +435,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         imageQuality: 88,
       ),
     };
-    if (picked == null || !mounted) return;
+    if (picked == null) return;
+    // Front-camera captures arrive with a mirrored EXIF orientation, which
+    // would send a mirror image of whatever was photographed.
+    if (attachment == _ChatAttachment.camera) {
+      await unmirrorPhotoFile(picked.path);
+    }
+    if (!mounted) return;
     _sendAttachment(picked, ChatMessageKind.photo);
   }
 
@@ -1918,6 +1925,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 color: AppColors.secondaryText,
                               ),
                               isDense: true,
+                              // The pill already paints the background; avoid
+                              // stacking the global field fill on top of it.
+                              filled: false,
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,

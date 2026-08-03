@@ -16,6 +16,27 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Web app
+
+Run ClubUp in a browser with:
+
+```sh
+flutter run -d chrome
+```
+
+The layout keeps the mobile bottom navigation below 960 logical pixels and
+switches to a persistent sidebar on wider windows. Desktop content is centered
+and width-limited so cards, images, forms, and text remain readable on large
+monitors. Mouse and trackpad dragging are enabled for horizontal content rails.
+
+Create the production bundle with:
+
+```sh
+flutter build web --release
+```
+
+The deployable output is written to `build/web/`.
+
 ## Live device preview
 
 Run the app in a desktop browser with an interactive phone/tablet frame:

@@ -1,12 +1,14 @@
 {
     "name": "ClubUp",
     "short_name": "ClubUp",
+    "id": ".",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "ClubUp",
-    "orientation": "portrait-primary",
+    "display_override": ["standalone", "minimal-ui"],
+    "background_color": "#FBF7F5",
+    "theme_color": "#9E2045",
+    "description": "Discover clubs, events, and campus life at Koç University.",
     "prefer_related_applications": false,
     "icons": [
         {
