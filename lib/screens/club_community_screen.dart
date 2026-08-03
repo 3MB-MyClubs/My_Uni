@@ -2246,6 +2246,9 @@ class _SheetField extends StatelessWidget {
         textCapitalization: TextCapitalization.sentences,
         style: TextStyle(fontSize: 14.5, color: t.text),
         decoration: InputDecoration(
+          // The container above paints the club-tinted input background; the
+          // global inputDecorationTheme would stack a neutral grey over it.
+          filled: false,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,

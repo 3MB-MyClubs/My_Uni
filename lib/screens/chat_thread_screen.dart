@@ -1695,6 +1695,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             color: AppColors.secondaryText,
                           ),
                           isDense: true,
+                          // The pill above already paints the background; the
+                          // global inputDecorationTheme would otherwise stack
+                          // its own grey fill on top of it.
+                          filled: false,
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
