@@ -41,6 +41,37 @@ String? notificationGroupKeyFromPushData(Map<String, dynamic> data) {
   return 'message:${normalizedType.isEmpty ? 'unknown' : normalizedType}:$targetId';
 }
 
+/// Pushes created by the current delivery pipeline name their recipient.
+/// Legacy chat pushes without that binding fail closed because their content
+/// cannot be proven to belong to the signed-in account.
+bool pushDataBelongsToUser(
+  Map<String, dynamic> data, {
+  required String currentUserId,
+}) {
+  final recipientId = data['recipient_user_id']?.toString().trim();
+  if (recipientId != null && recipientId.isNotEmpty) {
+    return currentUserId.isNotEmpty && recipientId == currentUserId;
+  }
+
+  final type = data['type']
+      ?.toString()
+      .trim()
+      .toLowerCase()
+      .replaceAll('-', '_')
+      .replaceAll(' ', '_');
+  final targetType = data['target_type']?.toString().trim().toLowerCase();
+  final isUnboundChatPush =
+      targetType == 'message' ||
+      targetType == 'chat' ||
+      const {
+        'direct_message',
+        'group_message',
+        'club_channel_message',
+        'club_inbox_message',
+      }.contains(type);
+  return !isUnboundChatPush;
+}
+
 class PushNotificationTarget {
   const PushNotificationTarget({
     required this.type,
@@ -357,7 +388,31 @@ class PushNotificationService extends ChangeNotifier {
     }
   }
 
+  /// Ends push delivery for the account that is about to sign out and removes
+  /// already-delivered alerts so the next person using this device cannot see
+  /// the previous account's notification content.
+  Future<void> deactivateCurrentUser() async {
+    _pendingTarget = null;
+    if (!isSupported) return;
+    await initialize();
+    await unregisterCurrentDevice();
+    await notificationService.cancelAllNotifications();
+  }
+
+  bool _isForSignedInUser(Map<String, dynamic> data) {
+    if (!SupabaseConfig.isConfigured) return false;
+    try {
+      return pushDataBelongsToUser(
+        data,
+        currentUserId: Supabase.instance.client.auth.currentUser?.id ?? '',
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    if (!_isForSignedInUser(message.data)) return;
     final remoteNotification = message.notification;
     final title =
         remoteNotification?.title ?? message.data['title']?.toString();
@@ -380,10 +435,12 @@ class PushNotificationService extends ChangeNotifier {
     );
   }
 
-  void _handleOpenedMessage(RemoteMessage message) =>
-      _queueTarget(message.data);
+  void _handleOpenedMessage(RemoteMessage message) {
+    if (_isForSignedInUser(message.data)) _queueTarget(message.data);
+  }
 
   void _queueTarget(Map<String, dynamic> data) {
+    if (!_isForSignedInUser(data)) return;
     _pendingTarget = PushNotificationTarget.fromData(data);
     notifyListeners();
   }

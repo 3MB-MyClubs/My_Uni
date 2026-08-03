@@ -1,6 +1,7 @@
 import Flutter
 import EventKit
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -46,6 +47,43 @@ import UIKit
         }
       } else {
         result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let notificationChannel = FlutterMethodChannel(
+      name: "ku_app/notifications",
+      binaryMessenger: messenger
+    )
+    notificationChannel.setMethodCallHandler { call, result in
+      if call.method == "removeDeliveredNotificationsForThreads" {
+        self.removeDeliveredNotificationsForThreads(call: call, result: result)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func removeDeliveredNotificationsForThreads(
+    call: FlutterMethodCall,
+    result: @escaping FlutterResult
+  ) {
+    guard let args = call.arguments as? [String: Any],
+          let threadIds = args["threadIds"] as? [String] else {
+      result(FlutterError(code: "bad_args", message: "Missing thread identifiers", details: nil))
+      return
+    }
+
+    let requestedThreads = Set(threadIds)
+    let center = UNUserNotificationCenter.current()
+    center.getDeliveredNotifications { notifications in
+      let identifiers = notifications.compactMap { notification in
+        requestedThreads.contains(notification.request.content.threadIdentifier)
+          ? notification.request.identifier
+          : nil
+      }
+      center.removeDeliveredNotifications(withIdentifiers: identifiers)
+      DispatchQueue.main.async {
+        result(identifiers.count)
       }
     }
   }

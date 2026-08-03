@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -9,9 +12,49 @@ import 'package:timezone/timezone.dart' as tz;
 import '../l10n/app_localizations.dart';
 import '../models/event.dart';
 import 'locale_service.dart';
+import 'runtime_environment.dart';
+
+/// Native notification grouping keys that may represent [threadId].
+///
+/// The server uses the `*_message:` form. The shorter keys cover legacy
+/// foreground notifications created by older app versions.
+Set<String> notificationGroupKeysForChatThread({
+  required String threadId,
+  required String currentUserId,
+}) {
+  final normalized = threadId.trim();
+  if (normalized.startsWith('dm:')) {
+    final peerIds = normalized
+        .substring('dm:'.length)
+        .split('|')
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty && id != currentUserId)
+        .toSet();
+    return {
+      for (final peerId in peerIds) 'direct_message:$peerId',
+      for (final peerId in peerIds) 'direct:$peerId',
+    };
+  }
+  if (normalized.startsWith('group:')) {
+    final id = normalized.substring('group:'.length);
+    return id.isEmpty ? {} : {'group_message:$id', 'group:$id'};
+  }
+  if (normalized.startsWith('clubdm:')) {
+    final id = normalized.substring('clubdm:'.length);
+    return id.isEmpty ? {} : {'club_inbox_message:$id', 'club_inbox:$id'};
+  }
+  if (normalized.startsWith('club:')) {
+    final id = normalized.substring('club:'.length);
+    return id.isEmpty ? {} : {'club_channel_message:$id', 'club:$id'};
+  }
+  return {};
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
+  static const MethodChannel _nativeNotificationChannel = MethodChannel(
+    'ku_app/notifications',
+  );
   late FlutterLocalNotificationsPlugin _notificationsPlugin;
   bool _initialized = false;
   final StreamController<Map<String, dynamic>> _remoteNotificationTaps =
@@ -217,6 +260,71 @@ class NotificationService {
       hash = (hash * 0x01000193) & 0x7fffffff;
     }
     return hash == 0 ? 1 : hash;
+  }
+
+  /// Removes only the native alerts for the conversation the user opened.
+  Future<void> cancelChatNotifications({
+    required String threadId,
+    required String currentUserId,
+  }) async {
+    final groupKeys = notificationGroupKeysForChatThread(
+      threadId: threadId,
+      currentUserId: currentUserId,
+    );
+    if (groupKeys.isEmpty) return;
+    // Widget tests have no native notification host or plugin registrar.
+    if (isFlutterTestHost) return;
+    try {
+      if (!_initialized) await initialize();
+    } catch (_) {
+      // Local-notification APIs are unavailable in some test/desktop hosts.
+      return;
+    }
+
+    // FCM-delivered iOS notifications have no plugin id. Native iOS can still
+    // remove just this conversation by its APNs thread identifier.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        await _nativeNotificationChannel.invokeMethod<void>(
+          'removeDeliveredNotificationsForThreads',
+          {'threadIds': groupKeys.toList()},
+        );
+      } catch (_) {
+        // Older builds may not contain the native notification channel yet.
+      }
+    }
+
+    // Firebase-created Android alerts can have a native id different from the
+    // stable foreground id, so remove any active matching (tag, id) pairs.
+    try {
+      final activeNotifications = await _notificationsPlugin
+          .getActiveNotifications();
+      for (final notification in activeNotifications) {
+        if (!groupKeys.contains(notification.tag) &&
+            !groupKeys.contains(notification.groupKey)) {
+          continue;
+        }
+        final id = notification.id;
+        if (id != null) {
+          await _notificationsPlugin.cancel(id, tag: notification.tag);
+        }
+      }
+    } catch (_) {
+      // Some platforms do not expose active FCM notifications to the plugin.
+    }
+
+    for (final groupKey in groupKeys) {
+      try {
+        await _notificationsPlugin.cancel(
+          notificationIdFor(groupKey),
+          tag: groupKey,
+        );
+        // Android FCM commonly assigns id 0 when a tag is supplied.
+        await _notificationsPlugin.cancel(0, tag: groupKey);
+      } catch (_) {
+        // Keep in-app read state working if native cancellation is unsupported.
+      }
+    }
   }
 
   /// Cancel all notifications

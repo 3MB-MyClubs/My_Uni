@@ -15,21 +15,28 @@ class AppPresenceService extends ChangeNotifier {
   static const _topic = 'app:presence';
   static const _backgroundGracePeriod = Duration(seconds: 5);
   static const _retryDelay = Duration(seconds: 5);
+  static const _lastSeenHeartbeatPeriod = Duration(minutes: 1);
 
   SupabaseClient? _client;
   RealtimeChannel? _channel;
   Timer? _backgroundTimer;
   Timer? _retryTimer;
+  Timer? _lastSeenHeartbeat;
   String? _presenceUserId;
   bool _desiredActive = false;
   bool _foreground = true;
   bool _subscribed = false;
   bool _tracking = false;
   Set<String> _onlineUserIds = const {};
+  final Map<String, DateTime> _lastSeenByUserId = {};
+  final Set<String> _loadedLastSeenUserIds = {};
+  final Set<String> _loadingLastSeenUserIds = {};
 
   Set<String> get onlineUserIds => Set.unmodifiable(_onlineUserIds);
 
   bool get isConnected => _subscribed;
+
+  DateTime? lastSeenAtFor(String userId) => _lastSeenByUserId[userId];
 
   SupabaseClient? get _configuredClient {
     if (!SupabaseConfig.isConfigured) return null;
@@ -107,8 +114,9 @@ class AppPresenceService extends ChangeNotifier {
     });
   }
 
-  /// Applies foreground/background policy without emitting periodic writes.
-  /// Supabase itself maintains the socket heartbeat while tracking is active.
+  /// Applies foreground/background policy without repeatedly retracking
+  /// Presence. A low-frequency database heartbeat keeps crash-time last-seen
+  /// accuracy within roughly one minute.
   void handleLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _foreground = true;
@@ -156,7 +164,12 @@ class AppPresenceService extends ChangeNotifier {
       });
       if (!identical(_channel, channel)) return;
       _tracking = response == ChannelResponse.ok;
-      if (!_tracking) _scheduleRetry(channel);
+      if (_tracking) {
+        unawaited(_touchOwnLastSeen());
+        _startLastSeenHeartbeat();
+      } else {
+        _scheduleRetry(channel);
+      }
     } catch (_) {
       if (identical(_channel, channel)) {
         _tracking = false;
@@ -168,6 +181,8 @@ class AppPresenceService extends ChangeNotifier {
   Future<void> _untrack() async {
     final channel = _channel;
     if (!_tracking || channel == null) return;
+    _lastSeenHeartbeat?.cancel();
+    await _touchOwnLastSeen();
     _tracking = false;
     try {
       await channel.untrack();
@@ -190,7 +205,85 @@ class AppPresenceService extends ChangeNotifier {
       );
       if (hasMatchingIdentity) next.add(key);
     }
+    final wentOffline = _onlineUserIds.difference(next);
+    if (wentOffline.isNotEmpty) {
+      final now = DateTime.now().toUtc();
+      for (final userId in wentOffline) {
+        _lastSeenByUserId[userId] = now;
+      }
+    }
     _setOnlineUsers(next);
+  }
+
+  void _startLastSeenHeartbeat() {
+    _lastSeenHeartbeat?.cancel();
+    _lastSeenHeartbeat = Timer.periodic(_lastSeenHeartbeatPeriod, (_) {
+      unawaited(_touchOwnLastSeen());
+    });
+  }
+
+  Future<void> _touchOwnLastSeen() async {
+    final client = _client;
+    final userId = _presenceUserId;
+    if (client == null || userId == null || userId.isEmpty) return;
+    if (client.auth.currentSession?.user.id != userId) return;
+
+    final now = DateTime.now().toUtc();
+    _lastSeenByUserId[userId] = now;
+    notifyListeners();
+    try {
+      await client.from('user_presence_status').upsert({
+        'user_id': userId,
+        'last_seen_at': now.toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (_) {
+      // Presence remains usable while offline or before the migration lands.
+    }
+  }
+
+  /// Loads persisted timestamps for chat peers not currently represented by
+  /// an online Presence payload.
+  Future<void> hydrateLastSeenForUsers(
+    Iterable<String> userIds, {
+    bool force = false,
+  }) async {
+    final client = _configuredClient;
+    if (client == null || client.auth.currentSession == null) return;
+    final requested = userIds
+        .map((id) => id.trim())
+        .where(
+          (id) =>
+              id.isNotEmpty &&
+              !_loadingLastSeenUserIds.contains(id) &&
+              (force || !_loadedLastSeenUserIds.contains(id)),
+        )
+        .toSet();
+    if (requested.isEmpty) return;
+    _loadingLastSeenUserIds.addAll(requested);
+    try {
+      final rows = await client
+          .from('user_presence_status')
+          .select('user_id, last_seen_at')
+          .inFilter('user_id', requested.toList());
+      var changed = false;
+      for (final row in rows) {
+        final userId = row['user_id']?.toString() ?? '';
+        final timestamp = DateTime.tryParse(
+          row['last_seen_at']?.toString() ?? '',
+        )?.toUtc();
+        if (userId.isEmpty || timestamp == null) continue;
+        if (_lastSeenByUserId[userId] != timestamp) {
+          _lastSeenByUserId[userId] = timestamp;
+          changed = true;
+        }
+      }
+      _loadedLastSeenUserIds.addAll(requested);
+      if (changed) notifyListeners();
+    } catch (_) {
+      // Generic last-seen copy remains available offline.
+    } finally {
+      _loadingLastSeenUserIds.removeAll(requested);
+    }
   }
 
   void _setOnlineUsers(Set<String> value) {
@@ -214,12 +307,15 @@ class AppPresenceService extends ChangeNotifier {
     _desiredActive = false;
     _backgroundTimer?.cancel();
     _retryTimer?.cancel();
+    _lastSeenHeartbeat?.cancel();
     await _disconnect(clearUsers: true);
   }
 
   Future<void> _disconnect({required bool clearUsers}) async {
     _backgroundTimer?.cancel();
     _retryTimer?.cancel();
+    _lastSeenHeartbeat?.cancel();
+    if (_tracking) await _touchOwnLastSeen();
     final channel = _channel;
     final client = _client;
     _channel = null;

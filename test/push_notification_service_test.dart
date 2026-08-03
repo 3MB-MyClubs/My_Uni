@@ -79,6 +79,42 @@ void main() {
     expect(club.chatThreadIdFor('user-a'), 'club:club-1');
   });
 
+  test('rejects pushes addressed to a different signed-in user', () {
+    expect(
+      pushDataBelongsToUser({
+        'recipient_user_id': 'user-b',
+        'type': 'direct_message',
+        'target_type': 'message',
+      }, currentUserId: 'user-a'),
+      isFalse,
+    );
+    expect(
+      pushDataBelongsToUser({
+        'recipient_user_id': 'user-a',
+        'type': 'direct_message',
+        'target_type': 'message',
+      }, currentUserId: 'user-a'),
+      isTrue,
+    );
+  });
+
+  test('legacy chat pushes without a recipient binding fail closed', () {
+    expect(
+      pushDataBelongsToUser({
+        'type': 'group_message',
+        'target_type': 'message',
+      }, currentUserId: 'user-a'),
+      isFalse,
+    );
+    expect(
+      pushDataBelongsToUser({
+        'type': 'club_event',
+        'target_type': 'event',
+      }, currentUserId: 'user-a'),
+      isTrue,
+    );
+  });
+
   test('derives content destinations from notification type as fallback', () {
     expect(
       PushNotificationTarget.fromData({
@@ -155,6 +191,40 @@ void main() {
     expect(inbox.type, 'club_inbox');
     expect(inbox.chatThreadIdFor('club-admin'), 'clubdm:inbox-1');
   });
+
+  test(
+    'maps canonical chat threads to current and legacy native group keys',
+    () {
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'dm:user-a|user-b',
+          currentUserId: 'user-a',
+        ),
+        {'direct_message:user-b', 'direct:user-b'},
+      );
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'group:group-1',
+          currentUserId: 'user-a',
+        ),
+        {'group_message:group-1', 'group:group-1'},
+      );
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'club:club-1',
+          currentUserId: 'user-a',
+        ),
+        {'club_channel_message:club-1', 'club:club-1'},
+      );
+      expect(
+        notificationGroupKeysForChatThread(
+          threadId: 'clubdm:inbox-1',
+          currentUserId: 'club-admin',
+        ),
+        {'club_inbox_message:inbox-1', 'club_inbox:inbox-1'},
+      );
+    },
+  );
 
   test('localizes club post copy in English and Turkish', () {
     final args = {'clubName': 'KU Music', 'content': 'Concert tonight'};

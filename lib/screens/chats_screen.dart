@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/user.dart';
+import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/app_presence_service.dart';
@@ -22,7 +23,9 @@ import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
+import 'club_profile_screen.dart';
 import 'create_group_screen.dart';
+import 'user_profile_screen.dart';
 
 /// Lets the main navigation reset Chats to its default student view whenever
 /// the tab is selected again, while pushed standalone inboxes remain simple.
@@ -128,8 +131,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   Future<void> _hydrateDmProfiles() async {
     final memberIds = <String>{};
+    final directPeerIds = <String>{};
     for (final thread in chatStore.threadsFor(_myId)) {
-      if (thread.peerId case final peerId?) memberIds.add(peerId);
+      if (thread.peerId case final peerId?) {
+        memberIds.add(peerId);
+        directPeerIds.add(peerId);
+      }
       if (thread.isGroup) {
         memberIds.addAll(
           chatStore
@@ -141,10 +148,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     memberIds
       ..removeWhere((id) => _userForId(id) != null)
       ..removeAll(_requestedProfileIds);
-    if (memberIds.isEmpty) return;
-    _requestedProfileIds.addAll(memberIds);
-    await peopleService.hydrateProfilesByIds(memberIds);
-    _requestedProfileIds.removeAll(memberIds);
+    if (memberIds.isNotEmpty) _requestedProfileIds.addAll(memberIds);
+    await Future.wait([
+      if (memberIds.isNotEmpty) peopleService.hydrateProfilesByIds(memberIds),
+      if (directPeerIds.isNotEmpty)
+        appPresenceService.hydrateLastSeenForUsers(directPeerIds),
+    ]);
+    if (memberIds.isNotEmpty) _requestedProfileIds.removeAll(memberIds);
     if (mounted) setState(() {});
   }
 
@@ -203,10 +213,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return body;
   }
 
+  String _threadSubtitle(ChatThreadSummary thread) {
+    final preview = _preview(thread);
+    if (!ChatStore.isDirectThread(thread.threadId)) return preview;
+    final peerId = thread.peerId ?? '';
+    final status = appPresenceService.onlineUserIds.contains(peerId)
+        ? S.activeNowLabel
+        : S.lastOnlineLabel(appPresenceService.lastSeenAtFor(peerId));
+    return preview.isEmpty ? status : '$status · $preview';
+  }
+
   void _openThread(String threadId, {User? recipient}) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      ChatPageRoute(
         builder: (_) =>
             ChatThreadScreen(threadId: threadId, recipient: recipient),
       ),
@@ -216,6 +236,42 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _openDmWith(User user) {
     final threadId = chatStore.ensureDirectThread(_myId, user.id);
     if (threadId != null) _openThread(threadId, recipient: user);
+  }
+
+  void _openUserProfile(User? user) {
+    if (user == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
+    );
+  }
+
+  void _openClubProfile(Club? club) {
+    if (club == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(
+        builder: (_) =>
+            ClubProfileScreen(club: club, color: _colorForClub(club.id)),
+      ),
+    );
+  }
+
+  /// Opens the identity represented by a conversation title without opening
+  /// the conversation itself. Group titles still lead to the group thread.
+  void _openProfileForThread(ChatThreadSummary thread) {
+    if (thread.isGroup) return;
+    final inbox = chatStore.clubInboxForThread(thread.threadId);
+    if (inbox != null && inbox.profileId != _myId) {
+      _openUserProfile(_userForId(inbox.profileId));
+      return;
+    }
+    final clubId = thread.clubId ?? inbox?.clubId;
+    if (clubId != null) {
+      _openClubProfile(clubForId(clubId));
+      return;
+    }
+    _openUserProfile(_userForId(thread.peerId ?? ''));
   }
 
   Future<void> _openCompose() async {
@@ -235,7 +291,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
     final threadId = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
+      ChatPageRoute(
         builder: (_) =>
             CreateGroupScreen(myId: _myId, initialMembers: recipients),
       ),
@@ -744,6 +800,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     color: AppColors.secondaryText,
                   ),
                   isDense: true,
+                  // The search pill already paints the background; without this
+                  // the global inputDecorationTheme adds a grey fill on top.
+                  filled: false,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -798,15 +857,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       const SizedBox(height: 5),
                       SizedBox(
                         width: 88,
-                        child: Text(
-                          displayName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
+                        child: GestureDetector(
+                          key: ValueKey('chat-online-profile-name-${user.id}'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _openUserProfile(user),
+                          child: Text(
+                            displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
                           ),
                         ),
                       ),
@@ -911,15 +975,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           ),
                         ),
                         const SizedBox(height: 5),
-                        Text(
-                          '${_shortClubName(club)} · ${S.onlineMembers(onlineCount)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
+                        GestureDetector(
+                          key: ValueKey('chat-online-club-name-${club.id}'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _openClubProfile(club),
+                          child: Text(
+                            '${_shortClubName(club)} · ${S.onlineMembers(onlineCount)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
                           ),
                         ),
                       ],
@@ -1031,17 +1100,26 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: unread > 0
-                                    ? FontWeight.w800
-                                    : FontWeight.w700,
-                                letterSpacing: -0.2,
-                                color: AppColors.text,
+                            child: GestureDetector(
+                              key: ValueKey(
+                                'chat-thread-profile-name-${t.threadId}',
+                              ),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: t.isGroup
+                                  ? null
+                                  : () => _openProfileForThread(t),
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: unread > 0
+                                      ? FontWeight.w800
+                                      : FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                  color: AppColors.text,
+                                ),
                               ),
                             ),
                           ),
@@ -1067,7 +1145,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              _preview(t),
+                              _threadSubtitle(t),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

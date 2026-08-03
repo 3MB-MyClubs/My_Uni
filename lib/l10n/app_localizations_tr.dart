@@ -2310,17 +2310,17 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String mutualFriendCountLabel(String mutualLabel) {
-    return '$mutualLabel ortak arkadaş';
+    return 'Takip ettiklerinden $mutualLabel kişi takip ediyor';
   }
 
   @override
   String mutualFriendNamed(String name) {
-    return 'Ortak arkadaş: $name';
+    return '$name takip ediyor';
   }
 
   @override
   String mutualFriendNamedPlus(String name, int extra) {
-    return 'Ortak arkadaş: $name + $extra kişi daha';
+    return '$name ve $extra kişi daha takip ediyor';
   }
 
   @override
@@ -2437,7 +2437,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get oneMutualBadge => '1 ortak';
 
   @override
-  String get oneMutualFriend => '1 ortak arkadaş';
+  String get oneMutualFriend => 'Takip ettiğin 1 kişi takip ediyor';
 
   @override
   String get onlyKuAddressesAccepted =>
@@ -3451,4 +3451,73 @@ class AppLocalizationsTr extends AppLocalizations {
   String youreInName(String name) {
     return 'Aramıza katıldın,\n$name.';
   }
+
+  @override
+  String get markAllRead => 'Tümünü okundu işaretle';
+
+  @override
+  String get clubRolePresident => 'Başkan';
+
+  @override
+  String get clubRoleVicePresident => 'Başkan Yardımcısı';
+
+  @override
+  String get clubRoleFounder => 'Kurucu';
+
+  @override
+  String get clubRoleCoFounder => 'Eş Kurucu';
+
+  @override
+  String get clubRoleSecretary => 'Sekreter';
+
+  @override
+  String get clubRoleTreasurer => 'Sayman';
+
+  @override
+  String get clubRoleCoordinator => 'Koordinatör';
+
+  @override
+  String get clubRoleChair => 'Başkan';
+
+  @override
+  String get clubRoleViceChair => 'Başkan Vekili';
+
+  @override
+  String get clubRoleTeamLead => 'Ekip Lideri';
+
+  @override
+  String get followRequests => 'Takip istekleri';
+
+  @override
+  String plusOthersCount(num n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '+ $n kişi daha',
+      one: '+ 1 kişi daha',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get notifGroupNew => 'YENİ';
+
+  @override
+  String get notifGroupToday => 'BUGÜN';
+
+  @override
+  String get notifGroupThisWeek => 'BU HAFTA';
+
+  @override
+  String get notifGroupThisMonth => 'BU AY';
+
+  @override
+  String get notifGroupEarlier => 'DAHA ÖNCE';
+
+  @override
+  String get updatedJustNow => 'Az önce güncellendi';
+
+  @override
+  String get notificationsAutoCleared =>
+      '30 günden eski bildirimler otomatik olarak temizlenir';
 }

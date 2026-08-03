@@ -18,6 +18,7 @@ import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
+import '../services/club_role_localization.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/lazy_content_loader.dart';
@@ -2026,7 +2027,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        hasTitle ? title : u.email,
+                                        hasTitle
+                                            ? localizedClubRole(
+                                                AppLocalizations.of(context)!,
+                                                title,
+                                              )
+                                            : u.email,
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: hasTitle

@@ -1,4 +1,5 @@
 import 'locale_service.dart';
+import 'presence_status.dart';
 
 class S {
   S._();
@@ -715,6 +716,9 @@ class S {
   );
   static String get safetyOptions =>
       _t('Safety options', 'Güvenlik seçenekleri');
+
+  /// Settings group heading for the blocked-accounts entry.
+  static String get privacySection => _t('Privacy', 'Gizlilik');
   static String get moderation => _t('Moderation', 'Moderasyon');
   static String get moderationCenter =>
       _t('ClubUp moderation center', 'ClubUp moderasyon merkezi');
@@ -887,9 +891,44 @@ class S {
   static String onlineMembers(int n) => _t('$n online', '$n çevrimiçi');
   static String get lastSeenRecently =>
       _t('Last seen recently', 'Son görülme az önce');
+  static String lastOnlineLabel(DateTime? lastSeenAt, {DateTime? now}) {
+    final relative = relativeLastSeen(lastSeenAt, now: now);
+    return switch (relative.period) {
+      LastSeenPeriod.unknown => lastSeenRecently,
+      LastSeenPeriod.justNow => _t(
+        'Last online just now',
+        'Son çevrimiçi: az önce',
+      ),
+      LastSeenPeriod.minutes => _t(
+        'Last online ${relative.value} min ago',
+        'Son çevrimiçi: ${relative.value} dk önce',
+      ),
+      LastSeenPeriod.hours => _t(
+        'Last online ${relative.value} ${relative.value == 1 ? 'hour' : 'hours'} ago',
+        'Son çevrimiçi: ${relative.value} saat önce',
+      ),
+      LastSeenPeriod.days => _t(
+        'Last online ${relative.value} ${relative.value == 1 ? 'day' : 'days'} ago',
+        'Son çevrimiçi: ${relative.value} gün önce',
+      ),
+    };
+  }
+
   static String get typing => _t('typing…', 'yazıyor…');
+  static String get sent => _t('Sent', 'Gönderildi');
   static String get delivered => _t('Delivered', 'Teslim edildi');
   static String get seen => _t('Seen', 'Görüldü');
+  static String get read => _t('Read', 'Okundu');
+  static String get messageInfo => _t('Message info', 'Mesaj bilgisi');
+  static String get readBy => _t('Read by', 'Okuyanlar');
+  static String get deliveredTo => _t('Delivered to', 'Teslim edilenler');
+  static String deliveredAt(String time) =>
+      _t('Delivered $time', '$time teslim edildi');
+  static String readAt(String time) => _t('Read $time', '$time okundu');
+  static String get reply => _t('Reply', 'Yanıtla');
+  static String replyingTo(String name) =>
+      _t('Replying to $name', '$name adlı kişiye yanıt');
+  static String get cancelReply => _t('Cancel reply', 'Yanıtı iptal et');
   static String nNew(int n) => _t('$n new', '$n yeni');
   static String get searchStudents => _t('Search students…', 'Öğrenci ara…');
   static String get studentChats => _t('Students', 'Öğrenciler');

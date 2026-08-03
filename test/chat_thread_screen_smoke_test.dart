@@ -134,6 +134,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a user can reply to their own sent message', (tester) async {
+    authService.login('alice@ku.edu.tr', '111111'); // u1
+    final threadId = ChatStore.dmThreadId('u1', 'u2');
+    final original = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: 'u1',
+      content: 'Reply to my message',
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+      ),
+    );
+    await tester.pump();
+
+    await tester.longPress(find.byKey(ValueKey('chat-message-${original.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('chat-reply-message-${original.id}')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('chat-reply-composer-preview')),
+      findsOneWidget,
+    );
+    expect(find.text(S.replyingTo(S.you)), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'This is my reply');
+    await tester.tap(find.byKey(const ValueKey('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    final reply = chatStore
+        .messagesFor(threadId)
+        .where((message) => message.content == 'This is my reply')
+        .last;
+    expect(reply.replyToMessageId, original.id);
+    expect(reply.replyToSenderId, 'u1');
+    expect(
+      find.byKey(ValueKey('chat-reply-quote-${reply.id}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-reply-composer-preview')),
+      findsNothing,
+    );
+  });
+
   testWidgets('DM header resolves the participant profile name', (
     tester,
   ) async {

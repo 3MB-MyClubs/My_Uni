@@ -2323,17 +2323,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String mutualFriendCountLabel(String mutualLabel) {
-    return '$mutualLabel mutual friends';
+    return 'Followed by $mutualLabel people you follow';
   }
 
   @override
   String mutualFriendNamed(String name) {
-    return 'Mutual friend: $name';
+    return 'Followed by $name';
   }
 
   @override
   String mutualFriendNamedPlus(String name, int extra) {
-    return 'Mutual friend: $name + $extra more';
+    return 'Followed by $name + $extra more';
   }
 
   @override
@@ -2450,7 +2450,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get oneMutualBadge => '1 mutual';
 
   @override
-  String get oneMutualFriend => '1 mutual friend';
+  String get oneMutualFriend => 'Followed by 1 person you follow';
 
   @override
   String get onlyKuAddressesAccepted =>
@@ -3461,4 +3461,73 @@ class AppLocalizationsEn extends AppLocalizations {
   String youreInName(String name) {
     return 'You\'re in,\n$name.';
   }
+
+  @override
+  String get markAllRead => 'Mark all read';
+
+  @override
+  String get clubRolePresident => 'President';
+
+  @override
+  String get clubRoleVicePresident => 'Vice President';
+
+  @override
+  String get clubRoleFounder => 'Founder';
+
+  @override
+  String get clubRoleCoFounder => 'Co-Founder';
+
+  @override
+  String get clubRoleSecretary => 'Secretary';
+
+  @override
+  String get clubRoleTreasurer => 'Treasurer';
+
+  @override
+  String get clubRoleCoordinator => 'Coordinator';
+
+  @override
+  String get clubRoleChair => 'Chair';
+
+  @override
+  String get clubRoleViceChair => 'Vice Chair';
+
+  @override
+  String get clubRoleTeamLead => 'Team Lead';
+
+  @override
+  String get followRequests => 'Follow requests';
+
+  @override
+  String plusOthersCount(num n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '+ $n others',
+      one: '+ 1 other',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get notifGroupNew => 'NEW';
+
+  @override
+  String get notifGroupToday => 'TODAY';
+
+  @override
+  String get notifGroupThisWeek => 'THIS WEEK';
+
+  @override
+  String get notifGroupThisMonth => 'THIS MONTH';
+
+  @override
+  String get notifGroupEarlier => 'EARLIER';
+
+  @override
+  String get updatedJustNow => 'Updated just now';
+
+  @override
+  String get notificationsAutoCleared =>
+      'Notifications older than 30 days are cleared automatically';
 }

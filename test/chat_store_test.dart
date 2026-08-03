@@ -422,4 +422,53 @@ void main() {
     expect(persisted['deliveredAt'], isNotNull);
     expect(persisted.containsKey('seenAt'), isTrue);
   });
+
+  test('replies snapshot any message in the same conversation', () {
+    final thread = ChatStore.dmThreadId('reply-sender', 'reply-peer');
+    final original = chatStore.sendMessage(
+      threadId: thread,
+      senderId: 'reply-sender',
+      content: 'Original from me',
+    )!;
+
+    final reply = chatStore.sendMessage(
+      threadId: thread,
+      senderId: 'reply-peer',
+      content: 'Reply from them',
+      replyToMessageId: original.id,
+    );
+
+    expect(reply, isNotNull);
+    expect(reply!.replyToMessageId, original.id);
+    expect(reply.replyToSenderId, 'reply-sender');
+    expect(reply.replyToPreview, 'Original from me');
+    expect(
+      ChatMessage.fromMap(reply.toMap()).replyToPreview,
+      'Original from me',
+    );
+    expect(
+      chatStore.deleteMessage(messageId: original.id, userId: 'reply-sender'),
+      isTrue,
+    );
+    expect(chatStore.messageById(reply.id)?.replyToPreview, 'Original from me');
+  });
+
+  test('reply targets cannot cross conversation boundaries', () {
+    final firstThread = ChatStore.dmThreadId('reply-a', 'reply-b');
+    final secondThread = ChatStore.dmThreadId('reply-a', 'reply-c');
+    final original = chatStore.sendMessage(
+      threadId: firstThread,
+      senderId: 'reply-a',
+      content: 'Private to this thread',
+    )!;
+
+    final rejected = chatStore.sendMessage(
+      threadId: secondThread,
+      senderId: 'reply-a',
+      content: 'Should not send',
+      replyToMessageId: original.id,
+    );
+
+    expect(rejected, isNull);
+  });
 }

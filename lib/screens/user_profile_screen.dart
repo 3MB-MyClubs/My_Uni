@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
+import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
+import '../services/club_role_localization.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
@@ -446,7 +448,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           if (threadId == null) return;
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
+                            ChatPageRoute(
                               builder: (_) => ChatThreadScreen(
                                 threadId: threadId,
                                 recipient: user,
@@ -848,7 +850,10 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
           border: isLeader ? null : Border.all(color: AppColors.divider),
         ),
         child: Text(
-          role ?? AppLocalizations.of(context)!.memberRoleFallback,
+          localizedClubRole(
+            AppLocalizations.of(context)!,
+            role ?? AppLocalizations.of(context)!.memberRoleFallback,
+          ),
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w700,

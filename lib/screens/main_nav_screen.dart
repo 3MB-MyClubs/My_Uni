@@ -22,6 +22,7 @@ import '../onboarding/onboarding_service.dart';
 import '../onboarding/onboarding_steps.dart';
 import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
+import '../widgets/app_pressable.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -545,7 +546,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         activeIcon: Icons.calendar_today_rounded,
         label: AppLocalizations.of(context)!.events,
       ),
-      if (!_isClubAdmin && !_isPlatformModerator)
+      // Platform moderators still need campus-wide discovery so they can find
+      // the people, clubs, posts, and events they are responsible for
+      // reviewing. Ordinary club admins keep their focused club workflow.
+      if (!_isClubAdmin)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
@@ -1244,9 +1248,10 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
+      child: AppPressable(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
+        pressedScale: 0.94,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
@@ -1411,8 +1416,9 @@ class _CenterAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Center(
-        child: GestureDetector(
+        child: AppPressable(
           onTap: onTap,
+          pressedScale: 0.92,
           child: Container(
             width: 52,
             height: 52,

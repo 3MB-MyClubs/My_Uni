@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/app_colors.dart';
 import '../services/locale_service.dart';
+import 'app_pressable.dart';
 
 /// Compact language picker shared by Settings and the authentication flow.
 class LanguageToggle extends StatelessWidget {
@@ -52,9 +53,10 @@ class LanguageToggle extends StatelessWidget {
       button: true,
       selected: active,
       label: label,
-      child: GestureDetector(
+      child: AppPressable(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
+        pressedScale: 0.94,
         child: AnimatedContainer(
           key: ValueKey<String>('language-$label'),
           duration: const Duration(milliseconds: 220),

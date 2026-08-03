@@ -240,6 +240,11 @@ class _PinchScaleGestureRecognizer extends ScaleGestureRecognizer {
       if (event is PointerUpEvent || event is PointerCancelEvent) {
         // Single-finger tap/lift → leave the arena so tap handlers win.
         resolve(GestureDisposition.rejected);
+        // Resolving the final pointer resets ScaleGestureRecognizer to its
+        // ready state. Forwarding this same up/cancel event afterwards makes
+        // the superclass handle an event for a gesture it has already ended,
+        // which asserts and prevents ancestor double-tap handlers from firing.
+        return;
       }
     }
     super.handleEvent(event);

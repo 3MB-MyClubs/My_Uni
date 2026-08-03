@@ -8,6 +8,8 @@ import 'locale_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
 
+typedef ProfileFollowEdge = ({String followerId, String followingId});
+
 class PeopleService {
   static const _localDirectoryBoxName = 'local_people_directory_v1';
 
@@ -24,6 +26,8 @@ class PeopleService {
   final Map<String, Set<String>> _followersByUserId = {};
   final Map<String, Set<String>> _followingByUserId = {};
   final Map<String, Set<String>> _clubIdsByUserId = {};
+  final Map<String, Set<String>> _mutualFollowerIdsBySuggestedUserId = {};
+  int _mutualFollowersRevision = 0;
 
   /// Profiles that are allowed to appear in people pickers and chats.
   ///
@@ -97,6 +101,41 @@ class PeopleService {
 
   Set<String> get cachedFollowerIds => _cachedFollowerIds;
   Set<String> clubIdsFor(String userId) => _clubIdsByUserId[userId] ?? const {};
+  int get mutualFollowersRevision => _mutualFollowersRevision;
+
+  /// People the current user follows who also follow [suggestedUserId].
+  ///
+  /// The direction matters: for `me -> mutual -> suggestion`, the mutual
+  /// person is a useful social proof for following the suggestion. Merely
+  /// sharing an account that both people follow is not a mutual follower.
+  Set<String> mutualFollowerIdsFor(String suggestedUserId) => Set.unmodifiable(
+    _mutualFollowerIdsBySuggestedUserId[suggestedUserId] ?? const {},
+  );
+
+  /// Replaces the mutual-follower index from a snapshot of follow edges.
+  /// Public so other directory surfaces can reuse the same graph semantics.
+  void replaceMutualFollowersForSuggestions({
+    required Iterable<String> currentUserFollowingIds,
+    required Iterable<String> suggestedUserIds,
+    required Iterable<ProfileFollowEdge> edges,
+  }) {
+    final currentFollowing = currentUserFollowingIds.toSet();
+    final suggestions = suggestedUserIds.toSet();
+    final next = <String, Set<String>>{};
+
+    for (final edge in edges) {
+      if (!currentFollowing.contains(edge.followerId) ||
+          !suggestions.contains(edge.followingId)) {
+        continue;
+      }
+      (next[edge.followingId] ??= <String>{}).add(edge.followerId);
+    }
+
+    _mutualFollowerIdsBySuggestedUserId
+      ..clear()
+      ..addAll(next);
+    _mutualFollowersRevision++;
+  }
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
@@ -302,6 +341,57 @@ class PeopleService {
     }
   }
 
+  /// Hydrates social proof for the people shown in follow suggestions.
+  ///
+  /// This is one bulk edge query, rather than a followers query per card. It
+  /// asks for edges `someone I follow -> suggested person`, which is the
+  /// mutual-follower relationship displayed by recommendation surfaces.
+  Future<void> hydrateMutualFollowersForSuggestions(
+    String currentUserId,
+  ) async {
+    final client = _client;
+    if (client == null || currentUserId.isEmpty) return;
+
+    final currentFollowing = {
+      ...?_followingByUserId[currentUserId],
+      ...userState.followedUserIds,
+    };
+    final suggestedIds = cachedPeople
+        .map((user) => user.id)
+        .where((id) => id != currentUserId && !currentFollowing.contains(id))
+        .toSet();
+
+    if (currentFollowing.isEmpty || suggestedIds.isEmpty) {
+      replaceMutualFollowersForSuggestions(
+        currentUserFollowingIds: currentFollowing,
+        suggestedUserIds: suggestedIds,
+        edges: const [],
+      );
+      return;
+    }
+
+    final rows = await client
+        .from('profile_follows')
+        .select('follower_id, following_id')
+        .inFilter('follower_id', currentFollowing.toList())
+        .inFilter('following_id', suggestedIds.toList());
+    final edges = <ProfileFollowEdge>[
+      for (final row in rows)
+        if (row['follower_id'] != null && row['following_id'] != null)
+          (
+            followerId: row['follower_id'].toString(),
+            followingId: row['following_id'].toString(),
+          ),
+    ];
+
+    replaceMutualFollowersForSuggestions(
+      currentUserFollowingIds: currentFollowing,
+      suggestedUserIds: suggestedIds,
+      edges: edges,
+    );
+    await _cacheProfilesByIds(edges.map((edge) => edge.followerId).toSet());
+  }
+
   Future<void> hydrateProfileDetailsFor(String userId) async {
     final client = _client;
     if (client == null || userId.isEmpty) return;
@@ -498,6 +588,12 @@ class PeopleService {
         force: force,
       ),
     ]);
+    try {
+      await hydrateMutualFollowersForSuggestions(currentUserId);
+    } catch (_) {
+      // The directory and follow buttons remain useful if social-proof
+      // hydration is temporarily unavailable; retain the previous snapshot.
+    }
   }
 
   void setCachedFollower(String userId, bool followsMe) {
@@ -521,12 +617,18 @@ class PeopleService {
       following.remove(userId);
       final followers = {...?_followersByUserId[userId]}..remove(myId);
       _followersByUserId[userId] = followers;
+
+      var removedFromMutuals = false;
+      for (final mutualIds in _mutualFollowerIdsBySuggestedUserId.values) {
+        removedFromMutuals = mutualIds.remove(userId) || removedFromMutuals;
+      }
+      if (removedFromMutuals) _mutualFollowersRevision++;
     }
     _followingByUserId[myId] = following;
   }
 
   List<User> peopleByIds(Iterable<String> ids) {
-    final byId = {for (final user in _cachedPeople) user.id: user};
+    final byId = {for (final user in cachedPeople) user.id: user};
     return ids
         .map(
           (id) =>

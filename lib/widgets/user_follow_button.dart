@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/user_state.dart';
+import 'app_pressable.dart';
 
 /// A self-contained follow/unfollow button for a user.
 ///
@@ -65,8 +66,9 @@ class UserFollowButton extends ConsumerWidget {
       _ => 8.0,
     };
 
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
+      pressedScale: 0.96,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: padding,

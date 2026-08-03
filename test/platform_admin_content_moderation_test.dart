@@ -5,11 +5,14 @@ import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/models/news_post.dart';
 import 'package:flutter_application_1/screens/admin_dashboard.dart';
+import 'package:flutter_application_1/screens/explore_screen.dart';
+import 'package:flutter_application_1/screens/main_nav_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/event_cleanup_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -158,7 +161,9 @@ void main() {
     },
   );
 
-  testWidgets('admin dashboard logout clears the admin session', (tester) async {
+  testWidgets('admin dashboard logout clears the admin session', (
+    tester,
+  ) async {
     authService.setClubAdmin(
       AppAdmin(
         id: 'platform-admin',
@@ -186,5 +191,36 @@ void main() {
 
     expect(authService.currentAdmin, isNull);
     expect(logoutNotified, isTrue);
+  });
+
+  testWidgets('platform admin can open campus search from navigation', (
+    tester,
+  ) async {
+    authService.setClubAdmin(
+      AppAdmin(
+        id: 'platform-admin',
+        name: 'ClubUp Admin',
+        email: 'dev3mb@gmail.com',
+        password: '',
+        isPlatformAdmin: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MainNavScreen(isAdmin: true),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Search'), findsOneWidget);
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExploreScreen), findsOneWidget);
   });
 }

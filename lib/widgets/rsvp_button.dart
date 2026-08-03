@@ -5,6 +5,7 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
 import '../services/rsvp_store.dart';
+import 'app_pressable.dart';
 
 class RsvpButton extends StatefulWidget {
   final String eventId;
@@ -88,7 +89,7 @@ class _RsvpButtonState extends State<RsvpButton> {
               onTap: onToggle,
             ),
             const SizedBox(width: 6),
-            GestureDetector(
+            AppPressable(
               onTap: onToggle,
               child: AnimatedOpacity(
                 opacity: 1.0,
@@ -194,7 +195,7 @@ class _RsvpButtonState extends State<RsvpButton> {
             const SizedBox(width: 10),
 
             // "Cancel" secondary action
-            GestureDetector(
+            AppPressable(
               onTap: onToggle,
               child: Container(
                 width: 96,
@@ -236,8 +237,9 @@ class _RsvpButtonState extends State<RsvpButton> {
       key: const ValueKey('full-rsvp'),
       height: 56,
       width: double.infinity,
-      child: GestureDetector(
+      child: AppPressable(
         onTap: onToggle,
+        pressedScale: 0.98,
         child: AnimatedOpacity(
           opacity: 1.0,
           duration: const Duration(milliseconds: 150),
@@ -311,7 +313,7 @@ class _CompactChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveColor = enabled ? color : color.withValues(alpha: 0.45);
 
-    return GestureDetector(
+    return AppPressable(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

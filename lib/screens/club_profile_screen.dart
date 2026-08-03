@@ -4,11 +4,13 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import '../models/user.dart';
+import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_follow_service.dart';
+import '../services/club_role_localization.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
@@ -118,7 +120,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   void _openCommunityChat() {
     final threadId = ChatStore.clubThreadId(widget.club.id);
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
+      ChatPageRoute(
         settings: RouteSettings(
           name: '/clubs/${widget.club.id}/community',
           arguments: threadId,
@@ -2219,7 +2221,9 @@ class BoardManagementSheetState extends State<BoardManagementSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            hasTitle ? title! : AppLocalizations.of(context)!.noTitleSet,
+            hasTitle
+                ? localizedClubRole(AppLocalizations.of(context)!, title)
+                : AppLocalizations.of(context)!.noTitleSet,
             style: TextStyle(
               fontSize: 12,
               color: hasTitle
@@ -2575,7 +2579,7 @@ class _BoardTabState extends State<_BoardTab> {
               children: [
                 if (title != null && title.isNotEmpty)
                   Text(
-                    title,
+                    localizedClubRole(AppLocalizations.of(context)!, title),
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF1565C0),
