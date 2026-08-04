@@ -2421,49 +2421,81 @@ class _StickyCtaState extends State<_StickyCta> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          // Priority ladder: the RSVP button carries the whole decision on its
+          // own line; calendar and reminder sit below as quiet text actions —
+          // present and tappable, never competing with it.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              RsvpButton(
+                eventId: widget.event.id,
+                color: accent,
+                isPast: false,
+                event: widget.event,
+              ),
+              const SizedBox(height: 11),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  GestureDetector(
-                    onTap: _toggleRemind,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: _remind
-                            ? accent.withValues(alpha: 0.14)
-                            : AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.all(Radius.circular(16)),
-                        border: Border.all(
-                          color: _remind
-                              ? accent
-                              : AppColors.divider.withValues(alpha: 0.9),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: AnimatedReminderBell(
-                        active: _remind,
-                        color: accent,
-                        inactiveColor: AppColors.text,
-                        size: 22,
-                      ),
+                  Expanded(
+                    child: AddToCalendarButton(
+                      event: widget.event,
+                      color: accent,
+                      asLink: true,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  Container(
+                    width: 1,
+                    height: 16,
+                    color: AppColors.divider.withValues(alpha: 0.9),
+                  ),
                   Expanded(
-                    child: RsvpButton(
-                      eventId: widget.event.id,
-                      color: accent,
-                      isPast: false,
-                      event: widget.event,
+                    child: SizedBox(
+                      height: 36,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                          onTap: _toggleRemind,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedReminderBell(
+                                active: _remind,
+                                color: accent,
+                                inactiveColor: AppColors.secondaryText,
+                                size: 15,
+                              ),
+                              const SizedBox(width: 7),
+                              Flexible(
+                                child: Text(
+                                  _remind
+                                      ? AppLocalizations.of(
+                                          context,
+                                        )!.remindedLabel
+                                      : AppLocalizations.of(
+                                          context,
+                                        )!.remindMeLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: _remind
+                                        ? accent
+                                        : AppColors.secondaryText,
+                                    letterSpacing: -0.1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 9),
-              AddToCalendarButton(event: widget.event, color: accent),
             ],
           ),
         ),
