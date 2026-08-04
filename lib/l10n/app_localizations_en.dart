@@ -209,7 +209,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get going => 'Going';
 
   @override
-  String get rsvp => 'RSVP';
+  String get rsvp => 'Let\'s Go';
 
   @override
   String get ended => 'Ended';

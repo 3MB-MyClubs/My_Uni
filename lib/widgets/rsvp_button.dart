@@ -34,7 +34,6 @@ class _RsvpButtonState extends State<RsvpButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _confirmationController;
   late final Animation<double> _confirmationPulse;
-  late final Animation<double> _confirmationIconScale;
   bool? _lastAttending;
 
   String get _userId =>
@@ -53,16 +52,6 @@ class _RsvpButtonState extends State<RsvpButton>
           TweenSequenceItem(tween: Tween(begin: 1, end: 1.055), weight: 34),
           TweenSequenceItem(tween: Tween(begin: 1.055, end: 0.985), weight: 28),
           TweenSequenceItem(tween: Tween(begin: 0.985, end: 1), weight: 38),
-        ]).animate(
-          CurvedAnimation(
-            parent: _confirmationController,
-            curve: Curves.easeOut,
-          ),
-        );
-    _confirmationIconScale =
-        TweenSequence<double>([
-          TweenSequenceItem(tween: Tween(begin: 0.55, end: 1.16), weight: 58),
-          TweenSequenceItem(tween: Tween(begin: 1.16, end: 1), weight: 42),
         ]).animate(
           CurvedAnimation(
             parent: _confirmationController,
@@ -215,110 +204,47 @@ class _RsvpButtonState extends State<RsvpButton>
     }
 
     // ── Full — attending ──────────────────────────────────────────────────────
+    // Cancel-only: once you're in, the affirmation is redundant — the one thing
+    // left to do here is back out, so the slot becomes a single quiet button.
     if (attending) {
       return SizedBox(
         key: const ValueKey('full-attending'),
         height: 56,
-        // stretch → both the status pill and the Cancel button fill the full
-        // 56px height (without this the pill collapses to its text height).
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // "You're going" status pill
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      widget.color,
-                      Color.lerp(widget.color, Colors.black, 0.15)!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      offset: const Offset(0, 5),
+        width: double.infinity,
+        child: AppPressable(
+          onTap: onToggle,
+          pressedScale: 0.98,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+              border: Border.all(color: AppColors.divider, width: 1.5),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    AppLocalizations.of(context)!.cancel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.secondaryText,
+                      letterSpacing: -0.2,
                     ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ScaleTransition(
-                        key: const ValueKey('rsvp-confirmation-check'),
-                        scale: _confirmationIconScale,
-                        child: const Icon(
-                          Icons.check_circle_rounded,
-                          color: Colors.white,
-                          size: 19,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          AppLocalizations.of(context)!.youreGoing,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-              ),
+              ],
             ),
-
-            const SizedBox(width: 10),
-
-            // "Cancel" secondary action
-            AppPressable(
-              onTap: onToggle,
-              child: Container(
-                width: 96,
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                  border: Border.all(color: AppColors.divider, width: 1.5),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.close_rounded,
-                        size: 16,
-                        color: AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          AppLocalizations.of(context)!.cancel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -362,13 +288,18 @@ class _RsvpButtonState extends State<RsvpButton>
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  AppLocalizations.of(context)!.rsvp,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.2,
+                Flexible(
+                  child: Text(
+                    AppLocalizations.of(context)!.rsvp,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      // words, not an acronym — tight tracking, per the design
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ),
               ],

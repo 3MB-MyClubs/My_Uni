@@ -208,7 +208,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get going => 'Gidiyorum';
 
   @override
-  String get rsvp => 'Kayıt Ol';
+  String get rsvp => 'Hadi Gidelim';
 
   @override
   String get ended => 'Bitti';

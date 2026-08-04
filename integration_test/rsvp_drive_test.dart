@@ -12,12 +12,12 @@ import 'package:flutter_application_1/services/rsvp_store.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/widgets/rsvp_button.dart';
 
-/// Verifies the RSVP button's attending state renders cleanly (no collapsed /
-/// deformed pill) when placed in an Expanded row like the event detail CTA.
+/// Verifies the RSVP button renders cleanly in both states when placed
+/// full-width like the event detail CTA: "Let's Go" before, Cancel-only after.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('RSVP → clean attending UI (no deform)', (tester) async {
+  testWidgets('RSVP → cancel-only attending UI', (tester) async {
     authService.logout();
     await hiveBootstrap.initialize();
     await contentStore.initialize();
@@ -41,7 +41,7 @@ void main() {
     events.add(event); // rsvpStore.toggle looks the event up in the global list
     rsvpStore.seed(event.id, false);
 
-    // Mimic the event-detail sticky CTA: a 56px control + Expanded RSVP button.
+    // Mimic the event-detail sticky CTA: the button owns the full width.
     // event: null → skip device-calendar sync (plugin unavailable headless).
     await tester.pumpWidget(
       MaterialApp(
@@ -51,26 +51,9 @@ void main() {
           body: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceAlt,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.divider, width: 1.5),
-                    ),
-                    child: const Icon(Icons.notifications_none_rounded),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: RsvpButton(
-                      eventId: event.id,
-                      color: AppColors.primaryRed,
-                    ),
-                  ),
-                ],
+              child: RsvpButton(
+                eventId: event.id,
+                color: AppColors.primaryRed,
               ),
             ),
           ),
@@ -81,20 +64,21 @@ void main() {
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();
     await binding.takeScreenshot('rsvp-01-before');
-    expect(find.text('RSVP'), findsOneWidget);
+    expect(find.text("Let's Go"), findsOneWidget);
 
-    await tester.tap(find.text('RSVP'));
+    await tester.tap(find.text("Let's Go"));
     await tester.pump(const Duration(milliseconds: 400));
     await binding.takeScreenshot('rsvp-02-attending');
 
-    expect(find.text("You're going"), findsOneWidget);
+    // Cancel-only: no redundant "you're going" affirmation in this slot.
     expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text("You're going"), findsNothing);
     expect(tester.takeException(), isNull);
 
-    // Toggle back off → returns to RSVP cleanly.
+    // Toggle back off → returns to the primary CTA cleanly.
     await tester.tap(find.text('Cancel'));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('RSVP'), findsOneWidget);
+    expect(find.text("Let's Go"), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -119,30 +103,7 @@ void main() {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppColors.divider,
-                          width: 1.5,
-                        ),
-                      ),
-                      child: const Icon(Icons.notifications_none_rounded),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: RsvpButton(
-                        eventId: id,
-                        color: AppColors.primaryRed,
-                      ),
-                    ),
-                  ],
-                ),
+                child: RsvpButton(eventId: id, color: AppColors.primaryRed),
               ),
             ],
           ),
@@ -153,7 +114,7 @@ void main() {
     await binding.convertFlutterSurfaceToImage();
     await tester.pump(const Duration(milliseconds: 400));
     await binding.takeScreenshot('rsvp-03-attending-render');
-    expect(find.text("You're going"), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

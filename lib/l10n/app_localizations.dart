@@ -491,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @rsvp.
   ///
   /// In en, this message translates to:
-  /// **'RSVP'**
+  /// **'Let\'s Go'**
   String get rsvp;
 
   /// No description provided for @ended.

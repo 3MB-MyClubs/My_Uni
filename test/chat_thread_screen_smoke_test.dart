@@ -508,6 +508,112 @@ void main() {
     },
   );
 
+  testWidgets('sender taps group checkmarks to see live per-member receipts', (
+    tester,
+  ) async {
+    const senderId = 'receipt-sender';
+    const recipientId = 'receipt-recipient';
+    const secondRecipientId = 'receipt-second-recipient';
+    final sender = User(
+      id: senderId,
+      name: 'Receipt Sender',
+      email: 'receipt.sender@example.test',
+      password: '135790',
+      role: 'student',
+      subscribedClubIds: const [],
+    );
+    users.add(sender);
+    addTearDown(() => users.remove(sender));
+    for (final recipient in [
+      User(
+        id: recipientId,
+        name: 'Receipt Recipient',
+        email: 'receipt.recipient@example.test',
+        password: '',
+        role: 'student',
+        subscribedClubIds: [],
+      ),
+      User(
+        id: secondRecipientId,
+        name: 'Second Recipient',
+        email: 'receipt.second@example.test',
+        password: '',
+        role: 'student',
+        subscribedClubIds: [],
+      ),
+    ]) {
+      peopleService.cacheRegisteredUser(recipient);
+    }
+    expect(authService.login(sender.email, sender.password), isTrue);
+    final threadId = chatStore.createGroupThread(
+      creatorId: senderId,
+      recipientIds: [recipientId, secondRecipientId],
+    )!;
+    final outgoing = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: senderId,
+      content: 'Receipt details',
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+      ),
+    );
+    await tester.pump();
+
+    final receiptButton = find.byKey(
+      ValueKey('group-message-receipts-${outgoing.id}'),
+    );
+    expect(receiptButton, findsOneWidget);
+    expect(tester.getSize(receiptButton), const Size(44, 44));
+
+    await tester.tap(receiptButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(
+      find.byKey(const ValueKey('chat-message-info-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text(S.readBy), findsOneWidget);
+    expect(find.text(S.deliveredTo), findsOneWidget);
+    expect(find.text(S.noOneYet), findsNWidgets(2));
+
+    // Simulate the recipient opening this group after the sheet is already
+    // visible. The AnimatedBuilder must surface the new receipt immediately.
+    await tester.runAsync(() async {
+      chatStore.markThreadRead(threadId, recipientId);
+      // markThreadRead persists immediately via an unawaited write. Give that
+      // write a real event loop turn instead of starting a competing save.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('message-receipt-$recipientId')),
+      findsOneWidget,
+    );
+    expect(find.text(S.noOneYet), findsOneWidget);
+
+    // While the modal route is open, add somebody else's message and verify
+    // that it never gains the sender-only receipt entry point.
+    final incoming = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: recipientId,
+      content: 'Incoming while info is open',
+    )!;
+    await tester.pump();
+    expect(
+      find.byKey(ValueKey('group-message-receipts-${incoming.id}')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('club thread shows the join prompt for non-members', (
     tester,
   ) async {

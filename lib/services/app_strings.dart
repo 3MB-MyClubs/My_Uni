@@ -922,6 +922,7 @@ class S {
   static String get messageInfo => _t('Message info', 'Mesaj bilgisi');
   static String get readBy => _t('Read by', 'Okuyanlar');
   static String get deliveredTo => _t('Delivered to', 'Teslim edilenler');
+  static String get noOneYet => _t('No one yet', 'Henüz kimse');
   static String deliveredAt(String time) =>
       _t('Delivered $time', '$time teslim edildi');
   static String readAt(String time) => _t('Read $time', '$time okundu');

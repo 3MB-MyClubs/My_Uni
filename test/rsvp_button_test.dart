@@ -38,7 +38,7 @@ void main() {
       ),
     );
 
-    expect(find.text('RSVP'), findsNothing);
+    expect(find.text("Let's Go"), findsNothing);
     expect(find.text('Ended'), findsNothing);
     expect(find.text('This event has passed'), findsNothing);
     expect(find.byType(GestureDetector), findsNothing);
@@ -104,10 +104,9 @@ void main() {
       find.byKey(const ValueKey('rsvp-confirmation-pulse')),
     );
     expect(activePulse.transform.getMaxScaleOnAxis(), greaterThan(1));
-    expect(
-      find.byKey(const ValueKey('rsvp-confirmation-check')),
-      findsOneWidget,
-    );
+    // The joined slot is cancel-only — the pulse is the confirmation, so there
+    // is no separate "you're going" affirmation to assert on.
+    expect(find.text('Cancel'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 500));
     final settledPulse = tester.widget<Transform>(
