@@ -1886,5 +1886,10 @@
   "notifGroupThisMonth": "THIS MONTH",
   "notifGroupEarlier": "EARLIER",
   "updatedJustNow": "Updated just now",
-  "notificationsAutoCleared": "Notifications older than 30 days are cleared automatically"
+  "notificationsAutoCleared": "Notifications older than 30 days are cleared automatically",
+  "updateRequiredTitle": "Update required",
+  "updateRequiredMessage": "Please update ClubUp to continue using the app.",
+  "updateRequiredButton": "Update now",
+  "updateRequiredRetry": "Check again",
+  "updateRequiredStoreError": "We couldn't open the app store. Please update ClubUp there, then try again."
 }

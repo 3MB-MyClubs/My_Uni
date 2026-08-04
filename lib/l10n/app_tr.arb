@@ -958,5 +958,10 @@
   "notifGroupThisMonth": "BU AY",
   "notifGroupEarlier": "DAHA ÖNCE",
   "updatedJustNow": "Az önce güncellendi",
-  "notificationsAutoCleared": "30 günden eski bildirimler otomatik olarak temizlenir"
+  "notificationsAutoCleared": "30 günden eski bildirimler otomatik olarak temizlenir",
+  "updateRequiredTitle": "Güncelleme gerekli",
+  "updateRequiredMessage": "Uygulamayı kullanmaya devam etmek için ClubUp'ı güncelleyin.",
+  "updateRequiredButton": "Şimdi güncelle",
+  "updateRequiredRetry": "Tekrar kontrol et",
+  "updateRequiredStoreError": "Uygulama mağazası açılamadı. ClubUp'ı mağazadan güncelledikten sonra tekrar deneyin."
 }

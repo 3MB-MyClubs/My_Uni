@@ -5851,6 +5851,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notifications older than 30 days are cleared automatically'**
   String get notificationsAutoCleared;
+
+  /// No description provided for @updateRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get updateRequiredTitle;
+
+  /// No description provided for @updateRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please update ClubUp to continue using the app.'**
+  String get updateRequiredMessage;
+
+  /// No description provided for @updateRequiredButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Update now'**
+  String get updateRequiredButton;
+
+  /// No description provided for @updateRequiredRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get updateRequiredRetry;
+
+  /// No description provided for @updateRequiredStoreError.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t open the app store. Please update ClubUp there, then try again.'**
+  String get updateRequiredStoreError;
 }
 
 class _AppLocalizationsDelegate

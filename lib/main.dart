@@ -13,6 +13,7 @@ import 'l10n/app_localizations.dart';
 import 'screens/app_launch_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
+import 'screens/update_required_screen.dart';
 // import 'screens/feed_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
@@ -49,6 +50,7 @@ import 'services/moderation_service.dart';
 import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
 import 'services/onboarding_intro_service.dart';
+import 'services/app_update_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -195,9 +197,11 @@ class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
     this.minimumLaunchDuration = const Duration(milliseconds: 2000),
+    this.updateService,
   });
 
   final Duration minimumLaunchDuration;
+  final AppUpdateService? updateService;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -209,6 +213,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _showSignUp = false;
   bool _loggedIn = false;
   bool _isPreparingAccountPreferences = false;
+  bool _isCheckingForUpdate = true;
+  AppUpdateRequirement? _requiredUpdate;
+  int _updateCheckGeneration = 0;
   String _signupEmail = '';
 
   // Snapshotted at app construction so persisting the seen flag cannot remove
@@ -248,6 +255,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         if (mounted) setState(() => _isLaunching = false);
       });
     }
+    unawaited(_checkForRequiredUpdate(blockWhileChecking: true));
   }
 
   @override
@@ -261,10 +269,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     appPresenceService.handleLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // Returning from the store is the important resume path: the update
+      // requirement stays visible until the newly installed build is verified.
+      unawaited(
+        _checkForRequiredUpdate(blockWhileChecking: _requiredUpdate != null),
+      );
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _savePrefs();
     }
+  }
+
+  Future<void> _checkForRequiredUpdate({
+    required bool blockWhileChecking,
+  }) async {
+    final generation = ++_updateCheckGeneration;
+    if (blockWhileChecking && mounted) {
+      setState(() => _isCheckingForUpdate = true);
+    }
+
+    final requiredUpdate = await (widget.updateService ?? appUpdateService)
+        .checkForRequiredUpdate();
+    if (!mounted || generation != _updateCheckGeneration) return;
+
+    setState(() {
+      _requiredUpdate = requiredUpdate;
+      if (blockWhileChecking) _isCheckingForUpdate = false;
+    });
+  }
+
+  Future<void> _retryUpdateCheck() async {
+    await _checkForRequiredUpdate(blockWhileChecking: true);
   }
 
   void _savePrefs() {
@@ -515,7 +552,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         // device-local SharedPreferences flag rather than that account-level
         // record, so signing in on a second device — or after a reinstall —
         // re-prompted people who had already agreed.
-        if (_showIntroThisLaunch &&
+        if (_isCheckingForUpdate) {
+          // Keep the branded launch screen up while the minimum-version check
+          // is in flight. No authenticated or cached destination is exposed
+          // before the check completes.
+          homeWidget = const AppLaunchScreen();
+          destinationKey = 'update-check';
+        } else if (_requiredUpdate != null) {
+          homeWidget = UpdateRequiredScreen(
+            storeUrl: _requiredUpdate!.storeUrl,
+            onRetry: _retryUpdateCheck,
+          );
+          destinationKey = 'update-required';
+        } else if (_showIntroThisLaunch &&
             !_showSignUp &&
             !_loggedIn &&
             authService.currentUser == null &&

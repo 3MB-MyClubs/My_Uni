@@ -3530,4 +3530,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsAutoCleared =>
       'Notifications older than 30 days are cleared automatically';
+
+  @override
+  String get updateRequiredTitle => 'Update required';
+
+  @override
+  String get updateRequiredMessage =>
+      'Please update ClubUp to continue using the app.';
+
+  @override
+  String get updateRequiredButton => 'Update now';
+
+  @override
+  String get updateRequiredRetry => 'Check again';
+
+  @override
+  String get updateRequiredStoreError =>
+      'We couldn\'t open the app store. Please update ClubUp there, then try again.';
 }

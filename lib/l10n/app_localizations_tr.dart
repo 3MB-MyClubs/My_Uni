@@ -3520,4 +3520,21 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get notificationsAutoCleared =>
       '30 günden eski bildirimler otomatik olarak temizlenir';
+
+  @override
+  String get updateRequiredTitle => 'Güncelleme gerekli';
+
+  @override
+  String get updateRequiredMessage =>
+      'Uygulamayı kullanmaya devam etmek için ClubUp\'ı güncelleyin.';
+
+  @override
+  String get updateRequiredButton => 'Şimdi güncelle';
+
+  @override
+  String get updateRequiredRetry => 'Tekrar kontrol et';
+
+  @override
+  String get updateRequiredStoreError =>
+      'Uygulama mağazası açılamadı. ClubUp\'ı mağazadan güncelledikten sonra tekrar deneyin.';
 }

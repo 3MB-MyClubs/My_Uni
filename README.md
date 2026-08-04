@@ -109,6 +109,29 @@ upload key; creating a different key will require an upload-key reset.
 The signed bundle is written to
 `build/app/outputs/bundle/release/app-release.aab`.
 
+## Mandatory mobile updates
+
+Mobile builds check the public, read-only `app_update_config` row before they
+show login or authenticated content. The migration seeds both minimum builds
+at `2`, matching the current `pubspec.yaml` build (`1.1.0+2`). Build 2 users
+continue normally; older mobile builds are required to update as soon as the
+configuration is live.
+
+After publishing a release, raise the corresponding minimum build in the
+Supabase dashboard or SQL editor only after the new build is available in the
+store:
+
+```sql
+update public.app_update_config
+set android_min_build = 3,
+    ios_min_build = 3,
+    updated_at = now()
+where id = 'global';
+```
+
+The iOS store URL is configured to the ClubUp App Store listing. Web and
+desktop builds are not gated.
+
 ## ClubUp support website
 
 The localized static website in `docs/` contains the public ClubUp support,
