@@ -554,134 +554,151 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _openMessageInfo(ChatMessage originalMessage) {
-    final message =
-        chatStore.messageById(originalMessage.id) ?? originalMessage;
-    final readReceipts =
-        message.receipts
-            .where(
-              (receipt) =>
-                  receipt.userId != message.senderId && receipt.seenAt != null,
-            )
-            .toList(growable: false)
-          ..sort((a, b) => b.seenAt!.compareTo(a.seenAt!));
-    final deliveredReceipts =
-        message.receipts
-            .where(
-              (receipt) =>
-                  receipt.userId != message.senderId &&
-                  receipt.seenAt == null &&
-                  receipt.deliveredAt != null,
-            )
-            .toList(growable: false)
-          ..sort((a, b) => b.deliveredAt!.compareTo(a.deliveredAt!));
+    // Receipt identities and timestamps are sender-only. Keep this guard here
+    // as well as at each UI entry point so future callers cannot accidentally
+    // expose message information for somebody else's message.
+    if (!chatStore.isMessageOwner(originalMessage, _myId)) return;
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        key: const ValueKey('chat-message-info-sheet'),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: chatStore,
+        builder: (context, _) {
+          // Re-read on every ChatStore notification so a Realtime receipt can
+          // move from Delivered to Read while this sheet remains open.
+          final message =
+              chatStore.messageById(originalMessage.id) ?? originalMessage;
+          final readReceipts =
+              message.receipts
+                  .where(
+                    (receipt) =>
+                        receipt.userId != message.senderId &&
+                        receipt.seenAt != null,
+                  )
+                  .toList(growable: false)
+                ..sort((a, b) => b.seenAt!.compareTo(a.seenAt!));
+          final deliveredReceipts =
+              message.receipts
+                  .where(
+                    (receipt) =>
+                        receipt.userId != message.senderId &&
+                        receipt.seenAt == null &&
+                        receipt.deliveredAt != null,
+                  )
+                  .toList(growable: false)
+                ..sort((a, b) => b.deliveredAt!.compareTo(a.deliveredAt!));
+
+          return Container(
+            key: const ValueKey('chat-message-info-sheet'),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(22),
               ),
-              const SizedBox(height: 18),
-              Text(
-                S.messageInfo,
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (_isDirect) ...[
-                _directReceiptRow(
-                  icon: Icons.done_all_rounded,
-                  label: S.deliveredAt(_receiptTimestamp(message.deliveredAt)),
-                  color: AppColors.secondaryText,
-                ),
-                if (message.seenAt case final seenAt?)
-                  _directReceiptRow(
-                    icon: Icons.done_all_rounded,
-                    label: S.readAt(_receiptTimestamp(seenAt)),
-                    color: AppColors.primaryRed,
-                  ),
-              ] else if (_isGroup) ...[
-                _receiptSection(
-                  title: S.readBy,
-                  receipts: readReceipts,
-                  timestampFor: (receipt) => receipt.seenAt!,
-                ),
-                const SizedBox(height: 14),
-                _receiptSection(
-                  title: S.deliveredTo,
-                  receipts: deliveredReceipts,
-                  timestampFor: (receipt) => receipt.deliveredAt!,
-                ),
-              ],
-              Divider(height: 28, color: AppColors.divider),
-              if (chatStore.canWriteThread(widget.threadId, _myId))
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.reply_rounded,
-                    color: AppColors.primaryRed,
-                  ),
-                  title: Text(
-                    S.reply,
-                    style: TextStyle(
-                      color: AppColors.text,
-                      fontWeight: FontWeight.w700,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _beginReply(message);
-                  },
-                ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  Icons.delete_outline_rounded,
-                  color: AppColors.primaryRed,
-                ),
-                title: Text(
-                  S.deleteMessage,
-                  style: TextStyle(
-                    color: AppColors.primaryRed,
-                    fontWeight: FontWeight.w700,
+                  const SizedBox(height: 18),
+                  Text(
+                    S.messageInfo,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
                   ),
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  unawaited(_confirmDeleteMessage(message));
-                },
+                  const SizedBox(height: 14),
+                  if (_isDirect) ...[
+                    _directReceiptRow(
+                      icon: Icons.done_all_rounded,
+                      label: S.deliveredAt(
+                        _receiptTimestamp(message.deliveredAt),
+                      ),
+                      color: AppColors.secondaryText,
+                    ),
+                    if (message.seenAt case final seenAt?)
+                      _directReceiptRow(
+                        icon: Icons.done_all_rounded,
+                        label: S.readAt(_receiptTimestamp(seenAt)),
+                        color: AppColors.primaryRed,
+                      ),
+                  ] else if (_isGroup) ...[
+                    _receiptSection(
+                      title: S.readBy,
+                      receipts: readReceipts,
+                      timestampFor: (receipt) => receipt.seenAt!,
+                    ),
+                    const SizedBox(height: 14),
+                    _receiptSection(
+                      title: S.deliveredTo,
+                      receipts: deliveredReceipts,
+                      timestampFor: (receipt) => receipt.deliveredAt!,
+                    ),
+                  ],
+                  Divider(height: 28, color: AppColors.divider),
+                  if (chatStore.canWriteThread(widget.threadId, _myId))
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        Icons.reply_rounded,
+                        color: AppColors.primaryRed,
+                      ),
+                      title: Text(
+                        S.reply,
+                        style: TextStyle(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _beginReply(message);
+                      },
+                    ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.primaryRed,
+                    ),
+                    title: Text(
+                      S.deleteMessage,
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      unawaited(_confirmDeleteMessage(message));
+                    },
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -719,38 +736,53 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ),
         const SizedBox(height: 4),
-        for (final receipt in receipts)
-          Builder(
-            builder: (context) {
-              final name = _senderInfo(receipt.userId).$1;
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: UserAvatar(
-                  userId: receipt.userId,
-                  name: name.isEmpty ? receipt.userId : name,
-                  size: 38,
-                  fontSize: 14,
-                ),
-                title: Text(
-                  name.isEmpty ? receipt.userId : name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontWeight: FontWeight.w700,
+        if (receipts.isEmpty)
+          Padding(
+            key: ValueKey('empty-message-receipts-$title'),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              S.noOneYet,
+              style: TextStyle(
+                color: AppColors.secondaryText,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          for (final receipt in receipts)
+            Builder(
+              builder: (context) {
+                final name = _senderInfo(receipt.userId).$1;
+                return ListTile(
+                  key: ValueKey('message-receipt-${receipt.userId}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: UserAvatar(
+                    userId: receipt.userId,
+                    name: name.isEmpty ? receipt.userId : name,
+                    size: 38,
+                    fontSize: 14,
                   ),
-                ),
-                trailing: Text(
-                  _receiptTimestamp(timestampFor(receipt)),
-                  style: TextStyle(
-                    color: AppColors.secondaryText,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  title: Text(
+                    name.isEmpty ? receipt.userId : name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
+                  trailing: Text(
+                    _receiptTimestamp(timestampFor(receipt)),
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              },
+            ),
       ],
     );
   }
@@ -1814,8 +1846,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   child: bubble,
                 ),
                 if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
-                // Outgoing student messages expose a compact delivery state;
-                // long-pressing the bubble opens the exact receipt timestamps.
+                // Outgoing student messages expose a compact delivery state.
+                // Group checkmarks are directly tappable; long-pressing the
+                // bubble remains a secondary route to the same information.
                 Padding(
                   padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
                   child: Row(
@@ -1831,15 +1864,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ),
                       if (mine && (_isDirect || _isGroup)) ...[
                         const SizedBox(width: 5),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          child: _MessageTicks(
-                            key: ValueKey(
-                              'message-status-${m.id}-${chatStore.deliveryStatusFor(m).name}',
-                            ),
-                            status: chatStore.deliveryStatusFor(m),
-                          ),
-                        ),
+                        _messageStatusIndicator(m),
                       ],
                     ],
                   ),
@@ -2445,6 +2470,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _timeLabel(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  Widget _messageStatusIndicator(ChatMessage message) {
+    final status = chatStore.deliveryStatusFor(message);
+    final ticks = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: _MessageTicks(
+        key: ValueKey('message-status-${message.id}-${status.name}'),
+        status: status,
+      ),
+    );
+    if (!_isGroup) return ticks;
+
+    return Semantics(
+      button: true,
+      label: S.messageInfo,
+      child: Tooltip(
+        message: S.messageInfo,
+        child: InkResponse(
+          key: ValueKey('group-message-receipts-${message.id}'),
+          onTap: () => _openMessageInfo(message),
+          radius: 22,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            child: Center(child: ticks),
+          ),
+        ),
+      ),
+    );
+  }
 
   String _receiptTimestamp(DateTime value) {
     final dt = value.toLocal();
