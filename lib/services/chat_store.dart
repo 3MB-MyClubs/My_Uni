@@ -48,6 +48,8 @@ class ChatStore extends ChangeNotifier {
   Box<dynamic>? _box;
 
   final List<ChatMessage> _messages = [];
+  final Map<String, ({String url, DateTime expiresAt})>
+  _signedChatAttachmentUrls = {};
 
   /// Local-first outbox. IDs remain here until Supabase acknowledges storage.
   final Set<String> _pendingRemoteMessageIds = {};
@@ -410,6 +412,7 @@ class ChatStore extends ChangeNotifier {
     final oldGroupChannel = _groupMessageChannel;
     if (oldGroupChannel != null) await client.removeChannel(oldGroupChannel);
     _syncRetry?.cancel();
+    if (_syncedUserId != userId) _signedChatAttachmentUrls.clear();
     _syncedUserId = userId;
 
     final channel = client
@@ -1383,9 +1386,22 @@ class ChatStore extends ChangeNotifier {
   Future<String> _signedChatAttachmentUrl(String objectPath) async {
     final client = _client;
     if (client == null) return objectPath;
-    return client.storage
+    final now = DateTime.now();
+    final cached = _signedChatAttachmentUrls[objectPath];
+    if (cached != null &&
+        cached.expiresAt.isAfter(now.add(const Duration(minutes: 1)))) {
+      return cached.url;
+    }
+    final url = await client.storage
         .from(_chatAttachmentBucket)
         .createSignedUrl(objectPath, _chatAttachmentSignedUrlLifetimeSeconds);
+    _signedChatAttachmentUrls[objectPath] = (
+      url: url,
+      expiresAt: now.add(
+        const Duration(seconds: _chatAttachmentSignedUrlLifetimeSeconds),
+      ),
+    );
+    return url;
   }
 
   void _removeRemoteMessageLocally(String messageId) {

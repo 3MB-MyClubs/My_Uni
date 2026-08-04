@@ -30,6 +30,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
@@ -1706,7 +1707,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               postId: m.sharedPostId!,
               onDarkBackground: mine,
             ),
-          if (photoPath != null) _photoAttachment(photoPath),
+          if (photoPath != null) _photoAttachment(m),
           if (videoPath != null) _videoAttachment(videoPath),
           if (filePath != null) _fileAttachment(m, mine: mine),
           if (hasText)
@@ -1981,15 +1982,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Widget _photoAttachment(String path) {
+  Widget _photoAttachment(ChatMessage message) {
+    final path = message.attachmentPath!;
     final isRemote = path.startsWith('http://') || path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
-    final imageProvider = isRemote
-        ? NetworkImage(path) as ImageProvider
-        : FileImage(file!);
     return GestureDetector(
-      key: ValueKey('chat-photo-$path'),
+      key: ValueKey('chat-photo-${message.id}'),
       onTap: exists
           ? () => showDialog<void>(
               context: context,
@@ -1999,7 +1998,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 child: InteractiveViewer(
                   maxScale: 4,
                   child: Center(
-                    child: Image(image: imageProvider, fit: BoxFit.contain),
+                    child: isRemote
+                        ? AppNetworkImage(url: path, fit: BoxFit.contain)
+                        : Image.file(file!, fit: BoxFit.contain),
                   ),
                 ),
               ),
@@ -2009,34 +2010,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         borderRadius: BorderRadius.circular(15),
         child: Container(
           width: 200,
-          constraints: const BoxConstraints(maxHeight: 240),
           decoration: BoxDecoration(
             border: Border.all(color: AppColors.glassEdge),
             borderRadius: BorderRadius.circular(15),
           ),
-          child: exists
-              ? Image(
-                  image: imageProvider,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => _missingPhotoPlaceholder(),
-                )
-              : Container(
-                  height: 140,
-                  alignment: Alignment.center,
-                  color: AppColors.surfaceAlt,
-                  child: Icon(
-                    Icons.image_outlined,
-                    size: 26,
-                    color: AppColors.secondaryText,
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: !exists
+                ? _missingPhotoPlaceholder()
+                : isRemote
+                ? AppNetworkImage(
+                    key: ValueKey('chat-photo-image-${message.id}'),
+                    url: path,
+                    cacheKey: 'chat-photo-${message.id}',
+                    cacheWidth: 320,
+                    fit: BoxFit.cover,
+                    useOldImageOnUrlChange: true,
+                    placeholderBuilder: (_) => _photoLoadingPlaceholder(),
+                    errorBuilder: (_) => _missingPhotoPlaceholder(),
+                  )
+                : Image.file(
+                    file!,
+                    fit: BoxFit.cover,
+                    cacheWidth: (320 * MediaQuery.devicePixelRatioOf(context))
+                        .round(),
+                    frameBuilder: (context, child, frame, syncLoaded) =>
+                        syncLoaded || frame != null
+                        ? child
+                        : _photoLoadingPlaceholder(),
+                    errorBuilder: (_, _, _) => _missingPhotoPlaceholder(),
                   ),
-                ),
+          ),
         ),
       ),
     );
   }
 
+  Widget _photoLoadingPlaceholder() => Container(
+    alignment: Alignment.center,
+    color: AppColors.surfaceAlt,
+    child: SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        color: AppColors.primaryRed,
+      ),
+    ),
+  );
+
   Widget _missingPhotoPlaceholder() => Container(
-    height: 140,
     alignment: Alignment.center,
     color: AppColors.surfaceAlt,
     child: Icon(Icons.image_outlined, size: 26, color: AppColors.secondaryText),
