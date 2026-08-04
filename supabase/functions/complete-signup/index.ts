@@ -24,6 +24,7 @@ function json(body: unknown, status = 200) {
     headers: {
       ...corsHeaders,
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
     },
   });
 }
@@ -50,7 +51,9 @@ function getServiceRoleKey() {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", {
+      headers: { ...corsHeaders, "Cache-Control": "no-store" },
+    });
   }
 
   if (req.method !== "POST") {
@@ -314,4 +317,3 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid request." }, 400);
   }
 });
-

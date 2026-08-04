@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'event_cleanup_service.dart';
 import 'supabase_content_service.dart';
 import 'supabase_config.dart';
+import 'supabase_read_cache.dart';
+import 'people_service.dart';
 
 typedef GuardedContentRefresh =
     Future<bool> Function(bool Function() shouldApply);
@@ -83,6 +85,20 @@ class LazyContentLoader {
     return future;
   }
 
+  /// Marks the public content snapshot stale after a successful remote write.
+  ///
+  /// Keep the current in-memory lists so the caller's optimistic/local update
+  /// remains visible, but force the next normal load to reconcile with
+  /// Supabase. The generation guard also prevents an older refresh that was
+  /// already running when the write completed from being applied afterward.
+  void invalidateContent() {
+    _generation++;
+    _contentLoadedAt = null;
+    _countsLoadedAt = null;
+    _contentLoad = null;
+    _countLoad = null;
+  }
+
   /// Drops all request state at an authentication boundary.
   ///
   /// Supabase RLS can return different public rows for different accounts
@@ -96,6 +112,8 @@ class LazyContentLoader {
     _countsLoadedAt = null;
     _contentLoad = null;
     _countLoad = null;
+    supabaseReadCache.clear();
+    peopleService.clearRemoteCaches();
     if (clearRemoteContent) {
       supabaseContentService.clearSessionContent();
     }
@@ -127,6 +145,8 @@ class LazyContentLoader {
       _countsLoadedAt = null;
       _contentLoad = null;
       _countLoad = null;
+      supabaseReadCache.clear();
+      peopleService.clearRemoteCaches();
       supabaseContentService.clearSessionContent();
     }
     return _CacheRequest(scope: scope, generation: _generation);

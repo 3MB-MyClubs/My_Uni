@@ -1670,16 +1670,26 @@ class ChatStore extends ChangeNotifier {
                     fileOptions: const FileOptions(
                       upsert: true,
                       contentType: 'image/jpeg',
+                      cacheControl: '0',
                     ),
                   );
               final publicUrl = client.storage
                   .from('group-chat-photos')
                   .getPublicUrl(objectPath);
+              final publicUri = Uri.parse(publicUrl);
+              final versionedUrl = publicUri
+                  .replace(
+                    queryParameters: {
+                      ...publicUri.queryParameters,
+                      'v': DateTime.now().microsecondsSinceEpoch.toString(),
+                    },
+                  )
+                  .toString();
               await client
                   .from('group_chats')
-                  .update({'photo_url': publicUrl})
+                  .update({'photo_url': versionedUrl})
                   .eq('id', group.id);
-              _groups[group.id] = group.withPhoto(publicUrl);
+              _groups[group.id] = group.withPhoto(versionedUrl);
             }
           }
           final existingRows = await client

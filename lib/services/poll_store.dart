@@ -92,6 +92,7 @@ class PollStore extends ChangeNotifier {
       final remote = await supabaseInteractionService.fetchPollVotes(
         postId,
         pollId: pollId,
+        force: force,
       );
       if (remote.isEmpty) return;
       final local = _votes.putIfAbsent(postId, () => {});

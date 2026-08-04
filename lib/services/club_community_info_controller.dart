@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_presence_service.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
+import 'supabase_read_cache.dart';
 
 /// Returns the number of unique authenticated online users who are members of
 /// one club. Kept pure so the membership rule is shared and directly testable.
@@ -41,6 +42,11 @@ class ClubCommunityInfoController extends ChangeNotifier {
   final String clubId;
   final AppPresenceService _presenceService;
   final Set<String> _memberIds;
+
+  static const _snapshotTtl = Duration(seconds: 30);
+
+  String get _memberCountCacheKey => 'club-community-count:$clubId';
+  String get _memberIdsCacheKey => 'club-community-members:$clubId';
 
   SupabaseClient? _client;
   RealtimeChannel? _membershipChannel;
@@ -100,31 +106,37 @@ class ClubCommunityInfoController extends ChangeNotifier {
   }
 
   Future<void> _refreshMemberCount(SupabaseClient client) async {
-    int? next;
-    try {
-      final rows = await client
-          .from('club_member_counts')
-          .select('member_count')
-          .eq('club_id', clubId)
-          .limit(1);
-      if (rows.isNotEmpty) {
-        next = int.tryParse(
-          (rows.first as Map)['member_count']?.toString() ?? '',
-        );
-      }
-    } catch (_) {
-      // Older environments may not have the aggregate view yet.
-    }
-    if (next == null) {
-      try {
-        next = await client
-            .from('club_followers')
-            .count(CountOption.exact)
-            .eq('club_id', clubId);
-      } catch (_) {
-        return;
-      }
-    }
+    final next = await supabaseReadCache.getOrFetch<int?>(
+      key: _memberCountCacheKey,
+      ttl: _snapshotTtl,
+      shouldCache: (value) => value != null,
+      fetch: () async {
+        try {
+          final rows = await client
+              .from('club_member_counts')
+              .select('member_count')
+              .eq('club_id', clubId)
+              .limit(1);
+          if (rows.isNotEmpty) {
+            final count = int.tryParse(
+              (rows.first as Map)['member_count']?.toString() ?? '',
+            );
+            if (count != null) return count;
+          }
+        } catch (_) {
+          // Older environments may not have the aggregate view yet.
+        }
+        try {
+          return await client
+              .from('club_followers')
+              .count(CountOption.exact)
+              .eq('club_id', clubId);
+        } catch (_) {
+          return null;
+        }
+      },
+    );
+    if (next == null) return;
     if (_disposed || next == _memberCount) return;
     _memberCount = next;
     supabaseClubMemberCounts[clubId] = next;
@@ -133,18 +145,24 @@ class ClubCommunityInfoController extends ChangeNotifier {
 
   Future<void> _refreshMemberIds(SupabaseClient client) async {
     try {
-      final rows = await client
-          .from('club_followers')
-          .select('profile_id')
-          .eq('club_id', clubId);
+      final nextIds = await supabaseReadCache.getOrFetch<Set<String>>(
+        key: _memberIdsCacheKey,
+        ttl: _snapshotTtl,
+        fetch: () async {
+          final rows = await client
+              .from('club_followers')
+              .select('profile_id')
+              .eq('club_id', clubId);
+          return rows
+              .map((row) => (row as Map)['profile_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+        },
+      );
       if (_disposed) return;
       _memberIds
         ..clear()
-        ..addAll(
-          rows
-              .map((row) => (row as Map)['profile_id']?.toString() ?? '')
-              .where((id) => id.isNotEmpty),
-        );
+        ..addAll(nextIds);
       _recalculateOnlineCount();
     } catch (_) {
       // Preserve the last complete membership snapshot while offline.
@@ -158,6 +176,8 @@ class ClubCommunityInfoController extends ChangeNotifier {
         : payload.newRecord;
     final profileId = record['profile_id']?.toString() ?? '';
     if (profileId.isNotEmpty) {
+      supabaseReadCache.invalidate(_memberCountCacheKey);
+      supabaseReadCache.invalidate(_memberIdsCacheKey);
       if (payload.eventType == PostgresChangeEvent.delete) {
         _memberIds.remove(profileId);
       } else {

@@ -2465,8 +2465,6 @@ List<User> _localPostLikers(String postId) {
   return users.where((user) => likerIds.contains(user.id)).toList();
 }
 
-final Map<String, List<User>> _likerPreviewCache = {};
-
 class _LikedByRow extends StatefulWidget {
   final String postId;
   final int likeCount;
@@ -2507,12 +2505,6 @@ class _LikedByRowState extends State<_LikedByRow> {
       return;
     }
 
-    final cached = _likerPreviewCache[widget.postId];
-    if (cached != null) {
-      _likers = cached;
-      return;
-    }
-
     unawaited(_loadRemotePreview());
   }
 
@@ -2521,7 +2513,6 @@ class _LikedByRowState extends State<_LikedByRow> {
       final remote = await supabaseInteractionService.fetchPostLikers(
         widget.postId,
       );
-      _likerPreviewCache[widget.postId] = remote;
       if (mounted && remote.isNotEmpty) setState(() => _likers = remote);
     } catch (_) {
       // A count-only fallback remains available while offline.

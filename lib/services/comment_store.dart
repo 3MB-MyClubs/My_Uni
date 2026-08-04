@@ -63,7 +63,10 @@ class CommentStore extends ChangeNotifier {
     }
 
     try {
-      final remote = await supabaseInteractionService.fetchComments(postId);
+      final remote = await supabaseInteractionService.fetchComments(
+        postId,
+        force: force,
+      );
       final remoteIds = remote.map((c) => c.id).toSet();
       final before = comments.length;
       comments.removeWhere(
@@ -145,18 +148,24 @@ class CommentStore extends ChangeNotifier {
     final inFlight = _inFlightCountHydrate;
     if (inFlight != null) return inFlight;
 
-    final future = _hydrateCounts(postIds).whenComplete(() {
+    final future = _hydrateCounts(postIds, force: force).whenComplete(() {
       _inFlightCountHydrate = null;
     });
     _inFlightCountHydrate = future;
     return future;
   }
 
-  Future<void> _hydrateCounts(Iterable<String> postIds) async {
+  Future<void> _hydrateCounts(
+    Iterable<String> postIds, {
+    bool force = false,
+  }) async {
     final ids = postIds.where(_looksLikeUuid).toSet().toList();
     if (ids.isEmpty) return;
     try {
-      final counts = await supabaseInteractionService.fetchCommentCounts(ids);
+      final counts = await supabaseInteractionService.fetchCommentCounts(
+        ids,
+        force: force,
+      );
       _remoteCounts
         ..addAll({for (final id in ids) id: 0})
         ..addAll(counts);

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/event.dart';
+import 'lazy_content_loader.dart';
 import 'supabase_config.dart';
 
 class SupabaseEventService {
@@ -51,6 +52,7 @@ class SupabaseEventService {
         .single();
 
     final data = Map<String, dynamic>.from(row);
+    lazyContentLoader.invalidateContent();
     return _eventFromRow(data, fallback: event, uploadedImage: uploadedImage);
   }
 
@@ -98,6 +100,7 @@ class SupabaseEventService {
     }
 
     final data = Map<String, dynamic>.from(row);
+    lazyContentLoader.invalidateContent();
     return _eventFromRow(data, fallback: event, uploadedImage: uploadedImage);
   }
 
@@ -114,6 +117,7 @@ class SupabaseEventService {
       throw StateError('Event was not deleted.');
     }
     await _deleteStoredImage(event.imagePath);
+    lazyContentLoader.invalidateContent();
   }
 
   Event _eventFromRow(
