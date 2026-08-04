@@ -36,6 +36,87 @@ class AppLocalizationsEn extends AppLocalizations {
   String get seeAll => 'See all';
 
   @override
+  String get bringYourFriends => 'Bring your friends';
+
+  @override
+  String get invite => 'Invite';
+
+  @override
+  String get invited => 'Invited';
+
+  @override
+  String get shareEventAction => 'Share event';
+
+  @override
+  String get shareThisEvent => 'Share this event';
+
+  @override
+  String get qrCodeAction => 'QR code';
+
+  @override
+  String get searchPeopleOnCampus => 'Search people on campus';
+
+  @override
+  String get sentAction => 'Sent';
+
+  @override
+  String inviteFriendsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Invite $count friends',
+      one: 'Invite 1 friend',
+      zero: 'Invite friends',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInvitesSentCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count invitations sent',
+      one: 'Invitation sent',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noPeopleMatchSearch => 'No people match your search.';
+
+  @override
+  String get scanToOpenEvent => 'Scan to open this event';
+
+  @override
+  String followedPeopleAttending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people you follow are going',
+      one: '1 person you follow is going',
+      zero: 'No one you follow is going yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInviteSent(String name) {
+    return '$name has been invited.';
+  }
+
+  @override
+  String mutualClubsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count mutual clubs',
+      one: '1 mutual club',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get fromYourClubs => 'FROM YOUR CLUBS';
 
   @override

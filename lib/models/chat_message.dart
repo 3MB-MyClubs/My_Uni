@@ -98,6 +98,24 @@ class ChatMessage {
   /// Event this message links to (for the inline event card).
   final String? eventId;
 
+  /// Resolves both current structured shares and older/plaintext event links.
+  /// The content fallback keeps received cards tappable if a remote row was
+  /// written before the structured payload was available on that device.
+  String? get linkedEventId {
+    final structuredId = eventId?.trim() ?? '';
+    if (structuredId.isNotEmpty) return structuredId;
+    for (final token in content.split(RegExp(r'\s+'))) {
+      final uri = Uri.tryParse(token.trim());
+      if (uri?.scheme == 'kuclubs' &&
+          uri?.host == 'event' &&
+          uri!.pathSegments.isNotEmpty) {
+        final id = Uri.decodeComponent(uri.pathSegments.first).trim();
+        if (id.isNotEmpty) return id;
+      }
+    }
+    return null;
+  }
+
   /// Post shared into a DM, user-created group, or club conversation.
   final String? sharedPostId;
 

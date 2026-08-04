@@ -36,6 +36,7 @@ import '../widgets/user_avatar.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
+import '../widgets/shared_event_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
@@ -1706,7 +1707,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
     );
 
-    final hasText = m.content.trim().isNotEmpty;
+    final linkedEventId = m.linkedEventId;
+    final hasEventPreview = linkedEventId != null;
+    final hasText = m.content.trim().isNotEmpty && !hasEventPreview;
     final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
     final attachedFilePath = m.kind == ChatMessageKind.file
         ? m.attachmentPath
@@ -1763,6 +1766,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
             SharedPostMessageCard(
               postId: m.sharedPostId!,
+              onDarkBackground: mine,
+            ),
+          if (hasEventPreview)
+            SharedEventMessageCard(
+              eventId: linkedEventId,
               onDarkBackground: mine,
             ),
           if (photoPath != null) _photoAttachment(m),

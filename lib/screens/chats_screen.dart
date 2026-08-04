@@ -425,7 +425,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       child: _sectionLabel(
                                         showingClubs
                                             ? S.clubChats
-                                            : S.studentChats,
+                                            : S.messagesLabel,
                                       ),
                                     )
                                   : _row(threads[i - 1]),
@@ -1034,13 +1034,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ? AppColors.primaryRed
         : _colorForClub(club.id);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Material(
+        // Rows read as one continuous list: no outline or shadow boxing each
+        // conversation off. Unread threads keep a faint tint for emphasis.
         color: unread > 0
-            ? AppColors.card
-            : AppColors.card.withValues(
-                alpha: themeService.isDark ? 0.74 : 0.88,
-              ),
+            ? clubColor.withValues(alpha: themeService.isDark ? 0.12 : 0.06)
+            : Colors.transparent,
         borderRadius: const BorderRadius.all(Radius.circular(18)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1049,22 +1049,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
             recipient: t.peerId == null ? null : _userForId(t.peerId!),
           ),
           child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: unread > 0
-                    ? clubColor.withValues(alpha: 0.34)
-                    : AppColors.glassEdge,
-              ),
-              borderRadius: const BorderRadius.all(Radius.circular(18)),
-              boxShadow: [
-                BoxShadow(
-                  color: clubColor.withValues(alpha: unread > 0 ? 0.09 : 0.035),
-                  blurRadius: 18,
-                  spreadRadius: -8,
-                  offset: const Offset(0, 7),
-                ),
-              ],
-            ),
             padding: const EdgeInsets.fromLTRB(12, 11, 13, 11),
             child: Row(
               children: [
@@ -1228,7 +1212,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (index == 0) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: _sectionLabel(S.studentChats),
+            child: _sectionLabel(S.messagesLabel),
           );
         }
         return _personSearchResult(people[index - 1]);
@@ -1245,9 +1229,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
       onTap: () => _openDmWith(user),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.divider)),
-        ),
         child: Row(
           children: [
             PresenceAvatar(
