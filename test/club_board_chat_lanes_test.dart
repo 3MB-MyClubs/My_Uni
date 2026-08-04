@@ -131,54 +131,38 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('club-board-locked-strip')));
     await tester.pumpAndSettle();
 
-    // Chat is the room: every member may talk in it.
-    expect(find.byType(TextField), findsOneWidget);
-    await settleStoreSave(tester);
-  });
-
-  testWidgets('opening a notice reveals its body and the route into chat', (
-    tester,
-  ) async {
-    expect(authService.login(member.email, member.password), isTrue);
-    final notice = postNotice(title: 'Navigation-stack demo moved to Friday');
-
-    await pumpRoom(tester);
-    await tester.tap(
-      find.byKey(ValueKey('club-notice-headline-${notice.id}')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text(notice.content), findsOneWidget);
-    expect(find.text(S.boardReplyInChat), findsOneWidget);
-
-    // "Reply in chat" switches lanes and carries the notice as a quote.
-    await tester.tap(find.byKey(ValueKey('club-notice-reply-${notice.id}')));
-    await tester.pumpAndSettle();
-
+    // The room remains readable, but only the yönetim kurulu may post.
+    expect(find.byType(TextField), findsNothing);
     expect(
-      find.byKey(const ValueKey('club-notice-quote-bar')),
+      find.byKey(const ValueKey('club-chat-locked-strip')),
       findsOneWidget,
     );
-    expect(find.text(S.boardReplyingToNotice), findsOneWidget);
-
-    await tester.enterText(find.byType(TextField), 'I can take the camera rig');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-
-    final reply = chatStore
-        .messagesFor(threadId)
-        .where((message) => message.content == 'I can take the camera rig')
-        .single;
-    expect(reply.replyToMessageId, notice.id);
-    expect(chatStore.replyCountFor(notice.id), 1);
-    expect(find.byKey(const ValueKey('club-notice-quote-bar')), findsNothing);
-
-    // The reply count is the Board's signal that the notice landed.
-    await tester.tap(find.byKey(const ValueKey('club-lane-board')));
-    await tester.pumpAndSettle();
-    expect(find.text(S.boardReplyCount(1)), findsOneWidget);
     await settleStoreSave(tester);
   });
+
+  testWidgets(
+    'opening a notice reveals its body without a member reply route',
+    (tester) async {
+      expect(authService.login(member.email, member.password), isTrue);
+      final notice = postNotice(title: 'Navigation-stack demo moved to Friday');
+
+      await pumpRoom(tester);
+      await tester.tap(
+        find.byKey(ValueKey('club-notice-headline-${notice.id}')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(notice.content), findsOneWidget);
+      // Non-board members can read the notice but cannot reply in the general
+      // channel.
+      expect(find.text(S.boardReplyInChat), findsNothing);
+      expect(
+        find.byKey(ValueKey('club-notice-reply-${notice.id}')),
+        findsNothing,
+      );
+      await settleStoreSave(tester);
+    },
+  );
 
   testWidgets('a member holding a role gets the notice composer', (
     tester,

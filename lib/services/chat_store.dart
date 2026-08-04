@@ -2147,11 +2147,29 @@ class ChatStore extends ChangeNotifier {
         managedClubForAdmin(userId)?.id == clubId;
   }
 
-  /// Reading and talking are the same right in every conversation: a club room
-  /// is a room, so each of its members may post in the Chat lane. Publishing a
-  /// notice on the Board lane is the narrower right — see [canPostNotice].
-  bool canWriteThread(String threadId, String userId) =>
-      canAccessThread(threadId, userId);
+  /// Returns whether [userId] may post in a club's general channel.
+  ///
+  /// Every follower may read the room, but posting is reserved for the club's
+  /// yönetim kurulu (the `board_member` role) and the linked club account.
+  bool canWriteClubThread(String threadId, String userId) {
+    if (!isClubThread(threadId) || !canAccessThread(threadId, userId)) {
+      return false;
+    }
+    final clubId = clubIdOf(threadId);
+    final club = clubId == null ? null : clubForId(clubId);
+    if (club == null) return false;
+    return club.boardMemberIds.contains(userId) ||
+        managedCommunityThreadId(userId) == threadId;
+  }
+
+  /// Reading and writing are separate rights for club rooms: every member may
+  /// read, while only the yönetim kurulu may post in the general Chat lane.
+  bool canWriteThread(String threadId, String userId) {
+    if (isClubThread(threadId)) {
+      return canWriteClubThread(threadId, userId);
+    }
+    return canAccessThread(threadId, userId);
+  }
 
   /// Who may publish a notice on a club Board: members holding a role in that
   /// club (President / VP / Officers), its admin ids, and the linked club

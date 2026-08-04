@@ -48,7 +48,7 @@ import 'user_profile_screen.dart';
 ///
 /// **Board** is the official notice area and the landing lane: one grouped list,
 /// one row per notice, and a composer only for members holding a role in the
-/// club. **Chat** is the room — every reply, poll, photo and mention lives here,
+/// club. **Chat** is the room — board-member replies, polls, photos and mentions live here,
 /// and a notice appears as a card so the conversation around it still reads.
 ///
 /// A notice is one object: the record published on the Board is the same message
@@ -141,7 +141,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   /// Only members holding a role in this club get the Board's composer.
   bool get _canPostNotice => chatStore.canPostNotice(widget.threadId, _myId);
 
-  /// Every member of the club may talk in the Chat lane.
+  /// Only the club's yönetim kurulu may talk in the Chat lane.
   bool get _canWrite => chatStore.canWriteThread(widget.threadId, _myId);
 
   /// Backgrounds affect the club's shared community identity, so board
@@ -1901,6 +1901,28 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                     chatStore.setTyping(widget.threadId, _myId),
               ),
             ],
+          )
+        else
+          Container(
+            key: const ValueKey('club-chat-locked-strip'),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+            decoration: BoxDecoration(
+              color: t.body,
+              border: Border(top: BorderSide(color: t.hair)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Text(
+                S.clubChannelReadOnly,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: t.sub,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
       ],
     );

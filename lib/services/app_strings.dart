@@ -978,7 +978,7 @@ class S {
   /// The official notice area — the lane a club room lands on.
   static String get clubBoardTab => _t('Board', 'Pano');
 
-  /// The room itself, where every reply lives.
+  /// The room itself, where board-member replies live.
   static String get clubChatTab => _t('Chat', 'Sohbet');
   static String get boardGroupPinned => _t('Pinned', 'Sabitlenen');
   static String boardGroupNew(int n) => _t('New · $n', 'Yeni · $n');
