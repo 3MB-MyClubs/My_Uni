@@ -38,6 +38,13 @@ String _extension(String value) {
         '.gif',
         '.heic',
         '.heif',
+        '.mp4',
+        '.mov',
+        '.m4v',
+        '.avi',
+        '.webm',
+        '.mkv',
+        '.3gp',
       }.contains(extension)
       ? extension
       : '.jpg';
