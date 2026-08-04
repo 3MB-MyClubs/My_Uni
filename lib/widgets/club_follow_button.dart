@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
@@ -6,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/user_state.dart';
 import '../services/club_follow_helper.dart';
+import 'app_pressable.dart';
 
 /// A self-contained follow/unfollow button for a club.
 ///
@@ -101,8 +103,12 @@ class ClubFollowButton extends ConsumerWidget {
       button = SizedBox(width: double.infinity, child: button);
     }
 
-    return GestureDetector(
-      onTap: () => handleFollowTap(context, clubId, () {}),
+    return AppPressable(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        handleFollowTap(context, clubId, () {});
+      },
+      pressedScale: 0.96,
       child: button,
     );
   }

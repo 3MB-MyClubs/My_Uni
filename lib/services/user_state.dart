@@ -434,6 +434,24 @@ class UserState extends ChangeNotifier {
     }
   }
 
+  /// Marks locally cached alerts for exactly one open chat as read.
+  void markChatThreadNotificationsRead({
+    required String threadId,
+    required String userId,
+  }) {
+    final conversationKey = notificationConversationKeyForThread(
+      threadId: threadId,
+      userId: userId,
+    );
+    if (conversationKey == null) return;
+    markNotificationsRead(
+      dynamicNotifications.where(
+        (notification) =>
+            notificationConversationKey(notification) == conversationKey,
+      ),
+    );
+  }
+
   // ── Pinned club posts (global; set by a club's admin) ───────────────────────
   final Set<String> pinnedPostIds = {};
 

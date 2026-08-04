@@ -5,9 +5,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
 import '../models/user.dart';
+import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
@@ -18,19 +20,28 @@ import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
 import '../services/mock_data.dart';
+import '../services/notification_inbox_service.dart';
+import '../services/notification_service.dart';
 import '../services/people_service.dart';
+import '../services/photo_orientation.dart';
 import '../services/image_cache_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
+import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/app_network_image.dart';
+import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
+import '../widgets/sent_message_entrance.dart';
+import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
 import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
+import 'media_preview_screen.dart';
 import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
@@ -59,9 +70,12 @@ class ChatThreadScreen extends StatefulWidget {
 class _ChatThreadScreenState extends State<ChatThreadScreen>
     with WidgetsBindingObserver {
   final _inputController = TextEditingController();
+  final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
   final Set<String> _requestedParticipantProfileIds = {};
   ClubCommunityInfoController? _communityInfo;
+  String? _animatingSentMessageId;
+  ChatMessage? _replyingTo;
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -131,6 +145,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.addListener(_onEnvChanged);
     localeService.addListener(_onEnvChanged);
     chatStore.addListener(_onStoreChanged);
+    notificationInboxService.addListener(_onNotificationInboxChanged);
     // Post-frame: both can notifyListeners, which is illegal while this
     // route is still mounting mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -165,8 +180,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.removeListener(_onEnvChanged);
     localeService.removeListener(_onEnvChanged);
     chatStore.removeListener(_onStoreChanged);
+    notificationInboxService.removeListener(_onNotificationInboxChanged);
     _communityInfo?.dispose();
     _inputController.dispose();
+    _inputFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -177,8 +194,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isDirect) {
           final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
-          if (peerId != null && _userForId(peerId) == null) {
-            unawaited(_hydratePeerProfile(peerId));
+          if (peerId != null) {
+            if (_userForId(peerId) == null) {
+              unawaited(_hydratePeerProfile(peerId));
+            } else {
+              unawaited(
+                appPresenceService.hydrateLastSeenForUsers([
+                  peerId,
+                ], force: true),
+              );
+            }
           }
         } else {
           _requestedParticipantProfileIds.removeWhere(
@@ -199,7 +224,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) return;
-    chatStore.markThreadRead(widget.threadId, _myId);
+    // A club room is read one lane at a time by the ClubCommunityScreen this
+    // route delegates to; marking the whole thread here would wipe both of the
+    // Board / Chat counts the moment the room opens.
+    if (!_isClub) chatStore.markThreadRead(widget.threadId, _myId);
+    _dismissVisibleChatNotifications();
+  }
+
+  void _onNotificationInboxChanged() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+    _dismissVisibleChatNotifications();
+  }
+
+  void _dismissVisibleChatNotifications() {
+    final userId = _myId;
+    if (userId.isEmpty) return;
+    userState.markChatThreadNotificationsRead(
+      threadId: widget.threadId,
+      userId: userId,
+    );
+    unawaited(
+      notificationInboxService.markChatThreadRead(
+        threadId: widget.threadId,
+        userId: userId,
+      ),
+    );
+    unawaited(
+      notificationService.cancelChatNotifications(
+        threadId: widget.threadId,
+        currentUserId: userId,
+      ),
+    );
   }
 
   void _onEnvChanged() {
@@ -207,7 +264,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _hydratePeerProfile(String peerId) async {
-    await peopleService.hydrateProfilesByIds([peerId]);
+    await Future.wait([
+      peopleService.hydrateProfilesByIds([peerId]),
+      appPresenceService.hydrateLastSeenForUsers([peerId]),
+    ]);
     if (mounted) setState(() {});
   }
 
@@ -254,16 +314,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  /// Sends the current composer draft.
-  void _send() {
+  /// Sends the composer draft, or [text] when a starter chip was tapped.
+  void _send({String? text}) {
     final sent = chatStore.sendMessage(
       threadId: widget.threadId,
       senderId: _myId,
-      content: _inputController.text,
+      content: text ?? _inputController.text,
+      replyToMessageId: _replyingTo?.id,
     );
     if (sent == null) return;
-    _inputController.clear();
+    if (text == null) _inputController.clear();
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+        if (text == null) _animatingSentMessageId = sent.id;
+      });
+    }
     _scrollToLatest();
+  }
+
+  void _finishSentMessageEntrance(String messageId) {
+    if (!mounted || _animatingSentMessageId != messageId) return;
+    setState(() => _animatingSentMessageId = null);
   }
 
   void _scrollToLatest() {
@@ -272,8 +344,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 440),
+          curve: const Cubic(0.20, 0.72, 0.24, 1),
         );
       }
     });
@@ -318,7 +390,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
             const SizedBox(height: 6),
             for (final (attachment, icon, label) in [
-              (_ChatAttachment.photo, Icons.image_outlined, S.attachPhoto),
+              (
+                _ChatAttachment.photo,
+                Icons.photo_library_outlined,
+                S.attachMedia,
+              ),
               (
                 _ChatAttachment.camera,
                 Icons.photo_camera_outlined,
@@ -367,52 +443,109 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickAttachment(_ChatAttachment attachment) async {
-    final XFile? picked = switch (attachment) {
-      _ChatAttachment.photo => await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 2048,
-        maxHeight: 2048,
-        imageQuality: 88,
-      ),
-      _ChatAttachment.camera => await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        maxWidth: 2048,
-        maxHeight: 2048,
-        imageQuality: 88,
-      ),
-    };
-    if (picked == null || !mounted) return;
-    await _sendAttachment(picked, ChatMessageKind.photo);
-  }
-
-  Future<void> _sendAttachment(XFile file, ChatMessageKind kind) async {
-    var size = 0;
+    late final List<XFile> picked;
     try {
-      size = File(file.path).lengthSync();
-    } on FileSystemException {
-      size = 0;
-    }
-    late final String stagedPath;
-    try {
-      stagedPath = await stageChatAttachment(file.path, sourceName: file.name);
-    } on Object {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.couldNotAttachPhoto)));
+      picked = switch (attachment) {
+        _ChatAttachment.photo => await ImagePicker().pickMultipleMedia(
+          maxWidth: 2048,
+          maxHeight: 2048,
+          imageQuality: 88,
+          limit: 30,
+        ),
+        _ChatAttachment.camera => [
+          ?await ImagePicker().pickImage(
+            source: ImageSource.camera,
+            maxWidth: 2048,
+            maxHeight: 2048,
+            imageQuality: 88,
+          ),
+        ],
+      };
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(S.mediaSelectionFailed)));
+      }
       return;
     }
-    final sent = chatStore.sendMessage(
-      threadId: widget.threadId,
-      senderId: _myId,
-      content: _inputController.text.trim(),
-      kind: kind,
-      attachmentPath: stagedPath,
-      attachmentName: file.name,
-      attachmentSize: size,
+    if (picked.isEmpty) return;
+    // Front-camera captures arrive with a mirrored EXIF orientation, which
+    // would send a mirror image of whatever was photographed.
+    if (attachment == _ChatAttachment.camera) {
+      await unmirrorPhotoFile(picked.single.path);
+    }
+    if (!mounted) return;
+    final inspected = await inspectChatMediaFiles(picked);
+    if (!mounted) return;
+    if (inspected.rejectedCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.mediaSelectionRejected(inspected.rejectedCount)),
+        ),
+      );
+    }
+    if (inspected.items.isEmpty) return;
+
+    final result = await Navigator.of(context).push<MediaPreviewResult>(
+      ChatPageRoute(
+        builder: (_) => MediaPreviewScreen(
+          initialMedia: inspected.items,
+          initialCaption: _inputController.text.trim(),
+        ),
+      ),
     );
-    if (sent == null) return;
+    if (!mounted || result == null) return;
+    await _sendAttachments(result);
+  }
+
+  Future<void> _sendAttachments(MediaPreviewResult result) async {
+    final sentMessages = <ChatMessage>[];
+    var stagingFailed = false;
+    for (final media in result.items) {
+      late final String stagedPath;
+      try {
+        stagedPath = await stageChatAttachment(
+          media.file.path,
+          sourceName: media.file.name,
+        );
+      } on Object {
+        stagingFailed = true;
+        continue;
+      }
+      final isFirst = sentMessages.isEmpty;
+      final sent = chatStore.sendMessage(
+        threadId: widget.threadId,
+        senderId: _myId,
+        content: isFirst ? result.caption : '',
+        kind: media.type == ChatMediaType.image
+            ? ChatMessageKind.photo
+            : ChatMessageKind.file,
+        attachmentPath: stagedPath,
+        attachmentName: media.file.name,
+        attachmentSize: media.sizeBytes,
+        replyToMessageId: isFirst ? _replyingTo?.id : null,
+      );
+      if (sent != null) sentMessages.add(sent);
+    }
+    if (!mounted) return;
+    if (sentMessages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            stagingFailed ? S.couldNotAttachPhoto : S.mediaSendFailed,
+          ),
+        ),
+      );
+      return;
+    }
     _inputController.clear();
+    if (mounted) {
+      setState(() {
+        _replyingTo = null;
+        _animatingSentMessageId = sentMessages.last.id;
+      });
+    }
     _scrollToLatest();
   }
 
@@ -444,6 +577,248 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (confirmed == true && mounted) {
       chatStore.deleteMessage(messageId: message.id, userId: _myId);
     }
+  }
+
+  void _openMessageInfo(ChatMessage originalMessage) {
+    // Receipt identities and timestamps are sender-only. Keep this guard here
+    // as well as at each UI entry point so future callers cannot accidentally
+    // expose message information for somebody else's message.
+    if (!chatStore.isMessageOwner(originalMessage, _myId)) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: chatStore,
+        builder: (context, _) {
+          // Re-read on every ChatStore notification so a Realtime receipt can
+          // move from Delivered to Read while this sheet remains open.
+          final message =
+              chatStore.messageById(originalMessage.id) ?? originalMessage;
+          final readReceipts =
+              message.receipts
+                  .where(
+                    (receipt) =>
+                        receipt.userId != message.senderId &&
+                        receipt.seenAt != null,
+                  )
+                  .toList(growable: false)
+                ..sort((a, b) => b.seenAt!.compareTo(a.seenAt!));
+          final deliveredReceipts =
+              message.receipts
+                  .where(
+                    (receipt) =>
+                        receipt.userId != message.senderId &&
+                        receipt.seenAt == null &&
+                        receipt.deliveredAt != null,
+                  )
+                  .toList(growable: false)
+                ..sort((a, b) => b.deliveredAt!.compareTo(a.deliveredAt!));
+
+          return Container(
+            key: const ValueKey('chat-message-info-sheet'),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(22),
+              ),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    S.messageInfo,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (_isDirect) ...[
+                    _directReceiptRow(
+                      icon: Icons.done_all_rounded,
+                      label: S.deliveredAt(
+                        _receiptTimestamp(message.deliveredAt),
+                      ),
+                      color: AppColors.secondaryText,
+                    ),
+                    if (message.seenAt case final seenAt?)
+                      _directReceiptRow(
+                        icon: Icons.done_all_rounded,
+                        label: S.readAt(_receiptTimestamp(seenAt)),
+                        color: AppColors.primaryRed,
+                      ),
+                  ] else if (_isGroup) ...[
+                    _receiptSection(
+                      title: S.readBy,
+                      receipts: readReceipts,
+                      timestampFor: (receipt) => receipt.seenAt!,
+                    ),
+                    const SizedBox(height: 14),
+                    _receiptSection(
+                      title: S.deliveredTo,
+                      receipts: deliveredReceipts,
+                      timestampFor: (receipt) => receipt.deliveredAt!,
+                    ),
+                  ],
+                  Divider(height: 28, color: AppColors.divider),
+                  if (chatStore.canWriteThread(widget.threadId, _myId))
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        Icons.reply_rounded,
+                        color: AppColors.primaryRed,
+                      ),
+                      title: Text(
+                        S.reply,
+                        style: TextStyle(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _beginReply(message);
+                      },
+                    ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.delete_outline_rounded,
+                      color: AppColors.primaryRed,
+                    ),
+                    title: Text(
+                      S.deleteMessage,
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      unawaited(_confirmDeleteMessage(message));
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _directReceiptRow({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: color),
+      title: Text(
+        label,
+        style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _receiptSection({
+    required String title,
+    required List<MessageReceipt> receipts,
+    required DateTime Function(MessageReceipt receipt) timestampFor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: AppColors.secondaryText,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (receipts.isEmpty)
+          Padding(
+            key: ValueKey('empty-message-receipts-$title'),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              S.noOneYet,
+              style: TextStyle(
+                color: AppColors.secondaryText,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          for (final receipt in receipts)
+            Builder(
+              builder: (context) {
+                final name = _senderInfo(receipt.userId).$1;
+                return ListTile(
+                  key: ValueKey('message-receipt-${receipt.userId}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: UserAvatar(
+                    userId: receipt.userId,
+                    name: name.isEmpty ? receipt.userId : name,
+                    size: 38,
+                    fontSize: 14,
+                  ),
+                  title: Text(
+                    name.isEmpty ? receipt.userId : name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  trailing: Text(
+                    _receiptTimestamp(timestampFor(receipt)),
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              },
+            ),
+      ],
+    );
+  }
+
+  void _openMessageLongPress(ChatMessage message) {
+    if (chatStore.isMessageOwner(message, _myId) && (_isDirect || _isGroup)) {
+      _openMessageInfo(message);
+      return;
+    }
+    _openReactionPicker(message);
   }
 
   void _openReactionPicker(ChatMessage message) {
@@ -502,9 +877,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
               ],
             ),
+            const SizedBox(height: 8),
+            Divider(color: AppColors.divider),
+            if (chatStore.canWriteThread(widget.threadId, _myId))
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  key: ValueKey('chat-reply-message-${message.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.reply_rounded,
+                    color: AppColors.primaryRed,
+                  ),
+                  title: Text(
+                    S.reply,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _beginReply(message);
+                  },
+                ),
+              ),
             if (chatStore.isMessageOwner(message, _myId)) ...[
-              const SizedBox(height: 8),
-              Divider(color: AppColors.divider),
               Material(
                 color: Colors.transparent,
                 child: ListTile(
@@ -534,6 +932,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  void _beginReply(ChatMessage message) {
+    setState(() => _replyingTo = message);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _inputFocusNode.requestFocus();
+    });
+  }
+
   // ── Sender identity ─────────────────────────────────────────────────────────
 
   /// Display name + whether the sender is a club-admin account.
@@ -556,11 +961,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _openHeaderProfile() {
+    if (_isClubInbox) {
+      final conversation = _clubInbox;
+      if (conversation != null && conversation.profileId != _myId) {
+        _openUserProfileById(conversation.profileId);
+        return;
+      }
+    }
     final club = _club;
     if (club != null) {
       Navigator.push(
         context,
-        MaterialPageRoute(
+        ChatPageRoute(
           builder: (_) =>
               ClubProfileScreen(club: club, color: _colorForClub(club.id)),
         ),
@@ -570,7 +982,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_isGroup) {
       Navigator.push(
         context,
-        MaterialPageRoute(
+        ChatPageRoute(
           builder: (_) =>
               GroupInfoScreen(threadId: widget.threadId, myId: _myId),
         ),
@@ -587,9 +999,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer != null) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => UserProfileScreen(user: peer)),
+        ChatPageRoute(builder: (_) => UserProfileScreen(user: peer)),
       ).then((_) => _markVisibleMessagesSeen());
     }
+  }
+
+  void _openUserProfileById(String userId) {
+    final user = _userForId(userId);
+    if (user == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
+    ).then((_) => _markVisibleMessagesSeen());
   }
 
   // ── Build ───────────────────────────────────────────────────────────────────
@@ -697,7 +1118,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const SizedBox(width: 5),
           ],
           Text(
-            online ? S.activeNowLabel : S.lastSeenRecently,
+            online
+                ? S.activeNowLabel
+                : S.lastOnlineLabel(
+                    appPresenceService.lastSeenAtFor(peerId ?? ''),
+                  ),
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
@@ -760,52 +1185,67 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
             const SizedBox(width: 4),
           ],
-          if (showingStudent)
-            PresenceAvatar(
-              userId: conversation.profileId,
-              name: title,
-              size: 40,
-              fontSize: 15,
-              online: appPresenceService.onlineUserIds.contains(
-                conversation.profileId,
-              ),
-            )
-          else if (club != null)
-            ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
-              color: _colorForClub(club.id),
-              imageUrl: club.logoUrl,
-              size: 40,
-              fontSize: 15,
-            ),
-          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
-                  ),
+            child: InkWell(
+              key: const ValueKey('club-inbox-profile-header'),
+              onTap: _openHeaderProfile,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    if (showingStudent)
+                      PresenceAvatar(
+                        userId: conversation.profileId,
+                        name: title,
+                        size: 40,
+                        fontSize: 15,
+                        online: appPresenceService.onlineUserIds.contains(
+                          conversation.profileId,
+                        ),
+                      )
+                    else if (club != null)
+                      ClubAvatar(
+                        clubId: club.id,
+                        clubName: club.name,
+                        color: _colorForClub(club.id),
+                        imageUrl: club.logoUrl,
+                        size: 40,
+                        fontSize: 15,
+                      ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: AppColors.secondaryText,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: AppColors.secondaryText,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Icon(Icons.lock_rounded, size: 17, color: AppColors.secondaryText),
         ],
       ),
@@ -1192,13 +1632,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final next = i < messages.length - 1 ? messages[i + 1] : null;
       final newDay = prev == null || !_sameDay(prev.createdAt, m.createdAt);
       if (newDay) items.add(_DateChip(label: _dayLabel(m.createdAt)));
-      final firstOfRun = newDay || prev.senderId != m.senderId;
+      final firstOfRun =
+          newDay || prev.senderId != m.senderId || m.replyToMessageId != null;
       final lastOfRun =
           next == null ||
           next.senderId != m.senderId ||
+          next.replyToMessageId != null ||
           !_sameDay(next.createdAt, m.createdAt);
       items.add(
-        _buildBubbleRow(m, firstOfRun: firstOfRun, lastOfRun: lastOfRun),
+        SentMessageEntrance(
+          key: ValueKey('sent-message-entrance-${m.id}'),
+          animate: m.id == _animatingSentMessageId,
+          onCompleted: () => _finishSentMessageEntrance(m.id),
+          child: _buildBubbleRow(
+            m,
+            firstOfRun: firstOfRun,
+            lastOfRun: lastOfRun,
+          ),
+        ),
       );
     }
     return items;
@@ -1215,6 +1666,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isMultiParticipant = _isClub || _isGroup;
     final showHeader = isMultiParticipant && !mine;
     final showAvatar = isMultiParticipant;
+    final VoidCallback? openSenderProfile =
+        !mine && !senderIsAdmin && _userForId(m.senderId) != null
+        ? () => _openUserProfileById(m.senderId)
+        : null;
     final senderAvatar = Container(
       key: _isGroup ? ValueKey('group-message-avatar-${m.id}') : null,
       width: 32,
@@ -1253,8 +1708,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     final hasText = m.content.trim().isNotEmpty;
     final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
-    final filePath = m.kind == ChatMessageKind.file ? m.attachmentPath : null;
-    final hasMedia = photoPath != null || filePath != null;
+    final attachedFilePath = m.kind == ChatMessageKind.file
+        ? m.attachmentPath
+        : null;
+    final videoPath =
+        attachedFilePath != null &&
+            isVideoMediaPath(m.attachmentName ?? attachedFilePath)
+        ? attachedFilePath
+        : null;
+    final filePath = videoPath == null ? attachedFilePath : null;
+    final hasMedia = photoPath != null || videoPath != null || filePath != null;
 
     final bubble = Container(
       constraints: BoxConstraints(
@@ -1292,36 +1755,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ],
       ),
-      child: m.kind == ChatMessageKind.postShare && m.sharedPostId != null
-          ? SharedPostMessageCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (m.replyToMessageId != null)
+            _messageReplyQuote(m, mine: mine, hasMedia: hasMedia),
+          if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
+            SharedPostMessageCard(
               postId: m.sharedPostId!,
               onDarkBackground: mine,
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (photoPath != null) _photoAttachment(photoPath),
-                if (filePath != null) _fileAttachment(m, mine: mine),
-                if (hasText)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      hasMedia ? 8 : 0,
-                      hasMedia ? 7 : 0,
-                      hasMedia ? 8 : 0,
-                      hasMedia ? 3 : 0,
-                    ),
-                    child: Text(
-                      m.content,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        height: 1.45,
-                        letterSpacing: -0.1,
-                        color: mine ? Colors.white : AppColors.text,
-                      ),
-                    ),
-                  ),
-              ],
             ),
+          if (photoPath != null) _photoAttachment(m),
+          if (videoPath != null) _videoAttachment(videoPath),
+          if (filePath != null) _fileAttachment(m, mine: mine),
+          if (hasText)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                hasMedia ? 8 : 0,
+                hasMedia ? 7 : 0,
+                hasMedia ? 8 : 0,
+                hasMedia ? 3 : 0,
+              ),
+              child: Text(
+                m.content,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.45,
+                  letterSpacing: -0.1,
+                  color: mine ? Colors.white : AppColors.text,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
 
     return Padding(
@@ -1336,7 +1802,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             Padding(
               // Keep the sender identity beside every incoming message.
               padding: const EdgeInsets.only(right: 8, bottom: 15),
-              child: senderAvatar,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: openSenderProfile,
+                child: senderAvatar,
+              ),
             ),
           Flexible(
             child: Column(
@@ -1351,18 +1821,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: Text(
-                            senderName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              // Each speaker keeps a stable accent so a busy
-                              // group stays readable at a glance.
-                              color: senderIsAdmin
-                                  ? AppColors.primaryRed
-                                  : _accentForUser(m.senderId),
+                          child: GestureDetector(
+                            key: ValueKey('chat-sender-profile-name-${m.id}'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: openSenderProfile,
+                            child: Text(
+                              senderName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                // Each speaker keeps a stable accent so a busy
+                                // group stays readable at a glance.
+                                color: senderIsAdmin
+                                    ? AppColors.primaryRed
+                                    : _accentForUser(m.senderId),
+                              ),
                             ),
                           ),
                         ),
@@ -1390,15 +1865,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ],
                     ),
                   ),
-                GestureDetector(
-                  key: ValueKey('chat-message-${m.id}'),
-                  behavior: HitTestBehavior.opaque,
-                  onLongPress: () => _openReactionPicker(m),
-                  child: bubble,
+                // Swipe right to reply, same as long-press → Reply. Gated on
+                // the same write check, so read-only threads stay inert.
+                SwipeToReply(
+                  key: ValueKey('chat-swipe-reply-${m.id}'),
+                  enabled: chatStore.canWriteThread(widget.threadId, _myId),
+                  onReply: () => _beginReply(m),
+                  child: GestureDetector(
+                    key: ValueKey('chat-message-${m.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: () => _openMessageLongPress(m),
+                    child: bubble,
+                  ),
                 ),
                 if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
-                // Every outgoing DM carries a delivery receipt. Incoming and
-                // group messages keep the compact timestamp-only treatment.
+                // Outgoing student messages expose a compact delivery state.
+                // Group checkmarks are directly tappable; long-pressing the
+                // bubble remains a secondary route to the same information.
                 Padding(
                   padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
                   child: Row(
@@ -1412,17 +1895,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           color: AppColors.secondaryText,
                         ),
                       ),
-                      if (mine && _isDirect) ...[
+                      if (mine && (_isDirect || _isGroup)) ...[
                         const SizedBox(width: 5),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          child: _MessageTicks(
-                            key: ValueKey(
-                              'message-status-${m.id}-${m.status.name}',
-                            ),
-                            seen: m.status == MessageDeliveryStatus.seen,
-                          ),
-                        ),
+                        _messageStatusIndicator(m),
                       ],
                     ],
                   ),
@@ -1456,6 +1931,64 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Color _accentForUser(String userId) {
     if (userId.isEmpty) return AppColors.secondaryText;
     return _senderAccents[userId.hashCode.abs() % _senderAccents.length];
+  }
+
+  Widget _messageReplyQuote(
+    ChatMessage message, {
+    required bool mine,
+    required bool hasMedia,
+  }) {
+    final repliedSenderId = message.replyToSenderId ?? '';
+    final repliedSenderName = repliedSenderId == _myId
+        ? S.you
+        : _senderInfo(repliedSenderId).$1;
+    final foreground = mine ? Colors.white : AppColors.text;
+    return Container(
+      key: ValueKey('chat-reply-quote-${message.id}'),
+      width: double.infinity,
+      margin: EdgeInsets.only(
+        bottom: hasMedia || message.content.isNotEmpty ? 7 : 0,
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 7, 9, 7),
+      decoration: BoxDecoration(
+        color: mine
+            ? Colors.black.withValues(alpha: 0.16)
+            : AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(
+            color: mine ? Colors.white : AppColors.primaryRed,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            repliedSenderName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: mine ? Colors.white : AppColors.primaryRed,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message.replyToPreview ?? S.message,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.25,
+              color: foreground.withValues(alpha: 0.82),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Tapping a chip toggles your own reaction; long-pressing the bubble opens
@@ -1507,7 +2040,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Widget _photoAttachment(String path) {
+  Widget _photoAttachment(ChatMessage message) {
+    final path = message.attachmentPath!;
     final isRemote = path.startsWith('http://') || path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
@@ -1518,7 +2052,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           )
         : FileImage(file!);
     return GestureDetector(
-      key: ValueKey('chat-photo-$path'),
+      key: ValueKey('chat-photo-${message.id}'),
       onTap: exists
           ? () => showDialog<void>(
               context: context,
@@ -1538,37 +2072,71 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         borderRadius: BorderRadius.circular(15),
         child: Container(
           width: 200,
-          constraints: const BoxConstraints(maxHeight: 240),
           decoration: BoxDecoration(
             border: Border.all(color: AppColors.glassEdge),
             borderRadius: BorderRadius.circular(15),
           ),
-          child: exists
-              ? Image(
-                  image: imageProvider,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => _missingPhotoPlaceholder(),
-                )
-              : Container(
-                  height: 140,
-                  alignment: Alignment.center,
-                  color: AppColors.surfaceAlt,
-                  child: Icon(
-                    Icons.image_outlined,
-                    size: 26,
-                    color: AppColors.secondaryText,
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: !exists
+                ? _missingPhotoPlaceholder()
+                : isRemote
+                ? AppNetworkImage(
+                    key: ValueKey('chat-photo-image-${message.id}'),
+                    url: path,
+                    cacheKey:
+                        stableSupabaseSignedUrlCacheKey(path) ??
+                        'chat-photo-${message.id}',
+                    cacheWidth: 320,
+                    fit: BoxFit.cover,
+                    useOldImageOnUrlChange: true,
+                    placeholderBuilder: (_) => _photoLoadingPlaceholder(),
+                    errorBuilder: (_) => _missingPhotoPlaceholder(),
+                  )
+                : Image.file(
+                    file!,
+                    fit: BoxFit.cover,
+                    cacheWidth: (320 * MediaQuery.devicePixelRatioOf(context))
+                        .round(),
+                    frameBuilder: (context, child, frame, syncLoaded) =>
+                        syncLoaded || frame != null
+                        ? child
+                        : _photoLoadingPlaceholder(),
+                    errorBuilder: (_, _, _) => _missingPhotoPlaceholder(),
                   ),
-                ),
+          ),
         ),
       ),
     );
   }
 
+  Widget _photoLoadingPlaceholder() => Container(
+    alignment: Alignment.center,
+    color: AppColors.surfaceAlt,
+    child: SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        color: AppColors.primaryRed,
+      ),
+    ),
+  );
+
   Widget _missingPhotoPlaceholder() => Container(
-    height: 140,
     alignment: Alignment.center,
     color: AppColors.surfaceAlt,
     child: Icon(Icons.image_outlined, size: 26, color: AppColors.secondaryText),
+  );
+
+  Widget _videoAttachment(String path) => ClipRRect(
+    key: ValueKey('chat-video-$path'),
+    borderRadius: BorderRadius.circular(15),
+    child: SizedBox(
+      width: 220,
+      height: 220,
+      child: ChatVideoPlayer(path: path),
+    ),
   );
 
   Widget _fileAttachment(ChatMessage m, {required bool mine}) {
@@ -1667,133 +2235,212 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: SafeArea(
         top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // "+" — photo or camera.
-            _composerCircleButton(
-              key: const ValueKey('chat-attach-button'),
-              size: 40,
-              icon: Icons.add_rounded,
-              iconSize: 21,
-              iconColor: AppColors.primaryRed,
-              onTap: enabled ? _openAttachSheet : null,
-              semanticLabel: S.attachToMessage,
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 44),
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: const BorderRadius.all(Radius.circular(22)),
-                  border: Border.all(color: AppColors.divider),
+            if (_replyingTo case final replied?) ...[
+              _composerReplyPreview(replied),
+              const SizedBox(height: 9),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // "+" — photo or camera.
+                _composerCircleButton(
+                  key: const ValueKey('chat-attach-button'),
+                  size: 40,
+                  icon: Icons.add_rounded,
+                  iconSize: 21,
+                  iconColor: AppColors.primaryRed,
+                  onTap: enabled ? _openAttachSheet : null,
+                  semanticLabel: S.attachToMessage,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _inputController,
-                        enabled: enabled,
-                        minLines: 1,
-                        maxLines: 1,
-                        textInputAction: TextInputAction.send,
-                        textAlignVertical: TextAlignVertical.center,
-                        textCapitalization: TextCapitalization.sentences,
-                        onSubmitted: enabled ? (_) => _send() : null,
-                        style: TextStyle(fontSize: 14.5, color: AppColors.text),
-                        decoration: InputDecoration(
-                          hintText: S.typeMessage,
-                          hintStyle: TextStyle(
-                            fontSize: 14.5,
-                            color: AppColors.secondaryText,
-                          ),
-                          isDense: true,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            16,
-                            0,
-                            4,
-                            0,
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      borderRadius: const BorderRadius.all(Radius.circular(22)),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inputController,
+                            focusNode: _inputFocusNode,
+                            enabled: enabled,
+                            minLines: 1,
+                            maxLines: 1,
+                            textInputAction: TextInputAction.send,
+                            textAlignVertical: TextAlignVertical.center,
+                            textCapitalization: TextCapitalization.sentences,
+                            onSubmitted: enabled ? (_) => _send() : null,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              color: AppColors.text,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: S.typeMessage,
+                              hintStyle: TextStyle(
+                                fontSize: 14.5,
+                                color: AppColors.secondaryText,
+                              ),
+                              isDense: true,
+                              // The pill already paints the background; avoid
+                              // stacking the global field fill on top of it.
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                16,
+                                0,
+                                4,
+                                0,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    // Quick camera capture, docked inside the pill.
-                    _composerCircleButton(
-                      key: const ValueKey('chat-camera-button'),
-                      size: 34,
-                      icon: Icons.photo_camera_outlined,
-                      iconSize: 19,
-                      iconColor: AppColors.secondaryText,
-                      filled: false,
-                      onTap: enabled
-                          ? () => _pickAttachment(_ChatAttachment.camera)
-                          : null,
-                      semanticLabel: S.takePhoto,
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 9),
-            // Send once there is a draft. The disabled send affordance keeps
-            // the composer layout stable without offering voice notes.
-            ListenableBuilder(
-              listenable: _inputController,
-              builder: (context, _) {
-                final hasDraft =
-                    enabled && _inputController.text.trim().isNotEmpty;
-                return GestureDetector(
-                  key: const ValueKey('chat-send-button'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: enabled && hasDraft ? _send : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: hasDraft ? null : AppColors.surfaceAlt,
-                      gradient: hasDraft
-                          ? LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [AppColors.primaryRed, AppColors.darkRed],
-                            )
-                          : null,
-                      shape: BoxShape.circle,
-                      border: hasDraft
-                          ? null
-                          : Border.all(color: AppColors.divider),
-                      boxShadow: hasDraft
-                          ? [
-                              BoxShadow(
-                                color: AppColors.primaryRed.withValues(
-                                  alpha: 0.33,
-                                ),
-                                blurRadius: 14,
-                                offset: const Offset(0, 4),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Icon(
-                      Icons.send_rounded,
-                      size: 21,
-                      color: hasDraft ? Colors.white : AppColors.secondaryText,
+                        // Quick camera capture, docked inside the pill.
+                        _composerCircleButton(
+                          key: const ValueKey('chat-camera-button'),
+                          size: 34,
+                          icon: Icons.photo_camera_outlined,
+                          iconSize: 19,
+                          iconColor: AppColors.secondaryText,
+                          filled: false,
+                          onTap: enabled
+                              ? () => _pickAttachment(_ChatAttachment.camera)
+                              : null,
+                          semanticLabel: S.takePhoto,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+                const SizedBox(width: 9),
+                // Send once there is a draft. The disabled send affordance keeps
+                // the composer layout stable without offering voice notes.
+                ListenableBuilder(
+                  listenable: _inputController,
+                  builder: (context, _) {
+                    final hasDraft =
+                        enabled && _inputController.text.trim().isNotEmpty;
+                    return AppPressable(
+                      key: const ValueKey('chat-send-button'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: enabled && hasDraft ? _send : null,
+                      pressedScale: 0.92,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: hasDraft ? null : AppColors.surfaceAlt,
+                          gradient: hasDraft
+                              ? LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppColors.primaryRed,
+                                    AppColors.darkRed,
+                                  ],
+                                )
+                              : null,
+                          shape: BoxShape.circle,
+                          border: hasDraft
+                              ? null
+                              : Border.all(color: AppColors.divider),
+                          boxShadow: hasDraft
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primaryRed.withValues(
+                                      alpha: 0.33,
+                                    ),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Icon(
+                          Icons.send_rounded,
+                          size: 21,
+                          color: hasDraft
+                              ? Colors.white
+                              : AppColors.secondaryText,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _composerReplyPreview(ChatMessage message) {
+    final senderName = message.senderId == _myId
+        ? S.you
+        : _senderInfo(message.senderId).$1;
+    return Container(
+      key: const ValueKey('chat-reply-composer-preview'),
+      padding: const EdgeInsets.fromLTRB(11, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: AppColors.primaryRed, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  S.replyingTo(senderName),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryRed,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ChatStore.replyPreviewFor(message),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('chat-cancel-reply'),
+            tooltip: S.cancelReply,
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _replyingTo = null),
+            icon: Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: AppColors.secondaryText,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1811,7 +2458,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Semantics(
       button: true,
       label: semanticLabel,
-      child: GestureDetector(
+      child: AppPressable(
         key: key,
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
@@ -1862,6 +2509,49 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _timeLabel(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  Widget _messageStatusIndicator(ChatMessage message) {
+    final status = chatStore.deliveryStatusFor(message);
+    final ticks = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      child: _MessageTicks(
+        key: ValueKey('message-status-${message.id}-${status.name}'),
+        status: status,
+      ),
+    );
+    if (!_isGroup) return ticks;
+
+    return Semantics(
+      button: true,
+      label: S.messageInfo,
+      child: Tooltip(
+        message: S.messageInfo,
+        child: InkResponse(
+          key: ValueKey('group-message-receipts-${message.id}'),
+          onTap: () => _openMessageInfo(message),
+          radius: 22,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            child: Center(child: ticks),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _receiptTimestamp(DateTime value) {
+    final dt = value.toLocal();
+    final now = DateTime.now();
+    final time = _timeLabel(dt);
+    if (_sameDay(dt, now)) return time;
+    final today = DateTime(now.year, now.month, now.day);
+    final startOfWeek = today.subtract(Duration(days: now.weekday - 1));
+    final date = DateTime(dt.year, dt.month, dt.day);
+    if (!date.isBefore(startOfWeek) && !date.isAfter(today)) {
+      return '${S.weekdayShort(dt.weekday)} $time';
+    }
+    return '${dt.day.toString().padLeft(2, '0')} ${S.monthShort(dt.month)} $time';
+  }
 }
 
 /// The design's day marker: a hairline rule on each side of a small caps label.
@@ -1896,20 +2586,27 @@ class _DateChip extends StatelessWidget {
   }
 }
 
-/// Double check-mark receipt: muted once delivered, red once seen.
+/// One check while sent, two muted checks once delivered, two red once seen.
 class _MessageTicks extends StatelessWidget {
-  final bool seen;
+  final MessageDeliveryStatus status;
 
-  const _MessageTicks({super.key, required this.seen});
+  const _MessageTicks({super.key, required this.status});
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: seen ? S.seen : S.delivered,
+      label: switch (status) {
+        MessageDeliveryStatus.sent => S.sent,
+        MessageDeliveryStatus.delivered => S.delivered,
+        MessageDeliveryStatus.seen => S.seen,
+      },
       child: CustomPaint(
         size: const Size(17, 11),
         painter: _TicksPainter(
-          color: seen ? AppColors.primaryRed : AppColors.secondaryText,
+          color: status == MessageDeliveryStatus.seen
+              ? AppColors.primaryRed
+              : AppColors.secondaryText,
+          tickCount: status == MessageDeliveryStatus.sent ? 1 : 2,
         ),
       ),
     );
@@ -1918,8 +2615,9 @@ class _MessageTicks extends StatelessWidget {
 
 class _TicksPainter extends CustomPainter {
   final Color color;
+  final int tickCount;
 
-  const _TicksPainter({required this.color});
+  const _TicksPainter({required this.color, required this.tickCount});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1935,12 +2633,12 @@ class _TicksPainter extends CustomPainter {
       ..lineTo((4 + dx) * scale, 9 * scale)
       ..lineTo((10 + dx) * scale, 2 * scale);
     canvas.drawPath(tick(0), paint);
-    canvas.drawPath(tick(6.5), paint);
+    if (tickCount == 2) canvas.drawPath(tick(6.5), paint);
   }
 
   @override
   bool shouldRepaint(covariant _TicksPainter oldDelegate) =>
-      color != oldDelegate.color;
+      color != oldDelegate.color || tickCount != oldDelegate.tickCount;
 }
 
 /// The student thread canvas: a flat body under the design's campus wallpaper

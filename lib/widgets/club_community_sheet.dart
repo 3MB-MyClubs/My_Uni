@@ -1,37 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../services/app_strings.dart';
 import 'club_chat_theme.dart';
 
-/// The three panels behind the community context bar.
-enum ClubSheetTab { members, events, notices }
-
-/// Bottom sheet holding the Members / Events / Notices panels.
+/// Bottom sheet holding one community panel — the members roster the ••• menu
+/// opens.
 ///
-/// Panel contents are built by the screen (which owns the live data); this
-/// widget owns the chrome: grab handle, segmented tabs, and scrolling.
-class ClubCommunitySheet extends StatefulWidget {
+/// The Board + Chat design retired the tabbed Members / Events / Notices sheet:
+/// the Board is the notice archive, Events live in the club's Events tab, and
+/// this sheet keeps only the chrome — grab handle, title, and scrolling.
+class ClubCommunitySheet extends StatelessWidget {
   const ClubCommunitySheet({
     super.key,
     required this.t,
-    required this.initialTab,
-    required this.builders,
+    required this.title,
+    required this.builder,
   });
 
   final ClubChatTheme t;
-  final ClubSheetTab initialTab;
-  final Map<ClubSheetTab, WidgetBuilder> builders;
-
-  @override
-  State<ClubCommunitySheet> createState() => _ClubCommunitySheetState();
-}
-
-class _ClubCommunitySheetState extends State<ClubCommunitySheet> {
-  late ClubSheetTab _tab = widget.initialTab;
+  final String title;
+  final WidgetBuilder builder;
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.t;
     return FractionallySizedBox(
       heightFactor: 0.74,
       child: Container(
@@ -55,47 +45,25 @@ class _ClubCommunitySheetState extends State<ClubCommunitySheet> {
               ),
             ),
             Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: t.hair)),
               ),
-              child: Row(
-                children: [
-                  for (final tab in ClubSheetTab.values)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _tab = tab),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: _tab == tab ? t.meGradient : null,
-                              borderRadius: BorderRadius.circular(10),
-                              border: _tab == tab
-                                  ? null
-                                  : Border.all(color: t.border),
-                            ),
-                            child: Text(
-                              _label(tab),
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: _tab == tab ? Colors.white : t.textMuted,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
+                  color: t.text,
+                ),
               ),
             ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
-                child: widget.builders[_tab]!(context),
+                child: builder(context),
               ),
             ),
           ],
@@ -103,12 +71,6 @@ class _ClubCommunitySheetState extends State<ClubCommunitySheet> {
       ),
     );
   }
-
-  String _label(ClubSheetTab tab) => switch (tab) {
-    ClubSheetTab.members => S.communityMembersButton,
-    ClubSheetTab.events => S.events,
-    ClubSheetTab.notices => S.communityNotices,
-  };
 }
 
 /// Uppercase group heading inside a sheet panel.

@@ -23,6 +23,7 @@ import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/app_pressable.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'user_profile_screen.dart';
@@ -1428,8 +1429,9 @@ class _PersonRowState extends State<_PersonRow> {
             ),
             const SizedBox(width: 10),
             if (widget.canFollow)
-              GestureDetector(
+              AppPressable(
                 onTap: _toggleFollow,
+                pressedScale: 0.95,
                 child: AnimatedScale(
                   scale: _changing ? 1.06 : 1,
                   duration: const Duration(milliseconds: 180),

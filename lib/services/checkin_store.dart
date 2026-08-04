@@ -65,6 +65,7 @@ class CheckinStore extends ChangeNotifier {
     try {
       final remote = await supabaseInteractionService.fetchEventCheckinIds(
         eventId,
+        force: force,
       );
       if (remote.isEmpty) return;
       final local = _byEvent.putIfAbsent(eventId, () => {});

@@ -491,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @rsvp.
   ///
   /// In en, this message translates to:
-  /// **'RSVP'**
+  /// **'Let\'s Go'**
   String get rsvp;
 
   /// No description provided for @ended.
@@ -3857,19 +3857,19 @@ abstract class AppLocalizations {
   /// No description provided for @mutualFriendCountLabel.
   ///
   /// In en, this message translates to:
-  /// **'{mutualLabel} mutual friends'**
+  /// **'Followed by {mutualLabel} people you follow'**
   String mutualFriendCountLabel(String mutualLabel);
 
   /// No description provided for @mutualFriendNamed.
   ///
   /// In en, this message translates to:
-  /// **'Mutual friend: {name}'**
+  /// **'Followed by {name}'**
   String mutualFriendNamed(String name);
 
   /// No description provided for @mutualFriendNamedPlus.
   ///
   /// In en, this message translates to:
-  /// **'Mutual friend: {name} + {extra} more'**
+  /// **'Followed by {name} + {extra} more'**
   String mutualFriendNamedPlus(String name, int extra);
 
   /// No description provided for @myCalendarTitle.
@@ -4091,7 +4091,7 @@ abstract class AppLocalizations {
   /// No description provided for @oneMutualFriend.
   ///
   /// In en, this message translates to:
-  /// **'1 mutual friend'**
+  /// **'Followed by 1 person you follow'**
   String get oneMutualFriend;
 
   /// No description provided for @onlyKuAddressesAccepted.
@@ -5731,6 +5731,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You\'re in,\n{name}.'**
   String youreInName(String name);
+
+  /// No description provided for @markAllRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all read'**
+  String get markAllRead;
+
+  /// No description provided for @clubRolePresident.
+  ///
+  /// In en, this message translates to:
+  /// **'President'**
+  String get clubRolePresident;
+
+  /// No description provided for @clubRoleVicePresident.
+  ///
+  /// In en, this message translates to:
+  /// **'Vice President'**
+  String get clubRoleVicePresident;
+
+  /// No description provided for @clubRoleFounder.
+  ///
+  /// In en, this message translates to:
+  /// **'Founder'**
+  String get clubRoleFounder;
+
+  /// No description provided for @clubRoleCoFounder.
+  ///
+  /// In en, this message translates to:
+  /// **'Co-Founder'**
+  String get clubRoleCoFounder;
+
+  /// No description provided for @clubRoleSecretary.
+  ///
+  /// In en, this message translates to:
+  /// **'Secretary'**
+  String get clubRoleSecretary;
+
+  /// No description provided for @clubRoleTreasurer.
+  ///
+  /// In en, this message translates to:
+  /// **'Treasurer'**
+  String get clubRoleTreasurer;
+
+  /// No description provided for @clubRoleCoordinator.
+  ///
+  /// In en, this message translates to:
+  /// **'Coordinator'**
+  String get clubRoleCoordinator;
+
+  /// No description provided for @clubRoleChair.
+  ///
+  /// In en, this message translates to:
+  /// **'Chair'**
+  String get clubRoleChair;
+
+  /// No description provided for @clubRoleViceChair.
+  ///
+  /// In en, this message translates to:
+  /// **'Vice Chair'**
+  String get clubRoleViceChair;
+
+  /// No description provided for @clubRoleTeamLead.
+  ///
+  /// In en, this message translates to:
+  /// **'Team Lead'**
+  String get clubRoleTeamLead;
+
+  /// No description provided for @followRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow requests'**
+  String get followRequests;
+
+  /// No description provided for @plusOthersCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n,plural, one{+ 1 other} other{+ {n} others}}'**
+  String plusOthersCount(num n);
+
+  /// No description provided for @notifGroupNew.
+  ///
+  /// In en, this message translates to:
+  /// **'NEW'**
+  String get notifGroupNew;
+
+  /// No description provided for @notifGroupToday.
+  ///
+  /// In en, this message translates to:
+  /// **'TODAY'**
+  String get notifGroupToday;
+
+  /// No description provided for @notifGroupThisWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'THIS WEEK'**
+  String get notifGroupThisWeek;
+
+  /// No description provided for @notifGroupThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'THIS MONTH'**
+  String get notifGroupThisMonth;
+
+  /// No description provided for @notifGroupEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'EARLIER'**
+  String get notifGroupEarlier;
+
+  /// No description provided for @updatedJustNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated just now'**
+  String get updatedJustNow;
+
+  /// No description provided for @notificationsAutoCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications older than 30 days are cleared automatically'**
+  String get notificationsAutoCleared;
+
+  /// No description provided for @updateRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get updateRequiredTitle;
+
+  /// No description provided for @updateRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please update ClubUp to continue using the app.'**
+  String get updateRequiredMessage;
+
+  /// No description provided for @updateRequiredButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Update now'**
+  String get updateRequiredButton;
+
+  /// No description provided for @updateRequiredRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get updateRequiredRetry;
+
+  /// No description provided for @updateRequiredStoreError.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t open the app store. Please update ClubUp there, then try again.'**
+  String get updateRequiredStoreError;
 }
 
 class _AppLocalizationsDelegate

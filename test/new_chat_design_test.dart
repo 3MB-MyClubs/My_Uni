@@ -130,6 +130,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('composer message rises smoothly into its sent position', (
+    tester,
+  ) async {
+    final threadId = ChatStore.dmThreadId(myId, peer.$1);
+    chatStore.ensureDirectThread(myId, peer.$1);
+
+    await pumpThread(tester, threadId);
+    await tester.enterText(find.byType(TextField), 'On my way');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat-send-button')));
+    await tester.pump();
+
+    final sent = chatStore.messagesFor(threadId, viewerId: myId).last;
+    final bubble = find.byKey(ValueKey('chat-message-${sent.id}'));
+    expect(
+      find.byKey(ValueKey('sent-message-entrance-${sent.id}')),
+      findsOneWidget,
+    );
+    final startingY = tester.getTopLeft(bubble).dy;
+
+    await tester.pump(const Duration(milliseconds: 220));
+    final movingY = tester.getTopLeft(bubble).dy;
+    expect(movingY, lessThan(startingY));
+
+    await tester.pump(const Duration(milliseconds: 260));
+    final settledY = tester.getTopLeft(bubble).dy;
+    expect(settledY, lessThan(movingY));
+    expect(find.text('On my way'), findsOneWidget);
+    expect(find.byIcon(Icons.mic_none_rounded), findsOneWidget);
+
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('empty group chat uses the group copy and member count', (
     tester,
   ) async {
@@ -161,7 +195,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('chat attachment sheet only offers photos and camera', (
+  testWidgets('chat attachment sheet offers gallery media and camera', (
     tester,
   ) async {
     final threadId = ChatStore.dmThreadId(myId, second.$1);

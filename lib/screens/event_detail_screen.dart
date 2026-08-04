@@ -26,6 +26,7 @@ import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/rsvp_button.dart';
+import '../widgets/app_motion.dart';
 import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
 import 'user_profile_screen.dart';
@@ -2383,6 +2384,7 @@ class _StickyCtaState extends State<_StickyCta> {
   bool _remind = false;
 
   void _toggleRemind() {
+    HapticFeedback.selectionClick();
     setState(() => _remind = !_remind);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -2419,50 +2421,81 @@ class _StickyCtaState extends State<_StickyCta> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          // Priority ladder: the RSVP button carries the whole decision on its
+          // own line; calendar and reminder sit below as quiet text actions —
+          // present and tappable, never competing with it.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              RsvpButton(
+                eventId: widget.event.id,
+                color: accent,
+                isPast: false,
+                event: widget.event,
+              ),
+              const SizedBox(height: 11),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  GestureDetector(
-                    onTap: _toggleRemind,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: _remind
-                            ? accent.withValues(alpha: 0.14)
-                            : AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.all(Radius.circular(16)),
-                        border: Border.all(
-                          color: _remind
-                              ? accent
-                              : AppColors.divider.withValues(alpha: 0.9),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Icon(
-                        _remind
-                            ? Icons.notifications_active_rounded
-                            : Icons.notifications_none_rounded,
-                        color: _remind ? accent : AppColors.text,
-                        size: 22,
-                      ),
+                  Expanded(
+                    child: AddToCalendarButton(
+                      event: widget.event,
+                      color: accent,
+                      asLink: true,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  Container(
+                    width: 1,
+                    height: 16,
+                    color: AppColors.divider.withValues(alpha: 0.9),
+                  ),
                   Expanded(
-                    child: RsvpButton(
-                      eventId: widget.event.id,
-                      color: accent,
-                      isPast: false,
-                      event: widget.event,
+                    child: SizedBox(
+                      height: 36,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                          onTap: _toggleRemind,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedReminderBell(
+                                active: _remind,
+                                color: accent,
+                                inactiveColor: AppColors.secondaryText,
+                                size: 15,
+                              ),
+                              const SizedBox(width: 7),
+                              Flexible(
+                                child: Text(
+                                  _remind
+                                      ? AppLocalizations.of(
+                                          context,
+                                        )!.remindedLabel
+                                      : AppLocalizations.of(
+                                          context,
+                                        )!.remindMeLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: _remind
+                                        ? accent
+                                        : AppColors.secondaryText,
+                                    letterSpacing: -0.1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 9),
-              AddToCalendarButton(event: widget.event, color: accent),
             ],
           ),
         ),

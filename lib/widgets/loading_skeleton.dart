@@ -50,8 +50,20 @@ class _SkeletonBoxState extends State<SkeletonBox>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1250),
+      duration: const Duration(milliseconds: 1450),
     )..repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -72,7 +84,8 @@ class _SkeletonBoxState extends State<SkeletonBox>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final x = -1.7 + (_controller.value * 3.4);
+        final progress = Curves.easeInOutSine.transform(_controller.value);
+        final x = -1.7 + (progress * 3.4);
         return Container(
           width: widget.width,
           height: widget.height,

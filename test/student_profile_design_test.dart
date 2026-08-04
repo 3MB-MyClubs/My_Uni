@@ -9,10 +9,56 @@ import 'package:flutter_application_1/screens/student_profile_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
+import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 
 void main() {
+  testWidgets('club role badges stay readable in light and dark modes', (
+    tester,
+  ) async {
+    addTearDown(() => themeService.setDark(false));
+
+    for (final brightness in [Brightness.light, Brightness.dark]) {
+      await themeService.setDark(brightness == Brightness.dark);
+
+      for (final role in ['Member', 'Founder', 'President']) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(brightness: brightness),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: ColoredBox(
+                color: StudentCampusPalette.solid,
+                child: StudentClubRoleBadge(role: role),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final badge = find.byType(StudentClubRoleBadge);
+        final container = tester.widget<Container>(
+          find.descendant(of: badge, matching: find.byType(Container)),
+        );
+        final decoration = container.decoration! as BoxDecoration;
+        final label = tester.widget<Text>(find.text(role));
+        final foreground = label.style!.color!;
+        final background = Color.alphaBlend(
+          decoration.color!,
+          StudentCampusPalette.solid,
+        );
+
+        expect(
+          _contrastRatio(foreground, background),
+          greaterThanOrEqualTo(4.5),
+          reason: '$role must remain readable in ${brightness.name} mode',
+        );
+      }
+    }
+  });
+
   testWidgets('blank bios are omitted from student profiles', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -277,4 +323,14 @@ void main() {
     expect(find.text('President'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+double _contrastRatio(Color first, Color second) {
+  final lighter = first.computeLuminance() > second.computeLuminance()
+      ? first.computeLuminance()
+      : second.computeLuminance();
+  final darker = first.computeLuminance() > second.computeLuminance()
+      ? second.computeLuminance()
+      : first.computeLuminance();
+  return (lighter + 0.05) / (darker + 0.05);
 }

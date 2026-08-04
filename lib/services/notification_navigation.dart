@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/notification.dart';
 import '../models/user.dart';
+import '../navigation/chat_page_route.dart';
 import '../screens/chat_thread_screen.dart';
 import '../screens/club_profile_screen.dart';
 import '../screens/event_detail_screen.dart';
@@ -37,6 +38,31 @@ PushNotificationTarget notificationTargetFor(AppNotification notification) =>
       if (notification.fromId != null) 'actor_user_id': notification.fromId,
       'notification_id': notification.id,
     });
+
+/// Returns whether [currentUserId] is allowed to see this notification now.
+///
+/// The recipient id is the first boundary. Chat alerts also have to resolve to
+/// a conversation the recipient currently belongs to, so stale or malformed
+/// rows cannot expose another conversation through the bell or inbox UI.
+bool canViewNotification(
+  AppNotification notification, {
+  required String currentUserId,
+}) {
+  if (currentUserId.isEmpty || notification.userId != currentUserId) {
+    return false;
+  }
+  if (notification.targetType != 'message') return true;
+
+  final target = notificationTargetFor(notification);
+  if (!target.isChat) return false;
+  if (ChatStore.isAdminAccountId(currentUserId) &&
+      target.type != 'club_chat' &&
+      target.type != 'club_inbox') {
+    return false;
+  }
+  final threadId = target.chatThreadIdFor(currentUserId);
+  return threadId != null && chatStore.canAccessThread(threadId, currentUserId);
+}
 
 User? _knownUser(String id) {
   for (final user in peopleService.cachedPeople) {
@@ -136,7 +162,7 @@ Future<bool> openNotificationTarget(
         return false;
       }
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        ChatPageRoute<void>(
           builder: (_) =>
               ChatThreadScreen(threadId: threadId, recipient: recipient),
         ),

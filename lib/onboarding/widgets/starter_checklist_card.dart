@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/app_colors.dart';
 import '../../services/app_strings.dart';
 import '../../services/auth_service.dart';
+import '../../services/locale_service.dart';
 import '../onboarding_service.dart';
 import '../starter_checklist_service.dart';
 
@@ -13,8 +14,11 @@ class StarterChecklistCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The card is inserted as a `const` widget, so a parent rebuild alone will
+    // not refresh it — listen to the locale as well or the labels stay stuck on
+    // whichever language was active when the card first built.
     return ListenableBuilder(
-      listenable: starterChecklistService,
+      listenable: Listenable.merge([starterChecklistService, localeService]),
       builder: (context, _) {
         final userId = authService.currentUser?.id ?? '';
         if (!starterChecklistService.isActiveFor(userId)) {

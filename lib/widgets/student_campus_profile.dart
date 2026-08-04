@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
+import '../services/club_role_localization.dart';
 import '../services/theme_service.dart';
 import 'club_avatar.dart';
 import 'user_avatar.dart';
+import 'app_pressable.dart';
 
 /// Campus ID reference-design palette. The ID card itself keeps its fixed
 /// burgundy/white branding in both themes; the surrounding page chrome
@@ -593,7 +595,7 @@ class StudentProfileTextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
@@ -776,38 +778,31 @@ class StudentClubRoleBadge extends StatelessWidget {
   }
 
   String _displayLabel(BuildContext context) {
-    final value = role.trim();
-    return value.isEmpty
-        ? AppLocalizations.of(context)!.memberRoleDefault
-        : value;
+    return localizedClubRole(AppLocalizations.of(context)!, role);
   }
 
-  bool get _isMember => _rawLabel.toLowerCase() == 'member';
+  bool get _isMember => isClubMemberRole(_rawLabel);
 
-  bool get _isFounder {
-    final value = _rawLabel.toLowerCase();
-    return value.contains('founder') || value.contains('co-founder');
-  }
+  bool get _isFounder => isClubFounderRole(_rawLabel);
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final foreground = _isFounder
-        ? const Color(0xFFFFD27A)
+        ? (isDark ? const Color(0xFFFFD27A) : const Color(0xFF6D4C00))
         : _isMember
         ? StudentCampusPalette.textSoft
-        : const Color(0xFFFFB3C8);
+        : (isDark ? const Color(0xFFFFB3C8) : const Color(0xFF7A1638));
     final background = _isFounder
-        ? const Color(0x26FFC857)
+        ? (isDark ? const Color(0x26FFC857) : const Color(0xFFFFF3CF))
         : _isMember
-        ? (themeService.isDark
-              ? const Color(0x0FFFFFFF)
-              : const Color(0x0A000000))
-        : const Color(0x478C1D40);
+        ? (isDark ? const Color(0x0FFFFFFF) : const Color(0x0A000000))
+        : (isDark ? const Color(0x478C1D40) : const Color(0xFFF9E4EB));
     final border = _isFounder
-        ? const Color(0x66FFC857)
+        ? (isDark ? const Color(0x66FFC857) : const Color(0xFFD3A62D))
         : _isMember
         ? StudentCampusPalette.borderStrong
-        : const Color(0x73D96A8B);
+        : (isDark ? const Color(0x73D96A8B) : const Color(0xFFC65C7D));
     final icon = _isFounder
         ? Icons.auto_awesome_rounded
         : _isMember
@@ -885,12 +880,28 @@ class _CampusStat extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                '$value',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.2),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  '$value',
+                  key: ValueKey(value),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               const SizedBox(width: 5),

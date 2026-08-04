@@ -65,7 +65,7 @@
   "allCaughtUp": "All caught up",
   "newEventsHint": "Newly created events will appear here until you open their details.",
   "going": "Going",
-  "rsvp": "RSVP",
+  "rsvp": "Let's Go",
   "ended": "Ended",
   "notifications": "Notifications",
   "filterYou": "You",
@@ -1252,7 +1252,7 @@
       }
     }
   },
-  "mutualFriendCountLabel": "{mutualLabel} mutual friends",
+  "mutualFriendCountLabel": "Followed by {mutualLabel} people you follow",
   "@mutualFriendCountLabel": {
     "placeholders": {
       "mutualLabel": {
@@ -1260,7 +1260,7 @@
       }
     }
   },
-  "mutualFriendNamed": "Mutual friend: {name}",
+  "mutualFriendNamed": "Followed by {name}",
   "@mutualFriendNamed": {
     "placeholders": {
       "name": {
@@ -1268,7 +1268,7 @@
       }
     }
   },
-  "mutualFriendNamedPlus": "Mutual friend: {name} + {extra} more",
+  "mutualFriendNamedPlus": "Followed by {name} + {extra} more",
   "@mutualFriendNamedPlus": {
     "placeholders": {
       "name": {
@@ -1322,7 +1322,7 @@
   "nowSegmentLabel": "Now",
   "officialClubLabel": "Official Club",
   "oneMutualBadge": "1 mutual",
-  "oneMutualFriend": "1 mutual friend",
+  "oneMutualFriend": "Followed by 1 person you follow",
   "onlyKuAddressesAccepted": "Only @ku.edu.tr addresses are accepted.",
   "onlyKuEmailInfoText": "Only @ku.edu.tr addresses are accepted. Personal emails won't work.",
   "onlyOwningClubCanDelete": "Only the club that owns this post can delete it.",
@@ -1859,5 +1859,37 @@
         "type": "String"
       }
     }
-  }
+  },
+  "markAllRead": "Mark all read",
+  "clubRolePresident": "President",
+  "clubRoleVicePresident": "Vice President",
+  "clubRoleFounder": "Founder",
+  "clubRoleCoFounder": "Co-Founder",
+  "clubRoleSecretary": "Secretary",
+  "clubRoleTreasurer": "Treasurer",
+  "clubRoleCoordinator": "Coordinator",
+  "clubRoleChair": "Chair",
+  "clubRoleViceChair": "Vice Chair",
+  "clubRoleTeamLead": "Team Lead",
+  "followRequests": "Follow requests",
+  "plusOthersCount": "{n,plural, one{+ 1 other} other{+ {n} others}}",
+  "@plusOthersCount": {
+    "placeholders": {
+      "n": {
+        "type": "num"
+      }
+    }
+  },
+  "notifGroupNew": "NEW",
+  "notifGroupToday": "TODAY",
+  "notifGroupThisWeek": "THIS WEEK",
+  "notifGroupThisMonth": "THIS MONTH",
+  "notifGroupEarlier": "EARLIER",
+  "updatedJustNow": "Updated just now",
+  "notificationsAutoCleared": "Notifications older than 30 days are cleared automatically",
+  "updateRequiredTitle": "Update required",
+  "updateRequiredMessage": "Please update ClubUp to continue using the app.",
+  "updateRequiredButton": "Update now",
+  "updateRequiredRetry": "Check again",
+  "updateRequiredStoreError": "We couldn't open the app store. Please update ClubUp there, then try again."
 }

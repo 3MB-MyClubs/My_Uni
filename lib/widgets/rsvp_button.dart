@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/event.dart';
 import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
 import '../services/rsvp_store.dart';
+import 'app_pressable.dart';
 
 class RsvpButton extends StatefulWidget {
   final String eventId;
@@ -26,13 +30,54 @@ class RsvpButton extends StatefulWidget {
   State<RsvpButton> createState() => _RsvpButtonState();
 }
 
-class _RsvpButtonState extends State<RsvpButton> {
+class _RsvpButtonState extends State<RsvpButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _confirmationController;
+  late final Animation<double> _confirmationPulse;
+  bool? _lastAttending;
+
   String get _userId =>
       authService.isStudentSession ? authService.currentUser?.id ?? '' : '';
+
+  @override
+  void initState() {
+    super.initState();
+    _confirmationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 440),
+      value: 1,
+    );
+    _confirmationPulse =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 1, end: 1.055), weight: 34),
+          TweenSequenceItem(tween: Tween(begin: 1.055, end: 0.985), weight: 28),
+          TweenSequenceItem(tween: Tween(begin: 0.985, end: 1), weight: 38),
+        ]).animate(
+          CurvedAnimation(
+            parent: _confirmationController,
+            curve: Curves.easeOut,
+          ),
+        );
+  }
 
   void _syncCalendar(BuildContext context) {
     if (widget.event == null) return;
     syncRsvpToDeviceCalendar(context, widget.event!);
+  }
+
+  void _playConfirmationMotion() {
+    if (!mounted ||
+        _confirmationController.isAnimating ||
+        MediaQuery.disableAnimationsOf(context)) {
+      return;
+    }
+    _confirmationController.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _confirmationController.dispose();
+    super.dispose();
   }
 
   @override
@@ -44,20 +89,41 @@ class _RsvpButtonState extends State<RsvpButton> {
       builder: (ctx, _) {
         final attending = rsvpStore.isAttending(widget.eventId);
         final pending = rsvpStore.isPending(widget.eventId);
+        final newlyConfirmed = _lastAttending == false && attending;
+        _lastAttending = attending;
+        if (newlyConfirmed) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && rsvpStore.isAttending(widget.eventId)) {
+              _playConfirmationMotion();
+            }
+          });
+        }
 
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: ScaleTransition(
-              scale: Tween<double>(
-                begin: 0.97,
-                end: 1.0,
-              ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
-              child: child,
+        return AnimatedBuilder(
+          animation: _confirmationPulse,
+          child: AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: ScaleTransition(
+                scale: Tween<double>(
+                  begin: 0.97,
+                  end: 1.0,
+                ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+                child: child,
+              ),
             ),
+            child: _build(ctx, attending, pending),
           ),
-          child: _build(ctx, attending, pending),
+          builder: (context, child) => Transform.scale(
+            key: const ValueKey('rsvp-confirmation-pulse'),
+            scale: MediaQuery.disableAnimationsOf(context)
+                ? 1
+                : _confirmationPulse.value,
+            child: child,
+          ),
         );
       },
     );
@@ -66,7 +132,13 @@ class _RsvpButtonState extends State<RsvpButton> {
   Widget _build(BuildContext context, bool attending, bool pending) {
     void onToggle() {
       final wasAttending = rsvpStore.isAttending(widget.eventId);
-      rsvpStore.toggle(widget.eventId, _userId);
+      if (!wasAttending) {
+        HapticFeedback.lightImpact();
+        _playConfirmationMotion();
+      } else {
+        HapticFeedback.selectionClick();
+      }
+      unawaited(rsvpStore.toggle(widget.eventId, _userId));
       if (!wasAttending && widget.event != null) {
         _syncCalendar(context);
       }
@@ -88,7 +160,7 @@ class _RsvpButtonState extends State<RsvpButton> {
               onTap: onToggle,
             ),
             const SizedBox(width: 6),
-            GestureDetector(
+            AppPressable(
               onTap: onToggle,
               child: AnimatedOpacity(
                 opacity: 1.0,
@@ -132,101 +204,47 @@ class _RsvpButtonState extends State<RsvpButton> {
     }
 
     // ── Full — attending ──────────────────────────────────────────────────────
+    // Cancel-only: once you're in, the affirmation is redundant — the one thing
+    // left to do here is back out, so the slot becomes a single quiet button.
     if (attending) {
       return SizedBox(
         key: const ValueKey('full-attending'),
         height: 56,
-        // stretch → both the status pill and the Cancel button fill the full
-        // 56px height (without this the pill collapses to its text height).
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // "You're going" status pill
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      widget.color,
-                      Color.lerp(widget.color, Colors.black, 0.15)!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: widget.color.withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      offset: const Offset(0, 5),
+        width: double.infinity,
+        child: AppPressable(
+          onTap: onToggle,
+          pressedScale: 0.98,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+              border: Border.all(color: AppColors.divider, width: 1.5),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    AppLocalizations.of(context)!.cancel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.secondaryText,
+                      letterSpacing: -0.2,
                     ),
-                  ],
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        color: Colors.white,
-                        size: 19,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          AppLocalizations.of(context)!.youreGoing,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-              ),
+              ],
             ),
-
-            const SizedBox(width: 10),
-
-            // "Cancel" secondary action
-            GestureDetector(
-              onTap: onToggle,
-              child: Container(
-                width: 96,
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                  border: Border.all(color: AppColors.divider, width: 1.5),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.close_rounded,
-                        size: 16,
-                        color: AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        AppLocalizations.of(context)!.cancel,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -236,8 +254,9 @@ class _RsvpButtonState extends State<RsvpButton> {
       key: const ValueKey('full-rsvp'),
       height: 56,
       width: double.infinity,
-      child: GestureDetector(
+      child: AppPressable(
         onTap: onToggle,
+        pressedScale: 0.98,
         child: AnimatedOpacity(
           opacity: 1.0,
           duration: const Duration(milliseconds: 150),
@@ -269,13 +288,18 @@ class _RsvpButtonState extends State<RsvpButton> {
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  AppLocalizations.of(context)!.rsvp,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.2,
+                Flexible(
+                  child: Text(
+                    AppLocalizations.of(context)!.rsvp,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      // words, not an acronym — tight tracking, per the design
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ),
               ],
@@ -311,7 +335,7 @@ class _CompactChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveColor = enabled ? color : color.withValues(alpha: 0.45);
 
-    return GestureDetector(
+    return AppPressable(
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

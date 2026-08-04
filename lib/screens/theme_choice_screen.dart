@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
+import '../widgets/app_pressable.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 
@@ -8,7 +9,7 @@ import '../l10n/app_localizations.dart';
 /// app, and Continue locks it in before proceeding.
 class ThemeChoiceScreen extends StatefulWidget {
   /// Called with the chosen mode (true = dark) when the user taps Continue.
-  final ValueChanged<bool> onChoose;
+  final Future<void> Function(bool isDark) onChoose;
 
   const ThemeChoiceScreen({super.key, required this.onChoose});
 
@@ -18,10 +19,30 @@ class ThemeChoiceScreen extends StatefulWidget {
 
 class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
   late bool _dark = themeService.isDark; // starts light for first-timers
+  bool _isSaving = false;
 
   void _select(bool dark) {
     setState(() => _dark = dark);
-    themeService.setDark(dark); // live preview across the app
+    themeService.setDark(
+      dark,
+      persistToAccount: false,
+    ); // live preview across the app
+  }
+
+  Future<void> _continue() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      await widget.onChoose(_dark);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+        ),
+      );
+    }
   }
 
   @override
@@ -94,7 +115,7 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () => widget.onChoose(_dark),
+                  onPressed: _isSaving ? null : _continue,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
@@ -102,24 +123,32 @@ class _ThemeChoiceScreenState extends State<ThemeChoiceScreen> {
                       borderRadius: BorderRadius.all(Radius.circular(16)),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        AppLocalizations.of(context)!.continueWithTheme(
-                          _dark
-                              ? AppLocalizations.of(context)!.dark
-                              : AppLocalizations.of(context)!.light,
+                  child: _isSaving
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              AppLocalizations.of(context)!.continueWithTheme(
+                                _dark
+                                    ? AppLocalizations.of(context)!.dark
+                                    : AppLocalizations.of(context)!.light,
+                              ),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_forward_rounded, size: 20),
+                          ],
                         ),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_rounded, size: 20),
-                    ],
-                  ),
                 ),
               ),
             ],
@@ -163,8 +192,9 @@ class _ThemePreviewCard extends StatelessWidget {
     final text = dark ? _darkText : _lightText;
     final sub = dark ? _darkSub : _lightSub;
 
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
+      pressedScale: 0.98,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(5),

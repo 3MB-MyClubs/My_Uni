@@ -1,6 +1,8 @@
 import 'dart:async' show unawaited;
 import 'dart:ui' show ImageFilter;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/calendar/providers/calendar_provider.dart';
 import '../features/calendar/providers/calendar_state.dart';
@@ -21,6 +23,7 @@ import '../onboarding/onboarding_service.dart';
 import '../onboarding/onboarding_steps.dart';
 import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
+import '../widgets/app_pressable.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -158,6 +161,10 @@ class MainNavScreen extends ConsumerStatefulWidget {
 
 class _MainNavScreenState extends ConsumerState<MainNavScreen>
     with SingleTickerProviderStateMixin {
+  static const double _desktopNavigationBreakpoint = 960;
+  static const double _desktopSidebarWidth = 248;
+  static const double _desktopContentMaxWidth = 1040;
+
   int _selectedIndex = 0;
   bool _showOnboarding = false;
   // True while the current run was requested from Settings, so finishing it
@@ -432,6 +439,22 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // the event form rather than asking Post-or-Event first.
   void _onAddTap() => _openCreateEvent();
 
+  Widget _buildTabContent() {
+    return AnimatedBuilder(
+      animation: _tabTransitionController,
+      child: LazyIndexedStack(index: _selectedIndex, children: _screens),
+      builder: (context, child) {
+        final motion = Curves.easeOutCubic.transform(
+          _tabTransitionController.value,
+        );
+        return Opacity(
+          opacity: 0.88 + (0.12 * motion),
+          child: Transform.scale(scale: 0.985 + (0.015 * motion), child: child),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // BackdropGroup lets the nav bar's and the feed top bar's grouped blurs
@@ -439,36 +462,52 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     return BackdropGroup(
       child: Stack(
         children: [
-          Scaffold(
-            extendBody: true,
-            body: AnimatedBuilder(
-              animation: _tabTransitionController,
-              child: LazyIndexedStack(
-                index: _selectedIndex,
-                children: _screens,
-              ),
-              builder: (context, child) {
-                final motion = Curves.easeOutCubic.transform(
-                  _tabTransitionController.value,
-                );
-                return Opacity(
-                  opacity: 0.88 + (0.12 * motion),
-                  child: Transform.scale(
-                    scale: 0.985 + (0.015 * motion),
-                    child: child,
-                  ),
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final useDesktopNavigation =
+                    constraints.maxWidth >= _desktopNavigationBreakpoint;
+                final tabContent = _buildTabContent();
+
+                // ChatStore can notify for message delivery, read receipts,
+                // typing state, and sync progress. Only the unread badge
+                // depends on those updates, so the mounted tab content is
+                // passed through unchanged while the navigation chrome
+                // refreshes.
+                return _UnreadNavBar(
+                  unread: () => chatStore.totalUnreadFor(_currentUserId),
+                  builder: (context, unreadChats) {
+                    if (useDesktopNavigation) {
+                      return Scaffold(
+                        backgroundColor: AppColors.background,
+                        body: Row(
+                          children: [
+                            SizedBox(
+                              width: _desktopSidebarWidth,
+                              child: _buildDesktopSidebar(context, unreadChats),
+                            ),
+                            Expanded(
+                              child: _DesktopContentCanvas(
+                                maxWidth: _desktopContentMaxWidth,
+                                child: tabContent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Scaffold(
+                      extendBody: true,
+                      body: tabContent,
+                      bottomNavigationBar: _buildBottomNav(
+                        context,
+                        unreadChats,
+                      ),
+                    );
+                  },
                 );
               },
-            ),
-            // ChatStore can notify for message delivery, read receipts,
-            // typing state, and sync progress. Only the unread badge depends
-            // on those updates, so keep them from rebuilding the mounted tab
-            // stack and the rest of this scaffold — and since rebuilding the
-            // nav bar re-runs its BackdropFilter subtree, drop the (frequent)
-            // notifications that leave the badge number unchanged.
-            bottomNavigationBar: _UnreadNavBar(
-              unread: () => chatStore.totalUnreadFor(_currentUserId),
-              builder: _buildBottomNav,
             ),
           ),
           if (_showOnboarding)
@@ -494,12 +533,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
   }
 
-  Widget _buildBottomNav(BuildContext context, int unreadChats) {
-    final isDark = themeService.isDark;
-
-    // Ordered slots so the sliding highlight can be positioned purely from
-    // list index, regardless of which tabs are hidden for admins.
-    final slots = <_NavSlot>[
+  List<_NavSlot> _buildNavSlots(BuildContext context, int unreadChats) {
+    return <_NavSlot>[
       _NavSlot(
         index: 0,
         icon: Icons.home_outlined,
@@ -512,7 +547,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         activeIcon: Icons.calendar_today_rounded,
         label: AppLocalizations.of(context)!.events,
       ),
-      if (!_isClubAdmin && !_isPlatformModerator)
+      // Platform moderators still need campus-wide discovery so they can find
+      // the people, clubs, posts, and events they are responsible for
+      // reviewing. Ordinary club admins keep their focused club workflow.
+      if (!_isClubAdmin)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
@@ -550,11 +588,142 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
           label: AppLocalizations.of(context)!.admin,
         ),
     ];
+  }
+
+  Key? _onboardingKeyForNavIndex(int index) {
+    return switch (index) {
+      0 => onboardingAnchors.keyFor(OnboardingAnchors.navHome),
+      1 => onboardingAnchors.keyFor(OnboardingAnchors.navEvents),
+      2 => onboardingAnchors.keyFor(OnboardingAnchors.navSearch),
+      3 => onboardingAnchors.keyFor(OnboardingAnchors.navChats),
+      4 => onboardingAnchors.keyFor(OnboardingAnchors.navProfile),
+      _ => null,
+    };
+  }
+
+  Widget _buildDesktopSidebar(BuildContext context, int unreadChats) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final slots = _buildNavSlots(context, unreadChats);
+
+    return Container(
+      key: const ValueKey<String>('desktop-navigation-sidebar'),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border(
+          right: BorderSide(
+            color: AppColors.divider.withValues(alpha: isDark ? 0.7 : 0.9),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        right: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 18, 18),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.all(Radius.circular(13)),
+                    child: Image.asset(
+                      'assets/branding/clubup_app_icon_1024.png',
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ClubUp',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                        Text(
+                          kIsWeb ? 'KOÇ UNIVERSITY · WEB' : 'KOÇ UNIVERSITY',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.7,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: AppColors.divider),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+                children: [
+                  for (final slot in slots) ...[
+                    if (slot.isCenterButton)
+                      _DesktopCreateButton(
+                        key: onboardingAnchors.keyFor(
+                          OnboardingAnchors.clubCreateButton,
+                        ),
+                        label: AppLocalizations.of(context)!.newEventTitle,
+                        onTap: _onAddTap,
+                      )
+                    else
+                      _DesktopNavItem(
+                        key: _onboardingKeyForNavIndex(slot.index!),
+                        icon: slot.icon!,
+                        activeIcon: slot.activeIcon!,
+                        label: slot.label!,
+                        selected: _selectedIndex == slot.index,
+                        badge: slot.badge,
+                        onTap: () => _selectNavIndex(slot.index!),
+                      ),
+                    const SizedBox(height: 6),
+                  ],
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+              child: Text(
+                'ClubUp',
+                style: TextStyle(
+                  color: AppColors.secondaryText.withValues(alpha: 0.72),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNav(BuildContext context, int unreadChats) {
+    final isDark = themeService.isDark;
+
+    // Ordered slots so the sliding highlight can be positioned purely from
+    // list index, regardless of which tabs are hidden for admins.
+    final slots = _buildNavSlots(context, unreadChats);
 
     final slotCount = slots.length;
     final selectedSlot = slots.indexWhere((s) => s.index == _selectedIndex);
 
     return SafeArea(
+      key: const ValueKey<String>('mobile-bottom-navigation'),
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -744,24 +913,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                         // The super-admin Dashboard slot (5) has
                                         // no tour step, and reusing navProfile
                                         // there would mount one GlobalKey twice.
-                                        key: switch (slot.index!) {
-                                          0 => onboardingAnchors.keyFor(
-                                            OnboardingAnchors.navHome,
-                                          ),
-                                          1 => onboardingAnchors.keyFor(
-                                            OnboardingAnchors.navEvents,
-                                          ),
-                                          2 => onboardingAnchors.keyFor(
-                                            OnboardingAnchors.navSearch,
-                                          ),
-                                          3 => onboardingAnchors.keyFor(
-                                            OnboardingAnchors.navChats,
-                                          ),
-                                          4 => onboardingAnchors.keyFor(
-                                            OnboardingAnchors.navProfile,
-                                          ),
-                                          _ => null,
-                                        },
+                                        key: _onboardingKeyForNavIndex(
+                                          slot.index!,
+                                        ),
                                         icon: slot.icon!,
                                         activeIcon: slot.activeIcon!,
                                         label: slot.label!,
@@ -777,6 +931,221 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                     ),
                   );
                 },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Keeps the phone-first tab screens readable on wide monitors. The nested
+/// MediaQuery reports the actual canvas width, so existing cards and media
+/// that size themselves from MediaQuery do not accidentally use the full
+/// browser window (which also includes the sidebar and outer gutters).
+class _DesktopContentCanvas extends StatelessWidget {
+  final double maxWidth;
+  final Widget child;
+
+  const _DesktopContentCanvas({required this.maxWidth, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppColors.background,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.clamp(0.0, maxWidth).toDouble();
+          final media = MediaQuery.of(context);
+
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: width,
+              height: constraints.maxHeight,
+              child: MediaQuery(
+                data: media.copyWith(size: Size(width, constraints.maxHeight)),
+                child: ClipRect(child: child),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DesktopNavItem extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool selected;
+  final int badge;
+  final VoidCallback onTap;
+
+  const _DesktopNavItem({
+    super.key,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.badge = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(15);
+    final foreground = selected
+        ? AppColors.primaryRed
+        : AppColors.secondaryText;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Tooltip(
+        message: label,
+        waitDuration: const Duration(milliseconds: 600),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            mouseCursor: SystemMouseCursors.click,
+            borderRadius: radius,
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              constraints: const BoxConstraints(minHeight: 52),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.primaryRed.withValues(alpha: 0.11)
+                    : Colors.transparent,
+                borderRadius: radius,
+                border: Border.all(
+                  color: selected
+                      ? AppColors.primaryRed.withValues(alpha: 0.2)
+                      : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(
+                      selected ? activeIcon : icon,
+                      key: ValueKey<bool>(selected),
+                      color: foreground,
+                      size: 23,
+                    ),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? AppColors.text : foreground,
+                        fontSize: 14,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (badge > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 22),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryRed,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        badge > 99 ? '99+' : '$badge',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopCreateButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _DesktopCreateButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(15);
+    return Semantics(
+      button: true,
+      label: label,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.primaryRed, AppColors.darkRed],
+          ),
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryRed.withValues(alpha: 0.2),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            mouseCursor: SystemMouseCursors.click,
+            borderRadius: radius,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Row(
+                children: [
+                  const Icon(Icons.add_rounded, color: Colors.white, size: 23),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -880,9 +1249,10 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
+      child: AppPressable(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
+        pressedScale: 0.94,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
@@ -1039,16 +1409,49 @@ class _CreateSheetAction extends StatelessWidget {
 
 // ─── Center Add Button ────────────────────────────────────────────────────────
 
-class _CenterAddButton extends StatelessWidget {
+class _CenterAddButton extends StatefulWidget {
   final VoidCallback onTap;
   const _CenterAddButton({super.key, required this.onTap});
+
+  @override
+  State<_CenterAddButton> createState() => _CenterAddButtonState();
+}
+
+class _CenterAddButtonState extends State<_CenterAddButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 360),
+  );
+
+  late final Animation<double> _turns = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 0, end: 0.125), weight: 42),
+    TweenSequenceItem(tween: Tween(begin: 0.125, end: -0.025), weight: 28),
+    TweenSequenceItem(tween: Tween(begin: -0.025, end: 0), weight: 30),
+  ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+  void _handleTap() {
+    if (_controller.isAnimating) return;
+    HapticFeedback.lightImpact();
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _controller.forward(from: 0);
+    }
+    widget.onTap();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Center(
-        child: GestureDetector(
-          onTap: onTap,
+        child: AppPressable(
+          onTap: _handleTap,
+          pressedScale: 0.92,
           child: Container(
             width: 52,
             height: 52,
@@ -1068,7 +1471,15 @@ class _CenterAddButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(Icons.add_rounded, color: Colors.white, size: 28),
+            child: RotationTransition(
+              key: const ValueKey('center-add-icon-motion'),
+              turns: _turns,
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
           ),
         ),
       ),

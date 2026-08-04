@@ -17,6 +17,8 @@ import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../widgets/event_cover_image.dart';
+import '../widgets/app_motion.dart';
+import '../widgets/instagram_refresh_control.dart';
 import 'event_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -315,251 +317,244 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        color: AppColors.primaryRed,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            // ── Header: title + subtitle + bell ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, topPad + 14, 16, 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (Navigator.canPop(context)) ...[
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          margin: const EdgeInsets.only(right: 10, top: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.lightGray,
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
-                          ),
-                          child: Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            size: 18,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        slivers: [
+          InstagramRefreshControl(onRefresh: _onRefresh),
+          // ── Header: title + subtitle + bell ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, topPad + 14, 16, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (Navigator.canPop(context)) ...[
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        margin: const EdgeInsets.only(right: 10, top: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.lightGray,
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 18,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)!.discoverEvents,
+                          style: TextStyle(
+                            fontSize: 27,
+                            fontWeight: FontWeight.w800,
                             color: AppColors.text,
+                            letterSpacing: -0.9,
+                            height: 1.0,
                           ),
                         ),
-                      ),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppLocalizations.of(context)!.discoverEvents,
-                            style: TextStyle(
-                              fontSize: 27,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.text,
-                              letterSpacing: -0.9,
-                              height: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            S.upcomingEventsHint,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.secondaryText,
-                              letterSpacing: -0.1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (authService.isStudentSession) ...[
-                      const SizedBox(width: 8),
-                      _HeaderIconBtn(
-                        icon: Icons.notifications_outlined,
-                        badgeCount: newEventCount,
-                        onTap: _openNewEventNotifications,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Search bar ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-                child: _SearchBar(
-                  controller: _searchController,
-                  onChanged: (v) => setState(() => _query = v),
-                  onClear: () => setState(() {
-                    _query = '';
-                    _searchController.clear();
-                  }),
-                ),
-              ),
-            ),
-
-            // ── Filter bar: audience · date (multi) · live · clear ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                child: Row(
-                  children: [
-                    // Audience
-                    Expanded(
-                      child: _FilterPillBtn(
-                        label: _audience == 'following'
-                            ? AppLocalizations.of(context)!.following
-                            : AppLocalizations.of(context)!.all,
-                        icon: _audience == 'following'
-                            ? Icons.favorite_outline_rounded
-                            : Icons.people_outline_rounded,
-                        active: _audience == 'following',
-                        onTap: _showAudienceSheet,
-                        expand: true,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Date (multi-select)
-                    Expanded(
-                      child: _FilterPillBtn(
-                        label: _dateFilters.isEmpty
-                            ? AppLocalizations.of(context)!.anyDate
-                            : _dateFilters.length == 1
-                            ? _shortDay(
-                                _dayKeyToDate(_dateFilters.first),
-                                context,
-                              )
-                            : AppLocalizations.of(
-                                context,
-                              )!.daysCount(_dateFilters.length),
-                        icon: Icons.calendar_today_outlined,
-                        active: _dateFilters.isNotEmpty,
-                        onTap: _showDateSheet,
-                        expand: true,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Live toggle
-                    _LiveToggleBtn(
-                      active: _showLive,
-                      onTap: () => setState(() => _showLive = !_showLive),
-                    ),
-                    // Clear all filters
-                    if (hasFilter && !searching) ...[
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: _resetFilters,
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(100),
-                            ),
-                            border: Border.all(
-                              color: AppColors.primaryRed.withValues(
-                                alpha: 0.25,
-                              ),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 15,
-                            color: AppColors.primaryRed,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Count header ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      AppLocalizations.of(context)!.eventsCount(results.length),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.text,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    if (contextLabel.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          contextLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 4),
+                        Text(
+                          S.upcomingEventsHint,
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.secondaryText,
+                            letterSpacing: -0.1,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  if (authService.isStudentSession) ...[
+                    const SizedBox(width: 8),
+                    _HeaderIconBtn(
+                      icon: Icons.notifications_outlined,
+                      badgeCount: newEventCount,
+                      onTap: _openNewEventNotifications,
+                    ),
                   ],
-                ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Search bar ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+              child: _SearchBar(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+                onClear: () => setState(() {
+                  _query = '';
+                  _searchController.clear();
+                }),
+              ),
+            ),
+          ),
+
+          // ── Filter bar: audience · date (multi) · live · clear ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: Row(
+                children: [
+                  // Audience
+                  Expanded(
+                    child: _FilterPillBtn(
+                      label: _audience == 'following'
+                          ? AppLocalizations.of(context)!.following
+                          : AppLocalizations.of(context)!.all,
+                      icon: _audience == 'following'
+                          ? Icons.favorite_outline_rounded
+                          : Icons.people_outline_rounded,
+                      active: _audience == 'following',
+                      onTap: _showAudienceSheet,
+                      expand: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Date (multi-select)
+                  Expanded(
+                    child: _FilterPillBtn(
+                      label: _dateFilters.isEmpty
+                          ? AppLocalizations.of(context)!.anyDate
+                          : _dateFilters.length == 1
+                          ? _shortDay(
+                              _dayKeyToDate(_dateFilters.first),
+                              context,
+                            )
+                          : AppLocalizations.of(
+                              context,
+                            )!.daysCount(_dateFilters.length),
+                      icon: Icons.calendar_today_outlined,
+                      active: _dateFilters.isNotEmpty,
+                      onTap: _showDateSheet,
+                      expand: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Live toggle
+                  _LiveToggleBtn(
+                    active: _showLive,
+                    onTap: () => setState(() => _showLive = !_showLive),
+                  ),
+                  // Clear all filters
+                  if (hasFilter && !searching) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _resetFilters,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryRed.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.all(Radius.circular(100)),
+                          border: Border.all(
+                            color: AppColors.primaryRed.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // ── Count header ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    AppLocalizations.of(context)!.eventsCount(results.length),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.text,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  if (contextLabel.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        contextLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // ── Results / empty ──
+          if (results.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _EmptyState(
+                searching: searching,
+                hasFilter: hasFilter,
+                onReset: _resetFilters,
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((ctx, i) {
+                  final ev = results[i];
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: i < results.length - 1 ? 12 : 0,
+                    ),
+                    child: _WeekEventRow(
+                      key: ValueKey(ev.id),
+                      event: ev,
+                      color: _clubColor(ev.clubId),
+                      onTap: () => _openEvent(ev),
+                      // Anchor the tour's "RSVP" step to the first event's
+                      // pill — only on the nav-hosted instance.
+                      rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
+                          ? onboardingAnchors.keyFor(
+                              OnboardingAnchors.eventsRsvp,
+                            )
+                          : null,
+                    ),
+                  );
+                }, childCount: results.length),
               ),
             ),
 
-            // ── Results / empty ──
-            if (results.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _EmptyState(
-                  searching: searching,
-                  hasFilter: hasFilter,
-                  onReset: _resetFilters,
-                ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((ctx, i) {
-                    final ev = results[i];
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        bottom: i < results.length - 1 ? 12 : 0,
-                      ),
-                      child: _WeekEventRow(
-                        key: ValueKey(ev.id),
-                        event: ev,
-                        color: _clubColor(ev.clubId),
-                        onTap: () => _openEvent(ev),
-                        // Anchor the tour's "RSVP" step to the first event's
-                        // pill — only on the nav-hosted instance.
-                        rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
-                            ? onboardingAnchors.keyFor(
-                                OnboardingAnchors.eventsRsvp,
-                              )
-                            : null,
-                      ),
-                    );
-                  }, childCount: results.length),
-                ),
-              ),
-
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: MediaQuery.paddingOf(context).bottom + 90,
-              ),
-            ),
-          ],
-        ),
+          SliverToBoxAdapter(
+            child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 90),
+          ),
+        ],
       ),
     );
   }
@@ -1759,21 +1754,23 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.all(Radius.circular(16)),
-              ),
-              child: Icon(
-                trulyEmpty
-                    ? Icons.event_available_rounded
-                    : (searching
-                          ? Icons.search_off_rounded
-                          : Icons.event_busy_rounded),
-                size: 26,
-                color: AppColors.primaryRed,
+            GentleFloat(
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.all(Radius.circular(16)),
+                ),
+                child: Icon(
+                  trulyEmpty
+                      ? Icons.event_available_rounded
+                      : (searching
+                            ? Icons.search_off_rounded
+                            : Icons.event_busy_rounded),
+                  size: 26,
+                  color: AppColors.primaryRed,
+                ),
               ),
             ),
             const SizedBox(height: 14),

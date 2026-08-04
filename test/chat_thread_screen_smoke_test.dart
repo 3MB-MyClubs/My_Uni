@@ -134,6 +134,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a user can reply to their own sent message', (tester) async {
+    authService.login('alice@ku.edu.tr', '111111'); // u1
+    final threadId = ChatStore.dmThreadId('u1', 'u2');
+    final original = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: 'u1',
+      content: 'Reply to my message',
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+      ),
+    );
+    await tester.pump();
+
+    await tester.longPress(find.byKey(ValueKey('chat-message-${original.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('chat-reply-message-${original.id}')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('chat-reply-composer-preview')),
+      findsOneWidget,
+    );
+    expect(find.text(S.replyingTo(S.you)), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'This is my reply');
+    await tester.tap(find.byKey(const ValueKey('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    final reply = chatStore
+        .messagesFor(threadId)
+        .where((message) => message.content == 'This is my reply')
+        .last;
+    expect(reply.replyToMessageId, original.id);
+    expect(reply.replyToSenderId, 'u1');
+    expect(
+      find.byKey(ValueKey('chat-reply-quote-${reply.id}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat-reply-composer-preview')),
+      findsNothing,
+    );
+  });
+
   testWidgets('DM header resolves the participant profile name', (
     tester,
   ) async {
@@ -461,6 +508,112 @@ void main() {
     },
   );
 
+  testWidgets('sender taps group checkmarks to see live per-member receipts', (
+    tester,
+  ) async {
+    const senderId = 'receipt-sender';
+    const recipientId = 'receipt-recipient';
+    const secondRecipientId = 'receipt-second-recipient';
+    final sender = User(
+      id: senderId,
+      name: 'Receipt Sender',
+      email: 'receipt.sender@example.test',
+      password: '135790',
+      role: 'student',
+      subscribedClubIds: const [],
+    );
+    users.add(sender);
+    addTearDown(() => users.remove(sender));
+    for (final recipient in [
+      User(
+        id: recipientId,
+        name: 'Receipt Recipient',
+        email: 'receipt.recipient@example.test',
+        password: '',
+        role: 'student',
+        subscribedClubIds: [],
+      ),
+      User(
+        id: secondRecipientId,
+        name: 'Second Recipient',
+        email: 'receipt.second@example.test',
+        password: '',
+        role: 'student',
+        subscribedClubIds: [],
+      ),
+    ]) {
+      peopleService.cacheRegisteredUser(recipient);
+    }
+    expect(authService.login(sender.email, sender.password), isTrue);
+    final threadId = chatStore.createGroupThread(
+      creatorId: senderId,
+      recipientIds: [recipientId, secondRecipientId],
+    )!;
+    final outgoing = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: senderId,
+      content: 'Receipt details',
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: ChatThreadScreen(threadId: threadId)),
+      ),
+    );
+    await tester.pump();
+
+    final receiptButton = find.byKey(
+      ValueKey('group-message-receipts-${outgoing.id}'),
+    );
+    expect(receiptButton, findsOneWidget);
+    expect(tester.getSize(receiptButton), const Size(44, 44));
+
+    await tester.tap(receiptButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(
+      find.byKey(const ValueKey('chat-message-info-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text(S.readBy), findsOneWidget);
+    expect(find.text(S.deliveredTo), findsOneWidget);
+    expect(find.text(S.noOneYet), findsNWidgets(2));
+
+    // Simulate the recipient opening this group after the sheet is already
+    // visible. The AnimatedBuilder must surface the new receipt immediately.
+    await tester.runAsync(() async {
+      chatStore.markThreadRead(threadId, recipientId);
+      // markThreadRead persists immediately via an unawaited write. Give that
+      // write a real event loop turn instead of starting a competing save.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('message-receipt-$recipientId')),
+      findsOneWidget,
+    );
+    expect(find.text(S.noOneYet), findsOneWidget);
+
+    // While the modal route is open, add somebody else's message and verify
+    // that it never gains the sender-only receipt entry point.
+    final incoming = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: recipientId,
+      content: 'Incoming while info is open',
+    )!;
+    await tester.pump();
+    expect(
+      find.byKey(ValueKey('group-message-receipts-${incoming.id}')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('club thread shows the join prompt for non-members', (
     tester,
   ) async {
@@ -503,6 +656,12 @@ void main() {
     );
     await tester.pump();
 
+    // A club room lands on the Board; the conversation is one segment away.
+    expect(find.byKey(const ValueKey('club-lane-switch')), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('club-lane-chat')));
+    await tester.pumpAndSettle();
+
     expect(find.byType(TextField), findsOneWidget);
     expectNoVisibleFocusedBorder(
       tester.widget<TextField>(find.byType(TextField)),
@@ -544,7 +703,10 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('club-members-button')));
+    // Members moved behind the ••• menu.
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('club-open-members')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('club-member-row-u1')), findsOneWidget);
     expect(
@@ -740,7 +902,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(S.postAsAnnouncement));
+    await tester.tap(find.text(S.boardPostNotice));
     await tester.pumpAndSettle();
 
     for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
@@ -757,9 +919,13 @@ void main() {
     await tester.tap(find.text(S.post));
     await tester.pumpAndSettle();
 
-    // The default pinned announcement appears both in the stream and in the
-    // pinned strip above it.
-    expect(find.text(title), findsWidgets);
+    // The notice is one object: a row on the Board the author lands back on,
+    // and the same record as a card in Chat.
+    expect(find.text(title), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('club-lane-chat')));
+    await tester.pumpAndSettle();
+    expect(find.text(title), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('club-attach-button')));
     await tester.pump();
@@ -775,16 +941,11 @@ void main() {
 
     expect(find.text(question), findsOneWidget);
 
+    // Events left this surface: the composer offers a photo and a poll only.
     await tester.tap(find.byKey(const ValueKey('club-attach-button')));
     await tester.pump();
-    await tester.tap(find.text(S.attachEvent));
-    await tester.pumpAndSettle();
-
-    expect(find.text(S.shareEvent), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('club-event-ev3')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Uludağ Kış Tırmanışı'), findsOneWidget);
+    expect(find.text(S.attachMedia), findsOneWidget);
+    expect(find.text(S.attachEvent), findsNothing);
     await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
   });

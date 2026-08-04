@@ -5,7 +5,9 @@ import 'package:uuid/uuid.dart';
 
 import '../models/news_post.dart';
 import 'content_safety_service.dart';
+import 'lazy_content_loader.dart';
 import 'supabase_config.dart';
+import 'supabase_interaction_service.dart';
 
 class SupabasePostService {
   static const _imageBucket = 'post-images';
@@ -30,6 +32,8 @@ class SupabasePostService {
       throw StateError('Post was not deleted.');
     }
     await _deleteStoredImage(post.imagePath);
+    lazyContentLoader.invalidateContent();
+    supabaseInteractionService.invalidatePostCaches(post.id);
   }
 
   Future<NewsPost> createPost({
@@ -94,6 +98,8 @@ class SupabasePostService {
         // NewsPost and votes stay local.
       }
     }
+
+    lazyContentLoader.invalidateContent();
 
     return NewsPost(
       id: postId,

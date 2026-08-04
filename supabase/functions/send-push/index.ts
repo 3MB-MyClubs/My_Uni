@@ -39,10 +39,20 @@ function localizedCopy(
   const club = value("clubName", tr ? "Bir kulüp" : "A club");
   const group = value("groupName", tr ? "Grup sohbeti" : "Group chat");
   const content = value("content", "");
+  const messageKind = value("messageKind", "");
+  const messagePreview = messageKind === "photo"
+    ? (tr ? "Fotoğraf" : "Photo")
+    : messageKind === "video"
+    ? "Video"
+    : messageKind === "file"
+    ? (tr ? "Dosya" : "File")
+    : messageKind === "post_share"
+    ? (tr ? "Bir gönderi paylaştı" : "Shared a post")
+    : content || (tr ? "Mesaj" : "Message");
   const count = messageCount(args);
   const messageBody = count > 1
     ? (tr ? `${count} yeni mesaj` : `${count} new messages`)
-    : `${actor}: ${content}`;
+    : `${actor}: ${messagePreview}`;
   const eventTitle = value("eventTitle", tr ? "etkinliğin" : "your event");
   const postPreview = value("postPreview", tr ? "son gönderin" : "your latest post");
   const comment = value("comment", "");
@@ -51,7 +61,7 @@ function localizedCopy(
     switch (type) {
       case "direct_message": return { title: actor, body: messageBody };
       case "group_message": return { title: group, body: messageBody };
-      case "club_channel_message": return { title: club, body: count > 1 ? messageBody : `${club}: ${content}` };
+      case "club_channel_message": return { title: club, body: count > 1 ? messageBody : `${club}: ${messagePreview}` };
       case "club_inbox_message": return { title: actor, body: messageBody };
       case "club_post": return {
         title: `${club} yeni bir gönderi paylaştı`,
@@ -84,7 +94,7 @@ function localizedCopy(
   switch (type) {
     case "direct_message": return { title: actor, body: messageBody };
     case "group_message": return { title: group, body: messageBody };
-    case "club_channel_message": return { title: club, body: count > 1 ? messageBody : `${club}: ${content}` };
+    case "club_channel_message": return { title: club, body: count > 1 ? messageBody : `${club}: ${messagePreview}` };
     case "club_inbox_message": return { title: actor, body: messageBody };
     case "club_post": return {
       title: `${club} posted something new`,
@@ -233,6 +243,7 @@ Deno.serve(async (request) => {
               notification: copy,
               data: {
                 notification_id: notification.id,
+                recipient_user_id: notification.user_id,
                 type: notification.type,
                 target_type: notification.target_type,
                 target_id: notification.target_id,

@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'app_pressable.dart';
 
 import '../models/chat_message.dart';
+import '../l10n/app_localizations.dart';
 import '../services/app_strings.dart';
+import '../services/club_role_localization.dart';
 import 'club_chat_theme.dart';
 import 'club_stream_items.dart';
 
-/// What the "+" sheet can attach to a community message.
-enum ClubAttachment { photo, poll, event }
+/// What the "+" sheet can attach to a message in a club's Chat lane.
+///
+/// Events left this surface with the Board + Chat design — the club's Events tab
+/// owns them, and a notice can link to one.
+enum ClubAttachment { photo, poll }
 
 /// Community composer: attachment sheet, @-mention autocomplete, and send.
 class ClubComposer extends StatefulWidget {
@@ -207,7 +213,10 @@ class _ClubComposerState extends State<ClubComposer> {
                                   ),
                                 ),
                                 Text(
-                                  person.role ?? S.memberRole,
+                                  localizedClubRole(
+                                    AppLocalizations.of(context)!,
+                                    person.role ?? S.memberRole,
+                                  ),
                                   style: TextStyle(fontSize: 11, color: t.sub),
                                 ),
                               ],
@@ -225,14 +234,13 @@ class _ClubComposerState extends State<ClubComposer> {
                   key: const ValueKey('club-attach-sheet'),
                   children: [
                     for (final entry in const [
-                      (ClubAttachment.photo, Icons.image_outlined),
+                      (ClubAttachment.photo, Icons.photo_library_outlined),
                       (ClubAttachment.poll, Icons.bar_chart_rounded),
-                      (ClubAttachment.event, Icons.calendar_today_outlined),
                     ])
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: GestureDetector(
+                          child: AppPressable(
                             onTap: () {
                               setState(() => _attachOpen = false);
                               widget.onAttach(entry.$1);
@@ -273,7 +281,7 @@ class _ClubComposerState extends State<ClubComposer> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  GestureDetector(
+                  AppPressable(
                     key: const ValueKey('club-attach-button'),
                     onTap: widget.enabled
                         ? () => setState(() => _attachOpen = !_attachOpen)
@@ -340,7 +348,7 @@ class _ClubComposerState extends State<ClubComposer> {
                               ),
                             ),
                           ),
-                          GestureDetector(
+                          AppPressable(
                             key: const ValueKey('club-mention-button'),
                             onTap: widget.enabled ? _insertMentionToken : null,
                             child: SizedBox(
@@ -358,8 +366,9 @@ class _ClubComposerState extends State<ClubComposer> {
                     ),
                   ),
                   const SizedBox(width: 9),
-                  GestureDetector(
+                  AppPressable(
                     onTap: hasDraft ? _send : null,
+                    pressedScale: 0.92,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       width: 44,
@@ -399,8 +408,7 @@ class _ClubComposerState extends State<ClubComposer> {
   }
 
   String _attachLabel(ClubAttachment attachment) => switch (attachment) {
-    ClubAttachment.photo => S.attachPhoto,
+    ClubAttachment.photo => S.attachMedia,
     ClubAttachment.poll => S.attachPoll,
-    ClubAttachment.event => S.attachEvent,
   };
 }

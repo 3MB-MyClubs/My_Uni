@@ -1,4 +1,5 @@
 import 'locale_service.dart';
+import 'presence_status.dart';
 
 class S {
   S._();
@@ -715,6 +716,9 @@ class S {
   );
   static String get safetyOptions =>
       _t('Safety options', 'Güvenlik seçenekleri');
+
+  /// Settings group heading for the blocked-accounts entry.
+  static String get privacySection => _t('Privacy', 'Gizlilik');
   static String get moderation => _t('Moderation', 'Moderasyon');
   static String get moderationCenter =>
       _t('ClubUp moderation center', 'ClubUp moderasyon merkezi');
@@ -887,9 +891,45 @@ class S {
   static String onlineMembers(int n) => _t('$n online', '$n çevrimiçi');
   static String get lastSeenRecently =>
       _t('Last seen recently', 'Son görülme az önce');
+  static String lastOnlineLabel(DateTime? lastSeenAt, {DateTime? now}) {
+    final relative = relativeLastSeen(lastSeenAt, now: now);
+    return switch (relative.period) {
+      LastSeenPeriod.unknown => lastSeenRecently,
+      LastSeenPeriod.justNow => _t(
+        'Last online just now',
+        'Son çevrimiçi: az önce',
+      ),
+      LastSeenPeriod.minutes => _t(
+        'Last online ${relative.value} min ago',
+        'Son çevrimiçi: ${relative.value} dk önce',
+      ),
+      LastSeenPeriod.hours => _t(
+        'Last online ${relative.value} ${relative.value == 1 ? 'hour' : 'hours'} ago',
+        'Son çevrimiçi: ${relative.value} saat önce',
+      ),
+      LastSeenPeriod.days => _t(
+        'Last online ${relative.value} ${relative.value == 1 ? 'day' : 'days'} ago',
+        'Son çevrimiçi: ${relative.value} gün önce',
+      ),
+    };
+  }
+
   static String get typing => _t('typing…', 'yazıyor…');
+  static String get sent => _t('Sent', 'Gönderildi');
   static String get delivered => _t('Delivered', 'Teslim edildi');
   static String get seen => _t('Seen', 'Görüldü');
+  static String get read => _t('Read', 'Okundu');
+  static String get messageInfo => _t('Message info', 'Mesaj bilgisi');
+  static String get readBy => _t('Read by', 'Okuyanlar');
+  static String get deliveredTo => _t('Delivered to', 'Teslim edilenler');
+  static String get noOneYet => _t('No one yet', 'Henüz kimse');
+  static String deliveredAt(String time) =>
+      _t('Delivered $time', '$time teslim edildi');
+  static String readAt(String time) => _t('Read $time', '$time okundu');
+  static String get reply => _t('Reply', 'Yanıtla');
+  static String replyingTo(String name) =>
+      _t('Replying to $name', '$name adlı kişiye yanıt');
+  static String get cancelReply => _t('Cancel reply', 'Yanıtı iptal et');
   static String nNew(int n) => _t('$n new', '$n yeni');
   static String get searchStudents => _t('Search students…', 'Öğrenci ara…');
   static String get studentChats => _t('Students', 'Öğrenciler');
@@ -933,6 +973,39 @@ class S {
   static String communityEventsButton(int n) =>
       _t('Events · $n', 'Etkinlikler · $n');
   static String get communityNotices => _t('Notices', 'Duyurular');
+
+  // ── Club Board + Chat (two lanes of one club room)
+  /// The official notice area — the lane a club room lands on.
+  static String get clubBoardTab => _t('Board', 'Pano');
+
+  /// The room itself, where board-member replies live.
+  static String get clubChatTab => _t('Chat', 'Sohbet');
+  static String get boardGroupPinned => _t('Pinned', 'Sabitlenen');
+  static String boardGroupNew(int n) => _t('New · $n', 'Yeni · $n');
+  static String get boardGroupEarlier => _t('Earlier', 'Daha önce');
+  static String get boardPostNotice => _t('Post a notice', 'Duyuru paylaş');
+  static String get boardOnlyBoardPosts =>
+      _t('Only the board posts here', 'Burada yalnızca yönetim paylaşır');
+  static String get boardSayItInChat => _t('Say it in chat', 'Sohbette söyle');
+  static String get boardReplyInChat => _t('Reply in chat', 'Sohbette yanıtla');
+  static String boardRepliesInChat(int n) =>
+      _t('$n replies in chat', 'Sohbette $n yanıt');
+  static String get boardReplyingToNotice =>
+      _t('REPLYING TO NOTICE', 'DUYURUYA YANIT');
+  static String get boardEmptyTitle => _t('No notices yet', 'Henüz duyuru yok');
+  static String get boardEmptyHintStaff => _t(
+    'Post a notice and every member sees it here — replies happen in chat.',
+    'Bir duyuru paylaş, tüm üyeler burada görsün — yanıtlar sohbette olur.',
+  );
+  static String get boardEmptyHintMember => _t(
+    "The club's notices will appear here. Until then, the room is in chat.",
+    'Kulübün duyuruları burada görünecek. O zamana kadar sohbete geç.',
+  );
+  static String boardReplyCount(int n) =>
+      n == 1 ? _t('1 reply', '1 yanıt') : _t('$n replies', '$n yanıt');
+  static String get noticeLabel => _t('NOTICE', 'DUYURU');
+  static String get boardExpandNotice => _t('Open notice', 'Duyuruyu aç');
+  static String get boardCollapseNotice => _t('Close notice', 'Duyuruyu kapat');
   static String get announcementLabel => _t('ANNOUNCEMENT', 'DUYURU');
   static String get pinnedLabel => _t('Pinned', 'Sabitlendi');
   static String get pinToTop => _t('Pin to top', 'Yukarı sabitle');
@@ -955,7 +1028,10 @@ class S {
   static String get activeNowLabel => _t('Active now', 'Şu an aktif');
   static String get offlineLabel => _t('Offline', 'Çevrimdışı');
   static String seenCount(int n) => _t('$n seen', '$n görüntüleme');
+  static String get attachMedia =>
+      _t('Photos & videos', 'Fotoğraf ve videolar');
   static String get attachPhoto => _t('Photo', 'Fotoğraf');
+  static String get attachVideo => _t('Video', 'Video');
   static String get couldNotAttachPhoto =>
       _t('Could not attach that photo.', 'Fotoğraf eklenemedi.');
   static String get photoSavedLocallyUploadFailed => _t(
@@ -963,6 +1039,30 @@ class S {
     'Fotoğraf cihaza kaydedildi ama yükleme başarısız oldu.',
   );
   static String get attachFile => _t('File', 'Dosya');
+  static String get mediaCaptionHint => _t('Add a caption…', 'Açıklama ekle…');
+  static String get mediaSend => _t('Send media', 'Medyayı gönder');
+  static String get mediaPreviewRemove => _t('Remove', 'Kaldır');
+  static String get mediaPreviewEmpty =>
+      _t('No media selected', 'Medya seçilmedi');
+  static String mediaPreviewPosition(int current, int total) =>
+      _t('$current of $total', '$current / $total');
+  static String mediaSelectionRejected(int count) => count == 1
+      ? _t(
+          '1 item could not be added. Media must be available and smaller than 100 MB.',
+          '1 öğe eklenemedi. Medya erişilebilir ve 100 MB\'tan küçük olmalı.',
+        )
+      : _t(
+          '$count items could not be added. Media must be available and smaller than 100 MB.',
+          '$count öğe eklenemedi. Medya erişilebilir ve 100 MB\'tan küçük olmalı.',
+        );
+  static String get mediaSelectionFailed => _t(
+    'Could not open your media library. Please try again.',
+    'Medya arşivi açılamadı. Lütfen tekrar dene.',
+  );
+  static String get mediaSendFailed => _t(
+    'The media could not be sent. Please try again.',
+    'Medya gönderilemedi. Lütfen tekrar dene.',
+  );
   static String get attachPoll => _t('Poll', 'Anket');
   static String get attachEvent => _t('Event', 'Etkinlik');
   static String get mentionEveryone => _t('everyone', 'herkes');

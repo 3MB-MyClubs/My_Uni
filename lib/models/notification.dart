@@ -102,5 +102,28 @@ String? notificationConversationKey(AppNotification notification) {
   return 'message:${notification.userId}:${type ?? 'unknown'}:$targetId';
 }
 
+/// Builds the same conversation key from a canonical chat thread id.
+///
+/// This lets the chat screen mark only its own notification rows as read,
+/// regardless of whether those rows came from Supabase or the local cache.
+String? notificationConversationKeyForThread({
+  required String threadId,
+  required String userId,
+}) {
+  final normalizedThreadId = threadId.trim();
+  final normalizedUserId = userId.trim();
+  if (normalizedThreadId.isEmpty || normalizedUserId.isEmpty) return null;
+  return notificationConversationKey(
+    AppNotification(
+      id: '',
+      userId: normalizedUserId,
+      message: '',
+      createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+      targetType: 'message',
+      targetId: normalizedThreadId,
+    ),
+  );
+}
+
 String _withoutPrefix(String value, String prefix) =>
     value.startsWith(prefix) ? value.substring(prefix.length) : value;

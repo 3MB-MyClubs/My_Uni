@@ -6,7 +6,10 @@ import '../l10n/app_localizations.dart';
 import '../models/user.dart';
 import 'locale_service.dart';
 import 'supabase_config.dart';
+import 'supabase_read_cache.dart';
 import 'user_state.dart';
+
+typedef ProfileFollowEdge = ({String followerId, String followingId});
 
 class PeopleService {
   static const _localDirectoryBoxName = 'local_people_directory_v1';
@@ -24,6 +27,8 @@ class PeopleService {
   final Map<String, Set<String>> _followersByUserId = {};
   final Map<String, Set<String>> _followingByUserId = {};
   final Map<String, Set<String>> _clubIdsByUserId = {};
+  final Map<String, Set<String>> _mutualFollowerIdsBySuggestedUserId = {};
+  int _mutualFollowersRevision = 0;
 
   /// Profiles that are allowed to appear in people pickers and chats.
   ///
@@ -97,11 +102,48 @@ class PeopleService {
 
   Set<String> get cachedFollowerIds => _cachedFollowerIds;
   Set<String> clubIdsFor(String userId) => _clubIdsByUserId[userId] ?? const {};
+  int get mutualFollowersRevision => _mutualFollowersRevision;
+
+  /// People the current user follows who also follow [suggestedUserId].
+  ///
+  /// The direction matters: for `me -> mutual -> suggestion`, the mutual
+  /// person is a useful social proof for following the suggestion. Merely
+  /// sharing an account that both people follow is not a mutual follower.
+  Set<String> mutualFollowerIdsFor(String suggestedUserId) => Set.unmodifiable(
+    _mutualFollowerIdsBySuggestedUserId[suggestedUserId] ?? const {},
+  );
+
+  /// Replaces the mutual-follower index from a snapshot of follow edges.
+  /// Public so other directory surfaces can reuse the same graph semantics.
+  void replaceMutualFollowersForSuggestions({
+    required Iterable<String> currentUserFollowingIds,
+    required Iterable<String> suggestedUserIds,
+    required Iterable<ProfileFollowEdge> edges,
+  }) {
+    final currentFollowing = currentUserFollowingIds.toSet();
+    final suggestions = suggestedUserIds.toSet();
+    final next = <String, Set<String>>{};
+
+    for (final edge in edges) {
+      if (!currentFollowing.contains(edge.followerId) ||
+          !suggestions.contains(edge.followingId)) {
+        continue;
+      }
+      (next[edge.followingId] ??= <String>{}).add(edge.followerId);
+    }
+
+    _mutualFollowerIdsBySuggestedUserId
+      ..clear()
+      ..addAll(next);
+    _mutualFollowersRevision++;
+  }
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
   }
+
+  int _remoteCacheGeneration = 0;
 
   // The people-directory query is identical for every caller (query/excludeId
   // are applied client-side), and at startup Feed, Explore and Profile all
@@ -111,9 +153,13 @@ class PeopleService {
   List<Map<String, dynamic>> _peopleRows = const [];
   DateTime? _peopleRowsFetchedAt;
   Future<List<Map<String, dynamic>>>? _peopleRowsInFlight;
+  int _peopleRowsInFlightGeneration = -1;
   static const _peopleRowsTtl = Duration(seconds: 60);
+  static const _profileRowsTtl = Duration(minutes: 2);
+  final Map<String, DateTime> _profileRowsFetchedAt = {};
 
   Future<List<Map<String, dynamic>>> _peopleRowsFor({required bool force}) {
+    final generation = _remoteCacheGeneration;
     final fetchedAt = _peopleRowsFetchedAt;
     if (!force &&
         fetchedAt != null &&
@@ -123,14 +169,17 @@ class PeopleService {
     }
 
     final inFlight = _peopleRowsInFlight;
-    if (inFlight != null) return inFlight;
+    if (inFlight != null && _peopleRowsInFlightGeneration == generation) {
+      return inFlight;
+    }
 
-    final future = _fetchPeopleRows();
+    final future = _fetchPeopleRows(generation);
     _peopleRowsInFlight = future;
+    _peopleRowsInFlightGeneration = generation;
     return future;
   }
 
-  Future<List<Map<String, dynamic>>> _fetchPeopleRows() async {
+  Future<List<Map<String, dynamic>>> _fetchPeopleRows(int generation) async {
     try {
       final rows = await _client!
           .from('profiles')
@@ -140,11 +189,17 @@ class PeopleService {
           .eq('role', 'student')
           .order('full_name', ascending: true)
           .limit(100);
-      _peopleRows = [for (final row in rows) Map<String, dynamic>.from(row)];
-      _peopleRowsFetchedAt = DateTime.now();
-      return _peopleRows;
+      final result = [for (final row in rows) Map<String, dynamic>.from(row)];
+      if (generation == _remoteCacheGeneration) {
+        _peopleRows = result;
+        _peopleRowsFetchedAt = DateTime.now();
+      }
+      return result;
     } finally {
-      _peopleRowsInFlight = null;
+      if (_peopleRowsInFlightGeneration == generation) {
+        _peopleRowsInFlight = null;
+        _peopleRowsInFlightGeneration = -1;
+      }
     }
   }
 
@@ -200,6 +255,10 @@ class PeopleService {
     }
 
     _cachedPeople = people;
+    final fetchedAt = DateTime.now();
+    _profileRowsFetchedAt.addAll({
+      for (final person in people) person.id: fetchedAt,
+    });
     return people;
   }
 
@@ -207,6 +266,7 @@ class PeopleService {
   // network fetch once per session (join any in-flight call) unless forced.
   final Set<String> _followingHydratedThisSession = {};
   final Map<String, Future<void>> _followingInFlight = {};
+  final Map<String, int> _followingInFlightGenerations = {};
 
   Future<void> hydrateFollowing(String userId, {bool force = false}) {
     final client = _client;
@@ -216,15 +276,24 @@ class PeopleService {
       return Future.value();
     }
 
+    final generation = _remoteCacheGeneration;
     final inFlight = _followingInFlight[userId];
-    if (inFlight != null) return inFlight;
+    if (inFlight != null &&
+        _followingInFlightGenerations[userId] == generation) {
+      return inFlight;
+    }
 
-    final future = _hydrateFollowing(client, userId);
+    final future = _hydrateFollowing(client, userId, generation);
     _followingInFlight[userId] = future;
+    _followingInFlightGenerations[userId] = generation;
     return future;
   }
 
-  Future<void> _hydrateFollowing(SupabaseClient client, String userId) async {
+  Future<void> _hydrateFollowing(
+    SupabaseClient client,
+    String userId,
+    int generation,
+  ) async {
     try {
       final results = await Future.wait([
         client
@@ -238,6 +307,8 @@ class PeopleService {
       ]);
       final followingRows = results[0];
       final followerRows = results[1];
+
+      if (generation != _remoteCacheGeneration) return;
 
       userState.replaceFollowedUsers(
         followingRows.map((row) => row['following_id'].toString()),
@@ -253,8 +324,37 @@ class PeopleService {
 
       _followingHydratedThisSession.add(userId);
     } finally {
-      _followingInFlight.remove(userId);
+      if (_followingInFlightGenerations[userId] == generation) {
+        _followingInFlight.remove(userId);
+        _followingInFlightGenerations.remove(userId);
+      }
     }
+  }
+
+  /// Clears remote snapshots at an authentication boundary. Local device
+  /// accounts remain available in the directory, but RLS-visible Supabase
+  /// rows and in-flight results must not leak between sessions.
+  void clearRemoteCaches() {
+    _remoteCacheGeneration++;
+    _peopleRows = const [];
+    _peopleRowsFetchedAt = null;
+    _peopleRowsInFlight = null;
+    _peopleRowsInFlightGeneration = -1;
+    _cachedPeople = const [];
+    _profileRowsFetchedAt.clear();
+    _cachedFollowerIds = const {};
+    _followersByUserId.clear();
+    _followingByUserId.clear();
+    _clubIdsByUserId.clear();
+    _followingHydratedThisSession.clear();
+    _followingInFlight.clear();
+    _followingInFlightGenerations.clear();
+    _clubMembersCache.clear();
+    _clubMembersCacheFetchedAt.clear();
+    _clubMembersInFlight.clear();
+    _clubMembersCacheVersions.clear();
+    _lookupNameCache.clear();
+    _lookupNameInFlight.clear();
   }
 
   Future<void> hydrateConnectionsFor(String userId) async {
@@ -277,10 +377,14 @@ class PeopleService {
       }
     }
 
-    final rows = await client
-        .from('profile_follows')
-        .select('follower_id, following_id')
-        .or('follower_id.eq.$userId,following_id.eq.$userId');
+    final rows = await supabaseReadCache.getOrFetch<List<dynamic>>(
+      key: 'people-connections:$userId',
+      ttl: const Duration(seconds: 60),
+      fetch: () => client
+          .from('profile_follows')
+          .select('follower_id, following_id')
+          .or('follower_id.eq.$userId,following_id.eq.$userId'),
+    );
 
     _followersByUserId[userId] = rows
         .where((row) => row['following_id'].toString() == userId)
@@ -302,6 +406,57 @@ class PeopleService {
     }
   }
 
+  /// Hydrates social proof for the people shown in follow suggestions.
+  ///
+  /// This is one bulk edge query, rather than a followers query per card. It
+  /// asks for edges `someone I follow -> suggested person`, which is the
+  /// mutual-follower relationship displayed by recommendation surfaces.
+  Future<void> hydrateMutualFollowersForSuggestions(
+    String currentUserId,
+  ) async {
+    final client = _client;
+    if (client == null || currentUserId.isEmpty) return;
+
+    final currentFollowing = {
+      ...?_followingByUserId[currentUserId],
+      ...userState.followedUserIds,
+    };
+    final suggestedIds = cachedPeople
+        .map((user) => user.id)
+        .where((id) => id != currentUserId && !currentFollowing.contains(id))
+        .toSet();
+
+    if (currentFollowing.isEmpty || suggestedIds.isEmpty) {
+      replaceMutualFollowersForSuggestions(
+        currentUserFollowingIds: currentFollowing,
+        suggestedUserIds: suggestedIds,
+        edges: const [],
+      );
+      return;
+    }
+
+    final rows = await client
+        .from('profile_follows')
+        .select('follower_id, following_id')
+        .inFilter('follower_id', currentFollowing.toList())
+        .inFilter('following_id', suggestedIds.toList());
+    final edges = <ProfileFollowEdge>[
+      for (final row in rows)
+        if (row['follower_id'] != null && row['following_id'] != null)
+          (
+            followerId: row['follower_id'].toString(),
+            followingId: row['following_id'].toString(),
+          ),
+    ];
+
+    replaceMutualFollowersForSuggestions(
+      currentUserFollowingIds: currentFollowing,
+      suggestedUserIds: suggestedIds,
+      edges: edges,
+    );
+    await _cacheProfilesByIds(edges.map((edge) => edge.followerId).toSet());
+  }
+
   Future<void> hydrateProfileDetailsFor(String userId) async {
     final client = _client;
     if (client == null || userId.isEmpty) return;
@@ -310,32 +465,36 @@ class PeopleService {
     // session-cached, and the three per-user reads fire together instead of
     // one after another. A null result preserves that branch's old
     // swallow-and-continue semantics.
-    final results = await Future.wait<dynamic>([
-      _lookupNames('majors'),
-      _lookupNames('academic_years'),
-      _lookupNames('interests'),
-      client
-          .from('profiles')
-          .select(
-            'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
-          )
-          .eq('id', userId)
-          .maybeSingle()
-          .then<dynamic>((row) => row)
-          .catchError((_) => null),
-      client
-          .from('student_interests')
-          .select('interest_id')
-          .eq('user_id', userId)
-          .then<dynamic>((rows) => rows)
-          .catchError((_) => null),
-      client
-          .from('club_followers')
-          .select('club_id')
-          .eq('profile_id', userId)
-          .then<dynamic>((rows) => rows)
-          .catchError((_) => null),
-    ]);
+    final results = await supabaseReadCache.getOrFetch<List<dynamic>>(
+      key: 'people-profile-details:$userId',
+      ttl: const Duration(seconds: 30),
+      fetch: () => Future.wait<dynamic>([
+        _lookupNames('majors'),
+        _lookupNames('academic_years'),
+        _lookupNames('interests'),
+        client
+            .from('profiles')
+            .select(
+              'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+            )
+            .eq('id', userId)
+            .maybeSingle()
+            .then<dynamic>((row) => row)
+            .catchError((_) => null),
+        client
+            .from('student_interests')
+            .select('interest_id')
+            .eq('user_id', userId)
+            .then<dynamic>((rows) => rows)
+            .catchError((_) => null),
+        client
+            .from('club_followers')
+            .select('club_id')
+            .eq('profile_id', userId)
+            .then<dynamic>((rows) => rows)
+            .catchError((_) => null),
+      ]),
+    );
 
     final majorNames = results[0] as Map<String, String>;
     final yearNames = results[1] as Map<String, String>;
@@ -381,14 +540,21 @@ class PeopleService {
   // tab and the Members sheet, each of which used to re-fetch this list (plus
   // the majors/academic_years lookups) from scratch.
   final Map<String, List<User>> _clubMembersCache = {};
+  final Map<String, DateTime> _clubMembersCacheFetchedAt = {};
   final Map<String, Future<List<User>>> _clubMembersInFlight = {};
   final Map<String, int> _clubMembersCacheVersions = {};
+  static const _clubMembersTtl = Duration(minutes: 2);
 
   Future<List<User>> fetchClubMembers(String clubId) async {
     if (_client == null || clubId.isEmpty) return const [];
 
     final cached = _clubMembersCache[clubId];
-    if (cached != null) return cached;
+    final fetchedAt = _clubMembersCacheFetchedAt[clubId];
+    if (cached != null &&
+        fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _clubMembersTtl) {
+      return cached;
+    }
 
     final inFlight = _clubMembersInFlight[clubId];
     if (inFlight != null) return inFlight;
@@ -401,6 +567,7 @@ class PeopleService {
       if (result.isNotEmpty &&
           (_clubMembersCacheVersions[clubId] ?? 0) == cacheVersion) {
         _clubMembersCache[clubId] = result;
+        _clubMembersCacheFetchedAt[clubId] = DateTime.now();
       }
       return result;
     } finally {
@@ -414,6 +581,7 @@ class PeopleService {
   /// re-fetches instead of serving a now-stale cached list.
   void invalidateClubMembers(String clubId) {
     _clubMembersCache.remove(clubId);
+    _clubMembersCacheFetchedAt.remove(clubId);
     _clubMembersCacheVersions[clubId] =
         (_clubMembersCacheVersions[clubId] ?? 0) + 1;
   }
@@ -482,6 +650,10 @@ class PeopleService {
       ..._cachedPeople.where((user) => !fetchedIds.contains(user.id)),
       ...members,
     ];
+    final fetchedAt = DateTime.now();
+    _profileRowsFetchedAt.addAll({
+      for (final member in members) member.id: fetchedAt,
+    });
     return members;
   }
 
@@ -498,6 +670,12 @@ class PeopleService {
         force: force,
       ),
     ]);
+    try {
+      await hydrateMutualFollowersForSuggestions(currentUserId);
+    } catch (_) {
+      // The directory and follow buttons remain useful if social-proof
+      // hydration is temporarily unavailable; retain the previous snapshot.
+    }
   }
 
   void setCachedFollower(String userId, bool followsMe) {
@@ -521,12 +699,18 @@ class PeopleService {
       following.remove(userId);
       final followers = {...?_followersByUserId[userId]}..remove(myId);
       _followersByUserId[userId] = followers;
+
+      var removedFromMutuals = false;
+      for (final mutualIds in _mutualFollowerIdsBySuggestedUserId.values) {
+        removedFromMutuals = mutualIds.remove(userId) || removedFromMutuals;
+      }
+      if (removedFromMutuals) _mutualFollowersRevision++;
     }
     _followingByUserId[myId] = following;
   }
 
   List<User> peopleByIds(Iterable<String> ids) {
-    final byId = {for (final user in _cachedPeople) user.id: user};
+    final byId = {for (final user in cachedPeople) user.id: user};
     return ids
         .map(
           (id) =>
@@ -612,6 +796,11 @@ class PeopleService {
     final client = _client;
     if (client == null || followerId.isEmpty || followingId.isEmpty) return;
 
+    supabaseReadCache.invalidate('people-connections:$followerId');
+    supabaseReadCache.invalidate('people-connections:$followingId');
+    supabaseReadCache.invalidate('people-profile-details:$followerId');
+    supabaseReadCache.invalidate('people-profile-details:$followingId');
+
     if (follow) {
       // Insert-ignoring-duplicate: one round trip instead of check-then-insert.
       try {
@@ -688,19 +877,37 @@ class PeopleService {
     final client = _client;
     if (client == null || ids.isEmpty) return;
 
+    final now = DateTime.now();
     final cachedIds = cachedPeople.map((user) => user.id).toSet();
-    final missingIds = ids.where((id) => !cachedIds.contains(id)).toList();
+    final missingIds =
+        ids
+            .where(
+              (id) =>
+                  !cachedIds.contains(id) ||
+                  _profileRowsFetchedAt[id] == null ||
+                  now.difference(_profileRowsFetchedAt[id]!) >= _profileRowsTtl,
+            )
+            .toList()
+          ..sort();
     if (missingIds.isEmpty) return;
 
-    final rows = await client
-        .from('profiles')
-        .select(
-          'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
-        )
-        .inFilter('id', missingIds);
+    final key = 'people-profiles:${missingIds.join(',')}';
+    final generation = _remoteCacheGeneration;
+    final rows = await supabaseReadCache.getOrFetch<List<dynamic>>(
+      key: key,
+      ttl: _profileRowsTtl,
+      fetch: () => client
+          .from('profiles')
+          .select(
+            'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+          )
+          .inFilter('id', missingIds),
+    );
+    if (generation != _remoteCacheGeneration) return;
 
     final majorNames = await _lookupNames('majors');
     final yearNames = await _lookupNames('academic_years');
+    if (generation != _remoteCacheGeneration) return;
     final loaded = rows.map(
       (row) => _userFromProfileRow(
         Map<String, dynamic>.from(row as Map),
@@ -713,6 +920,28 @@ class PeopleService {
       ..._cachedPeople.where((user) => !missingIds.contains(user.id)),
       ...loaded,
     ];
+    _profileRowsFetchedAt.addAll({
+      for (final user in loaded) user.id: DateTime.now(),
+    });
+  }
+
+  /// Drops one remote profile snapshot after a profile write. Device-local
+  /// accounts remain searchable, while the next remote hydration gets fresh
+  /// name/avatar/details data.
+  void invalidateProfile(String userId) {
+    if (userId.isEmpty) return;
+    _profileRowsFetchedAt.remove(userId);
+    _cachedPeople = [
+      for (final user in _cachedPeople)
+        if (user.id != userId) user,
+    ];
+    supabaseReadCache.invalidateWhere((key) {
+      if (!key.startsWith('people-profiles:')) return false;
+      return key
+          .substring('people-profiles:'.length)
+          .split(',')
+          .contains(userId);
+    });
   }
 
   User _userFromProfileRow(
@@ -752,6 +981,7 @@ class PeopleService {
       ..._cachedPeople.where((cached) => cached.id != user.id),
       user,
     ];
+    _profileRowsFetchedAt[user.id] = DateTime.now();
     if (!exists) {
       _cachedPeople.sort(
         (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),

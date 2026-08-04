@@ -21,7 +21,9 @@ class AppNetworkImage extends StatelessWidget {
   final double? height;
   final double? cacheWidth;
   final double? cacheHeight;
+  final String? cacheKey;
   final BoxFit fit;
+  final bool useOldImageOnUrlChange;
   final WidgetBuilder? placeholderBuilder;
   final WidgetBuilder? errorBuilder;
 
@@ -32,7 +34,9 @@ class AppNetworkImage extends StatelessWidget {
     this.height,
     this.cacheWidth,
     this.cacheHeight,
+    this.cacheKey,
     this.fit = BoxFit.cover,
+    this.useOldImageOnUrlChange = false,
     this.placeholderBuilder,
     this.errorBuilder,
   });
@@ -51,6 +55,8 @@ class AppNetworkImage extends StatelessWidget {
       fit: fit,
       memCacheWidth: w == null ? null : (w * dpr).round(),
       memCacheHeight: h == null ? null : (h * dpr).round(),
+      cacheKey: cacheKey,
+      useOldImageOnUrlChange: useOldImageOnUrlChange,
       fadeInDuration: const Duration(milliseconds: 120),
       fadeOutDuration: Duration.zero,
       placeholder: placeholderBuilder == null

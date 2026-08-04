@@ -6,8 +6,9 @@ import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/chat_message.dart';
 import '../models/chat_group.dart';
+import '../models/chat_media_selection.dart';
+import '../models/chat_message.dart';
 import '../models/notification.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
@@ -16,6 +17,10 @@ import 'mock_data.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
+
+/// The two lanes of a club room, per the Club Board + Chat handoff: `board` is
+/// the official notice area, `chat` is the room where the conversation lives.
+enum ClubChatLane { board, chat }
 
 /// Local-first messaging: 1:1 direct messages, student-created groups, plus
 /// one members-only community chat per club.
@@ -44,11 +49,16 @@ class ChatStore extends ChangeNotifier {
   Box<dynamic>? _box;
 
   final List<ChatMessage> _messages = [];
+  final Map<String, ({String url, DateTime expiresAt})>
+  _signedChatAttachmentUrls = {};
 
   /// Local-first outbox. IDs remain here until Supabase acknowledges storage.
   final Set<String> _pendingRemoteMessageIds = {};
 
-  /// DM threads whose incoming delivered messages were seen while offline.
+  /// DM/group threads with receipt changes waiting to reach Supabase.
+  ///
+  /// Group delivery and read rows intentionally reuse this durable queue so
+  /// there is one retry mechanism for every student-chat receipt.
   final Set<String> _pendingSeenThreadIds = {};
 
   RealtimeChannel? _directMessageChannel;
@@ -58,6 +68,7 @@ class ChatStore extends ChangeNotifier {
   String? _clubSyncedActorId;
   Timer? _syncRetry;
   bool _flushingRemote = false;
+  bool _flushRemoteAgain = false;
 
   /// Direct-message threads that have been opened, including conversations
   /// that do not have a first message yet.
@@ -90,6 +101,11 @@ class ChatStore extends ChangeNotifier {
 
   /// userId → threadId → last time that user opened the thread.
   final Map<String, Map<String, DateTime>> _lastRead = {};
+
+  /// userId → `threadId|lane` → last time that user opened one lane of a club
+  /// room. The Board + Chat design gives each segment its own count, so a
+  /// reader who only opens the Board keeps the Chat count they left behind.
+  final Map<String, Map<String, DateTime>> _lastReadLanes = {};
 
   bool takeAttachmentUploadFailure() {
     final failed = _attachmentUploadFailed;
@@ -214,6 +230,15 @@ class ChatStore extends ChangeNotifier {
         final inner = Map<String, dynamic>.from(entry.value as Map);
         _lastRead[entry.key.toString()] = inner.map(
           (threadId, iso) => MapEntry(threadId, DateTime.parse(iso as String)),
+        );
+      }
+    }
+    final rawLastReadLanes = box.get('lastReadLanes');
+    if (rawLastReadLanes is Map) {
+      for (final entry in rawLastReadLanes.entries) {
+        final inner = Map<String, dynamic>.from(entry.value as Map);
+        _lastReadLanes[entry.key.toString()] = inner.map(
+          (laneKey, iso) => MapEntry(laneKey, DateTime.parse(iso as String)),
         );
       }
     }
@@ -411,6 +436,7 @@ class ChatStore extends ChangeNotifier {
     final oldGroupChannel = _groupMessageChannel;
     if (oldGroupChannel != null) await client.removeChannel(oldGroupChannel);
     _syncRetry?.cancel();
+    if (_syncedUserId != userId) _signedChatAttachmentUrls.clear();
     _syncedUserId = userId;
 
     final channel = client
@@ -479,6 +505,12 @@ class ChatStore extends ChangeNotifier {
           table: 'group_messages',
           callback: (payload) =>
               unawaited(_handleGroupMessageChange(payload, userId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'group_message_receipts',
+          callback: (payload) => unawaited(_handleGroupReceiptChange(payload)),
         );
     _groupMessageChannel = channel;
     channel.subscribe((status, error) {
@@ -976,11 +1008,41 @@ class ChatStore extends ChangeNotifier {
           (membersByGroup[groupId] ??= []).add(memberId);
         }
       }
+      final messageIds = results[2]
+          .map((row) => row['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
+      var receiptRows = <Map<String, dynamic>>[];
+      if (messageIds.isNotEmpty) {
+        try {
+          final remoteReceipts = await client
+              .from('group_message_receipts')
+              .select('message_id, user_id, delivered_at, seen_at')
+              .inFilter('message_id', messageIds);
+          receiptRows = remoteReceipts
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(growable: false);
+        } catch (_) {
+          // Messages remain usable while a newly deployed receipts migration
+          // is still propagating. The existing sync retry will fetch them.
+        }
+      }
+      final receiptsByMessage = <String, List<MessageReceipt>>{};
+      for (final row in receiptRows) {
+        final messageId = row['message_id']?.toString() ?? '';
+        final receipt = _receiptFromRemoteRow(row);
+        if (messageId.isNotEmpty && receipt != null) {
+          (receiptsByMessage[messageId] ??= []).add(receipt);
+        }
+      }
       // Do not expose a group message until its sender's real profile name and
       // avatar have been resolved. This also preloads identities used by the
       // automatic group title and avatar stack.
       await peopleService.hydrateProfilesByIds(
-        membersByGroup.values.expand((memberIds) => memberIds),
+        <String>{
+          ...membersByGroup.values.expand((memberIds) => memberIds),
+          ...receiptRows.map((row) => row['user_id']?.toString() ?? ''),
+        }.where((id) => id.isNotEmpty),
       );
       for (final raw in results[0]) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -1014,9 +1076,11 @@ class ChatStore extends ChangeNotifier {
         );
       }
       for (final raw in results[2]) {
+        final row = Map<String, dynamic>.from(raw as Map);
         await _mergeRemoteGroupMessage(
-          Map<String, dynamic>.from(raw as Map),
+          row,
           userId,
+          receipts: receiptsByMessage[row['id']?.toString() ?? ''] ?? const [],
           notifyRecipient: false,
         );
       }
@@ -1031,6 +1095,7 @@ class ChatStore extends ChangeNotifier {
   Future<void> _mergeRemoteGroupMessage(
     Map<String, dynamic> row,
     String viewerId, {
+    List<MessageReceipt> receipts = const [],
     bool notifyRecipient = true,
   }) async {
     final id = row['id']?.toString() ?? '';
@@ -1045,7 +1110,7 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     if (_pendingRemoteDeleteThreadIds.containsKey(id)) return;
-    final message = await _messageFromRemotePayload(
+    final remoteMessage = await _messageFromRemotePayload(
       row: row,
       id: id,
       threadId: groupThreadId(groupId),
@@ -1053,19 +1118,45 @@ class ChatStore extends ChangeNotifier {
       createdAt: createdAt,
       deliveredAt: createdAt,
     );
-    if (message == null) return;
+    if (remoteMessage == null) return;
     final existingIndex = _messages.indexWhere(
       (candidate) => candidate.id == id,
     );
-    if (existingIndex != -1) {
-      if (_messages[existingIndex].attachmentPath != message.attachmentPath) {
-        _messages[existingIndex] = _messages[existingIndex].copyWith(
-          attachmentPath: message.attachmentPath,
+    final localReceipts = existingIndex == -1
+        ? const <MessageReceipt>[]
+        : _messages[existingIndex].receipts;
+    var mergedReceipts = _mergeRemoteReceiptLists(localReceipts, receipts);
+    var queuedDelivery = false;
+    if (senderId != viewerId) {
+      final viewerReceipt = _receiptFor(mergedReceipts, viewerId);
+      if (viewerReceipt?.deliveredAt == null) {
+        mergedReceipts = _withLocalReceipt(
+          mergedReceipts,
+          userId: viewerId,
+          deliveredAt: DateTime.now(),
         );
+        _pendingSeenThreadIds.add(groupThreadId(groupId));
+        queuedDelivery = true;
+      }
+    }
+    final message = remoteMessage.copyWith(receipts: mergedReceipts);
+    if (existingIndex != -1) {
+      final local = _messages[existingIndex];
+      final pendingChanged = _pendingRemoteGroupMessageIds.remove(id);
+      if (local.attachmentPath != message.attachmentPath ||
+          !listEquals(local.receipts, mergedReceipts)) {
+        _messages[existingIndex] = local.copyWith(
+          attachmentPath: message.attachmentPath,
+          receipts: mergedReceipts,
+        );
+      }
+      if (local.attachmentPath != message.attachmentPath ||
+          !listEquals(local.receipts, mergedReceipts) ||
+          pendingChanged) {
         scheduleSave();
         notifyListeners();
       }
-      _pendingRemoteGroupMessageIds.remove(id);
+      if (queuedDelivery) unawaited(_flushRemoteChanges());
       return;
     }
     _messages.add(message);
@@ -1085,6 +1176,84 @@ class ChatStore extends ChangeNotifier {
         ),
       );
     }
+    scheduleSave();
+    notifyListeners();
+    if (queuedDelivery) unawaited(_flushRemoteChanges());
+  }
+
+  static MessageReceipt? _receiptFromRemoteRow(Map<String, dynamic> row) {
+    final userId = row['user_id']?.toString() ?? '';
+    if (userId.isEmpty) return null;
+    return MessageReceipt(
+      userId: userId,
+      deliveredAt: DateTime.tryParse(
+        row['delivered_at']?.toString() ?? '',
+      )?.toLocal(),
+      seenAt: DateTime.tryParse(row['seen_at']?.toString() ?? '')?.toLocal(),
+    );
+  }
+
+  static MessageReceipt? _receiptFor(
+    Iterable<MessageReceipt> receipts,
+    String userId,
+  ) {
+    for (final receipt in receipts) {
+      if (receipt.userId == userId) return receipt;
+    }
+    return null;
+  }
+
+  static List<MessageReceipt> _mergeRemoteReceiptLists(
+    Iterable<MessageReceipt> localReceipts,
+    Iterable<MessageReceipt> remoteReceipts,
+  ) {
+    final merged = {
+      for (final receipt in localReceipts) receipt.userId: receipt,
+    };
+    for (final remote in remoteReceipts) {
+      final local = merged[remote.userId];
+      // Realtime/reconciliation snapshots can race an optimistic offline
+      // receipt. A null remote field must never erase a local timestamp.
+      merged[remote.userId] = MessageReceipt(
+        userId: remote.userId,
+        deliveredAt: remote.deliveredAt ?? local?.deliveredAt,
+        seenAt: remote.seenAt ?? local?.seenAt,
+      );
+    }
+    return List.unmodifiable(merged.values);
+  }
+
+  static List<MessageReceipt> _withLocalReceipt(
+    Iterable<MessageReceipt> receipts, {
+    required String userId,
+    DateTime? deliveredAt,
+    DateTime? seenAt,
+  }) {
+    final merged = {for (final receipt in receipts) receipt.userId: receipt};
+    final current = merged[userId];
+    merged[userId] = MessageReceipt(
+      userId: userId,
+      deliveredAt: current?.deliveredAt ?? deliveredAt,
+      seenAt: current?.seenAt ?? seenAt,
+    );
+    return List.unmodifiable(merged.values);
+  }
+
+  Future<void> _handleGroupReceiptChange(PostgresChangePayload payload) async {
+    // Receipt rows cannot be deleted by clients. Ignore an unexpected delete
+    // rather than rolling a locally known receipt backward.
+    if (payload.newRecord.isEmpty) return;
+    final row = payload.newRecord;
+    final messageId = row['message_id']?.toString() ?? '';
+    final receipt = _receiptFromRemoteRow(row);
+    if (messageId.isEmpty || receipt == null) return;
+    await peopleService.hydrateProfilesByIds([receipt.userId]);
+    final index = _messages.indexWhere((message) => message.id == messageId);
+    if (index == -1) return;
+    final message = _messages[index];
+    final merged = _mergeRemoteReceiptLists(message.receipts, [receipt]);
+    if (listEquals(message.receipts, merged)) return;
+    _messages[index] = message.copyWith(receipts: merged);
     scheduleSave();
     notifyListeners();
   }
@@ -1241,9 +1410,22 @@ class ChatStore extends ChangeNotifier {
   Future<String> _signedChatAttachmentUrl(String objectPath) async {
     final client = _client;
     if (client == null) return objectPath;
-    return client.storage
+    final now = DateTime.now();
+    final cached = _signedChatAttachmentUrls[objectPath];
+    if (cached != null &&
+        cached.expiresAt.isAfter(now.add(const Duration(minutes: 1)))) {
+      return cached.url;
+    }
+    final url = await client.storage
         .from(_chatAttachmentBucket)
         .createSignedUrl(objectPath, _chatAttachmentSignedUrlLifetimeSeconds);
+    _signedChatAttachmentUrls[objectPath] = (
+      url: url,
+      expiresAt: now.add(
+        const Duration(seconds: _chatAttachmentSignedUrlLifetimeSeconds),
+      ),
+    );
+    return url;
   }
 
   void _removeRemoteMessageLocally(String messageId) {
@@ -1274,6 +1456,9 @@ class ChatStore extends ChangeNotifier {
         if (local.content != merged.content ||
             local.kind != merged.kind ||
             local.title != merged.title ||
+            local.replyToMessageId != merged.replyToMessageId ||
+            local.replyToSenderId != merged.replyToSenderId ||
+            local.replyToPreview != merged.replyToPreview ||
             local.sharedPostId != merged.sharedPostId ||
             local.attachmentPath != merged.attachmentPath ||
             local.attachmentName != merged.attachmentName ||
@@ -1286,7 +1471,7 @@ class ChatStore extends ChangeNotifier {
         }
       }
       _directThreadIds.add(remote.threadId);
-      _pendingRemoteMessageIds.remove(remote.id);
+      if (_pendingRemoteMessageIds.remove(remote.id)) changed = true;
     }
     if (!changed) return;
     scheduleSave();
@@ -1319,7 +1504,11 @@ class ChatStore extends ChangeNotifier {
     ChatMessage message,
   ) async {
     final attachmentPath = message.attachmentPath?.trim() ?? '';
-    if (message.kind != ChatMessageKind.photo || attachmentPath.isEmpty) {
+    final isPhoto = message.kind == ChatMessageKind.photo;
+    final isVideo =
+        message.kind == ChatMessageKind.file &&
+        isVideoMediaPath(message.attachmentName ?? attachmentPath);
+    if ((!isPhoto && !isVideo) || attachmentPath.isEmpty) {
       return message;
     }
     if (attachmentPath.startsWith(_chatAttachmentReferencePrefix)) {
@@ -1336,9 +1525,11 @@ class ChatStore extends ChangeNotifier {
 
     final file = File(attachmentPath);
     if (!await file.exists()) return null;
-    final bytes = await file.readAsBytes();
+    final size = await file.length();
     final authUserId = client.auth.currentUser?.id ?? '';
-    if (bytes.isEmpty || authUserId.isEmpty) return null;
+    if (size <= 0 || size > maxChatMediaFileBytes || authUserId.isEmpty) {
+      return null;
+    }
 
     final extension = _attachmentExtension(
       message.attachmentName ?? attachmentPath,
@@ -1349,9 +1540,9 @@ class ChatStore extends ChangeNotifier {
     final objectPath = '$authUserId/${message.id}.$extension';
     await client.storage
         .from(_chatAttachmentBucket)
-        .uploadBinary(
+        .upload(
           objectPath,
-          bytes,
+          file,
           fileOptions: FileOptions(
             upsert: true,
             contentType: _attachmentContentType(extension),
@@ -1392,6 +1583,13 @@ class ChatStore extends ChangeNotifier {
       'gif',
       'heic',
       'heif',
+      'mp4',
+      'mov',
+      'm4v',
+      'avi',
+      'webm',
+      'mkv',
+      '3gp',
     ]) {
       if (lower.endsWith('.$extension')) return extension;
     }
@@ -1404,11 +1602,24 @@ class ChatStore extends ChangeNotifier {
     'gif' => 'image/gif',
     'heic' => 'image/heic',
     'heif' => 'image/heif',
+    'mp4' => 'video/mp4',
+    'mov' => 'video/quicktime',
+    'm4v' => 'video/x-m4v',
+    'avi' => 'video/x-msvideo',
+    'webm' => 'video/webm',
+    'mkv' => 'video/x-matroska',
+    '3gp' => 'video/3gpp',
     _ => 'image/jpeg',
   };
 
   Future<void> _flushRemoteChanges() async {
-    if (_flushingRemote) return;
+    if (_flushingRemote) {
+      // A receipt can advance from delivered to seen while the earlier value
+      // is still being uploaded. Remember the overlapping request so the
+      // durable queue is drained again after the active upload completes.
+      _flushRemoteAgain = true;
+      return;
+    }
     final userId = _syncedUserId;
     final client = _client;
     if (userId == null ||
@@ -1417,6 +1628,8 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     _flushingRemote = true;
+    final pendingMessageCountBefore =
+        _pendingRemoteMessageIds.length + _pendingRemoteGroupMessageIds.length;
     var failed = false;
     var removedLocalGroup = false;
     try {
@@ -1492,11 +1705,12 @@ class ChatStore extends ChangeNotifier {
                     .from('group-chat-photos')
                     .getPublicUrl(objectPath),
               );
+              final versionedUrl = publicUrl;
               await client
                   .from('group_chats')
-                  .update({'photo_url': publicUrl})
+                  .update({'photo_url': versionedUrl})
                   .eq('id', group.id);
-              _groups[group.id] = group.withPhoto(publicUrl);
+              _groups[group.id] = group.withPhoto(versionedUrl);
             }
           }
           final existingRows = await client
@@ -1615,6 +1829,49 @@ class ChatStore extends ChangeNotifier {
       }
 
       for (final threadId in _pendingSeenThreadIds.toList()) {
+        // Claim this queue item before awaiting the network. If another local
+        // receipt arrives for the same thread meanwhile, markThreadRead adds
+        // it back and the newer value remains queued for the next drain.
+        _pendingSeenThreadIds.remove(threadId);
+        if (isGroupThread(threadId)) {
+          final receiptMessages = _messages
+              .where((message) {
+                if (message.threadId != threadId ||
+                    message.senderId == userId) {
+                  return false;
+                }
+                return _receiptFor(message.receipts, userId)?.deliveredAt !=
+                    null;
+              })
+              .toList(growable: false);
+          if (receiptMessages.isEmpty) continue;
+          try {
+            await client.from('group_message_receipts').upsert([
+              for (final message in receiptMessages)
+                {
+                  'message_id': message.id,
+                  'user_id': userId,
+                  'delivered_at': _receiptFor(
+                    message.receipts,
+                    userId,
+                  )!.deliveredAt!.toUtc().toIso8601String(),
+                },
+            ], onConflict: 'message_id,user_id');
+            for (final message in receiptMessages) {
+              final seenAt = _receiptFor(message.receipts, userId)?.seenAt;
+              if (seenAt == null) continue;
+              await client
+                  .from('group_message_receipts')
+                  .update({'seen_at': seenAt.toUtc().toIso8601String()})
+                  .eq('message_id', message.id)
+                  .eq('user_id', userId);
+            }
+          } catch (_) {
+            _pendingSeenThreadIds.add(threadId);
+            failed = true;
+          }
+          continue;
+        }
         final senderId = dmPeerOf(threadId, userId);
         if (senderId == null) continue;
         final seenAt = _messages
@@ -1630,10 +1887,7 @@ class ChatStore extends ChangeNotifier {
               (latest, value) =>
                   latest == null || value.isAfter(latest) ? value : latest,
             );
-        if (seenAt == null) {
-          _pendingSeenThreadIds.remove(threadId);
-          continue;
-        }
+        if (seenAt == null) continue;
         try {
           final iso = seenAt.toUtc().toIso8601String();
           await client
@@ -1642,18 +1896,30 @@ class ChatStore extends ChangeNotifier {
               .eq('sender_id', senderId)
               .eq('receiver_id', userId)
               .isFilter('seen_at', null);
-          _pendingSeenThreadIds.remove(threadId);
         } catch (_) {
+          _pendingSeenThreadIds.add(threadId);
           failed = true;
         }
       }
       await _flushRemoteDeletes();
       scheduleSave();
-      if (removedLocalGroup) notifyListeners();
+      final pendingMessageCountAfter =
+          _pendingRemoteMessageIds.length +
+          _pendingRemoteGroupMessageIds.length;
+      if (removedLocalGroup ||
+          pendingMessageCountBefore != pendingMessageCountAfter) {
+        notifyListeners();
+      }
     } finally {
       _flushingRemote = false;
     }
-    if (failed) _scheduleSyncRetry();
+    final flushAgain = _flushRemoteAgain;
+    _flushRemoteAgain = false;
+    if (failed) {
+      _scheduleSyncRetry();
+    } else if (flushAgain || _pendingSeenThreadIds.isNotEmpty) {
+      unawaited(_flushRemoteChanges());
+    }
   }
 
   Future<void> _flushClubMessages() async {
@@ -1799,6 +2065,7 @@ class ChatStore extends ChangeNotifier {
     payload.remove('createdAt');
     payload.remove('deliveredAt');
     payload.remove('seenAt');
+    payload.remove('receipts');
     return payload;
   }
 
@@ -1880,13 +2147,38 @@ class ChatStore extends ChangeNotifier {
         managedClubForAdmin(userId)?.id == clubId;
   }
 
-  /// Read membership and posting authority are intentionally separate for
-  /// club channels: every follower reads, while only board or club accounts
-  /// may publish. DMs and student-created groups remain conversational.
+  /// Returns whether [userId] may post in a club's general channel.
+  ///
+  /// Every follower may read the room, but posting is reserved for the club's
+  /// yönetim kurulu (the `board_member` role) and the linked club account.
+  bool canWriteClubThread(String threadId, String userId) {
+    if (!isClubThread(threadId) || !canAccessThread(threadId, userId)) {
+      return false;
+    }
+    final clubId = clubIdOf(threadId);
+    final club = clubId == null ? null : clubForId(clubId);
+    if (club == null) return false;
+    return club.boardMemberIds.contains(userId) ||
+        managedCommunityThreadId(userId) == threadId;
+  }
+
+  /// Reading and writing are separate rights for club rooms: every member may
+  /// read, while only the yönetim kurulu may post in the general Chat lane.
   bool canWriteThread(String threadId, String userId) {
-    if (!canAccessThread(threadId, userId)) return false;
-    if (isClubInboxThread(threadId)) return true;
-    if (!isClubThread(threadId)) return true;
+    if (isClubThread(threadId)) {
+      return canWriteClubThread(threadId, userId);
+    }
+    return canAccessThread(threadId, userId);
+  }
+
+  /// Who may publish a notice on a club Board: members holding a role in that
+  /// club (President / VP / Officers), its admin ids, and the linked club
+  /// account. Members without a role never see a disabled composer — the Board
+  /// offers them the route into Chat instead.
+  bool canPostNotice(String threadId, String userId) {
+    if (!isClubThread(threadId) || !canAccessThread(threadId, userId)) {
+      return false;
+    }
     final clubId = clubIdOf(threadId);
     final club = clubId == null ? null : clubForId(clubId);
     if (club == null) return false;
@@ -2061,11 +2353,142 @@ class ChatStore extends ChangeNotifier {
           .where((m) => m.senderId != userId && m.seenAt == null)
           .length;
     }
+    // A club room carries two counts, one per segment; the inbox row shows the
+    // sum, so the two lanes are added here rather than measured separately.
+    if (isClubThread(threadId)) {
+      return _unreadInLane(
+            threadId,
+            userId,
+            ClubChatLane.board,
+            within: candidates,
+          ) +
+          _unreadInLane(
+            threadId,
+            userId,
+            ClubChatLane.chat,
+            within: candidates,
+          );
+    }
     final lastRead = _lastRead[userId]?[threadId];
     return candidates.where((m) {
       if (m.senderId == userId) return false;
       return lastRead == null || m.createdAt.isAfter(lastRead);
     }).length;
+  }
+
+  /// Unread notices on a club Board (`board`) or unread messages in its Chat
+  /// lane (`chat`). Returns 0 for anything that is not a club room.
+  int unreadInClubLane(String threadId, String userId, ClubChatLane lane) {
+    if (_box == null || userId.isEmpty || !isClubThread(threadId)) return 0;
+    if (!canAccessThread(threadId, userId)) return 0;
+    return _unreadInLane(threadId, userId, lane);
+  }
+
+  int _unreadInLane(
+    String threadId,
+    String userId,
+    ClubChatLane lane, {
+    Iterable<ChatMessage>? within,
+  }) => _unreadMessagesInLane(threadId, userId, lane, within: within).length;
+
+  /// Ids of the messages still unread in one lane of a club room, oldest first.
+  /// The screen snapshots these when it opens so the Board's dots and the Chat
+  /// divider survive the lane being marked read a frame later.
+  List<String> unreadIdsInClubLane(
+    String threadId,
+    String userId,
+    ClubChatLane lane,
+  ) {
+    if (_box == null || userId.isEmpty || !isClubThread(threadId)) {
+      return const [];
+    }
+    if (!canAccessThread(threadId, userId)) return const [];
+    final unread = _unreadMessagesInLane(threadId, userId, lane).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return unread.map((message) => message.id).toList(growable: false);
+  }
+
+  Iterable<ChatMessage> _unreadMessagesInLane(
+    String threadId,
+    String userId,
+    ClubChatLane lane, {
+    Iterable<ChatMessage>? within,
+  }) {
+    final cutoff = _laneCutoff(threadId, userId, lane);
+    final candidates = within ?? _messages.where((m) => m.threadId == threadId);
+    return candidates.where((message) {
+      if (message.threadId != threadId) return false;
+      if (message.senderId == userId) return false;
+      if (laneOf(message) != lane) return false;
+      return cutoff == null || message.createdAt.isAfter(cutoff);
+    });
+  }
+
+  /// The last moment [userId] saw [lane] — whichever is later, the whole-thread
+  /// receipt or this lane's own one. Marking the thread read (a notification
+  /// tap, a legacy call site) therefore still clears both lanes.
+  DateTime? _laneCutoff(String threadId, String userId, ClubChatLane lane) {
+    final thread = _lastRead[userId]?[threadId];
+    final laneRead = _lastReadLanes[userId]?[_laneKey(threadId, lane)];
+    if (thread == null) return laneRead;
+    if (laneRead == null) return thread;
+    return laneRead.isAfter(thread) ? laneRead : thread;
+  }
+
+  static String _laneKey(String threadId, ClubChatLane lane) =>
+      '$threadId|${lane.name}';
+
+  /// Which lane a club-room message belongs to: notices are the Board's own
+  /// object, everything else — chat, polls, photos, system lines — is the room.
+  static ClubChatLane laneOf(ChatMessage message) =>
+      message.kind == ChatMessageKind.announcement
+      ? ClubChatLane.board
+      : ClubChatLane.chat;
+
+  /// Notices on a club Board: pinned first ("Always here"), then newest first.
+  List<ChatMessage> noticesIn(String threadId) {
+    final list = announcementsIn(threadId).toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    return List.unmodifiable(list);
+  }
+
+  /// How many messages in the Chat lane quote [messageId] — the reply count a
+  /// notice shows instead of a seen count.
+  int replyCountFor(String messageId) {
+    if (messageId.isEmpty) return 0;
+    return _messages
+        .where((message) => message.replyToMessageId == messageId)
+        .length;
+  }
+
+  /// The newest message in a club room's Chat lane. The Messages inbox previews
+  /// Chat, so a notice on the Board never becomes the row's preview line.
+  ChatMessage? lastChatLaneMessageIn(String threadId) {
+    ChatMessage? last;
+    for (final message in _messages) {
+      if (message.threadId != threadId) continue;
+      if (laneOf(message) != ClubChatLane.chat) continue;
+      if (last == null || message.createdAt.isAfter(last.createdAt)) {
+        last = message;
+      }
+    }
+    return last;
+  }
+
+  /// Records that [userId] has seen one lane of a club room. The other lane
+  /// keeps its count, which is what gives the segments their own badges.
+  void markClubLaneRead(String threadId, String userId, ClubChatLane lane) {
+    if (_box == null || userId.isEmpty || !isClubThread(threadId)) return;
+    if (!canAccessThread(threadId, userId)) return;
+    if (_unreadInLane(threadId, userId, lane) == 0) return;
+    (_lastReadLanes[userId] ??= {})[_laneKey(threadId, lane)] = DateTime.now();
+    // Written straight through: a debounced save can be lost when the app is
+    // closed right after the room is opened, which would resurrect the badge.
+    unawaited(saveAll());
+    notifyListeners();
   }
 
   int totalUnreadFor(String userId) {
@@ -2299,6 +2722,7 @@ class ChatStore extends ChangeNotifier {
     String? eventId,
     String? sharedPostId,
     bool pinned = false,
+    String? replyToMessageId,
   }) {
     if (_box == null) return null;
     final text = content.trim();
@@ -2314,6 +2738,23 @@ class ChatStore extends ChangeNotifier {
             pollOptions.isNotEmpty);
     if (text.isEmpty && !carriesPayload) return null;
     if (!canWriteThread(threadId, senderId)) return null;
+    // A notice — and the pin that goes with it — is the Board's own object, so
+    // the narrower authority is enforced here and not only in the UI.
+    if ((kind == ChatMessageKind.announcement || pinned) &&
+        isClubThread(threadId) &&
+        !canPostNotice(threadId, senderId)) {
+      return null;
+    }
+
+    ChatMessage? repliedMessage;
+    if (replyToMessageId != null) {
+      final replyIndex = _messages.indexWhere(
+        (message) =>
+            message.id == replyToMessageId && message.threadId == threadId,
+      );
+      if (replyIndex == -1) return null;
+      repliedMessage = _messages[replyIndex];
+    }
 
     if (isDirectThread(threadId)) _directThreadIds.add(threadId);
 
@@ -2325,6 +2766,11 @@ class ChatStore extends ChangeNotifier {
       content: text,
       createdAt: now,
       deliveredAt: now,
+      replyToMessageId: repliedMessage?.id,
+      replyToSenderId: repliedMessage?.senderId,
+      replyToPreview: repliedMessage == null
+          ? null
+          : replyPreviewFor(repliedMessage),
       kind: kind,
       title: title,
       mentions: mentions.where((id) => id.isNotEmpty).toSet().toList(),
@@ -2365,11 +2811,41 @@ class ChatStore extends ChangeNotifier {
     return message;
   }
 
+  static String replyPreviewFor(ChatMessage message) {
+    final content = message.content.trim();
+    if (content.isNotEmpty) return content;
+    final title = message.title?.trim() ?? '';
+    if (title.isNotEmpty) return title;
+    final attachmentName = message.attachmentName?.trim() ?? '';
+    if (attachmentName.isNotEmpty) return attachmentName;
+    return switch (message.kind) {
+      ChatMessageKind.photo => 'Photo',
+      ChatMessageKind.file => 'File',
+      ChatMessageKind.poll => 'Poll',
+      ChatMessageKind.event => 'Event',
+      ChatMessageKind.postShare => 'Shared post',
+      ChatMessageKind.announcement => 'Announcement',
+      ChatMessageKind.system || ChatMessageKind.text => 'Message',
+    };
+  }
+
   // ── Community stream (announcements, polls, reactions, pins, typing) ─────────
 
   ChatMessage? messageById(String messageId) {
     final index = _messages.indexWhere((message) => message.id == messageId);
     return index == -1 ? null : _messages[index];
+  }
+
+  MessageDeliveryStatus deliveryStatusFor(ChatMessage message) {
+    if (_pendingRemoteMessageIds.contains(message.id) ||
+        _pendingRemoteGroupMessageIds.contains(message.id)) {
+      return MessageDeliveryStatus.sent;
+    }
+    if (isGroupThread(message.threadId)) {
+      return message.groupStatusForMembers(groupParticipants(message.threadId));
+    }
+    // Preserve the existing direct-message delivered/seen calculation.
+    return message.status;
   }
 
   /// Removes one message locally and queues the same deletion for Supabase.
@@ -2432,28 +2908,7 @@ class ChatStore extends ChangeNotifier {
     if (users.isEmpty) reactions.remove(emoji);
     return _replaceMessage(
       messageId,
-      (message) => ChatMessage(
-        id: message.id,
-        threadId: message.threadId,
-        senderId: message.senderId,
-        content: message.content,
-        createdAt: message.createdAt,
-        deliveredAt: message.deliveredAt,
-        seenAt: message.seenAt,
-        kind: message.kind,
-        title: message.title,
-        mentions: message.mentions,
-        reactions: reactions,
-        attachmentPath: message.attachmentPath,
-        attachmentName: message.attachmentName,
-        attachmentSize: message.attachmentSize,
-        pollOptions: message.pollOptions,
-        pollVotes: message.pollVotes,
-        pollClosesAt: message.pollClosesAt,
-        eventId: message.eventId,
-        sharedPostId: message.sharedPostId,
-        pinned: message.pinned,
-      ),
+      (message) => message.copyWith(reactions: reactions),
     );
   }
 
@@ -2568,10 +3023,20 @@ class ChatStore extends ChangeNotifier {
   /// "N seen" figure on an announcement. The author always counts.
   int seenCountFor(ChatMessage message) {
     var count = 1;
-    for (final entry in _lastRead.entries) {
-      if (entry.key == message.senderId) continue;
-      final lastRead = entry.value[message.threadId];
-      if (lastRead != null && !lastRead.isBefore(message.createdAt)) count++;
+    // A club room is read one lane at a time, so a reader counts when either
+    // their whole-thread receipt or the lane this message lives in is current.
+    final laneKey = isClubThread(message.threadId)
+        ? _laneKey(message.threadId, laneOf(message))
+        : null;
+    final readerIds = {..._lastRead.keys, ..._lastReadLanes.keys};
+    for (final readerId in readerIds) {
+      if (readerId == message.senderId) continue;
+      final thread = _lastRead[readerId]?[message.threadId];
+      final lane = laneKey == null ? null : _lastReadLanes[readerId]?[laneKey];
+      final seen =
+          (thread != null && !thread.isBefore(message.createdAt)) ||
+          (lane != null && !lane.isBefore(message.createdAt));
+      if (seen) count++;
     }
     return count;
   }
@@ -2652,6 +3117,25 @@ class ChatStore extends ChangeNotifier {
         markedSeen = true;
       }
       if (markedSeen) _pendingSeenThreadIds.add(threadId);
+    } else if (isGroupThread(threadId)) {
+      for (var i = 0; i < _messages.length; i++) {
+        final message = _messages[i];
+        if (message.threadId != threadId || message.senderId == userId) {
+          continue;
+        }
+        final receipt = _receiptFor(message.receipts, userId);
+        if (receipt?.seenAt != null) continue;
+        _messages[i] = message.copyWith(
+          receipts: _withLocalReceipt(
+            message.receipts,
+            userId: userId,
+            deliveredAt: receipt?.deliveredAt ?? now,
+            seenAt: now,
+          ),
+        );
+        markedSeen = true;
+      }
+      if (markedSeen) _pendingSeenThreadIds.add(threadId);
     }
     if (unread == 0 && !markedSeen) return;
     (_lastRead[userId] ??= {})[threadId] = now;
@@ -2710,6 +3194,13 @@ class ChatStore extends ChangeNotifier {
       box.put('messages', _messages.map((m) => m.toMap()).toList()),
       box.put('lastRead', {
         for (final entry in _lastRead.entries)
+          entry.key: {
+            for (final inner in entry.value.entries)
+              inner.key: inner.value.toIso8601String(),
+          },
+      }),
+      box.put('lastReadLanes', {
+        for (final entry in _lastReadLanes.entries)
           entry.key: {
             for (final inner in entry.value.entries)
               inner.key: inner.value.toIso8601String(),

@@ -16,6 +16,27 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Web app
+
+Run ClubUp in a browser with:
+
+```sh
+flutter run -d chrome
+```
+
+The layout keeps the mobile bottom navigation below 960 logical pixels and
+switches to a persistent sidebar on wider windows. Desktop content is centered
+and width-limited so cards, images, forms, and text remain readable on large
+monitors. Mouse and trackpad dragging are enabled for horizontal content rails.
+
+Create the production bundle with:
+
+```sh
+flutter build web --release
+```
+
+The deployable output is written to `build/web/`.
+
 ## Live device preview
 
 Run the app in a desktop browser with an interactive phone/tablet frame:
@@ -87,6 +108,29 @@ upload key; creating a different key will require an upload-key reset.
 
 The signed bundle is written to
 `build/app/outputs/bundle/release/app-release.aab`.
+
+## Mandatory mobile updates
+
+Mobile builds check the public, read-only `app_update_config` row before they
+show login or authenticated content. The migration seeds both minimum builds
+at `2`, matching the current `pubspec.yaml` build (`1.1.0+2`). Build 2 users
+continue normally; older mobile builds are required to update as soon as the
+configuration is live.
+
+After publishing a release, raise the corresponding minimum build in the
+Supabase dashboard or SQL editor only after the new build is available in the
+store:
+
+```sql
+update public.app_update_config
+set android_min_build = 3,
+    ios_min_build = 3,
+    updated_at = now()
+where id = 'global';
+```
+
+The iOS store URL is configured to the ClubUp App Store listing. Web and
+desktop builds are not gated.
 
 ## ClubUp support website
 

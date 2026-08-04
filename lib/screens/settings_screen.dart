@@ -24,6 +24,7 @@ import '../services/photo_upload_quality.dart';
 import '../onboarding/onboarding_service.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'blocked_accounts_screen.dart';
 import 'edit_profile_screen.dart';
@@ -730,37 +731,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _externalPageTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String url,
-    Color? color,
-  }) {
-    final accent = color ?? AppColors.primaryRed;
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: accent.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-        ),
-        child: Icon(icon, color: accent, size: 20),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.text),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(fontSize: 12, color: AppColors.secondaryText),
-      ),
-      trailing: Icon(Icons.open_in_new_rounded, color: AppColors.secondaryText),
-      onTap: () => _openExternalPage(url),
-    );
-  }
-
   void _openChangeNameSheet() {
     final user = authService.currentUser;
     if (user == null) return;
@@ -775,811 +745,409 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  /// Sections of the settings list, in the order the redesign lays them out:
+  /// identity card → role-specific group → privacy → appearance → tutorial →
+  /// support & legal → the destructive group.
+  List<Widget> _sections(BuildContext context, AppLocalizations l10n) {
+    final club = _managedClub;
+    final isStudent = authService.isStudentSession;
+
+    return [
+      // ── Identity card (students) ───────────────────────────────────────────
+      // Replaces the old "Edit profile" row: the row's destination now hangs
+      // off the card's own action strip.
+      if (isStudent)
+        ListenableBuilder(
+          listenable: userState,
+          builder: (context, _) {
+            final user = authService.currentUser!;
+            final displayName = userState.displayNameFor(user.id, user.name);
+            return _IdentityCard(
+              avatar: UserAvatar(
+                userId: user.id,
+                name: user.name,
+                size: 58,
+                fontSize: 22,
+              ),
+              avatarRadius: const BorderRadius.all(Radius.circular(29)),
+              name: displayName,
+              meta: userState.academicSummaryFor(user.id),
+              editLabel: l10n.editProfile,
+              onEdit: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        EditProfileScreen(userId: user.id, realName: user.name),
+                  ),
+                ).then((_) {
+                  if (mounted) setState(() {});
+                });
+              },
+            );
+          },
+        ),
+
+      // ── Identity card (club admins) ────────────────────────────────────────
+      if (club != null)
+        ListenableBuilder(
+          listenable: userState,
+          builder: (context, _) => _IdentityCard(
+            avatar: ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: AppColors.primaryRed,
+              imageUrl: club.logoUrl,
+              size: 58,
+              fontSize: 22,
+              borderRadius: 16,
+            ),
+            avatarRadius: const BorderRadius.all(Radius.circular(16)),
+            name: club.name,
+            meta: l10n.clubAdmin,
+          ),
+        ),
+
+      // ── Club section (club admins only) ────────────────────────────────────
+      if (club != null)
+        ListenableBuilder(
+          listenable: userState,
+          builder: (context, _) {
+            final categories = _clubCategories(club);
+            return _SettingsGroup(
+              label: l10n.clubSection,
+              children: [
+                _SettingsRow(
+                  icon: Icons.edit_outlined,
+                  title: l10n.clubName,
+                  value: club.name,
+                  onTap: () => _openClubNameSheet(club),
+                ),
+                _SettingsRow(
+                  iconNode: ClubAvatar(
+                    clubId: club.id,
+                    clubName: club.name,
+                    color: AppColors.primaryRed,
+                    imageUrl: club.logoUrl,
+                    size: 32,
+                    fontSize: 13,
+                    borderRadius: 10,
+                  ),
+                  title: l10n.clubPhoto,
+                  subtitle: l10n.tapToChangeLogo,
+                  onTap: () => _showClubPhotoOptions(club),
+                ),
+                _SettingsRow(
+                  icon: Icons.sell_outlined,
+                  title: l10n.clubCategories,
+                  subtitle: categories.isEmpty
+                      ? l10n.addDiscoveryTags
+                      : categories
+                            .map(
+                              (category) =>
+                                  _localizedClubCategory(context, category),
+                            )
+                            .join(', '),
+                  onTap: () => _openClubCategoriesSheet(club),
+                ),
+                _SettingsRow(
+                  icon: Icons.description_outlined,
+                  title: l10n.clubDescription,
+                  onTap: () => _openClubDescriptionSheet(club),
+                ),
+                _SettingsRow(
+                  icon: Icons.manage_accounts_outlined,
+                  title: l10n.manageBoardMembers,
+                  subtitle: l10n.manageBoardSubtitle,
+                  value: '${club.boardMemberIds.length}',
+                  onTap: () => _openBoardManagement(club),
+                ),
+              ],
+            );
+          },
+        ),
+
+      // ── Account section (students only) ────────────────────────────────────
+      if (isStudent)
+        ListenableBuilder(
+          listenable: userState,
+          builder: (context, _) {
+            final user = authService.currentUser!;
+            return _SettingsGroup(
+              label: l10n.account,
+              children: [
+                _SettingsRow(
+                  icon: Icons.badge_outlined,
+                  title: l10n.changeMyName,
+                  value: userState.displayNameFor(user.id, user.name),
+                  onTap: _openChangeNameSheet,
+                ),
+              ],
+            );
+          },
+        ),
+
+      // ── Moderation section (ClubUp moderators only) ────────────────────────
+      if (_isClubUpModerator)
+        _SettingsGroup(
+          label: S.moderation,
+          children: [
+            _SettingsRow(
+              icon: Icons.admin_panel_settings_outlined,
+              title: S.moderationCenter,
+              subtitle: S.moderationCenterSubtitle,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ModerationCenterScreen(),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+      // ── Privacy section ────────────────────────────────────────────────────
+      _SettingsGroup(
+        label: S.privacySection,
+        children: [
+          _SettingsRow(
+            icon: Icons.block_outlined,
+            title: S.blockedAccounts,
+            subtitle: S.blockedAccountsSubtitle,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BlockedAccountsScreen()),
+            ),
+          ),
+        ],
+      ),
+
+      // ── Appearance section ─────────────────────────────────────────────────
+      ListenableBuilder(
+        listenable: themeService,
+        builder: (context, _) => _SettingsGroup(
+          label: l10n.appearance,
+          children: [
+            _SettingsRow(
+              icon: themeService.isDark
+                  ? Icons.dark_mode_rounded
+                  : Icons.light_mode_rounded,
+              title: themeService.isDark ? l10n.darkMode : l10n.lightMode,
+              subtitle: themeService.isDark
+                  ? l10n.switchToLight
+                  : l10n.switchToDark,
+              onTap: () => themeService.setDark(!themeService.isDark),
+              trailing: _ThemeSwitch(
+                value: themeService.isDark,
+                onChanged: themeService.setDark,
+              ),
+            ),
+            _SettingsRow(
+              icon: Icons.language_rounded,
+              title: l10n.language,
+              trailing: const LanguageToggle(),
+            ),
+          ],
+        ),
+      ),
+
+      // ── Help section (replay the app tour) ─────────────────────────────────
+      if (isStudent || club != null)
+        _TutorialCard(
+          label: l10n.help,
+          title: l10n.replayTutorial,
+          subtitle: l10n.replayTutorialSubtitle,
+          onTap: _replayTutorial,
+        ),
+
+      // ── Public support and legal pages ─────────────────────────────────────
+      _SettingsGroup(
+        label: l10n.supportAndLegal,
+        children: [
+          _SettingsRow(
+            icon: Icons.help_outline_rounded,
+            title: l10n.supportCenter,
+            subtitle: l10n.supportCenterSubtitle,
+            external: true,
+            onTap: () => _openExternalPage(
+              localeService.languageCode == 'tr'
+                  ? AppLinks.supportTurkish
+                  : AppLinks.support,
+            ),
+          ),
+          _SettingsRow(
+            icon: Icons.privacy_tip_outlined,
+            title: l10n.privacyPolicy,
+            subtitle: l10n.privacyPolicySubtitle,
+            external: true,
+            onTap: () => _openExternalPage(
+              localeService.languageCode == 'tr'
+                  ? AppLinks.privacyPolicyTurkish
+                  : AppLinks.privacyPolicy,
+            ),
+          ),
+          _SettingsRow(
+            icon: Icons.gavel_rounded,
+            title: l10n.termsOfUse,
+            subtitle: l10n.termsOfUseSubtitle,
+            external: true,
+            onTap: () => _openExternalPage(
+              localeService.languageCode == 'tr'
+                  ? AppLinks.termsOfUseTurkish
+                  : AppLinks.termsOfUse,
+            ),
+          ),
+        ],
+      ),
+
+      // ── Destructive actions ────────────────────────────────────────────────
+      _SettingsGroup(
+        children: [
+          _SettingsRow(
+            icon: Icons.logout,
+            title: l10n.logOut,
+            danger: true,
+            chevron: false,
+            onTap: _confirmAndLogout,
+          ),
+          _SettingsRow(
+            icon: Icons.delete_outline_rounded,
+            title: l10n.deleteAccount,
+            subtitle: l10n.deleteAccountSubtitle,
+            danger: true,
+            external: true,
+            onTap: () => _openExternalPage(
+              localeService.languageCode == 'tr'
+                  ? AppLinks.accountDeletionTurkish
+                  : AppLinks.accountDeletion,
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          AppLocalizations.of(context)!.settings,
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: ListenableBuilder(
-        listenable: localeService,
-        builder: (context, _) => ListView(
-          children: [
-            const SizedBox(height: 12),
-
-            // ── Profile section (students only) ──────────────────────────────
-            // Clubs and the super admin edit via the Club section / dashboard,
-            // so the personal profile editor is shown for student accounts only.
-            if (authService.isStudentSession) ...[
-              _SectionHeader(
-                title: AppLocalizations.of(context)!.profileSection,
-              ),
-              ListenableBuilder(
-                listenable: userState,
-                builder: (context, _) {
-                  final user = authService.currentUser!;
-                  final currentName = userState.displayNameFor(
-                    user.id,
-                    user.name,
-                  );
-
-                  return Container(
-                    color: AppColors.card,
-                    child: Column(
-                      children: [
-                        ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.lightRed,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
+    // The theme listener wraps the Scaffold, not just its body: the page
+    // background is read from AppColors at Scaffold construction, so a rebuild
+    // confined to the body would leave it on the previous theme.
+    return ListenableBuilder(
+      listenable: themeService,
+      builder: (context, _) => Scaffold(
+        backgroundColor: AppColors.background,
+        body: ListenableBuilder(
+          listenable: localeService,
+          builder: (context, _) {
+            final l10n = AppLocalizations.of(context)!;
+            return Stack(
+              children: [
+                // Warm burgundy bloom behind the top of the page.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 220,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(0, -1.4),
+                          radius: 1.3,
+                          colors: [
+                            AppColors.darkRed.withValues(
+                              alpha: themeService.isDark ? 0.30 : 0.10,
                             ),
-                            child: Icon(
-                              Icons.person_outline_rounded,
-                              color: AppColors.primaryRed,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.editProfile,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppLocalizations.of(context)!.editProfileSubtitle,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EditProfileScreen(
-                                  userId: user.id,
-                                  realName: user.name,
-                                ),
-                              ),
-                            ).then((_) {
-                              if (mounted) setState(() {});
-                            });
-                          },
+                            AppColors.darkRed.withValues(alpha: 0),
+                          ],
+                          stops: const [0, 0.7],
                         ),
-                        Divider(
-                          height: 1,
-                          indent: 56,
-                          color: AppColors.divider,
-                        ),
-                        ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.lightRed,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.badge_outlined,
-                              color: AppColors.primaryRed,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.changeMyName,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            currentName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: _openChangeNameSheet,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-
-            // ── Club section (club admins only) ──────────────────────────────
-            if (_managedClub != null) ...[
-              const SizedBox(height: 24),
-              _SectionHeader(title: AppLocalizations.of(context)!.clubSection),
-              ListenableBuilder(
-                listenable: userState,
-                builder: (context, _) {
-                  final club = _managedClub;
-                  if (club == null) return const SizedBox.shrink();
-                  return Container(
-                    color: AppColors.card,
-                    child: Column(
-                      children: [
-                        ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.lightRed,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.edit_outlined,
-                              color: AppColors.primaryRed,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.clubName,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            club.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: () => _openClubNameSheet(club),
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 56,
-                          color: AppColors.divider,
-                        ),
-                        ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                            child: ClubAvatar(
-                              clubId: club.id,
-                              clubName: club.name,
-                              color: AppColors.primaryRed,
-                              imageUrl: club.logoUrl,
-                              size: 36,
-                              fontSize: 16,
-                              borderRadius: 10,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.clubPhoto,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppLocalizations.of(context)!.tapToChangeLogo,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: () => _showClubPhotoOptions(club),
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 56,
-                          color: AppColors.divider,
-                        ),
-                        ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.lightRed,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.sell_outlined,
-                              color: AppColors.primaryRed,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.clubCategories,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            _clubCategories(club).isEmpty
-                                ? AppLocalizations.of(context)!.addDiscoveryTags
-                                : _clubCategories(club)
-                                      .map(
-                                        (category) => _localizedClubCategory(
-                                          context,
-                                          category,
-                                        ),
-                                      )
-                                      .join(', '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: () => _openClubCategoriesSheet(club),
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 56,
-                          color: AppColors.divider,
-                        ),
-                        ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.lightRed,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.description_outlined,
-                              color: AppColors.primaryRed,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.clubDescription,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            club.description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: () => _openClubDescriptionSheet(club),
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 56,
-                          color: AppColors.divider,
-                        ),
-                        ListTile(
-                          leading: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: AppColors.lightRed,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.manage_accounts_outlined,
-                              color: AppColors.primaryRed,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            AppLocalizations.of(context)!.manageBoardMembers,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          subtitle: Text(
-                            AppLocalizations.of(context)!.manageBoardSubtitle,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondaryText,
-                          ),
-                          onTap: () => _openBoardManagement(club),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-
-            if (_isClubUpModerator) ...[
-              const SizedBox(height: 24),
-              _SectionHeader(title: S.moderation),
-              Container(
-                color: AppColors.card,
-                child: ListTile(
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.lightRed,
-                      borderRadius: const BorderRadius.all(Radius.circular(10)),
-                    ),
-                    child: Icon(
-                      Icons.admin_panel_settings_outlined,
-                      color: AppColors.primaryRed,
-                      size: 20,
+                      ),
                     ),
                   ),
-                  title: Text(
-                    S.moderationCenter,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
+                ),
+                SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      _SettingsHeader(title: l10n.settings),
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            6,
+                            16,
+                            32 + MediaQuery.paddingOf(context).bottom,
+                          ),
+                          children: _sections(context, l10n),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Destructive-action red. Brighter on the dark theme so it stays legible on
+/// the near-black background.
+Color get _dangerColor =>
+    themeService.isDark ? const Color(0xFFFF5F5F) : const Color(0xFFC62828);
+
+/// Back chevron in a soft square, with the title optically centred against the
+/// full width rather than against the remaining space.
+class _SettingsHeader extends StatelessWidget {
+  final String title;
+  const _SettingsHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      child: SizedBox(
+        height: 34,
+        child: Stack(
+          children: [
+            Center(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.3,
+                  color: AppColors.text,
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Material(
+                color: AppColors.card,
+                borderRadius: const BorderRadius.all(Radius.circular(11)),
+                child: InkWell(
+                  borderRadius: const BorderRadius.all(Radius.circular(11)),
+                  onTap: () => Navigator.maybePop(context),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.divider),
+                      borderRadius: const BorderRadius.all(Radius.circular(11)),
+                    ),
+                    child: Icon(
+                      Icons.chevron_left_rounded,
+                      size: 22,
                       color: AppColors.text,
                     ),
                   ),
-                  subtitle: Text(
-                    S.moderationCenterSubtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.secondaryText,
-                  ),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ModerationCenterScreen(),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 24),
-
-            // ── Safety section ───────────────────────────────────────────────
-            _SectionHeader(title: S.safetyOptions),
-            Container(
-              color: AppColors.card,
-              child: ListTile(
-                leading: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: const BorderRadius.all(Radius.circular(10)),
-                  ),
-                  child: Icon(
-                    Icons.block_outlined,
-                    color: AppColors.primaryRed,
-                    size: 20,
-                  ),
-                ),
-                title: Text(
-                  S.blockedAccounts,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
-                ),
-                subtitle: Text(
-                  S.blockedAccountsSubtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-                trailing: Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.secondaryText,
-                ),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const BlockedAccountsScreen(),
-                  ),
                 ),
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // ── Appearance section ───────────────────────────────────────────
-            _SectionHeader(title: AppLocalizations.of(context)!.appearance),
-            ListenableBuilder(
-              listenable: themeService,
-              builder: (context, _) => Container(
-                color: AppColors.card,
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      secondary: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.lightRed,
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
-                        ),
-                        child: Icon(
-                          themeService.isDark
-                              ? Icons.dark_mode_rounded
-                              : Icons.light_mode_rounded,
-                          color: AppColors.primaryRed,
-                          size: 20,
-                        ),
-                      ),
-                      title: Text(
-                        themeService.isDark
-                            ? AppLocalizations.of(context)!.darkMode
-                            : AppLocalizations.of(context)!.lightMode,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      subtitle: Text(
-                        themeService.isDark
-                            ? AppLocalizations.of(context)!.switchToLight
-                            : AppLocalizations.of(context)!.switchToDark,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                      value: themeService.isDark,
-                      activeThumbColor: AppColors.primaryRed,
-                      onChanged: (v) => themeService.setDark(v),
-                    ),
-                    Divider(height: 1, color: AppColors.divider),
-                    ListTile(
-                      leading: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.lightRed,
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
-                        ),
-                        child: Icon(
-                          Icons.language_rounded,
-                          color: AppColors.primaryRed,
-                          size: 20,
-                        ),
-                      ),
-                      title: Text(
-                        AppLocalizations.of(context)!.language,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      trailing: const LanguageToggle(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Help section (replay the student app tour — students only) ───
-            if (authService.isStudentSession) ...[
-              const SizedBox(height: 24),
-              _SectionHeader(title: AppLocalizations.of(context)!.help),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.primaryRed, AppColors.darkRed],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.all(Radius.circular(16)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryRed.withValues(alpha: 0.35),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.all(Radius.circular(16)),
-                      onTap: _replayTutorial,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(13),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.play_circle_fill_rounded,
-                                color: Colors.white,
-                                size: 27,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.replayTutorial,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.replayTutorialSubtitle,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      height: 1.3,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.85,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-
-            // ── Help section (replay the club admin tour — club admins only) ──
-            if (_managedClub != null) ...[
-              const SizedBox(height: 24),
-              _SectionHeader(title: AppLocalizations.of(context)!.help),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.primaryRed, AppColors.darkRed],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.all(Radius.circular(16)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryRed.withValues(alpha: 0.35),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.all(Radius.circular(16)),
-                      onTap: _replayTutorial,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(13),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.play_circle_fill_rounded,
-                                color: Colors.white,
-                                size: 27,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.replayTutorial,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.replayTutorialSubtitle,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      height: 1.3,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.85,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 24),
-
-            // ── Public support and legal pages ──────────────────────────────
-            _SectionHeader(
-              title: AppLocalizations.of(context)!.supportAndLegal,
-            ),
-            Container(
-              color: AppColors.card,
-              child: Column(
-                children: [
-                  _externalPageTile(
-                    icon: Icons.help_outline_rounded,
-                    title: AppLocalizations.of(context)!.supportCenter,
-                    subtitle: AppLocalizations.of(
-                      context,
-                    )!.supportCenterSubtitle,
-                    url: localeService.languageCode == 'tr'
-                        ? AppLinks.supportTurkish
-                        : AppLinks.support,
-                  ),
-                  Divider(height: 1, indent: 56, color: AppColors.divider),
-                  _externalPageTile(
-                    icon: Icons.privacy_tip_outlined,
-                    title: AppLocalizations.of(context)!.privacyPolicy,
-                    subtitle: AppLocalizations.of(
-                      context,
-                    )!.privacyPolicySubtitle,
-                    url: localeService.languageCode == 'tr'
-                        ? AppLinks.privacyPolicyTurkish
-                        : AppLinks.privacyPolicy,
-                  ),
-                  Divider(height: 1, indent: 56, color: AppColors.divider),
-                  _externalPageTile(
-                    icon: Icons.gavel_rounded,
-                    title: AppLocalizations.of(context)!.termsOfUse,
-                    subtitle: AppLocalizations.of(context)!.termsOfUseSubtitle,
-                    url: localeService.languageCode == 'tr'
-                        ? AppLinks.termsOfUseTurkish
-                        : AppLinks.termsOfUse,
-                  ),
-                  Divider(height: 1, indent: 56, color: AppColors.divider),
-                  _externalPageTile(
-                    icon: Icons.delete_outline_rounded,
-                    title: AppLocalizations.of(context)!.deleteAccount,
-                    subtitle: AppLocalizations.of(
-                      context,
-                    )!.deleteAccountSubtitle,
-                    url: localeService.languageCode == 'tr'
-                        ? AppLinks.accountDeletionTurkish
-                        : AppLinks.accountDeletion,
-                    color: Colors.red,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Account section ──────────────────────────────────────────────
-            _SectionHeader(title: AppLocalizations.of(context)!.account),
-            Container(
-              color: AppColors.card,
-              child: ListTile(
-                leading: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.all(Radius.circular(10)),
-                  ),
-                  child: Icon(Icons.logout, color: Colors.red, size: 20),
-                ),
-                title: Text(
-                  AppLocalizations.of(context)!.logOut,
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onTap: _confirmAndLogout,
-              ),
-            ),
-
-            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -1587,21 +1155,522 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
+/// An inset card of rows under an optional uppercase label. Rows are separated
+/// by a full-width hairline; the card clips them so the corners stay round.
+class _SettingsGroup extends StatelessWidget {
+  final String? label;
+  final List<Widget> children;
+
+  const _SettingsGroup({this.label, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        rows.add(Divider(height: 1, thickness: 1, color: AppColors.divider));
+      }
+      rows.add(children[i]);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (label != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+              child: Text(
+                label!.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.3,
+                  color: AppColors.secondaryText,
+                ),
+              ),
+            ),
+          Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: const BorderRadius.all(Radius.circular(18)),
+              border: Border.all(color: AppColors.divider),
+              boxShadow: themeService.isDark
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: const Color(0xFF1A0610).withValues(alpha: 0.04),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+            ),
+            child: Column(children: rows),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The rounded icon square that opens every row.
+class _RowIcon extends StatelessWidget {
+  final IconData? icon;
+  final Widget? node;
+  final bool danger;
+
+  const _RowIcon({this.icon, this.node, required this.danger});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: danger
+            ? _dangerColor.withValues(alpha: 0.13)
+            : AppColors.surfaceAlt,
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+      ),
+      child:
+          node ??
+          Icon(
+            icon,
+            size: 17,
+            color: danger ? _dangerColor : AppColors.mutedText,
+          ),
+    );
+  }
+}
+
+/// One row inside a [_SettingsGroup]: icon, title, optional subtitle, an
+/// optional right-aligned value, and either a supplied control or an affordance
+/// chevron / external-link glyph.
+class _SettingsRow extends StatelessWidget {
+  final IconData? icon;
+  final Widget? iconNode;
   final String title;
-  const _SectionHeader({required this.title});
+  final String? subtitle;
+  final String? value;
+  final Widget? trailing;
+  final bool chevron;
+  final bool external;
+  final bool danger;
+  final VoidCallback? onTap;
+
+  const _SettingsRow({
+    this.icon,
+    this.iconNode,
+    required this.title,
+    this.subtitle,
+    this.value,
+    this.trailing,
+    this.chevron = true,
+    this.external = false,
+    this.danger = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget? end = trailing;
+    if (end == null && external) {
+      end = Icon(
+        Icons.open_in_new_rounded,
+        size: 16,
+        color: AppColors.secondaryText,
+      );
+    } else if (end == null && chevron) {
+      end = Icon(
+        Icons.chevron_right_rounded,
+        size: 20,
+        color: AppColors.secondaryText,
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: subtitle == null ? 13 : 12,
+          ),
+          child: Row(
+            children: [
+              _RowIcon(icon: icon, node: iconNode, danger: danger),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                        color: danger ? _dangerColor : AppColors.text,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.35,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (value != null)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 130),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: Text(
+                      value!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ),
+              if (end != null)
+                Padding(padding: const EdgeInsets.only(left: 8), child: end),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar, name and supporting line at the top of the screen. Students also get
+/// an action strip that opens the profile editor; clubs edit through the rows
+/// in the Club group below, so the strip is omitted when [onEdit] is null.
+class _IdentityCard extends StatelessWidget {
+  final Widget avatar;
+  final BorderRadius avatarRadius;
+  final String name;
+  final String? meta;
+  final String? editLabel;
+  final VoidCallback? onEdit;
+
+  const _IdentityCard({
+    required this.avatar,
+    required this.avatarRadius,
+    required this.name,
+    this.meta,
+    this.editLabel,
+    this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeService.isDark;
+    final metaLine = meta?.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: const BorderRadius.all(Radius.circular(20)),
+        border: Border.all(
+          color: isDark
+              ? AppColors.primaryRed.withValues(alpha: 0.22)
+              : AppColors.divider,
+        ),
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            stops: const [0, 0.62],
+            colors: [
+              AppColors.darkRed.withValues(alpha: isDark ? 0.30 : 0.09),
+              AppColors.darkRed.withValues(alpha: 0),
+            ],
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              child: Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: avatarRadius,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.darkRed.withValues(
+                            alpha: isDark ? 0.30 : 0.12,
+                          ),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: avatar,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        if (metaLine != null && metaLine.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(
+                              metaLine,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onEdit != null) ...[
+              Divider(height: 1, thickness: 1, color: AppColors.divider),
+              Material(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : AppColors.primaryRed.withValues(alpha: 0.05),
+                child: InkWell(
+                  onTap: onEdit,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 15,
+                          color: AppColors.primaryRed,
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          editLabel ?? '',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryRed,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Standalone outlined card that replays the guided tour.
+class _TutorialCard extends StatelessWidget {
+  final String label;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _TutorialCard({
+    required this.label,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: AppColors.secondaryText,
-          letterSpacing: 0.8,
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+            child: Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.3,
+                color: AppColors.secondaryText,
+              ),
+            ),
+          ),
+          Material(
+            color: AppColors.card,
+            borderRadius: const BorderRadius.all(Radius.circular(18)),
+            child: InkWell(
+              borderRadius: const BorderRadius.all(Radius.circular(18)),
+              onTap: onTap,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.all(Radius.circular(18)),
+                  border: Border.all(
+                    color: AppColors.primaryRed.withValues(
+                      alpha: themeService.isDark ? 0.28 : 0.16,
+                    ),
+                  ),
+                ),
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.lightRed,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(11),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.play_circle_fill_rounded,
+                        size: 19,
+                        color: AppColors.primaryRed,
+                      ),
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.2,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.35,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: AppColors.secondaryText,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pill switch used by the appearance row — the design's gradient track instead
+/// of the stock Material thumb.
+class _ThemeSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ThemeSwitch({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      toggled: value,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          width: 46,
+          height: 28,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radius.circular(999)),
+            color: value ? null : AppColors.divider,
+            gradient: value
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.darkRed, AppColors.primaryRed],
+                  )
+                : null,
+          ),
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x4D000000),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -11,7 +11,17 @@ class AddToCalendarButton extends ConsumerStatefulWidget {
   final app.Event event;
   final Color? color;
 
-  const AddToCalendarButton({super.key, required this.event, this.color});
+  /// Quiet text-action form: no fill, no border, 36px tall. Used in the event
+  /// bottom bar's ghost row, where the RSVP button carries the whole decision
+  /// and calendar/reminder drop to secondary text actions.
+  final bool asLink;
+
+  const AddToCalendarButton({
+    super.key,
+    required this.event,
+    this.color,
+    this.asLink = false,
+  });
 
   @override
   ConsumerState<AddToCalendarButton> createState() =>
@@ -76,7 +86,70 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
     });
 
     final state = ref.watch(calendarEventProvider(widget.event.id));
-    return _buildButton(state);
+    return widget.asLink ? _buildLink(state) : _buildButton(state);
+  }
+
+  void _add() {
+    final model = CalendarEventModel.fromAppEvent(widget.event);
+    ref.read(calendarEventProvider(widget.event.id).notifier).add(model);
+  }
+
+  Widget _buildLink(CalendarAddState state) {
+    final isSuccess = state is CalendarAddSuccess;
+    final isLoading = state is CalendarAddLoading;
+    final color = isSuccess ? _accent : AppColors.secondaryText;
+
+    return SizedBox(
+      height: 36,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+          onTap: (isLoading || isSuccess) ? null : _add,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: color,
+                    strokeCap: StrokeCap.round,
+                  ),
+                )
+              else
+                Icon(
+                  isSuccess
+                      ? Icons.check_circle_rounded
+                      : Icons.calendar_today_rounded,
+                  size: 15,
+                  color: color,
+                ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  isLoading
+                      ? AppLocalizations.of(context)!.addingEllipsis
+                      : isSuccess
+                      ? AppLocalizations.of(context)!.calendarAlreadyAdded
+                      : AppLocalizations.of(context)!.addToCalendarButton,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildButton(CalendarAddState state) {
