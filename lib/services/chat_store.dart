@@ -1119,16 +1119,22 @@ class ChatStore extends ChangeNotifier {
     if (existingIndex != -1) {
       final local = _messages[existingIndex];
       final pendingChanged = _pendingRemoteGroupMessageIds.remove(id);
-      if (local.attachmentPath != message.attachmentPath ||
-          !listEquals(local.receipts, mergedReceipts)) {
-        _messages[existingIndex] = local.copyWith(
-          attachmentPath: message.attachmentPath,
-          receipts: mergedReceipts,
-        );
-      }
-      if (local.attachmentPath != message.attachmentPath ||
-          !listEquals(local.receipts, mergedReceipts) ||
-          pendingChanged) {
+      final messageChanged =
+          local.content != message.content ||
+          local.kind != message.kind ||
+          local.title != message.title ||
+          local.replyToMessageId != message.replyToMessageId ||
+          local.replyToSenderId != message.replyToSenderId ||
+          local.replyToPreview != message.replyToPreview ||
+          local.eventId != message.eventId ||
+          local.sharedPostId != message.sharedPostId ||
+          local.attachmentPath != message.attachmentPath ||
+          local.attachmentName != message.attachmentName ||
+          local.attachmentSize != message.attachmentSize ||
+          !listEquals(local.pollOptions, message.pollOptions) ||
+          !listEquals(local.receipts, mergedReceipts);
+      if (messageChanged) _messages[existingIndex] = message;
+      if (messageChanged || pendingChanged) {
         scheduleSave();
         notifyListeners();
       }

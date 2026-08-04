@@ -1682,8 +1682,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
     );
 
-    final hasEventPreview =
-        m.kind == ChatMessageKind.event && m.eventId != null;
+    final linkedEventId = m.linkedEventId;
+    final hasEventPreview = linkedEventId != null;
     final hasText = m.content.trim().isNotEmpty && !hasEventPreview;
     final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
     final attachedFilePath = m.kind == ChatMessageKind.file
@@ -1744,7 +1744,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onDarkBackground: mine,
             ),
           if (hasEventPreview)
-            SharedEventMessageCard(eventId: m.eventId!, onDarkBackground: mine),
+            SharedEventMessageCard(
+              eventId: linkedEventId,
+              onDarkBackground: mine,
+            ),
           if (photoPath != null) _photoAttachment(m),
           if (videoPath != null) _videoAttachment(videoPath),
           if (filePath != null) _fileAttachment(m, mine: mine),

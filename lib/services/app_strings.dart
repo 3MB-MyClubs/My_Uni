@@ -54,6 +54,8 @@ class S {
   static String get sharedPost => _t('Shared post', 'Paylaşılan gönderi');
   static String get eventUnavailable =>
       _t('Event unavailable', 'Etkinlik kullanılamıyor');
+  static String get loadingEvent =>
+      _t('Loading event…', 'Etkinlik yükleniyor…');
   static String get clubMightLike =>
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');

@@ -14,6 +14,11 @@ import 'supabase_club_service.dart';
 import 'user_state.dart';
 
 class SupabaseContentService {
+  static const _eventSelectColumns =
+      'id, club_id, title, description, location, image_url, starts_at, '
+      'ends_at, image_path, created_by_user_id, tags, registration_url, '
+      'schedule, speakers';
+
   bool _hasAppliedRemoteContent = false;
 
   // No BuildContext is available this deep in the service layer; these
@@ -46,18 +51,11 @@ class SupabaseContentService {
             'id, name, short_name, description, logo_url, category_id, email, club_categories(name)',
           ),
       if (includeModerationArchive)
-        _fetchAllRows(
-          client,
-          table: 'events',
-          columns:
-              'id, club_id, title, description, location, image_url, starts_at, ends_at, image_path, created_by_user_id, tags, registration_url, schedule, speakers',
-        )
+        _fetchAllRows(client, table: 'events', columns: _eventSelectColumns)
       else
         client
             .from('events')
-            .select(
-              'id, club_id, title, description, location, image_url, starts_at, ends_at, image_path, created_by_user_id, tags, registration_url, schedule, speakers',
-            )
+            .select(_eventSelectColumns)
             .gte('starts_at', eventsCutoff)
             .order('starts_at', ascending: true)
             .limit(500),
@@ -116,6 +114,41 @@ class SupabaseContentService {
       ..addAll(nextPosts);
     _hasAppliedRemoteContent = true;
     return true;
+  }
+
+  /// Resolves a shared event that is not in this device's current feed cache.
+  /// A direct id query also covers valid events outside the feed time window.
+  Future<Event?> fetchEventById(String eventId) async {
+    final normalizedId = eventId.trim();
+    if (normalizedId.isEmpty) return null;
+    for (final event in events) {
+      if (event.id == normalizedId) return event;
+    }
+
+    final client = _client;
+    if (client == null) return null;
+    try {
+      final row = await client
+          .from('events')
+          .select(_eventSelectColumns)
+          .eq('id', normalizedId)
+          .maybeSingle();
+      if (row == null) return null;
+      final event = _eventFromRow(Map<String, dynamic>.from(row));
+      if (event.id.isEmpty) return null;
+
+      final existingIndex = events.indexWhere(
+        (candidate) => candidate.id == event.id,
+      );
+      if (existingIndex == -1) {
+        events.add(event);
+      } else {
+        events[existingIndex] = event;
+      }
+      return event;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _isPlatformAdmin(SupabaseClient client) async {

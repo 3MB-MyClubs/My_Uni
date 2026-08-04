@@ -6,24 +6,71 @@ import '../screens/event_detail_screen.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/mock_data.dart';
+import '../services/supabase_content_service.dart';
 import 'event_cover_image.dart';
 
+typedef SharedEventResolver = Future<Event?> Function(String eventId);
+
 /// Rich, tappable event preview rendered inside direct and group messages.
-class SharedEventMessageCard extends StatelessWidget {
+class SharedEventMessageCard extends StatefulWidget {
   const SharedEventMessageCard({
     super.key,
     required this.eventId,
     this.onDarkBackground = false,
+    this.resolveEvent,
   });
 
   final String eventId;
   final bool onDarkBackground;
+  final SharedEventResolver? resolveEvent;
 
-  Event? get _event {
+  @override
+  State<SharedEventMessageCard> createState() => _SharedEventMessageCardState();
+}
+
+class _SharedEventMessageCardState extends State<SharedEventMessageCard> {
+  Event? _event;
+  bool _isLoading = false;
+
+  Event? _loadedEvent(String eventId) {
     for (final event in events) {
       if (event.id == eventId) return event;
     }
     return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _event = _loadedEvent(widget.eventId);
+    if (_event == null) _resolveEvent();
+  }
+
+  @override
+  void didUpdateWidget(covariant SharedEventMessageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventId == widget.eventId) return;
+    _event = _loadedEvent(widget.eventId);
+    _isLoading = false;
+    if (_event == null) _resolveEvent();
+  }
+
+  Future<void> _resolveEvent() async {
+    final requestedId = widget.eventId;
+    setState(() => _isLoading = true);
+    final resolver =
+        widget.resolveEvent ?? supabaseContentService.fetchEventById;
+    Event? event;
+    try {
+      event = await resolver(requestedId);
+    } catch (_) {
+      event = null;
+    }
+    if (!mounted || requestedId != widget.eventId) return;
+    setState(() {
+      _event = event;
+      _isLoading = false;
+    });
   }
 
   static const _fallbackColors = <Color>[
@@ -49,10 +96,14 @@ class SharedEventMessageCard extends StatelessWidget {
     final event = _event;
     if (event == null) {
       return Container(
-        key: ValueKey('shared-event-unavailable-$eventId'),
+        key: ValueKey(
+          _isLoading
+              ? 'shared-event-loading-${widget.eventId}'
+              : 'shared-event-unavailable-${widget.eventId}',
+        ),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: onDarkBackground
+          color: widget.onDarkBackground
               ? Colors.white.withValues(alpha: 0.14)
               : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(14),
@@ -60,9 +111,16 @@ class SharedEventMessageCard extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.event_busy_outlined, size: 20),
+            if (_isLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              const Icon(Icons.event_busy_outlined, size: 20),
             const SizedBox(width: 8),
-            Text(S.eventUnavailable),
+            Text(_isLoading ? S.loadingEvent : S.eventUnavailable),
           ],
         ),
       );
@@ -70,8 +128,8 @@ class SharedEventMessageCard extends StatelessWidget {
 
     final color = _eventColor(event);
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final foreground = onDarkBackground ? Colors.white : AppColors.text;
-    final secondary = onDarkBackground
+    final foreground = widget.onDarkBackground ? Colors.white : AppColors.text;
+    final secondary = widget.onDarkBackground
         ? Colors.white70
         : AppColors.secondaryText;
     final date = DateFormat('EEE, MMM d', locale).format(event.dateTime);
@@ -91,12 +149,12 @@ class SharedEventMessageCard extends StatelessWidget {
         child: Container(
           width: 250,
           decoration: BoxDecoration(
-            color: onDarkBackground
+            color: widget.onDarkBackground
                 ? Colors.white.withValues(alpha: 0.13)
                 : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: onDarkBackground
+              color: widget.onDarkBackground
                   ? Colors.white.withValues(alpha: 0.22)
                   : AppColors.divider,
             ),
