@@ -15,12 +15,14 @@ class InstagramRefreshControl extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final double refreshTriggerPullDistance;
   final double refreshIndicatorExtent;
+  final bool showIndicator;
 
   const InstagramRefreshControl({
     super.key,
     required this.onRefresh,
     this.refreshTriggerPullDistance = 82,
     this.refreshIndicatorExtent = 48,
+    this.showIndicator = true,
   });
 
   @override
@@ -37,9 +39,10 @@ class InstagramRefreshControl extends StatelessWidget {
             triggerDistance,
             indicatorExtent,
           ) {
+            if (!showIndicator) return const SizedBox.shrink();
             final progress = (pulledExtent / triggerDistance).clamp(0.0, 1.0);
             return Center(
-              child: _InstagramSpinner(
+              child: InstagramRefreshSpinner(
                 progress: progress,
                 spinning: refreshState == RefreshIndicatorMode.refresh,
               ),
@@ -49,17 +52,23 @@ class InstagramRefreshControl extends StatelessWidget {
   }
 }
 
-class _InstagramSpinner extends StatefulWidget {
+/// The twelve-tick indicator shared by pull-to-refresh surfaces and app bars.
+class InstagramRefreshSpinner extends StatefulWidget {
   final double progress;
   final bool spinning;
 
-  const _InstagramSpinner({required this.progress, required this.spinning});
+  const InstagramRefreshSpinner({
+    super.key,
+    required this.progress,
+    required this.spinning,
+  });
 
   @override
-  State<_InstagramSpinner> createState() => _InstagramSpinnerState();
+  State<InstagramRefreshSpinner> createState() =>
+      _InstagramRefreshSpinnerState();
 }
 
-class _InstagramSpinnerState extends State<_InstagramSpinner>
+class _InstagramRefreshSpinnerState extends State<InstagramRefreshSpinner>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -85,7 +94,7 @@ class _InstagramSpinnerState extends State<_InstagramSpinner>
   }
 
   @override
-  void didUpdateWidget(covariant _InstagramSpinner oldWidget) {
+  void didUpdateWidget(covariant InstagramRefreshSpinner oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.spinning && !_reduceMotion && !_controller.isAnimating) {
       _controller.repeat();

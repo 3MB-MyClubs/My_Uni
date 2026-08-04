@@ -152,6 +152,8 @@ class _FeedScreenState extends State<FeedScreen> {
   // Only render the blur once content has actually scrolled under the bar —
   // pixel-identical in both states (the translucent fill is the same).
   bool _scrolledUnder = false;
+  double _refreshProgress = 0;
+  bool _isRefreshing = false;
   final ScrollController _scrollController = ScrollController();
 
   _FeedCache? _feedCache;
@@ -438,14 +440,24 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _onRefresh() async {
+    if (_isRefreshing) return;
+    if (mounted) setState(() => _isRefreshing = true);
     try {
-      await lazyContentLoader.refreshContent();
-    } catch (_) {
-      // Keep currently loaded content if the network request fails.
+      try {
+        await lazyContentLoader.refreshContent();
+      } catch (_) {
+        // Keep currently loaded content if the network request fails.
+      }
+      await _loadPeopleDirectory(force: true);
+      _hydrateVisiblePostViews(force: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+          _refreshProgress = 0;
+        });
+      }
     }
-    await _loadPeopleDirectory(force: true);
-    _hydrateVisiblePostViews(force: true);
-    setState(() {});
   }
 
   Future<void> _loadFeedContent() async {
@@ -481,17 +493,22 @@ class _FeedScreenState extends State<FeedScreen> {
     final showFeedSkeleton = _loadingFeedContent && mixed.isEmpty;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: NotificationListener<ScrollUpdateNotification>(
+      body: NotificationListener<ScrollNotification>(
         onNotification: (n) {
           // Vertical feed scroll only (depth 0) — not the horizontal events
-          // rail. setState fires only on threshold crossings (≤2 per
-          // gesture), and post-_FeedCache such a rebuild is just a hash
-          // compare. Top overscroll is negative, so pull-to-refresh stays
-          // unblurred.
+          // rail. The glass state changes only on threshold crossings; while
+          // pulling, the negative overscroll also drives the title-row refresh
+          // indicator. Post-_FeedCache, either rebuild is just a hash compare.
           if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
           final under = n.metrics.pixels > 1.0;
-          if (under != _scrolledUnder) {
-            setState(() => _scrolledUnder = under);
+          final refreshProgress = n.metrics.pixels < 0
+              ? (-n.metrics.pixels / 82).clamp(0.0, 1.0)
+              : 0.0;
+          if (under != _scrolledUnder || refreshProgress != _refreshProgress) {
+            setState(() {
+              _scrolledUnder = under;
+              _refreshProgress = refreshProgress;
+            });
           }
           return false;
         },
@@ -501,7 +518,10 @@ class _FeedScreenState extends State<FeedScreen> {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            InstagramRefreshControl(onRefresh: _onRefresh),
+            InstagramRefreshControl(
+              onRefresh: _onRefresh,
+              showIndicator: false,
+            ),
             _buildTopBar(),
             _buildGreeting(),
             _buildEventsRail(),
@@ -728,102 +748,128 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
       title: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
+        child: Stack(
+          key: const ValueKey('home-top-bar-row'),
+          alignment: Alignment.center,
           children: [
-            // ClubUp logotype — "Club" in maroon, "Up" in foreground, gold dot.
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Club',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryRed,
-                      letterSpacing: -0.8,
+            Row(
+              children: [
+                // ClubUp logotype — "Club" in maroon, "Up" in foreground,
+                // gold dot.
+                RichText(
+                  key: const ValueKey('home-clubup-logo'),
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Club',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryRed,
+                          letterSpacing: -0.8,
+                        ),
+                      ),
+                      TextSpan(
+                        text: 'Up',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.text,
+                          letterSpacing: -0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 3, bottom: 12),
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGold,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  TextSpan(
-                    text: 'Up',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.text,
-                      letterSpacing: -0.8,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                const Spacer(),
+                // Chats live in the bottom navigation. The bell is
+                // intentionally the only shortcut in the Home top bar.
+                ListenableBuilder(
+                  listenable: Listenable.merge([
+                    userState,
+                    notificationInboxService,
+                  ]),
+                  builder: (_, x) {
+                    final myId =
+                        authService.currentUser?.id ??
+                        authService.currentAdmin?.id ??
+                        '';
+                    final unreadIds = <String>{};
+                    for (final notification
+                        in [
+                          ...notifications,
+                          ...userState.dynamicNotifications,
+                        ].where(
+                          (n) =>
+                              canViewNotification(n, currentUserId: myId) &&
+                              n.targetType != 'story' &&
+                              !userState.isNotificationRead(n),
+                        )) {
+                      unreadIds.add(notification.id);
+                    }
+                    for (final row in notificationInboxService.rows) {
+                      final notification = AppNotification(
+                        id: row['id']?.toString() ?? '',
+                        userId: row['user_id']?.toString() ?? '',
+                        fromId: row['actor_user_id']?.toString(),
+                        message: row['body']?.toString() ?? '',
+                        createdAt:
+                            DateTime.tryParse(
+                              row['created_at']?.toString() ?? '',
+                            ) ??
+                            DateTime.fromMillisecondsSinceEpoch(0),
+                        read: row['read_at'] != null,
+                        notificationType: row['type']?.toString(),
+                        targetType: row['target_type']?.toString(),
+                        targetId: row['target_id']?.toString(),
+                      );
+                      if (row['read_at'] == null &&
+                          canViewNotification(
+                            notification,
+                            currentUserId: myId,
+                          )) {
+                        unreadIds.add(notification.id);
+                      }
+                    }
+                    return _TopBarIconButton(
+                      key: const ValueKey('home-notifications-bell'),
+                      icon: Icons.notifications_none_rounded,
+                      semanticLabel: AppLocalizations.of(
+                        context,
+                      )!.notifications,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NotificationsScreen(),
+                        ),
+                      ),
+                      badgeCount: unreadIds.length,
+                    );
+                  },
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 3, bottom: 12),
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: AppColors.accentGold,
-                  shape: BoxShape.circle,
+            IgnorePointer(
+              child: AnimatedOpacity(
+                key: const ValueKey('home-refresh-indicator'),
+                opacity: _isRefreshing || _refreshProgress > 0 ? 1 : 0,
+                duration: const Duration(milliseconds: 120),
+                child: InstagramRefreshSpinner(
+                  progress: _isRefreshing ? 1 : _refreshProgress,
+                  spinning: _isRefreshing,
                 ),
               ),
-            ),
-            const Spacer(),
-            // Chats live in the bottom navigation. The bell is intentionally
-            // the only shortcut in the Home top bar.
-            ListenableBuilder(
-              listenable: Listenable.merge([
-                userState,
-                notificationInboxService,
-              ]),
-              builder: (_, x) {
-                final myId =
-                    authService.currentUser?.id ??
-                    authService.currentAdmin?.id ??
-                    '';
-                final unreadIds = <String>{};
-                for (final notification
-                    in [
-                      ...notifications,
-                      ...userState.dynamicNotifications,
-                    ].where(
-                      (n) =>
-                          canViewNotification(n, currentUserId: myId) &&
-                          n.targetType != 'story' &&
-                          !userState.isNotificationRead(n),
-                    )) {
-                  unreadIds.add(notification.id);
-                }
-                for (final row in notificationInboxService.rows) {
-                  final notification = AppNotification(
-                    id: row['id']?.toString() ?? '',
-                    userId: row['user_id']?.toString() ?? '',
-                    fromId: row['actor_user_id']?.toString(),
-                    message: row['body']?.toString() ?? '',
-                    createdAt:
-                        DateTime.tryParse(
-                          row['created_at']?.toString() ?? '',
-                        ) ??
-                        DateTime.fromMillisecondsSinceEpoch(0),
-                    read: row['read_at'] != null,
-                    notificationType: row['type']?.toString(),
-                    targetType: row['target_type']?.toString(),
-                    targetId: row['target_id']?.toString(),
-                  );
-                  if (row['read_at'] == null &&
-                      canViewNotification(notification, currentUserId: myId)) {
-                    unreadIds.add(notification.id);
-                  }
-                }
-                return _TopBarIconButton(
-                  key: const ValueKey('home-notifications-bell'),
-                  icon: Icons.notifications_none_rounded,
-                  semanticLabel: AppLocalizations.of(context)!.notifications,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => NotificationsScreen()),
-                  ),
-                  badgeCount: unreadIds.length,
-                );
-              },
             ),
           ],
         ),
