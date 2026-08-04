@@ -23,6 +23,9 @@ class DarkColors {
   static const Color accentGold = Color(0xFF9E2045);
   static const Color cardGlow = Color(0x189E2045);
   static const Color glassEdge = Color(0xFF332E30);
+  static const Color positive = Color(0xFF6DDA9B);
+  static const Color positiveSurface = Color(0xFF173C29);
+  static const Color onPositive = Color(0xFF07180E);
 }
 
 // ─── Theme-aware dynamic color accessors (use in all widget code) ─────────────
@@ -63,9 +66,8 @@ class AppColors {
 
   /// The heavier hairline the design system uses for outlined controls
   /// (secondary buttons) — roughly twice the weight of [divider].
-  static Color get borderStrong => themeService.isDark
-      ? DarkColors.borderStrong
-      : LightColors.borderStrong;
+  static Color get borderStrong =>
+      themeService.isDark ? DarkColors.borderStrong : LightColors.borderStrong;
   static Color get lightRed =>
       themeService.isDark ? DarkColors.lightRed : LightColors.lightRed;
   static Color get accentGold =>
@@ -74,6 +76,17 @@ class AppColors {
       themeService.isDark ? DarkColors.cardGlow : LightColors.cardGlow;
   static Color get glassEdge =>
       themeService.isDark ? DarkColors.glassEdge : LightColors.glassEdge;
+
+  /// Positive actions and completed states. These are separate from the
+  /// brand-red action color because invitation controls use green in the
+  /// event-sharing design and need accessible contrast in both themes.
+  static Color get positive =>
+      themeService.isDark ? DarkColors.positive : LightColors.positive;
+  static Color get positiveSurface => themeService.isDark
+      ? DarkColors.positiveSurface
+      : LightColors.positiveSurface;
+  static Color get onPositive =>
+      themeService.isDark ? DarkColors.onPositive : LightColors.onPositive;
 }
 
 // ─── Light theme — warm KU burgundy tones on off-white ───────────────────────
@@ -95,4 +108,7 @@ class LightColors {
   static const Color accentGold = Color(0xFFB8943A);
   static const Color cardGlow = Color(0x089E2045);
   static const Color glassEdge = Color(0x1F9E2045);
+  static const Color positive = Color(0xFF147A43);
+  static const Color positiveSurface = Color(0xFFE0F3E8);
+  static const Color onPositive = Color(0xFFFFFFFF);
 }

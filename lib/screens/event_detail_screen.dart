@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../features/calendar/widgets/add_to_calendar_button.dart';
+import '../models/chat_message.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -18,6 +19,7 @@ import '../services/rsvp_store.dart';
 import '../services/supabase_event_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/checkin_store.dart';
+import '../services/chat_store.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -27,8 +29,11 @@ import '../widgets/club_avatar.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/app_motion.dart';
+import '../widgets/event_share_sheet.dart';
+import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
+import 'event_attendee_list_screen.dart';
 import 'user_profile_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +81,8 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
+  final Set<String> _invitedFriendIds = {};
+
   Event get _event => events.firstWhere(
     (event) => event.id == widget.event.id,
     orElse: () => widget.event,
@@ -113,6 +120,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final viewerId =
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     viewTracker.recordView(widget.event.id, viewerId);
+    _loadPeople();
   }
 
   @override
@@ -123,6 +131,86 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   void _onContentChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadPeople() async {
+    try {
+      await peopleService.hydrateProfilesByIds(widget.event.attendeeUserIds);
+      if (peopleService.cachedPeople.isEmpty) {
+        await peopleService.fetchPeople(excludeId: _currentSessionId);
+      }
+    } catch (_) {
+      // The cards keep their initials and local suggestions when offline.
+    }
+    if (mounted) setState(() {});
+  }
+
+  Map<String, User> get _knownPeopleById => {
+    for (final user in users) user.id: user,
+    for (final user in peopleService.cachedPeople) user.id: user,
+    if (authService.currentUser != null)
+      authService.currentUser!.id: authService.currentUser!,
+  };
+
+  List<User> get _attendees {
+    final known = _knownPeopleById;
+    return _event.attendeeUserIds
+        .map(
+          (id) =>
+              known[id] ??
+              User(
+                id: id,
+                name: lookupAppLocalizations(
+                  Locale(localeService.languageCode),
+                ).studentProfile,
+                email: '',
+                password: '',
+                role: 'student',
+                subscribedClubIds: const [],
+              ),
+        )
+        .toList(growable: false);
+  }
+
+  List<User> get _suggestedFriends {
+    final excludedIds = {_currentSessionId, ..._event.attendeeUserIds};
+    final realPeople = <String, User>{
+      for (final person in peopleService.randomProfiles(
+        excludeId: _currentSessionId,
+      ))
+        if (!excludedIds.contains(person.id)) person.id: person,
+      for (final person in users)
+        if (!excludedIds.contains(person.id)) person.id: person,
+    }.values.toList(growable: false);
+
+    if (realPeople.isNotEmpty) return realPeople;
+
+    return [
+      User(
+        id: 'event-friend-ceren',
+        name: 'Ceren Levent',
+        email: '',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+      User(
+        id: 'event-friend-zeynep',
+        name: 'Zeynep Arslan',
+        email: '',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+      User(
+        id: 'event-friend-tolga',
+        name: 'Tolga Kurt',
+        email: '',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+    ];
   }
 
   Color get _accent => _event.accentColorHex != null
@@ -155,20 +243,85 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   void _shareEvent() {
     if (!authService.isStudentSession) return;
+    _showEventShareSheet();
+  }
 
-    Clipboard.setData(ClipboardData(text: 'kuclubs://event/${_event.id}'));
+  void _openAttendees() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventAttendeeListScreen(event: _event, color: _accent),
+      ),
+    );
+  }
+
+  void _inviteFriend(User friend) {
+    _sendEventInvitations([friend], singleFriendName: friend.name);
+  }
+
+  void _sendEventInvitations(
+    List<User> recipients, {
+    String? singleFriendName,
+  }) {
+    final newRecipients = recipients
+        .where((person) => !_invitedFriendIds.contains(person.id))
+        .toList(growable: false);
+    if (newRecipients.isEmpty) return;
+
+    HapticFeedback.selectionClick();
+    final senderId = _currentSessionId;
+    for (final person in newRecipients) {
+      final threadId = chatStore.ensureDirectThread(senderId, person.id);
+      if (threadId == null) continue;
+      chatStore.sendMessage(
+        threadId: threadId,
+        senderId: senderId,
+        content: '${_event.title}\nkuclubs://event/${_event.id}',
+        kind: ChatMessageKind.event,
+        title: _event.title,
+        eventId: _event.id,
+      );
+    }
+    setState(() {
+      _invitedFriendIds.addAll(newRecipients.map((person) => person.id));
+    });
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.eventLinkCopied),
+          content: Text(
+            singleFriendName == null
+                ? AppLocalizations.of(
+                    context,
+                  )!.eventInvitesSentCount(newRecipients.length)
+                : AppLocalizations.of(
+                    context,
+                  )!.eventInviteSent(singleFriendName),
+            style: TextStyle(
+              color: AppColors.positive,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
+          backgroundColor: AppColors.positiveSurface,
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
         ),
       );
   }
+
+  void _showEventShareSheet() {
+    showEventShareSheet(
+      context: context,
+      event: _event,
+      people: _suggestedFriends,
+      sentUserIds: _invitedFriendIds,
+      onInvite: _sendEventInvitations,
+    );
+  }
+
+  void _showAllSuggestedFriends() => _showEventShareSheet();
 
   void _confirmDelete() {
     showDialog<bool>(
@@ -413,6 +566,37 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     const SizedBox(height: 12),
                     _SpeakersRow(speakers: event.speakers),
                   ],
+
+                  // People attending
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                    child: ListenableBuilder(
+                      listenable: rsvpStore,
+                      builder: (_, _) {
+                        final liveEvent = _event;
+                        return _AttendingCard(
+                          attendees: _attendees,
+                          totalCount: liveEvent.attendeeUserIds.length,
+                          followedCount: liveEvent.attendeeUserIds
+                              .where(userState.isFollowingUser)
+                              .length,
+                          onTap: _openAttendees,
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Bring your friends
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
+                    child: _BringFriendsSection(
+                      friends: _suggestedFriends.take(3).toList(),
+                      invitedFriendIds: _invitedFriendIds,
+                      onInvite: _inviteFriend,
+                      onSeeAll: _showAllSuggestedFriends,
+                      onShare: _shareEvent,
+                    ),
+                  ),
 
                   const SizedBox(height: 24),
                 ],
@@ -2368,6 +2552,420 @@ class _SpeakersRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Event social sections — attendees and friend invitations
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AttendingCard extends StatelessWidget {
+  const _AttendingCard({
+    required this.attendees,
+    required this.totalCount,
+    required this.followedCount,
+    required this.onTap,
+  });
+
+  final List<User> attendees;
+  final int totalCount;
+  final int followedCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: AppColors.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(16)),
+        side: BorderSide(color: AppColors.divider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const ValueKey('event-attending-card'),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+          child: Row(
+            children: [
+              _AttendeeAvatarStack(
+                attendees: attendees,
+                totalCount: totalCount,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.attendingCount(totalCount),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.35,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      l10n.followedPeopleAttending(followedCount),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 11.5,
+                        height: 1.25,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
+                color: AppColors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendeeAvatarStack extends StatelessWidget {
+  const _AttendeeAvatarStack({
+    required this.attendees,
+    required this.totalCount,
+  });
+
+  final List<User> attendees;
+  final int totalCount;
+
+  static const _size = 32.0;
+  static const _step = 19.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = attendees.take(4).toList(growable: false);
+    final hiddenCount = totalCount - visible.length;
+    final slotCount = visible.length + (hiddenCount > 0 ? 1 : 0);
+
+    if (slotCount == 0) {
+      return Container(
+        width: _size,
+        height: _size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.surfaceAlt,
+          border: Border.all(color: AppColors.divider, width: 2),
+        ),
+        child: Icon(
+          Icons.people_outline_rounded,
+          size: 20,
+          color: AppColors.secondaryText,
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: _size + ((slotCount - 1) * _step),
+      height: _size,
+      child: Stack(
+        children: [
+          for (var index = 0; index < visible.length; index++)
+            Positioned(
+              left: index * _step,
+              child: _BorderedEventAvatar(user: visible[index], index: index),
+            ),
+          if (hiddenCount > 0)
+            Positioned(
+              left: visible.length * _step,
+              child: Container(
+                width: _size,
+                height: _size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surfaceAlt,
+                  border: Border.all(color: AppColors.card, width: 2.5),
+                ),
+                child: Text(
+                  '+$hiddenCount',
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: hiddenCount > 99 ? 10 : 11.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BorderedEventAvatar extends StatelessWidget {
+  const _BorderedEventAvatar({required this.user, required this.index});
+
+  final User user;
+  final int index;
+
+  static const _backgrounds = [
+    Color(0xFF4A1E22),
+    Color(0xFF2D153C),
+    Color(0xFF143337),
+    Color(0xFF4A2819),
+  ];
+
+  static const _foregrounds = [
+    Color(0xFFFFDCE1),
+    Color(0xFFEFD9FF),
+    Color(0xFFD5F5F4),
+    Color(0xFFFFE3D2),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(color: AppColors.card, shape: BoxShape.circle),
+      child: UserAvatar(
+        userId: user.id,
+        name: user.name,
+        size: 27,
+        fontSize: 10,
+        backgroundColor: _backgrounds[index % _backgrounds.length],
+        textColor: _foregrounds[index % _foregrounds.length],
+      ),
+    );
+  }
+}
+
+class _BringFriendsSection extends StatelessWidget {
+  const _BringFriendsSection({
+    required this.friends,
+    required this.invitedFriendIds,
+    required this.onInvite,
+    required this.onSeeAll,
+    required this.onShare,
+  });
+
+  final List<User> friends;
+  final Set<String> invitedFriendIds;
+  final ValueChanged<User> onInvite;
+  final VoidCallback onSeeAll;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.bringYourFriends,
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.45,
+                ),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('event-friends-see-all'),
+              onPressed: onSeeAll,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.positive,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.seeAll,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.chevron_right_rounded, size: 17),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          key: const ValueKey('event-bring-friends-card'),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: const BorderRadius.all(Radius.circular(18)),
+            border: Border.all(color: AppColors.divider),
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+          child: Column(
+            children: [
+              for (var index = 0; index < friends.length; index++) ...[
+                _FriendInviteRow(
+                  friend: friends[index],
+                  invited: invitedFriendIds.contains(friends[index].id),
+                  onInvite: () => onInvite(friends[index]),
+                ),
+                if (index < friends.length - 1)
+                  Divider(height: 1, indent: 64, color: AppColors.divider),
+              ],
+              if (friends.isNotEmpty) const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('event-share-from-friends'),
+                  onPressed: onShare,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.text,
+                    side: BorderSide(color: AppColors.borderStrong, width: 1.5),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(13)),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  icon: const Icon(Icons.ios_share_rounded, size: 18),
+                  label: Text(l10n.shareEventAction),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FriendInviteRow extends StatelessWidget {
+  const _FriendInviteRow({
+    required this.friend,
+    required this.invited,
+    required this.onInvite,
+  });
+
+  final User friend;
+  final bool invited;
+  final VoidCallback onInvite;
+
+  String _contextDetail(BuildContext context) {
+    final academic = userState.academicSummaryFor(friend.id);
+    if (academic.isNotEmpty) return academic;
+
+    final currentUser = authService.currentUser;
+    if (currentUser != null) {
+      final myClubs = currentUser.subscribedClubIds.toSet();
+      final friendClubs = {
+        ...friend.subscribedClubIds,
+        ...peopleService.clubIdsFor(friend.id),
+      };
+      final mutualCount = myClubs.intersection(friendClubs).length;
+      if (mutualCount > 0) {
+        return AppLocalizations.of(context)!.mutualClubsCount(mutualCount);
+      }
+    }
+
+    return AppLocalizations.of(context)!.suggestedForYou;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = userState.displayNameFor(friend.id, friend.name);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          UserAvatar(
+            userId: friend.id,
+            name: displayName,
+            size: 40,
+            fontSize: 13,
+            backgroundColor: AppColors.lightRed,
+            textColor: AppColors.primaryRed,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _contextDetail(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 12,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            height: 40,
+            child: FilledButton(
+              key: ValueKey('event-invite-${friend.id}'),
+              onPressed: invited ? null : onInvite,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.positive,
+                disabledBackgroundColor: AppColors.surfaceAlt,
+                foregroundColor: AppColors.onPositive,
+                disabledForegroundColor: AppColors.positive,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: Text(
+                invited
+                    ? AppLocalizations.of(context)!.invited
+                    : AppLocalizations.of(context)!.invite,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Sticky CTA — reminder bell + RSVP + add to calendar
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -1,59 +1,65 @@
-# Design QA
+# Design QA — Event Share Sheet
 
-- Source visual truth: user-provided notification-center reference image in the conversation (displayed at 720 x 1436 px; no local source path was exposed).
-- Implementation screenshot: unavailable.
-- Intended viewport: mobile portrait; responsive widget behavior exercised at Flutter's default widget-test viewport.
-- Density normalization: unavailable because neither the conversation attachment nor a rendered implementation capture could be opened as a local image pair.
-- State: populated notification center in light and dark themes.
+- Source visual truth: user-provided “Share this event” bottom-sheet screenshot in the conversation. The attachment was visible to the user but was not exposed to the workspace as a readable local file, so its pixel dimensions could not be measured.
+- Implementation screenshots:
+  - `design-qa-share-dark-simulator.png`
+  - `design-qa-share-light-simulator.png`
+  - Density-normalized captures: `design-qa-share-dark.png` and `design-qa-share-light.png`
+- Viewport: iPhone 17 simulator, 393 x 852 logical px.
+- Implementation pixels: 1206 x 2622 simulator capture; normalized captures are 393 x 852 at device pixel ratio 1.
+- State: sheet open over a dimmed event screen, populated event summary with embedded QR, people list, one existing `Sent` state, zero pending selections, fixed disabled invite footer.
 
 ## Full-view comparison evidence
 
-The implementation follows the reference hierarchy in code: title and unread pill, mark-all-read action, collapsible follow-request strip, unread `NEW` section, chronological groups, avatar/type badges, follow buttons, content previews, and read/unread row treatment. A same-state screenshot comparison could not be completed.
+Both implementation themes were opened in the iPhone simulator and inspected. The rendered sheet has the revised hierarchy: drag handle, title/close row, event summary card with a scannable QR on its right edge, search field, scrollable people rows, and a fixed bottom invite control. The Copy link, Message, Story, and separate QR action row are absent. The sheet has no visible horizontal overflow, clipped controls, or safe-area collision. A paired source-versus-implementation comparison could not be produced because the source attachment was not available as a file.
 
 ## Focused region comparison evidence
 
-Blocked. No Flutter simulator or physical device was available. The Flutter web build compiled and served locally, but the in-app browser reported no available browser backend, so it could not be opened or captured.
-
-## Automated interaction evidence
-
-- Home bell exists, exposes a notification semantic label and unread badge, and opens `NotificationsScreen`.
-- Mark-all-read and individual-row read state pass.
-- Follow-request collapse, expand, confirm, and delete pass.
-- Follow, Following, and Requested accessory states pass.
-- Pull-to-refresh confirmation passes.
-- Light and dark theme surface assertions pass.
-- Thirty-day retention behavior passes.
-- `flutter analyze` passes with no issues.
+- Header and summary: real simulator rendering confirms readable title weight, close affordance, compact date block, one-line event title, time, location, and a complete high-contrast QR code on the card’s right edge.
+- QR and search: the embedded QR remains fully visible at 393 logical px in both themes and opens the larger QR dialog when tapped; the search control and its border remain distinct.
+- People and footer: four full rows remain visible at the captured extent; `Invite` and `Sent` states are differentiated by border, fill, and text; the footer remains fixed above the safe area.
+- QR dialog: interaction and presence are covered by widget tests, but a separate simulator screenshot was not required because the primary comparison target is the open share sheet.
 
 ## Fidelity surfaces
 
-- Fonts and typography: source hierarchy is represented with matching heavy title/name weights, compact timestamps, and uppercase group labels; screenshot-level comparison is blocked.
-- Spacing and layout rhythm: responsive row, section, header, and action spacing is implemented; screenshot-level comparison is blocked.
-- Colors and visual tokens: KU burgundy, warm light surfaces, and warm near-black dark surfaces use the app's theme tokens; both theme states pass widget assertions.
-- Image quality and asset fidelity: real user/club avatars and real post/event thumbnails are used when available; standard Material icons are used for notification types. Screenshot-level comparison is blocked.
-- Copy and content: English and Turkish notification-center copy is generated from ARB localization files.
+- Fonts and typography: simulator captures show native app typography with clear title, metadata, action-label, row-name, and button hierarchy. Exact font-size comparison to the source is blocked by the unavailable source file.
+- Spacing and layout rhythm: 18–20 px side margins, 28 px top radii, compact summary/action spacing, 64 px people rows, and a fixed 50 px primary control form a consistent mobile rhythm. No P0/P1/P2 layout issue is visible in the implementation captures.
+- Colors and visual tokens: light mode uses the existing warm-white surfaces and burgundy text system; dark mode uses the existing warm near-black surfaces. New positive-state tokens provide accessible green foreground/background pairs for actions and `Sent` states. Exact sampled comparison to the source is blocked.
+- Image quality and asset fidelity: no custom raster artwork is required by the sheet. Existing `UserAvatar` rendering and Material icons are used; the QR code is generated by `qr_flutter` with high-contrast black modules on white.
+- Copy and content: all requested labels and confirmation/fallback messages are localized in English and Turkish. The event summary uses live event data rather than screenshot-specific copy.
 
 ## Findings
 
-- [P2] Rendered visual comparison is unavailable.
-  - Location: complete notification center, light and dark states.
-  - Evidence: no Flutter device was available and the in-app browser backend list was empty.
-  - Impact: exact pixel fidelity, text wrapping, and device-specific safe-area rendering cannot be signed off from a rendered artifact.
-  - Fix: launch the app on an iOS or Android simulator, open the Home bell, capture populated light and dark states, and compare them beside the supplied reference.
+- [P2] Source-to-implementation pixel comparison is unavailable.
+  - Location: complete event share sheet.
+  - Evidence: light and dark simulator captures exist, but the conversation attachment has no readable local path and cannot be placed beside them in one comparison input.
+  - Impact: exact screenshot fidelity for dimensions, spacing, and color sampling cannot be signed off, despite the implementation itself rendering cleanly.
+  - Fix: export or reattach the source screenshot as a workspace-readable image, then create a same-viewport paired comparison.
+
+## Automated interaction evidence
+
+- “See all” and “Share event” open the same sheet.
+- Close button, outside tap, and swipe-down dismissal pass.
+- Search filters by name.
+- Pending selections update the footer count and survive filtering/theme rebuilds while open.
+- Sent recipients cannot be selected or invited twice.
+- Embedded QR presence and enlarged QR dialog pass.
+- Light-to-dark token changes rebuild while the sheet is open.
+- `flutter analyze` passes with no issues.
 
 ## Comparison history
 
-- Initial implementation QA found that expanded request actions could overlap the sticky notification list in a constrained viewport.
-- Fix made: expanded request rows now participate directly in sliver layout rather than animating their size under a pinned header.
-- Post-fix evidence: confirm/delete hit testing and all notification widget tests pass; rendered visual evidence remains unavailable.
+- Initial headless captures verified composition but substituted glyph blocks for fonts/icons.
+- First simulator pass verified the original action row with real fonts and icons.
+- User-directed revision removed the Copy link, Message, Story, and separate QR actions and moved the QR into the event summary card.
+- Post-revision evidence: refreshed `design-qa-share-dark-simulator.png` and `design-qa-share-light-simulator.png` show the complete embedded QR with no actionable P0/P1/P2 implementation-only visual issues. Paired fidelity comparison remains blocked on the unavailable source file.
 
 ## Implementation checklist
 
-- [x] Implement reference hierarchy and notification-row variants.
-- [x] Connect Home bell, unread badge, realtime inbox, and read state.
-- [x] Implement light and dark themes.
-- [x] Test core interactions and theme states.
-- [x] Pass static analysis.
-- [ ] Capture and compare light and dark simulator screenshots.
+- [x] Render and inspect the populated sheet in light and dark themes.
+- [x] Verify typography, icons, controls, safe areas, and scroll/footer behavior on an iPhone simulator.
+- [x] Verify core interactions and duplicate prevention.
+- [x] Pass formatting and static analysis.
+- [ ] Compare source and implementation in one image input after the source attachment is available locally.
 
 final result: blocked

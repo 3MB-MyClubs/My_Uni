@@ -1436,6 +1436,7 @@ class ChatStore extends ChangeNotifier {
             local.replyToSenderId != merged.replyToSenderId ||
             local.replyToPreview != merged.replyToPreview ||
             local.sharedPostId != merged.sharedPostId ||
+            local.eventId != merged.eventId ||
             local.attachmentPath != merged.attachmentPath ||
             local.attachmentName != merged.attachmentName ||
             local.attachmentSize != merged.attachmentSize ||

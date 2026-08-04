@@ -36,6 +36,85 @@ class AppLocalizationsTr extends AppLocalizations {
   String get seeAll => 'Hepsini gör';
 
   @override
+  String get bringYourFriends => 'Arkadaşlarını da getir';
+
+  @override
+  String get invite => 'Davet et';
+
+  @override
+  String get invited => 'Davet edildi';
+
+  @override
+  String get shareEventAction => 'Etkinliği paylaş';
+
+  @override
+  String get shareThisEvent => 'Bu etkinliği paylaş';
+
+  @override
+  String get qrCodeAction => 'QR kodu';
+
+  @override
+  String get searchPeopleOnCampus => 'Kampüsteki kişileri ara';
+
+  @override
+  String get sentAction => 'Gönderildi';
+
+  @override
+  String inviteFriendsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count arkadaşını davet et',
+      one: '1 arkadaşını davet et',
+      zero: 'Arkadaşlarını davet et',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInvitesSentCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count davet gönderildi',
+      one: 'Davet gönderildi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noPeopleMatchSearch => 'Aramanla eşleşen kişi bulunamadı.';
+
+  @override
+  String get scanToOpenEvent => 'Etkinliği açmak için tara';
+
+  @override
+  String followedPeopleAttending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Takip ettiğin $count kişi katılıyor',
+      zero: 'Takip ettiklerinden henüz katılan yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInviteSent(String name) {
+    return '$name davet edildi.';
+  }
+
+  @override
+  String mutualClubsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ortak kulüp',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get fromYourClubs => 'KULÜPLERİNDEN';
 
   @override

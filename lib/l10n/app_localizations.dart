@@ -152,6 +152,96 @@ abstract class AppLocalizations {
   /// **'See all'**
   String get seeAll;
 
+  /// No description provided for @bringYourFriends.
+  ///
+  /// In en, this message translates to:
+  /// **'Bring your friends'**
+  String get bringYourFriends;
+
+  /// No description provided for @invite.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite'**
+  String get invite;
+
+  /// No description provided for @invited.
+  ///
+  /// In en, this message translates to:
+  /// **'Invited'**
+  String get invited;
+
+  /// No description provided for @shareEventAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share event'**
+  String get shareEventAction;
+
+  /// No description provided for @shareThisEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this event'**
+  String get shareThisEvent;
+
+  /// No description provided for @qrCodeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get qrCodeAction;
+
+  /// No description provided for @searchPeopleOnCampus.
+  ///
+  /// In en, this message translates to:
+  /// **'Search people on campus'**
+  String get searchPeopleOnCampus;
+
+  /// No description provided for @sentAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get sentAction;
+
+  /// No description provided for @inviteFriendsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =0{Invite friends} one{Invite 1 friend} other{Invite {count} friends}}'**
+  String inviteFriendsCount(int count);
+
+  /// No description provided for @eventInvitesSentCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, one{Invitation sent} other{{count} invitations sent}}'**
+  String eventInvitesSentCount(int count);
+
+  /// No description provided for @noPeopleMatchSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'No people match your search.'**
+  String get noPeopleMatchSearch;
+
+  /// No description provided for @scanToOpenEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to open this event'**
+  String get scanToOpenEvent;
+
+  /// No description provided for @followedPeopleAttending.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =0{No one you follow is going yet} one{1 person you follow is going} other{{count} people you follow are going}}'**
+  String followedPeopleAttending(int count);
+
+  /// No description provided for @eventInviteSent.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} has been invited.'**
+  String eventInviteSent(String name);
+
+  /// No description provided for @mutualClubsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, one{1 mutual club} other{{count} mutual clubs}}'**
+  String mutualClubsCount(int count);
+
   /// No description provided for @fromYourClubs.
   ///
   /// In en, this message translates to:

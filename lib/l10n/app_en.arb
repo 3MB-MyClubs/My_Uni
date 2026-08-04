@@ -9,6 +9,56 @@
   "campusHappening": "Here's what's happening on campus.",
   "membersHappening": "Here's what your members are up to.",
   "seeAll": "See all",
+  "bringYourFriends": "Bring your friends",
+  "invite": "Invite",
+  "invited": "Invited",
+  "shareEventAction": "Share event",
+  "shareThisEvent": "Share this event",
+  "qrCodeAction": "QR code",
+  "searchPeopleOnCampus": "Search people on campus",
+  "sentAction": "Sent",
+  "inviteFriendsCount": "{count,plural, =0{Invite friends} one{Invite 1 friend} other{Invite {count} friends}}",
+  "@inviteFriendsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventInvitesSentCount": "{count,plural, one{Invitation sent} other{{count} invitations sent}}",
+  "@eventInvitesSentCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noPeopleMatchSearch": "No people match your search.",
+  "scanToOpenEvent": "Scan to open this event",
+  "followedPeopleAttending": "{count,plural, =0{No one you follow is going yet} one{1 person you follow is going} other{{count} people you follow are going}}",
+  "@followedPeopleAttending": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventInviteSent": "{name} has been invited.",
+  "@eventInviteSent": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mutualClubsCount": "{count,plural, one{1 mutual club} other{{count} mutual clubs}}",
+  "@mutualClubsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "fromYourClubs": "FROM YOUR CLUBS",
   "clubFeed": "CLUB FEED",
   "following": "Following",
