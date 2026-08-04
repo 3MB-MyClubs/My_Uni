@@ -3,8 +3,6 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter/cupertino.dart'
-    show CupertinoSliverRefreshControl, RefreshIndicatorMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
@@ -33,6 +31,7 @@ import '../widgets/user_avatar.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/app_motion.dart';
 import '../widgets/loading_skeleton.dart';
+import '../widgets/instagram_refresh_control.dart';
 
 /// Notification center — the "UniHub Notifications" design.
 ///
@@ -114,11 +113,8 @@ class _NotificationGroup {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _requestsOpen = false;
   bool _toastVisible = false;
-  bool _refreshSucceeded = false;
   bool _markAllReadInProgress = false;
   Timer? _toastTimer;
-  Timer? _refreshSuccessTimer;
-  Completer<void>? _refreshSuccessCompleter;
   final Map<String, Timer> _followPulseTimers = {};
   final Set<String> _visuallyReadGroups = {};
   final Set<String> _followPulseUserIds = {};
@@ -188,10 +184,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void dispose() {
     _toastTimer?.cancel();
-    _refreshSuccessTimer?.cancel();
-    if (!(_refreshSuccessCompleter?.isCompleted ?? true)) {
-      _refreshSuccessCompleter!.complete();
-    }
     for (final timer in _followPulseTimers.values) {
       timer.cancel();
     }
@@ -244,30 +236,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _onRefresh() async {
     await Future.wait([
       notificationInboxService.refresh(),
-      // Keep the arc spinner on screen long enough to read as a refresh even
+      // Keep the pulse on screen long enough to read as a refresh even
       // when the request resolves (or is skipped) instantly.
-      Future<void>.delayed(const Duration(milliseconds: 850)),
+      Future<void>.delayed(const Duration(milliseconds: 600)),
     ]);
     if (!mounted) return;
-    setState(() {
-      _refreshSucceeded = true;
-      _toastVisible = true;
-    });
+    setState(() => _toastVisible = true);
     _toastTimer?.cancel();
     _toastTimer = Timer(const Duration(milliseconds: 1800), () {
       if (mounted) setState(() => _toastVisible = false);
     });
-    _refreshSuccessTimer?.cancel();
-    if (!(_refreshSuccessCompleter?.isCompleted ?? true)) {
-      _refreshSuccessCompleter!.complete();
-    }
-    final successCompleter = Completer<void>();
-    _refreshSuccessCompleter = successCompleter;
-    _refreshSuccessTimer = Timer(const Duration(milliseconds: 380), () {
-      if (mounted) setState(() => _refreshSucceeded = false);
-      if (!successCompleter.isCompleted) successCompleter.complete();
-    });
-    await successCompleter.future;
   }
 
   // ── Read state ──────────────────────────────────────────────────────────────
@@ -698,10 +676,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         parent: AlwaysScrollableScrollPhysics(),
                       ),
                       slivers: [
-                        CupertinoSliverRefreshControl(
+                        InstagramRefreshControl(
                           refreshTriggerPullDistance: 90,
-                          refreshIndicatorExtent: 56,
-                          builder: _buildRefreshIndicator,
+                          refreshIndicatorExtent: 48,
                           onRefresh: _onRefresh,
                         ),
                         if (requesters.isNotEmpty)
@@ -727,8 +704,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ],
                       ],
                     ),
-                    _buildRefreshSuccessOverlay(),
-                    _buildToast(),
+                    KeyedSubtree(
+                      key: _toastVisible
+                          ? const ValueKey('pull-refresh-success')
+                          : null,
+                      child: _buildToast(),
+                    ),
                   ],
                 ),
               ),
@@ -758,76 +739,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ],
       ),
     ];
-  }
-
-  // ── Pull-to-refresh arc spinner ────────────────────────────────────────────
-  Widget _buildRefreshIndicator(
-    BuildContext context,
-    RefreshIndicatorMode refreshState,
-    double pulledExtent,
-    double refreshTriggerPullDistance,
-    double refreshIndicatorExtent,
-  ) {
-    final progress = (pulledExtent / refreshTriggerPullDistance).clamp(
-      0.0,
-      1.0,
-    );
-    final spinning =
-        refreshState == RefreshIndicatorMode.refresh ||
-        refreshState == RefreshIndicatorMode.armed;
-    return Center(
-      child: _PullSpinner(
-        progress: progress,
-        spinning: spinning,
-        success: _refreshSucceeded,
-      ),
-    );
-  }
-
-  Widget _buildRefreshSuccessOverlay() {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return Positioned(
-      left: 0,
-      right: 0,
-      top: 12,
-      child: IgnorePointer(
-        child: Center(
-          child: AnimatedSwitcher(
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 220),
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.65, end: 1).animate(animation),
-                child: child,
-              ),
-            ),
-            child: _refreshSucceeded
-                ? DecoratedBox(
-                    key: const ValueKey('pull-refresh-success'),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        size: 24,
-                        color: AppColors.primaryRed,
-                      ),
-                    ),
-                  )
-                : const SizedBox(
-                    key: ValueKey('pull-refresh-success-idle'),
-                    width: 30,
-                    height: 30,
-                  ),
-          ),
-        ),
-      ),
-    );
   }
 
   // ── Header (title + unread pill + mark-all) ─────────────────────────────────
@@ -1836,148 +1747,6 @@ class _StripePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _StripePainter oldDelegate) =>
-      oldDelegate.accent != accent;
-}
-
-// ── Pull-to-refresh arc spinner ───────────────────────────────────────────────
-class _PullSpinner extends StatefulWidget {
-  final double progress;
-  final bool spinning;
-  final bool success;
-
-  const _PullSpinner({
-    required this.progress,
-    required this.spinning,
-    required this.success,
-  });
-
-  @override
-  State<_PullSpinner> createState() => _PullSpinnerState();
-}
-
-class _PullSpinnerState extends State<_PullSpinner>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 800),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.spinning && !widget.success) _controller.repeat();
-  }
-
-  @override
-  void didUpdateWidget(covariant _PullSpinner oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.success) {
-      _controller.stop();
-    } else if (widget.spinning && !_controller.isAnimating) {
-      _controller.repeat();
-    } else if (!widget.spinning && _controller.isAnimating) {
-      _controller.stop();
-      _controller.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final opacity = widget.success ? 1.0 : math.min(1.0, widget.progress * 1.6);
-    return Opacity(
-      opacity: opacity,
-      child: AnimatedSwitcher(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 220),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.65, end: 1).animate(animation),
-            child: child,
-          ),
-        ),
-        child: widget.success
-            ? Icon(
-                Icons.check_circle_rounded,
-                key: const ValueKey('pull-refresh-indicator-check'),
-                size: 24,
-                color: AppColors.primaryRed,
-              )
-            : AnimatedBuilder(
-                key: const ValueKey('pull-refresh-spinner'),
-                animation: _controller,
-                builder: (context, _) {
-                  final turns = widget.spinning
-                      ? _controller.value
-                      : widget.progress * (260 / 360);
-                  return Transform.rotate(
-                    angle: turns * 2 * math.pi,
-                    child: CustomPaint(
-                      size: const Size(22, 22),
-                      painter: _SpinnerPainter(
-                        sweep: widget.spinning
-                            ? 0.28
-                            : widget.progress.clamp(0.0, 1.0),
-                        track: AppColors.divider,
-                        accent: AppColors.primaryRed,
-                      ),
-                    ),
-                  );
-                },
-              ),
-      ),
-    );
-  }
-}
-
-class _SpinnerPainter extends CustomPainter {
-  final double sweep;
-  final Color track;
-  final Color accent;
-
-  const _SpinnerPainter({
-    required this.sweep,
-    required this.track,
-    required this.accent,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const radius = 8.5;
-    final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = track
-        ..strokeWidth = 2.2
-        ..style = PaintingStyle.stroke,
-    );
-    if (sweep <= 0) return;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      sweep * 2 * math.pi,
-      false,
-      Paint()
-        ..color = accent
-        ..strokeWidth = 2.2
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SpinnerPainter oldDelegate) =>
-      oldDelegate.sweep != sweep ||
-      oldDelegate.track != track ||
       oldDelegate.accent != accent;
 }
 

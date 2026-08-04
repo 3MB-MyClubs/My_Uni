@@ -33,6 +33,7 @@ import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/profile_photo_viewer.dart';
+import '../widgets/instagram_refresh_control.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -1076,39 +1077,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.delayed(const Duration(milliseconds: 400));
-          if (mounted) setState(() {});
-        },
-        color: AppColors.primaryRed,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            _buildAppBar(context, displayName),
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListenableBuilder(
-                    listenable: userState,
-                    builder: (context, _) => _buildProfileHeader(
-                      displayName,
-                      realName,
-                      isAdmin,
-                      myClubs.length,
-                      myEventCount,
-                    ),
-                  ),
-                  Divider(height: 1, color: AppColors.divider),
-                  _buildMyClubsSection(myClubs),
-                  if (isAdmin) _buildMyContentSection(admin.id),
-                  const SizedBox(height: 80),
-                ],
-              ),
-            ),
-          ],
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
         ),
+        slivers: [
+          InstagramRefreshControl(
+            onRefresh: () async {
+              await Future.delayed(const Duration(milliseconds: 400));
+              if (mounted) setState(() {});
+            },
+          ),
+          _buildAppBar(context, displayName),
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListenableBuilder(
+                  listenable: userState,
+                  builder: (context, _) => _buildProfileHeader(
+                    displayName,
+                    realName,
+                    isAdmin,
+                    myClubs.length,
+                    myEventCount,
+                  ),
+                ),
+                Divider(height: 1, color: AppColors.divider),
+                _buildMyClubsSection(myClubs),
+                if (isAdmin) _buildMyContentSection(admin.id),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

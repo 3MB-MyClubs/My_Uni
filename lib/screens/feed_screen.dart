@@ -49,6 +49,7 @@ import '../widgets/poll_card.dart';
 import '../widgets/post_share_sheet.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/app_motion.dart';
+import '../widgets/instagram_refresh_control.dart';
 import '../services/supabase_interaction_service.dart';
 import '../services/supabase_post_service.dart';
 import '../services/notification_inbox_service.dart';
@@ -480,179 +481,176 @@ class _FeedScreenState extends State<FeedScreen> {
     final showFeedSkeleton = _loadingFeedContent && mixed.isEmpty;
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        color: AppColors.primaryRed,
-        child: NotificationListener<ScrollUpdateNotification>(
-          onNotification: (n) {
-            // Vertical feed scroll only (depth 0) — not the horizontal events
-            // rail. setState fires only on threshold crossings (≤2 per
-            // gesture), and post-_FeedCache such a rebuild is just a hash
-            // compare. Top overscroll is negative, so pull-to-refresh stays
-            // unblurred.
-            if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
-            final under = n.metrics.pixels > 1.0;
-            if (under != _scrolledUnder) {
-              setState(() => _scrolledUnder = under);
-            }
-            return false;
-          },
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const _FeedBouncePhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            slivers: [
-              _buildTopBar(),
-              _buildGreeting(),
-              _buildEventsRail(),
-              _buildFeedTabs(),
-              _buildComposer(),
-              if (showFeedSkeleton) ...[
-                ..._buildFeedSkeletonSlivers(),
-              ] else if (mixed.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const GentleFloat(child: _EmptyFeedArt()),
-                          const SizedBox(height: 18),
-                          Text(
-                            AppLocalizations.of(context)!.nothingHere,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            AppLocalizations.of(context)!.followClubs,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.secondaryText,
-                              height: 1.4,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton.icon(
-                            onPressed: () => setState(() => _feedTab = 1),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primaryRed,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(12),
-                                ),
-                              ),
-                              elevation: 0,
-                            ),
-                            icon: Icon(Icons.explore_rounded, size: 18),
-                            label: Text(
-                              AppLocalizations.of(context)!.exploreClubs,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else ...[
-                SliverToBoxAdapter(
+      body: NotificationListener<ScrollUpdateNotification>(
+        onNotification: (n) {
+          // Vertical feed scroll only (depth 0) — not the horizontal events
+          // rail. setState fires only on threshold crossings (≤2 per
+          // gesture), and post-_FeedCache such a rebuild is just a hash
+          // compare. Top overscroll is negative, so pull-to-refresh stays
+          // unblurred.
+          if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+          final under = n.metrics.pixels > 1.0;
+          if (under != _scrolledUnder) {
+            setState(() => _scrolledUnder = under);
+          }
+          return false;
+        },
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const _FeedBouncePhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          slivers: [
+            InstagramRefreshControl(onRefresh: _onRefresh),
+            _buildTopBar(),
+            _buildGreeting(),
+            _buildEventsRail(),
+            _buildFeedTabs(),
+            _buildComposer(),
+            if (showFeedSkeleton) ...[
+              ..._buildFeedSkeletonSlivers(),
+            ] else if (mixed.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-                    child: Row(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        const GentleFloat(child: _EmptyFeedArt()),
+                        const SizedBox(height: 18),
                         Text(
-                          AppLocalizations.of(context)!.latest,
+                          AppLocalizations.of(context)!.nothingHere,
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppColors.text,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          AppLocalizations.of(context)!.followClubs,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.secondaryText,
+                            height: 1.4,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: () => setState(() => _feedTab = 1),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryRed,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(12),
+                              ),
+                            ),
+                            elevation: 0,
+                          ),
+                          icon: Icon(Icons.explore_rounded, size: 18),
+                          label: Text(
+                            AppLocalizations.of(context)!.exploreClubs,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate((context, i) {
-                    final item = mixed[i];
-                    if (item is List<User>) {
-                      return _PeopleSuggestionCard(
-                        key: const ValueKey('home-people-suggestions'),
-                        suggestions: item,
-                        onFollowed: () => setState(() {}),
-                      );
-                    }
-                    if (item is _EventSuggestion) {
-                      return _TrendingEventCard(
-                        key: ValueKey('home-event-suggestion-${item.event.id}'),
-                        event: item.event,
-                        onUpdate: () => setState(() {}),
-                      );
-                    }
-                    if (item is _ClubSuggestion) {
-                      return _ClubSuggestionCard(
-                        key: ValueKey('home-club-suggestion-${item.club.id}'),
-                        club: item.club,
-                        onUpdate: () => setState(() {}),
-                      );
-                    }
-                    final feedItem = item as _FeedItem;
-                    return KeyedSubtree(
-                      key: ValueKey('home-feed-item-${feedItem.id}'),
-                      child: _buildFeedCard(feedItem, i),
-                    );
-                  }, childCount: mixed.length),
-                ),
-                SliverToBoxAdapter(
-                  child: Semantics(
-                    key: const ValueKey('home-feed-end'),
-                    container: true,
-                    child: SizedBox(
-                      height: 56,
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle_rounded,
-                              size: 18,
-                              color: AppColors.primaryRed,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              AppLocalizations.of(context)!.endOfFeed,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                          ],
+              )
+            else ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                  child: Row(
+                    children: [
+                      Text(
+                        AppLocalizations.of(context)!.latest,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate((context, i) {
+                  final item = mixed[i];
+                  if (item is List<User>) {
+                    return _PeopleSuggestionCard(
+                      key: const ValueKey('home-people-suggestions'),
+                      suggestions: item,
+                      onFollowed: () => setState(() {}),
+                    );
+                  }
+                  if (item is _EventSuggestion) {
+                    return _TrendingEventCard(
+                      key: ValueKey('home-event-suggestion-${item.event.id}'),
+                      event: item.event,
+                      onUpdate: () => setState(() {}),
+                    );
+                  }
+                  if (item is _ClubSuggestion) {
+                    return _ClubSuggestionCard(
+                      key: ValueKey('home-club-suggestion-${item.club.id}'),
+                      club: item.club,
+                      onUpdate: () => setState(() {}),
+                    );
+                  }
+                  final feedItem = item as _FeedItem;
+                  return KeyedSubtree(
+                    key: ValueKey('home-feed-item-${feedItem.id}'),
+                    child: _buildFeedCard(feedItem, i),
+                  );
+                }, childCount: mixed.length),
+              ),
+              SliverToBoxAdapter(
+                child: Semantics(
+                  key: const ValueKey('home-feed-end'),
+                  container: true,
+                  child: SizedBox(
+                    height: 56,
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: AppColors.primaryRed,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            AppLocalizations.of(context)!.endOfFeed,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
