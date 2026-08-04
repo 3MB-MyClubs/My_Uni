@@ -34,6 +34,7 @@ import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
+import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
 import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
@@ -1839,11 +1840,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ],
                     ),
                   ),
-                GestureDetector(
-                  key: ValueKey('chat-message-${m.id}'),
-                  behavior: HitTestBehavior.opaque,
-                  onLongPress: () => _openMessageLongPress(m),
-                  child: bubble,
+                // Swipe right to reply, same as long-press → Reply. Gated on
+                // the same write check, so read-only threads stay inert.
+                SwipeToReply(
+                  key: ValueKey('chat-swipe-reply-${m.id}'),
+                  enabled: chatStore.canWriteThread(widget.threadId, _myId),
+                  onReply: () => _beginReply(m),
+                  child: GestureDetector(
+                    key: ValueKey('chat-message-${m.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: () => _openMessageLongPress(m),
+                    child: bubble,
+                  ),
                 ),
                 if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
                 // Outgoing student messages expose a compact delivery state.
