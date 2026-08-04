@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -13,6 +14,7 @@ import '../services/app_colors.dart';
 import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
+import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
@@ -22,6 +24,7 @@ import '../services/notification_inbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/people_service.dart';
 import '../services/photo_orientation.dart';
+import '../services/image_cache_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
@@ -302,6 +305,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
+    if (chatStore.takeAttachmentUploadFailure()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
+        );
+    }
   }
 
   /// Sends the composer draft, or [text] when a starter chip was tapped.
@@ -486,13 +496,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (!mounted || result == null) return;
-    _sendAttachments(result);
+    await _sendAttachments(result);
   }
 
-  void _sendAttachments(MediaPreviewResult result) {
+  Future<void> _sendAttachments(MediaPreviewResult result) async {
     final sentMessages = <ChatMessage>[];
+    var stagingFailed = false;
     for (final media in result.items) {
-      if (!File(media.file.path).existsSync()) continue;
+      late final String stagedPath;
+      try {
+        stagedPath = await stageChatAttachment(
+          media.file.path,
+          sourceName: media.file.name,
+        );
+      } on Object {
+        stagingFailed = true;
+        continue;
+      }
       final isFirst = sentMessages.isEmpty;
       final sent = chatStore.sendMessage(
         threadId: widget.threadId,
@@ -501,17 +521,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         kind: media.type == ChatMediaType.image
             ? ChatMessageKind.photo
             : ChatMessageKind.file,
-        attachmentPath: media.file.path,
+        attachmentPath: stagedPath,
         attachmentName: media.file.name,
         attachmentSize: media.sizeBytes,
         replyToMessageId: isFirst ? _replyingTo?.id : null,
       );
       if (sent != null) sentMessages.add(sent);
     }
+    if (!mounted) return;
     if (sentMessages.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.mediaSendFailed)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            stagingFailed ? S.couldNotAttachPhoto : S.mediaSendFailed,
+          ),
+        ),
+      );
       return;
     }
     _inputController.clear();
@@ -2020,6 +2045,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isRemote = path.startsWith('http://') || path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
+    final ImageProvider imageProvider = isRemote
+        ? CachedNetworkImageProvider(
+            path,
+            cacheKey: stableSupabaseSignedUrlCacheKey(path),
+          )
+        : FileImage(file!);
     return GestureDetector(
       key: ValueKey('chat-photo-${message.id}'),
       onTap: exists
@@ -2031,9 +2062,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 child: InteractiveViewer(
                   maxScale: 4,
                   child: Center(
-                    child: isRemote
-                        ? AppNetworkImage(url: path, fit: BoxFit.contain)
-                        : Image.file(file!, fit: BoxFit.contain),
+                    child: Image(image: imageProvider, fit: BoxFit.contain),
                   ),
                 ),
               ),
@@ -2055,7 +2084,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ? AppNetworkImage(
                     key: ValueKey('chat-photo-image-${message.id}'),
                     url: path,
-                    cacheKey: 'chat-photo-${message.id}',
+                    cacheKey:
+                        stableSupabaseSignedUrlCacheKey(path) ??
+                        'chat-photo-${message.id}',
                     cacheWidth: 320,
                     fit: BoxFit.cover,
                     useOldImageOnUrlChange: true,

@@ -1,6 +1,4 @@
 import 'dart:async' show unawaited;
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,6 +14,7 @@ import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
+import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_chat_prefs.dart';
@@ -235,6 +234,13 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
+    if (chatStore.takeAttachmentUploadFailure()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
+        );
+    }
   }
 
   void _onScroll() {
@@ -631,16 +637,26 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           ),
         );
         if (!mounted || result == null) return;
-        _sendAttachments(result);
+        await _sendAttachments(result);
       case ClubAttachment.poll:
         await _composePoll();
     }
   }
 
-  void _sendAttachments(MediaPreviewResult result) {
+  Future<void> _sendAttachments(MediaPreviewResult result) async {
     final sentMessages = <ChatMessage>[];
+    var stagingFailed = false;
     for (final media in result.items) {
-      if (!File(media.file.path).existsSync()) continue;
+      late final String stagedPath;
+      try {
+        stagedPath = await stageChatAttachment(
+          media.file.path,
+          sourceName: media.file.name,
+        );
+      } on Object {
+        stagingFailed = true;
+        continue;
+      }
       final isFirst = sentMessages.isEmpty;
       final caption = isFirst ? result.caption : '';
       final sent = chatStore.sendMessage(
@@ -653,17 +669,22 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         mentions: isFirst
             ? ClubComposer.resolveMentions(caption, _members)
             : const [],
-        attachmentPath: media.file.path,
+        attachmentPath: stagedPath,
         attachmentName: media.file.name,
         attachmentSize: media.sizeBytes,
         replyToMessageId: isFirst ? _replyingTo?.id : null,
       );
       if (sent != null) sentMessages.add(sent);
     }
+    if (!mounted) return;
     if (sentMessages.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.mediaSendFailed)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            stagingFailed ? S.couldNotAttachPhoto : S.mediaSendFailed,
+          ),
+        ),
+      );
       return;
     }
     _inputController.clear();

@@ -1032,6 +1032,12 @@ class S {
       _t('Photos & videos', 'Fotoğraf ve videolar');
   static String get attachPhoto => _t('Photo', 'Fotoğraf');
   static String get attachVideo => _t('Video', 'Video');
+  static String get couldNotAttachPhoto =>
+      _t('Could not attach that photo.', 'Fotoğraf eklenemedi.');
+  static String get photoSavedLocallyUploadFailed => _t(
+    'Photo saved locally, but upload failed.',
+    'Fotoğraf cihaza kaydedildi ama yükleme başarısız oldu.',
+  );
   static String get attachFile => _t('File', 'Dosya');
   static String get mediaCaptionHint => _t('Add a caption…', 'Açıklama ekle…');
   static String get mediaSend => _t('Send media', 'Medyayı gönder');
