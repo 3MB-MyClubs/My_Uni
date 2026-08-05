@@ -3154,8 +3154,6 @@ class ChatStore extends ChangeNotifier {
     if (markedSeen) unawaited(_flushRemoteChanges());
   }
 
-  // ── Demo presence ────────────────────────────────────────────────────────────
-
   void _createGroupMessageNotifications(ChatMessage message) {
     final group = groupForThread(message.threadId);
     if (group == null) return;

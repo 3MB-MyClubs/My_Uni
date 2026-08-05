@@ -10,7 +10,7 @@ import 'app_pressable.dart';
 /// Identity + live community information header for every club chat.
 ///
 /// Follows the Club Board + Chat handoff: back, club monogram, name with the
-/// reader's own role, "N members · M active", and the notification / settings
+/// reader's own role, "N members", and the notification / settings
 /// icon buttons. Navigation between the two lanes belongs to the segments
 /// below, and Members / About live behind the ••• menu.
 class ClubCommunityHeader extends StatelessWidget {
@@ -26,7 +26,6 @@ class ClubCommunityHeader extends StatelessWidget {
     this.onToggleMute,
     this.onOpenSettings,
     this.muted = false,
-    this.activeCount = 0,
     this.viewerRoleTitle,
   });
 
@@ -40,9 +39,6 @@ class ClubCommunityHeader extends StatelessWidget {
   final VoidCallback? onToggleMute;
   final VoidCallback? onOpenSettings;
   final bool muted;
-
-  /// Members online right now, shown next to the member count.
-  final int activeCount;
 
   /// The reader's own board title, when they hold one — the design puts it
   /// straight next to the club name so authority is visible without a tap.
@@ -128,40 +124,15 @@ class ClubCommunityHeader extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 1),
-                          Row(
-                            children: [
-                              Text(
-                                S.communityMembers(memberCount),
-                                key: const ValueKey('club-community-members'),
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  height: 1.2,
-                                  fontWeight: FontWeight.w600,
-                                  color: t.sub,
-                                ),
-                              ),
-                              if (activeCount > 0) ...[
-                                Text(
-                                  ' · ',
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    height: 1.2,
-                                    fontWeight: FontWeight.w600,
-                                    color: t.sub,
-                                  ),
-                                ),
-                                Text(
-                                  S.communityActiveNow(activeCount),
-                                  key: const ValueKey('club-community-active'),
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    height: 1.2,
-                                    fontWeight: FontWeight.w600,
-                                    color: t.online,
-                                  ),
-                                ),
-                              ],
-                            ],
+                          Text(
+                            S.communityMembers(memberCount),
+                            key: const ValueKey('club-community-members'),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              height: 1.2,
+                              fontWeight: FontWeight.w600,
+                              color: t.sub,
+                            ),
                           ),
                         ],
                       ),

@@ -45,7 +45,6 @@ import 'onboarding/onboarding_service.dart';
 import 'onboarding/starter_checklist_service.dart';
 import 'debug/device_preview.dart';
 import 'services/event_cleanup_service.dart';
-import 'services/app_presence_service.dart';
 import 'services/moderation_service.dart';
 import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
@@ -262,13 +261,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _launchTimer?.cancel();
-    unawaited(appPresenceService.stop());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    appPresenceService.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       // Returning from the store is the important resume path: the update
       // requirement stays visible until the newly installed build is verified.
@@ -351,7 +348,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final currentUserId =
         authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
-      unawaited(appPresenceService.startForAuthenticatedSession());
       unawaited(pushNotificationService.activateForCurrentUser());
       unawaited(moderationService.activateForUser(currentUserId));
       _prefsLoadedForUserId = currentUserId;
@@ -617,7 +613,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               isAdmin: isAdmin,
               onLogout: () {
                 _savePrefs();
-                unawaited(appPresenceService.stop());
                 moderationService.clearActiveUser();
                 accountPreferencesService.clear();
                 _prefsLoadedForUserId = null;

@@ -10,7 +10,6 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
-import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
@@ -419,7 +418,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         name: club.name,
         role: S.adminLabel,
         isClubAccount: true,
-        online: true,
       );
     }
     final adminIndex = clubAdmins.indexWhere((admin) => admin.id == userId);
@@ -429,7 +427,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         name: clubAdmins[adminIndex].name,
         role: S.adminLabel,
         isClubAccount: true,
-        online: true,
       );
     }
     if (userId == appAdmin.id) {
@@ -460,7 +457,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       role: club == null
           ? null
           : studentClubRoleService.roleTitleFor(club, userId),
-      online: appPresenceService.onlineUserIds.contains(userId),
     );
   }
 
@@ -468,7 +464,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   List<ClubPerson> get _members {
     final club = _club;
     if (club == null) return const [];
-    final online = appPresenceService.onlineUserIds;
     final people = <ClubPerson>[];
     final seen = <String>{};
     for (final user in _memberUsers) {
@@ -479,7 +474,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           id: user.id,
           name: mine ? S.you : userState.displayNameFor(user.id, user.name),
           role: studentClubRoleService.roleTitleFor(club, user.id),
-          online: online.contains(user.id),
         ),
       );
     }
@@ -1464,7 +1458,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         listenable: Listenable.merge([
           chatStore,
           userState,
-          appPresenceService,
           _memberDirectoryRevision,
         ]),
         builder: (sheetContext, _) => ClubCommunitySheet(
@@ -1478,8 +1471,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   Widget _membersPanel(ClubChatTheme t) {
     final people = _members;
-    final online = people.where((person) => person.online).toList();
-    final offline = people.where((person) => !person.online).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1504,10 +1495,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               ),
             ),
           ),
-        ClubSheetLabel(label: S.activeNowGroup(online.length), t: t),
-        for (final person in online) _memberRow(person, t),
-        ClubSheetLabel(label: S.offlineGroup(offline.length), t: t, top: true),
-        for (final person in offline) _memberRow(person, t),
+        ClubSheetLabel(label: S.chatMembers(people.length), t: t),
+        for (final person in people) _memberRow(person, t),
       ],
     );
   }
@@ -1518,26 +1507,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _avatarFor(person, 38),
-              if (person.online)
-                Positioned(
-                  right: -1,
-                  bottom: -1,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: t.online,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: t.sheet, width: 2.5),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          _avatarFor(person, 38),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -1565,15 +1535,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                       show: clubChatPrefs.showRoles,
                     ),
                   ],
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  person.online ? S.activeNowLabel : S.offlineLabel,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: person.online ? t.online : t.sub,
-                  ),
                 ),
               ],
             ),
@@ -1673,7 +1634,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         listenable: Listenable.merge([
           chatStore,
           userState,
-          appPresenceService,
           rsvpStore,
           ?_communityInfo,
         ]),
@@ -1734,7 +1694,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       club: club,
       avatarColor: _accent,
       memberCount: memberCount,
-      activeCount: _members.where((person) => person.online).length,
       viewerRoleTitle: studentClubRoleService.roleTitleFor(club, _myId),
       // Inside the room the identity is not a link out: tapping it opens the
       // Chat lane. The club profile lives behind the ••• menu.
