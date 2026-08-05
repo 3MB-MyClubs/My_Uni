@@ -90,6 +90,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('chat-filter-students')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-filter-clubs')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-filter-solo')), findsNothing);
     final initialIndicator = tester.widget<AnimatedAlign>(
       find.byKey(const ValueKey('chat-filter-liquid-indicator')),
     );

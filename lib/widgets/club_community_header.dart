@@ -10,9 +10,9 @@ import 'app_pressable.dart';
 /// Identity + live community information header for every club chat.
 ///
 /// Follows the Club Board + Chat handoff: back, club monogram, name with the
-/// reader's own role, "N members · M active", and the notification / settings
-/// icon buttons. Navigation between the two lanes belongs to the segments
-/// below, and Members / About live behind the ••• menu.
+/// reader's own role, "N members · M active", and the notification / private
+/// chat / settings icon buttons. Navigation between the two lanes belongs to
+/// the segments below, and Members / About live behind the ••• menu.
 class ClubCommunityHeader extends StatelessWidget {
   const ClubCommunityHeader({
     super.key,
@@ -24,6 +24,7 @@ class ClubCommunityHeader extends StatelessWidget {
     this.topInset = 0,
     this.onBack,
     this.onToggleMute,
+    this.onMessagePrivately,
     this.onOpenSettings,
     this.muted = false,
     this.activeCount = 0,
@@ -38,6 +39,7 @@ class ClubCommunityHeader extends StatelessWidget {
   final double topInset;
   final VoidCallback? onBack;
   final VoidCallback? onToggleMute;
+  final VoidCallback? onMessagePrivately;
   final VoidCallback? onOpenSettings;
   final bool muted;
 
@@ -181,6 +183,16 @@ class ClubCommunityHeader extends StatelessWidget {
             active: muted,
             onTap: onToggleMute,
           ),
+          if (onMessagePrivately != null) ...[
+            const SizedBox(width: 8),
+            ClubHeaderIconButton(
+              key: const ValueKey('message-club-privately'),
+              icon: Icons.chat_bubble_outline_rounded,
+              label: S.messageClub,
+              t: t,
+              onTap: onMessagePrivately,
+            ),
+          ],
           const SizedBox(width: 8),
           ClubHeaderIconButton(
             icon: Icons.more_horiz_rounded,

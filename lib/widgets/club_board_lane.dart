@@ -2,30 +2,34 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
 import '../services/app_strings.dart';
-import '../services/chat_store.dart';
 import 'app_pressable.dart';
 import 'club_chat_theme.dart';
 import 'club_stream_items.dart';
 
-/// The one navigation control of a club room: Board | Chat, each segment
-/// carrying its own unread count.
+/// The navigation control of a club room: Board | Chat | Solo Chat.
+enum ClubCommunityTab { board, chat, solo }
+
+/// The one navigation control of a club room, each segment carrying its own
+/// unread count where the underlying surface has one.
 ///
 /// Follows the "Club Board + Chat" handoff — a notice is one object, so the
 /// Board is the notice area and the Chat is the room where board replies live.
 class ClubLaneSwitch extends StatelessWidget {
   const ClubLaneSwitch({
     super.key,
-    required this.lane,
-    required this.onLane,
+    required this.tab,
+    required this.onTab,
     required this.boardUnread,
     required this.chatUnread,
+    required this.soloUnread,
     required this.t,
   });
 
-  final ClubChatLane lane;
-  final void Function(ClubChatLane lane) onLane;
+  final ClubCommunityTab tab;
+  final void Function(ClubCommunityTab tab) onTab;
   final int boardUnread;
   final int chatUnread;
+  final int soloUnread;
   final ClubChatTheme t;
 
   @override
@@ -47,17 +51,24 @@ class ClubLaneSwitch extends StatelessWidget {
         child: Row(
           children: [
             _segment(
-              ClubChatLane.board,
+              ClubCommunityTab.board,
               Icons.campaign_outlined,
               S.clubBoardTab,
               boardUnread,
             ),
             const SizedBox(width: 4),
             _segment(
-              ClubChatLane.chat,
+              ClubCommunityTab.chat,
               Icons.groups_2_outlined,
               S.clubChatTab,
               chatUnread,
+            ),
+            const SizedBox(width: 4),
+            _segment(
+              ClubCommunityTab.solo,
+              Icons.lock_outline_rounded,
+              S.clubSoloChatTab,
+              soloUnread,
             ),
           ],
         ),
@@ -65,8 +76,13 @@ class ClubLaneSwitch extends StatelessWidget {
     );
   }
 
-  Widget _segment(ClubChatLane value, IconData icon, String label, int unread) {
-    final on = lane == value;
+  Widget _segment(
+    ClubCommunityTab value,
+    IconData icon,
+    String label,
+    int unread,
+  ) {
+    final on = tab == value;
     return Expanded(
       child: Semantics(
         button: true,
@@ -74,7 +90,7 @@ class ClubLaneSwitch extends StatelessWidget {
         label: unread > 0 ? '$label, ${S.nNew(unread)}' : label,
         child: GestureDetector(
           key: ValueKey('club-lane-${value.name}'),
-          onTap: () => onLane(value),
+          onTap: () => onTab(value),
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
@@ -136,6 +152,251 @@ class ClubLaneSwitch extends StatelessWidget {
   }
 }
 
+/// One private club-inbox row shown by the Solo Chat tab.
+class ClubSoloChatEntry {
+  const ClubSoloChatEntry({
+    required this.threadId,
+    required this.title,
+    required this.preview,
+    required this.whenLabel,
+    required this.unread,
+    required this.avatar,
+  });
+
+  final String threadId;
+  final String title;
+  final String preview;
+  final String whenLabel;
+  final int unread;
+  final Widget avatar;
+}
+
+/// The private-inbox surface behind the third club-room tab.
+class ClubSoloChatLane extends StatelessWidget {
+  const ClubSoloChatLane({
+    super.key,
+    required this.showAll,
+    required this.entries,
+    required this.t,
+    required this.onOpen,
+    this.onStart,
+  });
+
+  final bool showAll;
+  final List<ClubSoloChatEntry> entries;
+  final ClubChatTheme t;
+  final ValueChanged<String> onOpen;
+  final VoidCallback? onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) {
+      return _emptyState();
+    }
+    return Column(
+      key: const ValueKey('club-solo-chat-list'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+          child: Row(
+            children: [
+              Icon(Icons.lock_outline_rounded, size: 16, color: t.red),
+              const SizedBox(width: 8),
+              Text(
+                showAll ? S.soloChatAllTitle : S.soloChatWithClubTitle,
+                style: TextStyle(
+                  color: t.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
+            itemCount: entries.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
+            itemBuilder: (context, index) {
+              final entry = entries[index];
+              return _entryRow(entry);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _entryRow(ClubSoloChatEntry entry) {
+    final highlighted = entry.unread > 0;
+    return Material(
+      color: highlighted ? t.ltRed : t.sheet,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: ValueKey('club-solo-chat-row-${entry.threadId}'),
+        onTap: () => onOpen(entry.threadId),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
+          child: Row(
+            children: [
+              entry.avatar,
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: t.text,
+                              fontSize: 14,
+                              fontWeight: highlighted
+                                  ? FontWeight.w900
+                                  : FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (entry.whenLabel.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            entry.whenLabel,
+                            style: TextStyle(
+                              color: t.sub,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 11,
+                          color: t.red,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          S.privateSoloChat,
+                          style: TextStyle(
+                            color: t.red,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            entry.preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: t.sub,
+                              fontSize: 11.5,
+                              fontWeight: highlighted
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (highlighted) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 18),
+                            height: 18,
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: t.red,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Text(
+                              entry.unread > 99 ? '99+' : '${entry.unread}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    return Center(
+      key: const ValueKey('club-solo-chat-empty'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: t.accent.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.lock_outline_rounded, size: 31, color: t.red),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              showAll ? S.soloChatAllTitle : S.soloChatEmptyTitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: t.text,
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              showAll ? S.soloChatAllEmptyHint : S.soloChatEmptyHint,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: t.sub, fontSize: 13, height: 1.45),
+            ),
+            if (onStart != null) ...[
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                key: const ValueKey('club-solo-chat-start'),
+                onPressed: onStart,
+                icon: const Icon(Icons.lock_outline_rounded, size: 17),
+                label: Text(S.startSoloChat),
+                style: FilledButton.styleFrom(
+                  backgroundColor: t.red,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Uppercase group label above a notice group ("Pinned", "New · 2", "Earlier").
 class ClubBoardLabel extends StatelessWidget {
   const ClubBoardLabel({
@@ -171,11 +432,7 @@ class ClubBoardLabel extends StatelessWidget {
 /// One grouped list of notices — a single card, one hairline-separated row per
 /// notice.
 class ClubNoticeGroup extends StatelessWidget {
-  const ClubNoticeGroup({
-    super.key,
-    required this.rows,
-    required this.t,
-  });
+  const ClubNoticeGroup({super.key, required this.rows, required this.t});
 
   final List<Widget> rows;
   final ClubChatTheme t;
@@ -393,41 +650,41 @@ class _ClubNoticeRowState extends State<ClubNoticeRow> {
                   ...widget.attachments,
                   ?widget.reactions,
                   if (widget.replyEnabled) ...[
-                  const SizedBox(height: 13),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppPressable(
-                      key: ValueKey('club-notice-reply-${message.id}'),
-                      onTap: widget.onReplyInChat,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 13,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: t.ltRed,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.reply_rounded, size: 14, color: t.red),
-                            const SizedBox(width: 6),
-                            Text(
-                              widget.replyCount > 0
-                                  ? S.boardRepliesInChat(widget.replyCount)
-                                  : S.boardReplyInChat,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: t.red,
+                    const SizedBox(height: 13),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppPressable(
+                        key: ValueKey('club-notice-reply-${message.id}'),
+                        onTap: widget.onReplyInChat,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 13,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: t.ltRed,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.reply_rounded, size: 14, color: t.red),
+                              const SizedBox(width: 6),
+                              Text(
+                                widget.replyCount > 0
+                                    ? S.boardRepliesInChat(widget.replyCount)
+                                    : S.boardReplyInChat,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: t.red,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   ],
                 ],
               ),
@@ -446,7 +703,10 @@ class _ClubNoticeRowState extends State<ClubNoticeRow> {
     );
     final dot = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 5),
-      child: Text('·', style: muted.copyWith(color: t.sub.withValues(alpha: 0.5))),
+      child: Text(
+        '·',
+        style: muted.copyWith(color: t.sub.withValues(alpha: 0.5)),
+      ),
     );
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -483,11 +743,7 @@ class _ClubNoticeRowState extends State<ClubNoticeRow> {
 
 /// Footer of the Board for a member holding a role: the notice composer.
 class ClubBoardPostBar extends StatelessWidget {
-  const ClubBoardPostBar({
-    super.key,
-    required this.t,
-    required this.onPost,
-  });
+  const ClubBoardPostBar({super.key, required this.t, required this.onPost});
 
   final ClubChatTheme t;
   final VoidCallback onPost;
@@ -522,7 +778,11 @@ class ClubBoardPostBar extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.campaign_outlined, size: 17, color: Colors.white),
+                const Icon(
+                  Icons.campaign_outlined,
+                  size: 17,
+                  color: Colors.white,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   S.boardPostNotice,
@@ -641,7 +901,11 @@ class ClubBoardEmpty extends StatelessWidget {
             Text(
               canPost ? S.boardEmptyHintStaff : S.boardEmptyHintMember,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, height: 1.45, color: t.textMuted),
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.45,
+                color: t.textMuted,
+              ),
             ),
           ],
         ),

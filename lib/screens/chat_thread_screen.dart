@@ -96,6 +96,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ClubInboxConversation? get _clubInbox =>
       chatStore.clubInboxForThread(widget.threadId);
 
+  bool get _isClubInboxBoardViewer {
+    final conversation = _clubInbox;
+    final club = _club;
+    if (conversation == null || club == null) return false;
+    return club.boardMemberIds.contains(_myId) ||
+        managedClubForAdmin(_myId)?.id == conversation.clubId;
+  }
+
   User? _userForId(String userId) {
     final passedRecipient = widget.recipient;
     if (passedRecipient != null && passedRecipient.id == userId) {
@@ -283,7 +291,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (_clubInbox case final inbox?) inbox.profileId,
             ...chatStore
                 .messagesFor(widget.threadId, viewerId: _myId)
-                .map((message) => message.senderId),
+                .map((message) => chatStore.senderIdForViewer(message, _myId)),
           }
           ..remove(_myId)
           ..removeAll(_requestedParticipantProfileIds);
@@ -1159,7 +1167,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final title = showingStudent
         ? userState.displayNameFor(conversation.profileId, student?.name ?? '')
         : club?.name ?? '';
-    final subtitle = showingStudent ? S.clubInbox : S.privateClubMessage;
     return Container(
       padding: EdgeInsets.fromLTRB(
         10,
@@ -1230,11 +1237,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ),
                           ),
                           const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.lock_outline_rounded,
+                                size: 12,
+                                color: AppColors.primaryRed,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  S.privateSoloChat,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.primaryRed,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 1),
                           Text(
-                            subtitle,
+                            showingStudent ? S.clubInbox : S.privateClubMessage,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: AppColors.secondaryText,
-                              fontSize: 10.5,
+                              fontSize: 9.5,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1633,11 +1665,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final next = i < messages.length - 1 ? messages[i + 1] : null;
       final newDay = prev == null || !_sameDay(prev.createdAt, m.createdAt);
       if (newDay) items.add(_DateChip(label: _dayLabel(m.createdAt)));
+      final senderId = chatStore.senderIdForViewer(m, _myId);
+      final previousSenderId = prev == null
+          ? null
+          : chatStore.senderIdForViewer(prev, _myId);
+      final nextSenderId = next == null
+          ? null
+          : chatStore.senderIdForViewer(next, _myId);
       final firstOfRun =
-          newDay || prev.senderId != m.senderId || m.replyToMessageId != null;
+          newDay || previousSenderId != senderId || m.replyToMessageId != null;
       final lastOfRun =
           next == null ||
-          next.senderId != m.senderId ||
+          nextSenderId != senderId ||
           next.replyToMessageId != null ||
           !_sameDay(next.createdAt, m.createdAt);
       items.add(
@@ -1662,14 +1701,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required bool lastOfRun,
   }) {
     final mine = chatStore.isMessageOwner(m, _myId);
-    final (senderName, senderIsAdmin) = _senderInfo(m.senderId);
+    final senderId = chatStore.senderIdForViewer(m, _myId);
+    final (senderName, senderIsAdmin) = _senderInfo(senderId);
     final club = _club;
     final isMultiParticipant = _isClub || _isGroup;
     final showHeader = isMultiParticipant && !mine;
+    final showClubInboxSenderLabel =
+        _isClubInbox && (mine ? _isClubInboxBoardViewer : true);
     final showAvatar = isMultiParticipant;
     final VoidCallback? openSenderProfile =
-        !mine && !senderIsAdmin && _userForId(m.senderId) != null
-        ? () => _openUserProfileById(m.senderId)
+        !mine && !senderIsAdmin && _userForId(senderId) != null
+        ? () => _openUserProfileById(senderId)
         : null;
     final senderAvatar = Container(
       key: _isGroup ? ValueKey('group-message-avatar-${m.id}') : null,
@@ -1700,7 +1742,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               shape: 'circle',
             )
           : UserAvatar(
-              userId: m.senderId,
+              userId: senderId,
               name: senderName,
               size: 28,
               fontSize: 11,
@@ -1844,7 +1886,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 // group stays readable at a glance.
                                 color: senderIsAdmin
                                     ? AppColors.primaryRed
-                                    : _accentForUser(m.senderId),
+                                    : _accentForUser(senderId),
                               ),
                             ),
                           ),
@@ -1887,6 +1929,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                 ),
                 if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
+                if (showClubInboxSenderLabel)
+                  Padding(
+                    key: ValueKey('chat-sender-label-${m.id}'),
+                    padding: const EdgeInsets.only(top: 3, left: 4, right: 4),
+                    child: Text(
+                      senderName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ),
                 // Outgoing student messages expose a compact delivery state.
                 // Group checkmarks are directly tappable; long-pressing the
                 // bubble remains a secondary route to the same information.

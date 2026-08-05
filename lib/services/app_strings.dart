@@ -868,6 +868,8 @@ class S {
   );
   static String get clubChat => _t('Club chat', 'Kulüp sohbeti');
   static String get clubInbox => _t('Club inbox', 'Kulüp gelen kutusu');
+  static String get privateSoloChat =>
+      _t('Private solo chat', 'Özel birebir sohbet');
   static String get privateClubMessage =>
       _t('Private club message', 'Özel kulüp mesajı');
   static String get messageClub => _t('Message club', 'Kulübe mesaj yaz');
@@ -978,12 +980,29 @@ class S {
       _t('Events · $n', 'Etkinlikler · $n');
   static String get communityNotices => _t('Notices', 'Duyurular');
 
-  // ── Club Board + Chat (two lanes of one club room)
+  // ── Club Board + Chat + Solo Chat
   /// The official notice area — the lane a club room lands on.
   static String get clubBoardTab => _t('Board', 'Pano');
 
   /// The room itself, where board-member replies live.
   static String get clubChatTab => _t('Chat', 'Sohbet');
+  static String get clubSoloChatTab => _t('Solo Chat', 'Birebir Sohbet');
+  static String get soloChatWithClubTitle =>
+      _t('Your private chat with the club', 'Kulüple özel sohbetin');
+  static String get soloChatAllTitle =>
+      _t('All private chats', 'Tüm özel sohbetler');
+  static String get soloChatEmptyTitle =>
+      _t('No solo chat yet', 'Henüz birebir sohbet yok');
+  static String get soloChatEmptyHint => _t(
+    'Start a private conversation with the club. Only you and the club team can see it.',
+    'Kulüple özel bir sohbet başlat. Bu sohbeti yalnızca sen ve kulüp ekibi görebilir.',
+  );
+  static String get soloChatAllEmptyHint => _t(
+    'Student conversations with the club will appear here.',
+    'Öğrencilerin kulüple yaptığı sohbetler burada görünecek.',
+  );
+  static String get startSoloChat =>
+      _t('Start solo chat', 'Birebir sohbet başlat');
   static String get boardGroupPinned => _t('Pinned', 'Sabitlenen');
   static String boardGroupNew(int n) => _t('New · $n', 'Yeni · $n');
   static String get boardGroupEarlier => _t('Earlier', 'Daha önce');
