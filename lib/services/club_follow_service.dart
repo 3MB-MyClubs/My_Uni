@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_config.dart';
+import 'supabase_read_cache.dart';
+import 'lazy_content_loader.dart';
 
 class ClubFollowService {
   SupabaseClient? get _client {
@@ -8,19 +10,38 @@ class ClubFollowService {
     return Supabase.instance.client;
   }
 
-  Future<Set<String>> fetchFollowedClubIds(String userId) async {
+  static const _followedClubTtl = Duration(seconds: 60);
+
+  String _cacheKey(String userId) => 'club-following:$userId';
+
+  void _invalidateUser(String userId) {
+    supabaseReadCache.invalidate(_cacheKey(userId));
+    supabaseReadCache.invalidate('people-profile-details:$userId');
+  }
+
+  Future<Set<String>> fetchFollowedClubIds(
+    String userId, {
+    bool force = false,
+  }) async {
     final client = _client;
     if (client == null || userId.isEmpty) return const {};
 
-    final rows = await client
-        .from('club_followers')
-        .select('club_id')
-        .eq('profile_id', userId);
+    return supabaseReadCache.getOrFetch<Set<String>>(
+      key: _cacheKey(userId),
+      ttl: _followedClubTtl,
+      force: force,
+      fetch: () async {
+        final rows = await client
+            .from('club_followers')
+            .select('club_id')
+            .eq('profile_id', userId);
 
-    return rows
-        .map((row) => (row as Map)['club_id']?.toString() ?? '')
-        .where((clubId) => clubId.isNotEmpty)
-        .toSet();
+        return rows
+            .map((row) => (row as Map)['club_id']?.toString() ?? '')
+            .where((clubId) => clubId.isNotEmpty)
+            .toSet();
+      },
+    );
   }
 
   Future<void> followClub({
@@ -29,6 +50,8 @@ class ClubFollowService {
   }) async {
     final client = _client;
     if (client == null || userId.isEmpty || clubId.isEmpty) return;
+
+    _invalidateUser(userId);
 
     // Insert-ignoring-duplicate: one round trip instead of check-then-insert,
     // and an existing row (e.g. a board_member role) is left untouched.
@@ -42,6 +65,9 @@ class ClubFollowService {
       if (error.code == '23505') return;
       rethrow;
     }
+    supabaseReadCache.invalidate('club-community-count:$clubId');
+    supabaseReadCache.invalidate('club-community-members:$clubId');
+    lazyContentLoader.invalidateContent();
   }
 
   Future<void> unfollowClub({
@@ -51,11 +77,16 @@ class ClubFollowService {
     final client = _client;
     if (client == null || userId.isEmpty || clubId.isEmpty) return;
 
+    _invalidateUser(userId);
+
     await client
         .from('club_followers')
         .delete()
         .eq('profile_id', userId)
         .eq('club_id', clubId);
+    supabaseReadCache.invalidate('club-community-count:$clubId');
+    supabaseReadCache.invalidate('club-community-members:$clubId');
+    lazyContentLoader.invalidateContent();
   }
 
   Future<void> setFollowedClubIds({
@@ -64,6 +95,8 @@ class ClubFollowService {
   }) async {
     final client = _client;
     if (client == null || userId.isEmpty) return;
+
+    _invalidateUser(userId);
 
     await client.from('club_followers').delete().eq('profile_id', userId);
     final rows = clubIds
@@ -79,6 +112,15 @@ class ClubFollowService {
     if (rows.isNotEmpty) {
       await client.from('club_followers').insert(rows);
     }
+    // The previous membership set is not available after the replacement, so
+    // invalidate all opened-club snapshots rather than risking stale counts
+    // for a club that was removed from the new set.
+    supabaseReadCache.invalidateWhere(
+      (key) =>
+          key.startsWith('club-community-count:') ||
+          key.startsWith('club-community-members:'),
+    );
+    lazyContentLoader.invalidateContent();
   }
 }
 

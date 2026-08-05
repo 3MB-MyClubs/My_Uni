@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -10,9 +11,9 @@ import '../models/club.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
-import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
+import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
@@ -22,13 +23,13 @@ import '../services/notification_inbox_service.dart';
 import '../services/notification_service.dart';
 import '../services/people_service.dart';
 import '../services/photo_orientation.dart';
+import '../services/image_cache_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
-import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
@@ -42,9 +43,6 @@ import 'media_preview_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
 enum _ChatAttachment { photo, camera }
-
-/// The presence green shared by the header dot and the avatar dots.
-const Color _onlineGreen = Color(0xFF2E7D32);
 
 /// A single direct message, student-created group, or club community thread.
 class ChatThreadScreen extends StatefulWidget {
@@ -190,16 +188,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isDirect) {
           final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
-          if (peerId != null) {
-            if (_userForId(peerId) == null) {
-              unawaited(_hydratePeerProfile(peerId));
-            } else {
-              unawaited(
-                appPresenceService.hydrateLastSeenForUsers([
-                  peerId,
-                ], force: true),
-              );
-            }
+          if (peerId != null && _userForId(peerId) == null) {
+            unawaited(_hydratePeerProfile(peerId));
           }
         } else {
           _requestedParticipantProfileIds.removeWhere(
@@ -260,10 +250,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _hydratePeerProfile(String peerId) async {
-    await Future.wait([
-      peopleService.hydrateProfilesByIds([peerId]),
-      appPresenceService.hydrateLastSeenForUsers([peerId]),
-    ]);
+    await peopleService.hydrateProfilesByIds([peerId]);
     if (mounted) setState(() {});
   }
 
@@ -301,6 +288,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
+    if (chatStore.takeAttachmentUploadFailure()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
+        );
+    }
   }
 
   /// Sends the composer draft, or [text] when a starter chip was tapped.
@@ -485,13 +479,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (!mounted || result == null) return;
-    _sendAttachments(result);
+    await _sendAttachments(result);
   }
 
-  void _sendAttachments(MediaPreviewResult result) {
+  Future<void> _sendAttachments(MediaPreviewResult result) async {
     final sentMessages = <ChatMessage>[];
+    var stagingFailed = false;
     for (final media in result.items) {
-      if (!File(media.file.path).existsSync()) continue;
+      late final String stagedPath;
+      try {
+        stagedPath = await stageChatAttachment(
+          media.file.path,
+          sourceName: media.file.name,
+        );
+      } on Object {
+        stagingFailed = true;
+        continue;
+      }
       final isFirst = sentMessages.isEmpty;
       final sent = chatStore.sendMessage(
         threadId: widget.threadId,
@@ -500,17 +504,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         kind: media.type == ChatMediaType.image
             ? ChatMessageKind.photo
             : ChatMessageKind.file,
-        attachmentPath: media.file.path,
+        attachmentPath: stagedPath,
         attachmentName: media.file.name,
         attachmentSize: media.sizeBytes,
         replyToMessageId: isFirst ? _replyingTo?.id : null,
       );
       if (sent != null) sentMessages.add(sent);
     }
+    if (!mounted) return;
     if (sentMessages.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.mediaSendFailed)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            stagingFailed ? S.couldNotAttachPhoto : S.mediaSendFailed,
+          ),
+        ),
+      );
       return;
     }
     _inputController.clear();
@@ -985,12 +994,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
           ),
           ListenableBuilder(
-            listenable: Listenable.merge([
-              chatStore,
-              userState,
-              appPresenceService,
-              ?_communityInfo,
-            ]),
+            listenable: Listenable.merge([chatStore, userState, ?_communityInfo]),
             builder: (context, _) {
               final canAccess = chatStore.canAccessThread(
                 widget.threadId,
@@ -1039,47 +1043,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final name = peer != null
         ? userState.displayNameFor(peer.id, peer.name)
         : '';
-    final online = appPresenceService.onlineUserIds.contains(peerId ?? '');
     final academicSummary = userState.academicSummaryFor(peerId ?? '');
 
     return _headerShell(
-      leading: PresenceAvatar(
+      leading: UserAvatar(
         userId: peer?.id ?? peerId ?? '',
         name: peer?.name ?? '',
         size: 38,
         fontSize: 15,
-        online: online,
       ),
       title: name,
-      // Presence leads, and the peer's programme trails it so the header still
-      // says who you are talking to.
+      // The peer's programme is what the header carries under the name.
       subtitle: Row(
         children: [
-          if (online) ...[
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: _onlineGreen,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            online
-                ? S.activeNowLabel
-                : S.lastOnlineLabel(
-                    appPresenceService.lastSeenAtFor(peerId ?? ''),
-                  ),
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: online ? _onlineGreen : AppColors.secondaryText,
-            ),
-          ),
-          if (academicSummary.isNotEmpty) ...[
-            _subtitleDot(),
+          if (academicSummary.isNotEmpty)
             Flexible(
               child: Text(
                 academicSummary,
@@ -1092,7 +1069,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               ),
             ),
-          ],
         ],
       ),
     );
@@ -1142,14 +1118,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 child: Row(
                   children: [
                     if (showingStudent)
-                      PresenceAvatar(
+                      UserAvatar(
                         userId: conversation.profileId,
                         name: title,
                         size: 40,
                         fontSize: 15,
-                        online: appPresenceService.onlineUserIds.contains(
-                          conversation.profileId,
-                        ),
                       )
                     else if (club != null)
                       ClubAvatar(
@@ -1228,14 +1201,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onTap: _openGroupInfo,
     );
   }
-
-  Widget _subtitleDot() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 5),
-    child: Text(
-      '·',
-      style: TextStyle(fontSize: 11.5, color: AppColors.secondaryText),
-    ),
-  );
 
   /// One bar for both thread kinds: back button, identity, optional drill-in
   /// chevron. Keeping the metrics in a single place stops the direct-message
@@ -1516,14 +1481,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       alpha: themeService.isDark ? 0.13 : 0.07,
                     ),
                   ),
-                  child: PresenceAvatar(
+                  child: UserAvatar(
                     userId: peer?.id ?? peerId ?? '',
                     name: peer?.name ?? '',
                     size: 72,
                     fontSize: 27,
-                    online: appPresenceService.onlineUserIds.contains(
-                      peerId ?? '',
-                    ),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -2001,6 +1963,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isRemote = path.startsWith('http://') || path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
+    final ImageProvider imageProvider = isRemote
+        ? CachedNetworkImageProvider(
+            path,
+            cacheKey: stableSupabaseSignedUrlCacheKey(path),
+          )
+        : FileImage(file!);
     return GestureDetector(
       key: ValueKey('chat-photo-${message.id}'),
       onTap: exists
@@ -2012,9 +1980,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 child: InteractiveViewer(
                   maxScale: 4,
                   child: Center(
-                    child: isRemote
-                        ? AppNetworkImage(url: path, fit: BoxFit.contain)
-                        : Image.file(file!, fit: BoxFit.contain),
+                    child: Image(image: imageProvider, fit: BoxFit.contain),
                   ),
                 ),
               ),
@@ -2036,7 +2002,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ? AppNetworkImage(
                     key: ValueKey('chat-photo-image-${message.id}'),
                     url: path,
-                    cacheKey: 'chat-photo-${message.id}',
+                    cacheKey:
+                        stableSupabaseSignedUrlCacheKey(path) ??
+                        'chat-photo-${message.id}',
                     cacheWidth: 320,
                     fit: BoxFit.cover,
                     useOldImageOnUrlChange: true,

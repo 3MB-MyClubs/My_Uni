@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/club.dart';
+import 'lazy_content_loader.dart';
+import 'people_service.dart';
 import 'supabase_config.dart';
 
 class SupabaseClubService {
@@ -50,6 +52,7 @@ class SupabaseClubService {
         .update({'logo_url': publicUrl})
         .eq('id', club.id);
     await _deleteStoredLogo(club.logoUrl, except: objectPath);
+    lazyContentLoader.invalidateContent();
     return publicUrl;
   }
 
@@ -59,6 +62,7 @@ class SupabaseClubService {
 
     await client.from('clubs').update({'logo_url': null}).eq('id', club.id);
     await _deleteStoredLogo(club.logoUrl);
+    lazyContentLoader.invalidateContent();
   }
 
   Future<void> updateClubName({
@@ -70,6 +74,7 @@ class SupabaseClubService {
     if (client == null || !_looksLikeUuid(club.id) || value.isEmpty) return;
 
     await client.from('clubs').update({'name': value}).eq('id', club.id);
+    lazyContentLoader.invalidateContent();
   }
 
   Future<void> updateClubDescription({
@@ -81,6 +86,7 @@ class SupabaseClubService {
     if (client == null || !_looksLikeUuid(club.id) || value.isEmpty) return;
 
     await client.from('clubs').update({'description': value}).eq('id', club.id);
+    lazyContentLoader.invalidateContent();
   }
 
   Future<void> setBoardMemberRole({
@@ -107,6 +113,8 @@ class SupabaseClubService {
         })
         .eq('club_id', club.id)
         .eq('profile_id', profileId);
+    peopleService.invalidateClubMembers(club.id);
+    lazyContentLoader.invalidateContent();
   }
 
   Future<void> removeBoardMemberRole({
@@ -126,6 +134,8 @@ class SupabaseClubService {
         .update({'role': 'member', 'role_title': null})
         .eq('club_id', club.id)
         .eq('profile_id', profileId);
+    peopleService.invalidateClubMembers(club.id);
+    lazyContentLoader.invalidateContent();
   }
 
   String? publicLogoUrl(String? value) {

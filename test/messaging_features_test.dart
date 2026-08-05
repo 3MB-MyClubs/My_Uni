@@ -40,20 +40,20 @@ void main() {
 
   setUp(userState.followedClubIds.clear);
 
-  test('club members talk in Chat while only the board posts notices', () {
+  test('club members read Chat while only the board can post', () {
     final threadId = ChatStore.clubThreadId(club.id);
     userState.followedClubIds.add(club.id);
 
-    // The Chat lane is a room: every member of the club may talk in it.
+    // Every member can read the room, but only the yönetim kurulu may post.
     expect(store.canAccessThread(threadId, 'regular-follower'), isTrue);
-    expect(store.canWriteThread(threadId, 'regular-follower'), isTrue);
+    expect(store.canWriteThread(threadId, 'regular-follower'), isFalse);
     expect(
       store.sendMessage(
         threadId: threadId,
         senderId: 'regular-follower',
         content: 'see you at the build session',
       ),
-      isNotNull,
+      isNull,
     );
 
     // The Board lane is the notice area: a member without a role cannot
@@ -95,11 +95,11 @@ void main() {
       contains(notice.id),
     );
 
-    // Replies never live under a notice: "Reply in chat" quotes it in the room,
-    // and that count is the signal the Board shows.
+    // Replies never live under a notice: only a board member may quote it in
+    // the room, and that count is the signal the Board shows.
     final reply = store.sendMessage(
       threadId: threadId,
-      senderId: 'regular-follower',
+      senderId: 'board-member',
       content: 'I can take the camera rig',
       replyToMessageId: notice.id,
     );
@@ -166,12 +166,12 @@ void main() {
     );
     store.sendMessage(
       threadId: threadId,
-      senderId: 'other-member',
+      senderId: 'board-member',
       content: 'servo order arrived',
     );
     store.sendMessage(
       threadId: threadId,
-      senderId: 'other-member',
+      senderId: 'board-member',
       content: 'unboxing in B-14 now',
     );
 

@@ -9,6 +9,7 @@ import 'auth_service.dart';
 import 'locale_service.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
+import 'supabase_read_cache.dart';
 import 'terms_acceptance_service.dart';
 
 class SignupResult {
@@ -27,6 +28,8 @@ class SignupLookupItem {
 }
 
 class SignupService {
+  static const _lookupTtl = Duration(minutes: 10);
+
   // No BuildContext is available this deep in the service layer; these
   // fallbacks never come from the server, so they're resolved here via the
   // current locale rather than pushed up to a caller that may not exist yet.
@@ -62,21 +65,28 @@ class SignupService {
     final client = _client;
     if (client == null) return const [];
 
-    final rows = await client
-        .from(tableName)
-        .select('id, name')
-        .eq('is_active', true)
-        .order('sort_order', ascending: true);
+    return supabaseReadCache.getOrFetch<List<SignupLookupItem>>(
+      key: 'signup-lookup:$tableName',
+      ttl: _lookupTtl,
+      shouldCache: (value) => value.isNotEmpty,
+      fetch: () async {
+        final rows = await client
+            .from(tableName)
+            .select('id, name')
+            .eq('is_active', true)
+            .order('sort_order', ascending: true);
 
-    return rows
-        .map(
-          (row) => SignupLookupItem(
-            id: row['id'].toString(),
-            name: row['name'].toString(),
-          ),
-        )
-        .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
-        .toList();
+        return rows
+            .map(
+              (row) => SignupLookupItem(
+                id: row['id'].toString(),
+                name: row['name'].toString(),
+              ),
+            )
+            .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+            .toList();
+      },
+    );
   }
 
   Future<SignupResult> sendCode(String email) async {

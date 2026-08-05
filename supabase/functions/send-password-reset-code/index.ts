@@ -15,7 +15,11 @@ const corsHeaders = {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -47,7 +51,9 @@ function getServiceRoleKey() {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", {
+      headers: { ...corsHeaders, "Cache-Control": "no-store" },
+    });
   }
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
 

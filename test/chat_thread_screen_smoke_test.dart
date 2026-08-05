@@ -21,7 +21,6 @@ import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
 import 'package:flutter_application_1/widgets/loading_skeleton.dart';
-import 'package:flutter_application_1/widgets/presence_avatar.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
 import 'package:hive/hive.dart';
 
@@ -121,7 +120,7 @@ void main() {
     // Header avatar plus the new-chat intro card avatar.
     expect(
       find.descendant(
-        of: find.byType(PresenceAvatar),
+        of: find.byType(UserAvatar),
         matching: find.byType(Image),
       ),
       findsNWidgets(2),
@@ -702,7 +701,6 @@ void main() {
       find.text(S.communityMembers(clubMemberCount('c5'))),
       findsOneWidget,
     );
-    expect(find.text(S.communityOnline(0)), findsNothing);
     expect(
       find.descendant(
         of: find.byType(ClubAvatar),

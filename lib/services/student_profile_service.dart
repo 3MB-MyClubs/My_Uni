@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'academic_year_options.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
+import 'supabase_read_cache.dart';
 import 'user_state.dart';
 
 /// Supabase Storage object paths are stable across avatar replacements. A
@@ -90,6 +91,9 @@ class UpdateStudentProfileInput {
 }
 
 class StudentProfileService {
+  static const _profileTtl = Duration(seconds: 30);
+  static const _lookupTtl = Duration(minutes: 10);
+
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -101,29 +105,43 @@ class StudentProfileService {
     return fetchProfile(userId);
   }
 
-  Future<StudentProfileData?> fetchProfile(String userId) async {
-    final row = await fetchProfileCore(userId);
+  Future<StudentProfileData?> fetchProfile(
+    String userId, {
+    bool force = false,
+  }) async {
+    final row = await fetchProfileCore(userId, force: force);
     if (row == null) return null;
-    return _fetchDetails(row);
+    return _fetchDetails(row, force: force);
   }
 
   /// The single `profiles` row — the only query login has to block on.
   /// Everything else (interests, double majors, minors, lookup names) is
   /// resolved by [hydrateDetails] off the critical path.
-  Future<Map<String, dynamic>?> fetchProfileCore(String userId) async {
+  Future<Map<String, dynamic>?> fetchProfileCore(
+    String userId, {
+    bool force = false,
+  }) async {
     final client = _client;
     if (client == null) return null;
 
-    final profile = await client
-        .from('profiles')
-        .select(
-          'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
-        )
-        .eq('id', userId)
-        .maybeSingle();
+    return supabaseReadCache.getOrFetch<Map<String, dynamic>?>(
+      key: 'profile-core:$userId',
+      ttl: _profileTtl,
+      force: force,
+      shouldCache: (value) => value != null,
+      fetch: () async {
+        final profile = await client
+            .from('profiles')
+            .select(
+              'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+            )
+            .eq('id', userId)
+            .maybeSingle();
 
-    if (profile == null) return null;
-    return Map<String, dynamic>.from(profile);
+        if (profile == null) return null;
+        return Map<String, dynamic>.from(profile);
+      },
+    );
   }
 
   /// Applies the fields the core `profiles` row already carries (bio +
@@ -141,10 +159,11 @@ class StudentProfileService {
   /// Resolves the detail fields for an already-fetched core row and pushes
   /// them into [userState]. Never throws: every branch degrades to empty.
   Future<StudentProfileData?> hydrateDetails(
-    Map<String, dynamic> coreRow,
-  ) async {
+    Map<String, dynamic> coreRow, {
+    bool force = false,
+  }) async {
     try {
-      final profile = await _fetchDetails(coreRow);
+      final profile = await _fetchDetails(coreRow, force: force);
       if (profile != null) applyToUserState(profile);
       return profile;
     } catch (_) {
@@ -153,6 +172,22 @@ class StudentProfileService {
   }
 
   Future<StudentProfileData?> _fetchDetails(
+    Map<String, dynamic> profile, {
+    bool force = false,
+  }) {
+    final userId = profile['id']?.toString() ?? '';
+    if (userId.isEmpty) return Future.value(null);
+
+    return supabaseReadCache.getOrFetch<StudentProfileData?>(
+      key: 'profile-details:$userId',
+      ttl: _profileTtl,
+      force: force,
+      shouldCache: (value) => value != null,
+      fetch: () => _fetchDetailsUncached(profile),
+    );
+  }
+
+  Future<StudentProfileData?> _fetchDetailsUncached(
     Map<String, dynamic> profile,
   ) async {
     final client = _client;
@@ -207,6 +242,13 @@ class StudentProfileService {
       minorIds: minors.map((item) => item.id).toList(),
       minorNames: minors.map((item) => item.name).toList(),
     );
+  }
+
+  void invalidateProfile(String userId) {
+    if (userId.isEmpty) return;
+    peopleService.invalidateProfile(userId);
+    supabaseReadCache.invalidate('profile-core:$userId');
+    supabaseReadCache.invalidate('profile-details:$userId');
   }
 
   /// The lookup maps are fetched ordered by `sort_order`, so iterating their
@@ -274,6 +316,8 @@ class StudentProfileService {
     final client = _client;
     if (client == null) return null;
 
+    invalidateProfile(input.userId);
+
     await client
         .from('profiles')
         .update({
@@ -324,6 +368,8 @@ class StudentProfileService {
     final value = fullName.trim();
     if (client == null || userId.isEmpty || value.isEmpty) return null;
 
+    invalidateProfile(userId);
+
     await client
         .from('profiles')
         .update({
@@ -344,6 +390,8 @@ class StudentProfileService {
     final client = _client;
     if (client == null || userId.isEmpty) return null;
 
+    invalidateProfile(userId);
+
     final path = '$userId/avatar.jpg';
     await client.storage
         .from('avatars')
@@ -353,7 +401,9 @@ class StudentProfileService {
           fileOptions: const FileOptions(
             upsert: true,
             contentType: 'image/jpeg',
-            cacheControl: '0',
+            // The public URL is versioned below, so a long browser/CDN TTL is
+            // safe and avoids re-downloading unchanged avatars.
+            cacheControl: '31536000',
           ),
         );
 
@@ -379,6 +429,8 @@ class StudentProfileService {
   Future<void> removeAvatar(String userId) async {
     final client = _client;
     if (client == null || userId.isEmpty) return;
+
+    invalidateProfile(userId);
 
     await client
         .from('profiles')
@@ -422,25 +474,32 @@ class StudentProfileService {
     final client = _client;
     if (client == null) return const [];
 
-    try {
-      final rows = await client
-          .from(tableName)
-          .select('id, name')
-          .eq('is_active', true)
-          .order('sort_order', ascending: true);
+    return supabaseReadCache.getOrFetch<List<ProfileLookupItem>>(
+      key: 'profile-lookup:$tableName',
+      ttl: _lookupTtl,
+      shouldCache: (value) => value.isNotEmpty,
+      fetch: () async {
+        try {
+          final rows = await client
+              .from(tableName)
+              .select('id, name')
+              .eq('is_active', true)
+              .order('sort_order', ascending: true);
 
-      return rows
-          .map(
-            (row) => ProfileLookupItem(
-              id: row['id'].toString(),
-              name: row['name'].toString(),
-            ),
-          )
-          .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
-          .toList();
-    } catch (_) {
-      return const [];
-    }
+          return rows
+              .map(
+                (row) => ProfileLookupItem(
+                  id: row['id'].toString(),
+                  name: row['name'].toString(),
+                ),
+              )
+              .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+              .toList();
+        } catch (_) {
+          return const [];
+        }
+      },
+    );
   }
 
   Future<void> _replaceJoinRows({

@@ -1,6 +1,4 @@
 import 'dart:async' show unawaited;
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,10 +10,10 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
-import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
+import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_chat_prefs.dart';
@@ -49,7 +47,7 @@ import 'user_profile_screen.dart';
 ///
 /// **Board** is the official notice area and the landing lane: one grouped list,
 /// one row per notice, and a composer only for members holding a role in the
-/// club. **Chat** is the room — every reply, poll, photo and mention lives here,
+/// club. **Chat** is the room — board-member replies, polls, photos and mentions live here,
 /// and a notice appears as a card so the conversation around it still reads.
 ///
 /// A notice is one object: the record published on the Board is the same message
@@ -142,7 +140,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   /// Only members holding a role in this club get the Board's composer.
   bool get _canPostNotice => chatStore.canPostNotice(widget.threadId, _myId);
 
-  /// Every member of the club may talk in the Chat lane.
+  /// Only the club's yönetim kurulu may talk in the Chat lane.
   bool get _canWrite => chatStore.canWriteThread(widget.threadId, _myId);
 
   /// Backgrounds affect the club's shared community identity, so board
@@ -235,6 +233,13 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
+    if (chatStore.takeAttachmentUploadFailure()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
+        );
+    }
   }
 
   void _onScroll() {
@@ -413,7 +418,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         name: club.name,
         role: S.adminLabel,
         isClubAccount: true,
-        online: true,
       );
     }
     final adminIndex = clubAdmins.indexWhere((admin) => admin.id == userId);
@@ -423,7 +427,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         name: clubAdmins[adminIndex].name,
         role: S.adminLabel,
         isClubAccount: true,
-        online: true,
       );
     }
     if (userId == appAdmin.id) {
@@ -454,7 +457,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       role: club == null
           ? null
           : studentClubRoleService.roleTitleFor(club, userId),
-      online: appPresenceService.onlineUserIds.contains(userId),
     );
   }
 
@@ -462,7 +464,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   List<ClubPerson> get _members {
     final club = _club;
     if (club == null) return const [];
-    final online = appPresenceService.onlineUserIds;
     final people = <ClubPerson>[];
     final seen = <String>{};
     for (final user in _memberUsers) {
@@ -473,7 +474,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           id: user.id,
           name: mine ? S.you : userState.displayNameFor(user.id, user.name),
           role: studentClubRoleService.roleTitleFor(club, user.id),
-          online: online.contains(user.id),
         ),
       );
     }
@@ -631,16 +631,26 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           ),
         );
         if (!mounted || result == null) return;
-        _sendAttachments(result);
+        await _sendAttachments(result);
       case ClubAttachment.poll:
         await _composePoll();
     }
   }
 
-  void _sendAttachments(MediaPreviewResult result) {
+  Future<void> _sendAttachments(MediaPreviewResult result) async {
     final sentMessages = <ChatMessage>[];
+    var stagingFailed = false;
     for (final media in result.items) {
-      if (!File(media.file.path).existsSync()) continue;
+      late final String stagedPath;
+      try {
+        stagedPath = await stageChatAttachment(
+          media.file.path,
+          sourceName: media.file.name,
+        );
+      } on Object {
+        stagingFailed = true;
+        continue;
+      }
       final isFirst = sentMessages.isEmpty;
       final caption = isFirst ? result.caption : '';
       final sent = chatStore.sendMessage(
@@ -653,17 +663,22 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         mentions: isFirst
             ? ClubComposer.resolveMentions(caption, _members)
             : const [],
-        attachmentPath: media.file.path,
+        attachmentPath: stagedPath,
         attachmentName: media.file.name,
         attachmentSize: media.sizeBytes,
         replyToMessageId: isFirst ? _replyingTo?.id : null,
       );
       if (sent != null) sentMessages.add(sent);
     }
+    if (!mounted) return;
     if (sentMessages.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(S.mediaSendFailed)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            stagingFailed ? S.couldNotAttachPhoto : S.mediaSendFailed,
+          ),
+        ),
+      );
       return;
     }
     _inputController.clear();
@@ -1443,7 +1458,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         listenable: Listenable.merge([
           chatStore,
           userState,
-          appPresenceService,
           _memberDirectoryRevision,
         ]),
         builder: (sheetContext, _) => ClubCommunitySheet(
@@ -1457,8 +1471,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   Widget _membersPanel(ClubChatTheme t) {
     final people = _members;
-    final online = people.where((person) => person.online).toList();
-    final offline = people.where((person) => !person.online).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1483,10 +1495,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               ),
             ),
           ),
-        ClubSheetLabel(label: S.activeNowGroup(online.length), t: t),
-        for (final person in online) _memberRow(person, t),
-        ClubSheetLabel(label: S.offlineGroup(offline.length), t: t, top: true),
-        for (final person in offline) _memberRow(person, t),
+        ClubSheetLabel(label: S.chatMembers(people.length), t: t),
+        for (final person in people) _memberRow(person, t),
       ],
     );
   }
@@ -1497,26 +1507,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _avatarFor(person, 38),
-              if (person.online)
-                Positioned(
-                  right: -1,
-                  bottom: -1,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: t.online,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: t.sheet, width: 2.5),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          _avatarFor(person, 38),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -1544,15 +1535,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                       show: clubChatPrefs.showRoles,
                     ),
                   ],
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  person.online ? S.activeNowLabel : S.offlineLabel,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: person.online ? t.online : t.sub,
-                  ),
                 ),
               ],
             ),
@@ -1652,7 +1634,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         listenable: Listenable.merge([
           chatStore,
           userState,
-          appPresenceService,
           rsvpStore,
           ?_communityInfo,
         ]),
@@ -1713,7 +1694,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       club: club,
       avatarColor: _accent,
       memberCount: memberCount,
-      activeCount: _members.where((person) => person.online).length,
       viewerRoleTitle: studentClubRoleService.roleTitleFor(club, _myId),
       // Inside the room the identity is not a link out: tapping it opens the
       // Chat lane. The club profile lives behind the ••• menu.
@@ -1880,6 +1860,28 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                     chatStore.setTyping(widget.threadId, _myId),
               ),
             ],
+          )
+        else
+          Container(
+            key: const ValueKey('club-chat-locked-strip'),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+            decoration: BoxDecoration(
+              color: t.body,
+              border: Border(top: BorderSide(color: t.hair)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Text(
+                S.clubChannelReadOnly,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: t.sub,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
       ],
     );

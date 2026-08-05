@@ -11,7 +11,7 @@ import 'club_stream_items.dart';
 /// carrying its own unread count.
 ///
 /// Follows the "Club Board + Chat" handoff — a notice is one object, so the
-/// Board is the notice area and the Chat is the room every reply lives in.
+/// Board is the notice area and the Chat is the room where board replies live.
 class ClubLaneSwitch extends StatelessWidget {
   const ClubLaneSwitch({
     super.key,
@@ -235,8 +235,8 @@ class ClubNoticeRow extends StatefulWidget {
   final ClubChatTheme t;
   final VoidCallback onReplyInChat;
 
-  /// False for a reader who cannot post in the room (a club account viewing its
-  /// own Board): the notice still opens, it just has no reply route.
+  /// False for a reader who cannot post in the room: the notice still opens,
+  /// it just has no reply route.
   final bool replyEnabled;
   final VoidCallback? onLongPress;
   final VoidCallback? onOpenAuthor;

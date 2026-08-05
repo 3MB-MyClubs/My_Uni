@@ -103,4 +103,25 @@ void main() {
       expect(applied, isFalse);
     },
   );
+
+  test('content invalidation makes the next content load fresh', () async {
+    var calls = 0;
+    final loader = LazyContentLoader(
+      scopeProvider: () => 'same-user',
+      cleanupExpiredEvents: () async {},
+      contentRefresh: (shouldApply) async {
+        calls++;
+        return shouldApply();
+      },
+      countsRefresh: (shouldApply) async => shouldApply(),
+    );
+
+    await loader.ensureContentLoaded();
+    await loader.ensureContentLoaded();
+    expect(calls, 1);
+
+    loader.invalidateContent();
+    await loader.ensureContentLoaded();
+    expect(calls, 2);
+  });
 }
