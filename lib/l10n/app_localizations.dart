@@ -5971,6 +5971,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We couldn\'t open the app store. Please update ClubUp there, then try again.'**
   String get updateRequiredStoreError;
+
+  /// No description provided for @removeMemberConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {name}?'**
+  String removeMemberConfirmTitle(String name);
+
+  /// No description provided for @removeMemberConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to remove {name} from this group?'**
+  String removeMemberConfirmBody(String name);
+
+  /// No description provided for @leaveGroupConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave group?'**
+  String get leaveGroupConfirmTitle;
+
+  /// No description provided for @leaveGroupConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You will no longer receive messages from this group.'**
+  String get leaveGroupConfirmBody;
+
+  /// No description provided for @leaveGroupAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave group'**
+  String get leaveGroupAction;
+
+  /// No description provided for @deleteGroupConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group?'**
+  String get deleteGroupConfirmTitle;
+
+  /// No description provided for @deleteGroupConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes the group and its messages for everyone.'**
+  String get deleteGroupConfirmBody;
+
+  /// No description provided for @deleteGroupAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete group'**
+  String get deleteGroupAction;
+
+  /// No description provided for @addMembersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add members'**
+  String get addMembersTitle;
+
+  /// No description provided for @noMorePeopleToAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'No more people to add'**
+  String get noMorePeopleToAdd;
+
+  /// No description provided for @groupSearchPeopleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search people'**
+  String get groupSearchPeopleHint;
+
+  /// No description provided for @groupUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Group unavailable'**
+  String get groupUnavailable;
+
+  /// No description provided for @groupInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group info'**
+  String get groupInfoTitle;
+
+  /// No description provided for @groupNameOptionalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group name (optional)'**
+  String get groupNameOptionalLabel;
+
+  /// No description provided for @groupNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter group name'**
+  String get groupNameHint;
+
+  /// No description provided for @saveGroupNameTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Save group name'**
+  String get saveGroupNameTooltip;
+
+  /// No description provided for @groupMemberCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, one{1 member} other{{count} members}}'**
+  String groupMemberCount(int count);
+
+  /// No description provided for @memberNameYouSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (You)'**
+  String memberNameYouSuffix(String name);
+
+  /// No description provided for @groupCreatorAdminLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group creator · Admin'**
+  String get groupCreatorAdminLabel;
+
+  /// No description provided for @groupAdminLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group admin'**
+  String get groupAdminLabel;
+
+  /// No description provided for @memberActionsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Member actions'**
+  String get memberActionsTooltip;
+
+  /// No description provided for @dismissAsGroupAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss as group admin'**
+  String get dismissAsGroupAdmin;
+
+  /// No description provided for @makeGroupAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Make group admin'**
+  String get makeGroupAdmin;
+
+  /// No description provided for @removeMemberAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove member'**
+  String get removeMemberAction;
+
+  /// No description provided for @createGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Group'**
+  String get createGroupTitle;
+
+  /// No description provided for @addGroupPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add group photo'**
+  String get addGroupPhoto;
+
+  /// No description provided for @changeGroupPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Change group photo'**
+  String get changeGroupPhoto;
+
+  /// No description provided for @groupPhotoSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group photo'**
+  String get groupPhotoSheetTitle;
+
+  /// No description provided for @photoEditorOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the photo editor.'**
+  String get photoEditorOpenFailed;
+
+  /// No description provided for @startChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Chat'**
+  String get startChat;
+
+  /// No description provided for @conversationUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation unavailable'**
+  String get conversationUnavailableTitle;
+
+  /// No description provided for @conversationUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have access to this conversation.'**
+  String get conversationUnavailableBody;
+
+  /// No description provided for @appTaglineCampusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Your campus, connected'**
+  String get appTaglineCampusConnected;
+
+  /// No description provided for @clubSentAMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{clubName} sent a message.'**
+  String clubSentAMessage(String clubName);
+
+  /// No description provided for @groupSenderSentAMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{groupName}: {senderName} sent a message.'**
+  String groupSenderSentAMessage(String groupName, String senderName);
+
+  /// Preparatory (language) year label.
+  ///
+  /// In en, this message translates to:
+  /// **'Prep'**
+  String get academicYearPrep;
+
+  /// First undergraduate year label.
+  ///
+  /// In en, this message translates to:
+  /// **'1st Year'**
+  String get academicYear1;
+
+  /// Second undergraduate year label.
+  ///
+  /// In en, this message translates to:
+  /// **'2nd Year'**
+  String get academicYear2;
+
+  /// Third undergraduate year label.
+  ///
+  /// In en, this message translates to:
+  /// **'3rd Year'**
+  String get academicYear3;
+
+  /// Fourth undergraduate year label.
+  ///
+  /// In en, this message translates to:
+  /// **'4th Year'**
+  String get academicYear4;
+
+  /// Fifth undergraduate year label.
+  ///
+  /// In en, this message translates to:
+  /// **'5th Year'**
+  String get academicYear5;
+
+  /// Short label for a graduate student.
+  ///
+  /// In en, this message translates to:
+  /// **'Grad'**
+  String get academicYearGrad;
+
+  /// Full label for a graduate student.
+  ///
+  /// In en, this message translates to:
+  /// **'Graduate'**
+  String get academicYearGraduate;
 }
 
 class _AppLocalizationsDelegate

@@ -1941,5 +1941,118 @@
   "updateRequiredMessage": "Please update ClubUp to continue using the app.",
   "updateRequiredButton": "Update now",
   "updateRequiredRetry": "Check again",
-  "updateRequiredStoreError": "We couldn't open the app store. Please update ClubUp there, then try again."
+  "updateRequiredStoreError": "We couldn't open the app store. Please update ClubUp there, then try again.",
+  "removeMemberConfirmTitle": "Remove {name}?",
+  "@removeMemberConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removeMemberConfirmBody": "Are you sure you want to remove {name} from this group?",
+  "@removeMemberConfirmBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "leaveGroupConfirmTitle": "Leave group?",
+  "leaveGroupConfirmBody": "You will no longer receive messages from this group.",
+  "leaveGroupAction": "Leave group",
+  "deleteGroupConfirmTitle": "Delete group?",
+  "deleteGroupConfirmBody": "This permanently deletes the group and its messages for everyone.",
+  "deleteGroupAction": "Delete group",
+  "addMembersTitle": "Add members",
+  "noMorePeopleToAdd": "No more people to add",
+  "groupSearchPeopleHint": "Search people",
+  "groupUnavailable": "Group unavailable",
+  "groupInfoTitle": "Group info",
+  "groupNameOptionalLabel": "Group name (optional)",
+  "groupNameHint": "Enter group name",
+  "saveGroupNameTooltip": "Save group name",
+  "groupMemberCount": "{count,plural, one{1 member} other{{count} members}}",
+  "@groupMemberCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "memberNameYouSuffix": "{name} (You)",
+  "@memberNameYouSuffix": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "groupCreatorAdminLabel": "Group creator · Admin",
+  "groupAdminLabel": "Group admin",
+  "memberActionsTooltip": "Member actions",
+  "dismissAsGroupAdmin": "Dismiss as group admin",
+  "makeGroupAdmin": "Make group admin",
+  "removeMemberAction": "Remove member",
+  "createGroupTitle": "Create Group",
+  "addGroupPhoto": "Add group photo",
+  "changeGroupPhoto": "Change group photo",
+  "groupPhotoSheetTitle": "Group photo",
+  "removePhoto": "Remove photo",
+  "photoEditorOpenFailed": "Could not open the photo editor.",
+  "startChat": "Start Chat",
+  "conversationUnavailableTitle": "Conversation unavailable",
+  "conversationUnavailableBody": "You don't have access to this conversation.",
+  "appTaglineCampusConnected": "Your campus, connected",
+  "clubSentAMessage": "{clubName} sent a message.",
+  "@clubSentAMessage": {
+    "placeholders": {
+      "clubName": {
+        "type": "String"
+      }
+    }
+  },
+  "groupSenderSentAMessage": "{groupName}: {senderName} sent a message.",
+  "@groupSenderSentAMessage": {
+    "placeholders": {
+      "groupName": {
+        "type": "String"
+      },
+      "senderName": {
+        "type": "String"
+      }
+    }
+  },
+  "academicYearPrep": "Prep",
+  "@academicYearPrep": {
+    "description": "Preparatory (language) year label."
+  },
+  "academicYear1": "1st Year",
+  "@academicYear1": {
+    "description": "First undergraduate year label."
+  },
+  "academicYear2": "2nd Year",
+  "@academicYear2": {
+    "description": "Second undergraduate year label."
+  },
+  "academicYear3": "3rd Year",
+  "@academicYear3": {
+    "description": "Third undergraduate year label."
+  },
+  "academicYear4": "4th Year",
+  "@academicYear4": {
+    "description": "Fourth undergraduate year label."
+  },
+  "academicYear5": "5th Year",
+  "@academicYear5": {
+    "description": "Fifth undergraduate year label."
+  },
+  "academicYearGrad": "Grad",
+  "@academicYearGrad": {
+    "description": "Short label for a graduate student."
+  },
+  "academicYearGraduate": "Graduate",
+  "@academicYearGraduate": {
+    "description": "Full label for a graduate student."
+  }
 }

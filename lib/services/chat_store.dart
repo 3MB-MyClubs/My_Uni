@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_group.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
@@ -13,6 +15,7 @@ import '../models/notification.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'image_cache_service.dart';
+import 'locale_service.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
@@ -32,6 +35,12 @@ enum ClubChatLane { board, chat }
 /// Like the other stores, every method no-ops / returns empty before
 /// [initialize] so screens render safely in widget tests without Hive.
 class ChatStore extends ChangeNotifier {
+  // No BuildContext is available this deep in the service layer; these
+  // generated in-app notification messages are resolved here via the
+  // current locale.
+  AppLocalizations get _l10n =>
+      lookupAppLocalizations(Locale(localeService.languageCode));
+
   static const _boxName = 'chat_v1';
   static const _chatAttachmentBucket = 'chat-attachments';
   static const _chatAttachmentReferencePrefix = 'chat-attachment://';
@@ -756,7 +765,7 @@ class ChatStore extends ChangeNotifier {
         AppNotification(
           id: 'remote_club_msg_${message.id}_$actorId',
           userId: actorId,
-          message: '$clubName sent a message.',
+          message: _l10n.clubSentAMessage(clubName),
           createdAt: message.createdAt,
           targetType: 'message',
           targetId: message.threadId,
@@ -918,7 +927,7 @@ class ChatStore extends ChangeNotifier {
         AppNotification(
           id: 'remote_club_inbox_${message.id}_$actorId',
           userId: actorId,
-          message: '$title sent a message.',
+          message: _l10n.clubSentAMessage(title),
           createdAt: message.createdAt,
           targetType: 'message',
           targetId: message.threadId,
@@ -1174,7 +1183,7 @@ class ChatStore extends ChangeNotifier {
         AppNotification(
           id: 'remote_group_msg_${message.id}_$viewerId',
           userId: viewerId,
-          message: '$groupName: $senderName sent a message.',
+          message: _l10n.groupSenderSentAMessage(groupName, senderName),
           createdAt: message.createdAt,
           targetType: 'message',
           targetId: message.threadId,
@@ -3168,7 +3177,7 @@ class ChatStore extends ChangeNotifier {
         AppNotification(
           id: 'group_msg_${message.id}_$recipientId',
           userId: recipientId,
-          message: '$groupName: $senderName sent a message.',
+          message: _l10n.groupSenderSentAMessage(groupName, senderName),
           createdAt: message.createdAt,
           targetType: 'message',
           targetId: message.threadId,

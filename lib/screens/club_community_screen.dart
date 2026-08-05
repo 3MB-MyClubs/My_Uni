@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
@@ -2335,7 +2336,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   Icon(Icons.lock_outline_rounded, size: 44, color: t.sub),
                   const SizedBox(height: 14),
                   Text(
-                    'Conversation unavailable',
+                    AppLocalizations.of(context)!.conversationUnavailableTitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 17,
@@ -2345,7 +2346,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    "You don't have access to this conversation.",
+                    AppLocalizations.of(context)!.conversationUnavailableBody,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
