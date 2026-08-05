@@ -22,7 +22,7 @@ void main() {
       name: 'Feature Club',
       description: 'Messaging fixture',
       adminUserIds: const ['club-account'],
-      boardMemberIds: const ['board-member'],
+      boardMemberIds: const ['board-member', 'board-member-two'],
     );
     clubs.add(club);
     await contentStore.initialize();
@@ -175,20 +175,14 @@ void main() {
       content: 'unboxing in B-14 now',
     );
 
-    expect(
-      store.unreadInClubLane(threadId, reader, ClubChatLane.board),
-      1,
-    );
+    expect(store.unreadInClubLane(threadId, reader, ClubChatLane.board), 1);
     expect(store.unreadInClubLane(threadId, reader, ClubChatLane.chat), 2);
     // The inbox row shows the sum of the two segments.
     expect(store.unreadCountFor(threadId, reader), 3);
 
     // Reading the Board leaves what is waiting in Chat exactly where it was.
     store.markClubLaneRead(threadId, reader, ClubChatLane.board);
-    expect(
-      store.unreadInClubLane(threadId, reader, ClubChatLane.board),
-      0,
-    );
+    expect(store.unreadInClubLane(threadId, reader, ClubChatLane.board), 0);
     expect(store.unreadInClubLane(threadId, reader, ClubChatLane.chat), 2);
     expect(store.unreadCountFor(threadId, reader), 2);
 
@@ -249,5 +243,29 @@ void main() {
     expect(ChatStore.isClubInboxThread(threadId), isTrue);
     expect(ChatStore.clubInboxIdOf(threadId), inboxId);
     expect(ChatStore.isClubThread(threadId), isFalse);
+  });
+
+  test('club inbox replies show board actor only to board viewers', () {
+    final message = ChatMessage(
+      id: 'club-inbox-board-reply',
+      threadId: ChatStore.clubInboxThreadId('inbox-1'),
+      senderId: club.id,
+      senderAuthId: 'board-member',
+      senderClubId: club.id,
+      content: 'We can help with that.',
+      createdAt: DateTime(2026, 8, 5),
+    );
+
+    expect(store.senderIdForViewer(message, 'board-member'), 'board-member');
+    expect(
+      store.senderIdForViewer(message, 'board-member-two'),
+      'board-member',
+    );
+    expect(store.senderIdForViewer(message, 'regular-follower'), club.id);
+    final restored = ChatMessage.fromMap(message.toMap());
+    expect(restored.senderAuthId, 'board-member');
+    expect(restored.senderClubId, club.id);
+    expect(store.isMessageOwner(message, 'board-member'), isTrue);
+    expect(store.isMessageOwner(message, 'regular-follower'), isFalse);
   });
 }

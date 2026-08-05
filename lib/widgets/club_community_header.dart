@@ -24,6 +24,7 @@ class ClubCommunityHeader extends StatelessWidget {
     this.topInset = 0,
     this.onBack,
     this.onToggleMute,
+    this.onMessagePrivately,
     this.onOpenSettings,
     this.muted = false,
     this.viewerRoleTitle,
@@ -37,6 +38,7 @@ class ClubCommunityHeader extends StatelessWidget {
   final double topInset;
   final VoidCallback? onBack;
   final VoidCallback? onToggleMute;
+  final VoidCallback? onMessagePrivately;
   final VoidCallback? onOpenSettings;
   final bool muted;
 
@@ -152,6 +154,16 @@ class ClubCommunityHeader extends StatelessWidget {
             active: muted,
             onTap: onToggleMute,
           ),
+          if (onMessagePrivately != null) ...[
+            const SizedBox(width: 8),
+            ClubHeaderIconButton(
+              key: const ValueKey('message-club-privately'),
+              icon: Icons.chat_bubble_outline_rounded,
+              label: S.messageClub,
+              t: t,
+              onTap: onMessagePrivately,
+            ),
+          ],
           const SizedBox(width: 8),
           ClubHeaderIconButton(
             icon: Icons.more_horiz_rounded,

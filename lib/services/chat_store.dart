@@ -190,6 +190,29 @@ class ChatStore extends ChangeNotifier {
     return inboxId == null ? null : _clubInboxes[inboxId];
   }
 
+  /// Resolves the identity a viewer should see for a message in a private
+  /// club inbox. Board replies are stored as the club publicly, but the
+  /// authenticated actor is retained so current board members can see which
+  /// board member answered. Students and non-board viewers always get the
+  /// club identity.
+  String senderIdForViewer(ChatMessage message, String viewerId) {
+    if (!isClubInboxThread(message.threadId) || message.senderClubId == null) {
+      return message.senderId;
+    }
+    final conversation = clubInboxForThread(message.threadId);
+    final clubId = message.senderClubId ?? conversation?.clubId;
+    final club = clubId == null ? null : clubForId(clubId);
+    final senderAuthId = message.senderAuthId;
+    if (club != null &&
+        senderAuthId != null &&
+        club.boardMemberIds.contains(senderAuthId) &&
+        (club.boardMemberIds.contains(viewerId) ||
+            managedClubForAdmin(viewerId)?.id == club.id)) {
+      return senderAuthId;
+    }
+    return message.senderClubId!;
+  }
+
   List<String> groupParticipants(String threadId) =>
       groupForThread(threadId)?.memberIds ?? const [];
 
@@ -866,10 +889,12 @@ class ChatStore extends ChangeNotifier {
   }) async {
     final id = row['id']?.toString() ?? '';
     final inboxId = row['thread_id']?.toString() ?? '';
-    final senderId =
-        row['sender_profile_id']?.toString().trim().isNotEmpty == true
-        ? row['sender_profile_id'].toString()
-        : row['sender_club_id']?.toString() ?? '';
+    final senderProfileId = row['sender_profile_id']?.toString().trim() ?? '';
+    final senderClubId = row['sender_club_id']?.toString().trim() ?? '';
+    final senderAuthId = row['sender_auth_id']?.toString().trim() ?? '';
+    final senderId = senderProfileId.isNotEmpty
+        ? senderProfileId
+        : senderClubId;
     final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
     final deliveredAt =
         DateTime.tryParse(row['delivered_at']?.toString() ?? '') ?? createdAt;
@@ -891,14 +916,23 @@ class ChatStore extends ChangeNotifier {
       createdAt: createdAt,
       deliveredAt: deliveredAt,
       seenAt: seenAt,
+      senderAuthId: senderAuthId.isEmpty ? null : senderAuthId,
+      senderClubId: senderClubId.isEmpty ? null : senderClubId,
     );
     if (message == null) return;
     final existingIndex = _messages.indexWhere(
       (candidate) => candidate.id == id,
     );
     if (existingIndex != -1) {
-      if (_messages[existingIndex].attachmentPath != message.attachmentPath) {
-        _messages[existingIndex] = _messages[existingIndex].copyWith(
+      final existing = _messages[existingIndex];
+      if (existing.attachmentPath != message.attachmentPath ||
+          existing.senderId != message.senderId ||
+          existing.senderAuthId != message.senderAuthId ||
+          existing.senderClubId != message.senderClubId) {
+        _messages[existingIndex] = existing.copyWith(
+          senderId: message.senderId,
+          senderAuthId: message.senderAuthId,
+          senderClubId: message.senderClubId,
           attachmentPath: message.attachmentPath,
         );
         scheduleSave();
@@ -1372,6 +1406,8 @@ class ChatStore extends ChangeNotifier {
     required DateTime createdAt,
     required DateTime deliveredAt,
     DateTime? seenAt,
+    String? senderAuthId,
+    String? senderClubId,
   }) async {
     // Rows written by the retired E2EE client are intentionally preserved in
     // Supabase, but their plaintext cannot be recovered without device keys.
@@ -1395,6 +1431,16 @@ class ChatStore extends ChangeNotifier {
       ..['createdAt'] = createdAt.toLocal().toIso8601String()
       ..['deliveredAt'] = deliveredAt.toLocal().toIso8601String()
       ..['seenAt'] = seenAt?.toLocal().toIso8601String();
+    if (senderAuthId == null) {
+      payload.remove('senderAuthId');
+    } else {
+      payload['senderAuthId'] = senderAuthId;
+    }
+    if (senderClubId == null) {
+      payload.remove('senderClubId');
+    } else {
+      payload['senderClubId'] = senderClubId;
+    }
     final attachmentReference = payload['attachmentPath']?.toString() ?? '';
     if (attachmentReference.startsWith(_chatAttachmentReferencePrefix)) {
       final objectPath = attachmentReference.substring(
@@ -2068,6 +2114,8 @@ class ChatStore extends ChangeNotifier {
     payload.remove('id');
     payload.remove('threadId');
     payload.remove('senderId');
+    payload.remove('senderAuthId');
+    payload.remove('senderClubId');
     payload.remove('content');
     payload.remove('createdAt');
     payload.remove('deliveredAt');
@@ -2142,13 +2190,15 @@ class ChatStore extends ChangeNotifier {
   /// remotely under the managed club ID even though the local session uses a
   /// board/admin ID, so those identities are normalized here.
   bool isMessageOwner(ChatMessage message, String userId) {
-    if (userId.isEmpty || message.senderId == userId) return userId.isNotEmpty;
+    if (userId.isEmpty) return false;
+    final visibleSenderId = senderIdForViewer(message, userId);
+    if (visibleSenderId == userId) return true;
     final clubId = isClubThread(message.threadId)
         ? clubIdOf(message.threadId)
         : isClubInboxThread(message.threadId)
         ? clubInboxForThread(message.threadId)?.clubId
         : null;
-    if (clubId == null || message.senderId != clubId) return false;
+    if (clubId == null || visibleSenderId != clubId) return false;
     final club = clubForId(clubId);
     return (club?.boardMemberIds.contains(userId) ?? false) ||
         managedClubForAdmin(userId)?.id == clubId;
@@ -2771,11 +2821,24 @@ class ChatStore extends ChangeNotifier {
 
     if (isDirectThread(threadId)) _directThreadIds.add(threadId);
 
+    String? localSenderClubId;
+    if (isClubInboxThread(threadId)) {
+      final conversation = clubInboxForThread(threadId);
+      final club = conversation == null ? null : clubForId(conversation.clubId);
+      final sendsAsClub =
+          club != null &&
+          (club.boardMemberIds.contains(senderId) ||
+              managedClubForAdmin(senderId)?.id == club.id);
+      if (sendsAsClub) localSenderClubId = club.id;
+    }
+
     final now = DateTime.now();
     final message = ChatMessage(
       id: const Uuid().v4(),
       threadId: threadId,
       senderId: senderId,
+      senderAuthId: isClubInboxThread(threadId) ? senderId : null,
+      senderClubId: localSenderClubId,
       content: text,
       createdAt: now,
       deliveredAt: now,

@@ -30,10 +30,9 @@ class ChatsController extends ChangeNotifier {
 
 enum _ChatInboxFilter { students, clubs }
 
-/// The chats inbox: every conversation the current user can see — direct
-/// messages plus one members-only room per club they follow (or manage, for
-/// club-admin sessions). Hosted as a main-nav tab and also pushed from the
-/// feed's paper-plane button.
+/// The main Chats inbox: direct messages plus one public community room per
+/// club the current user can access. Private club inboxes intentionally stay
+/// inside the club community's Solo Chat lane.
 class ChatsScreen extends StatefulWidget {
   /// True only for the instance hosted in the main nav bar's IndexedStack, so
   /// the app tour's compose anchor attaches to a single widget.
@@ -81,10 +80,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (authService.isStudentSession) {
         unawaited(chatStore.startDirectMessageSync(_myId));
-        unawaited(_hydrateDmProfiles());
         unawaited(_hydratePeopleDirectory());
       }
       unawaited(chatStore.startClubMessageSync(_myId));
+      // Club inbox rows are visible to the club admin as well as the student.
+      // Hydrate the student profile for both sessions so the private thread
+      // has an identity and the private label, not an empty title.
+      unawaited(_hydrateDmProfiles());
     });
   }
 
@@ -102,7 +104,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   void _onChatStoreChanged() {
-    if (!mounted || !authService.isStudentSession) return;
+    if (!mounted) return;
     unawaited(_hydrateDmProfiles());
   }
 
@@ -208,13 +210,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
         (last.title ?? '').trim().isEmpty ? last.content : last.title!,
       _ => last.content,
     };
-    if (last.senderId == _myId) return '${S.you}: $body';
+    final senderId = chatStore.senderIdForViewer(last, _myId);
+    if (senderId == _myId) return '${S.you}: $body';
     if (t.isClub || t.isGroup) {
       final conversation = chatStore.clubInboxForThread(t.threadId);
-      final senderName =
-          conversation != null && last.senderId == conversation.clubId
+      final senderName = conversation != null && senderId == conversation.clubId
           ? clubForId(conversation.clubId)?.name ?? ''
-          : _nameForUser(last.senderId);
+          : _nameForUser(senderId);
       return '$senderName: $body';
     }
     return body;
@@ -301,6 +303,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         builder: (context, _) {
           final query = _query.trim().toLowerCase();
           final allThreads = chatStore.threadsFor(_myId).where((thread) {
+            if (thread.isClubInbox) return false;
             final peerId = thread.peerId;
             return peerId == null || !moderationService.isUserBlocked(peerId);
           }).toList();
@@ -876,6 +879,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               ),
                             ),
                           ),
+                          if (t.isClubInbox) ...[
+                            const SizedBox(width: 6),
+                            Semantics(
+                              label: S.privateSoloChat,
+                              child: Icon(
+                                Icons.lock_rounded,
+                                size: 14,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                          ],
                           const SizedBox(width: 8),
                           if (isPinnedClubRoom) ...[
                             Tooltip(
