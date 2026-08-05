@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/screens/group_info_screen.dart';
-import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/user.dart';
@@ -269,10 +268,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('DM header uses a passed recipient outside the mock directory', (
-    tester,
-  ) async {
-    authService.login('alice@ku.edu.tr', '111111'); // u1
+  testWidgets('DM header stays in chat for a passed recipient', (tester) async {
+    const currentEmail = 'chat-header-test@ku.edu.tr';
+    expect(
+      authService.signUp('Chat Header Test', currentEmail, '135790'),
+      isTrue,
+    );
+    final currentId = authService.currentUser!.id;
+    addTearDown(() => users.removeWhere((user) => user.email == currentEmail));
     final recipient = User(
       id: 'remote-can-id',
       name: 'Can Serbester',
@@ -286,7 +289,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           home: ChatThreadScreen(
-            threadId: ChatStore.dmThreadId('u1', recipient.id),
+            threadId: ChatStore.dmThreadId(currentId, recipient.id),
             recipient: recipient,
           ),
         ),
@@ -306,9 +309,14 @@ void main() {
     await tester.tap(find.text('Can Serbester').first);
     await tester.pumpAndSettle();
 
-    expect(find.byType(UserProfileScreen), findsOneWidget);
+    expect(find.byType(ChatThreadScreen), findsOneWidget);
+    expect(
+      tester.widget<ChatThreadScreen>(find.byType(ChatThreadScreen)).threadId,
+      ChatStore.dmThreadId(currentId, recipient.id),
+    );
     expect(find.text('Can Serbester'), findsWidgets);
     expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('group header shows its dynamic name and opens group info', (

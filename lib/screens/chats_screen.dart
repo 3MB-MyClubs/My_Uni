@@ -24,7 +24,6 @@ import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
 import 'create_group_screen.dart';
-import 'user_profile_screen.dart';
 
 /// Lets the main navigation reset Chats to its default student view whenever
 /// the tab is selected again, while pushed standalone inboxes remain simple.
@@ -267,32 +266,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _openDmWith(User user) {
     final threadId = chatStore.ensureDirectThread(_myId, user.id);
     if (threadId != null) _openThread(threadId, recipient: user);
-  }
-
-  void _openUserProfile(User? user) {
-    if (user == null) return;
-    Navigator.push(
-      context,
-      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
-    );
-  }
-
-  /// Opens the identity represented by a conversation title without opening
-  /// the conversation itself. Club titles are the exception: throughout the
-  /// Chats area they always lead to their existing chat thread.
-  void _openProfileForThread(ChatThreadSummary thread) {
-    if (thread.isGroup) return;
-    final inbox = chatStore.clubInboxForThread(thread.threadId);
-    if (inbox != null && inbox.profileId != _myId) {
-      _openUserProfile(_userForId(inbox.profileId));
-      return;
-    }
-    final clubId = thread.clubId ?? inbox?.clubId;
-    if (clubId != null) {
-      _openThread(thread.threadId);
-      return;
-    }
-    _openUserProfile(_userForId(thread.peerId ?? ''));
   }
 
   Future<void> _openCompose() async {
@@ -878,10 +851,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       const SizedBox(height: 5),
                       SizedBox(
                         width: 88,
-                        child: GestureDetector(
+                        child: KeyedSubtree(
                           key: ValueKey('chat-online-profile-name-${user.id}'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _openUserProfile(user),
                           child: Text(
                             displayName,
                             maxLines: 2,
@@ -1108,14 +1079,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Expanded(
-                            child: GestureDetector(
+                            child: KeyedSubtree(
                               key: ValueKey(
                                 'chat-thread-profile-name-${t.threadId}',
                               ),
-                              behavior: HitTestBehavior.opaque,
-                              onTap: t.isGroup
-                                  ? null
-                                  : () => _openProfileForThread(t),
                               child: Text(
                                 title,
                                 maxLines: 1,

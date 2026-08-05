@@ -37,10 +37,8 @@ import '../widgets/shared_event_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
-import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
 import 'media_preview_screen.dart';
-import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
 enum _ChatAttachment { photo, camera }
@@ -936,56 +934,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return (userState.displayNameFor(senderId, ''), false);
   }
 
-  void _openHeaderProfile() {
-    if (_isClubInbox) {
-      final conversation = _clubInbox;
-      if (conversation != null && conversation.profileId != _myId) {
-        _openUserProfileById(conversation.profileId);
-        return;
-      }
-    }
-    final club = _club;
-    if (club != null) {
-      Navigator.push(
-        context,
-        ChatPageRoute(
-          builder: (_) =>
-              ClubProfileScreen(club: club, color: _colorForClub(club.id)),
-        ),
-      ).then((_) => _markVisibleMessagesSeen());
-      return;
-    }
-    if (_isGroup) {
-      Navigator.push(
-        context,
-        ChatPageRoute(
-          builder: (_) =>
-              GroupInfoScreen(threadId: widget.threadId, myId: _myId),
-        ),
-      ).then((leftGroup) {
-        if (leftGroup == true && mounted) {
-          Navigator.pop(context);
-        } else {
-          _markVisibleMessagesSeen();
-        }
-      });
-      return;
-    }
-    final peer = _peer;
-    if (peer != null) {
-      Navigator.push(
-        context,
-        ChatPageRoute(builder: (_) => UserProfileScreen(user: peer)),
-      ).then((_) => _markVisibleMessagesSeen());
-    }
-  }
-
-  void _openUserProfileById(String userId) {
-    final user = _userForId(userId);
-    if (user == null) return;
+  void _openGroupInfo() {
     Navigator.push(
       context,
-      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
+      ChatPageRoute(
+        builder: (_) => GroupInfoScreen(threadId: widget.threadId, myId: _myId),
+      ),
+    ).then((leftGroup) {
+      if (leftGroup == true && mounted) {
+        Navigator.pop(context);
+      } else {
+        _markVisibleMessagesSeen();
+      }
+    });
+  }
+
+  void _openDirectChatById(String userId) {
+    final user = _userForId(userId);
+    if (user == null) return;
+    final threadId = chatStore.ensureDirectThread(_myId, userId);
+    if (threadId == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(
+        builder: (_) => ChatThreadScreen(threadId: threadId, recipient: user),
+      ),
     ).then((_) => _markVisibleMessagesSeen());
   }
 
@@ -1162,10 +1135,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const SizedBox(width: 4),
           ],
           Expanded(
-            child: InkWell(
+            child: KeyedSubtree(
               key: const ValueKey('club-inbox-profile-header'),
-              onTap: _openHeaderProfile,
-              borderRadius: BorderRadius.circular(14),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
@@ -1254,6 +1225,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
       showChevron: true,
+      onTap: _openGroupInfo,
     );
   }
 
@@ -1275,6 +1247,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     Widget? leadingOverlay,
     Key? tapKey,
     bool showChevron = false,
+    VoidCallback? onTap,
   }) {
     return Container(
       // A solid bar, so the campus wallpaper stops cleanly at the header edge
@@ -1338,7 +1311,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           Expanded(
             child: InkWell(
               key: tapKey,
-              onTap: _openHeaderProfile,
+              onTap: onTap,
               borderRadius: BorderRadius.circular(14),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -1642,9 +1615,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isMultiParticipant = _isClub || _isGroup;
     final showHeader = isMultiParticipant && !mine;
     final showAvatar = isMultiParticipant;
-    final VoidCallback? openSenderProfile =
+    final VoidCallback? openSenderChat =
         !mine && !senderIsAdmin && _userForId(m.senderId) != null
-        ? () => _openUserProfileById(m.senderId)
+        ? () => _openDirectChatById(m.senderId)
         : null;
     final senderAvatar = Container(
       key: _isGroup ? ValueKey('group-message-avatar-${m.id}') : null,
@@ -1787,7 +1760,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               padding: const EdgeInsets.only(right: 8, bottom: 15),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: openSenderProfile,
+                onTap: openSenderChat,
                 child: senderAvatar,
               ),
             ),
@@ -1807,7 +1780,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           child: GestureDetector(
                             key: ValueKey('chat-sender-profile-name-${m.id}'),
                             behavior: HitTestBehavior.opaque,
-                            onTap: openSenderProfile,
+                            onTap: openSenderChat,
                             child: Text(
                               senderName,
                               maxLines: 1,
