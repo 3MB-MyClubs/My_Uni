@@ -194,6 +194,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return userState.displayNameFor(userId, _userForId(userId)?.name ?? '');
   }
 
+  /// Student-facing club sections contain only the shared community rooms.
+  /// Club accounts have no personal/club switch, so their private student
+  /// inboxes remain visible in their single messaging list.
+  bool _belongsToClubSection(ChatThreadSummary thread) =>
+      thread.isClub || (!authService.isStudentSession && thread.isClubInbox);
+
   String _preview(ChatThreadSummary t) {
     // A club room previews its Chat lane: a notice belongs to the Board, so it
     // never becomes the inbox line. The badge still counts both lanes.
@@ -362,7 +368,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 }).toList()
               : const <User>[];
           final threads = allThreads
-              .where((thread) => thread.isClub == showingClubs)
+              .where((thread) => _belongsToClubSection(thread) == showingClubs)
               .where(
                 (t) =>
                     query.isEmpty || _titleFor(t).toLowerCase().contains(query),
@@ -382,9 +388,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     )
                     .toList()
               : const <User>[];
-          final clubThreads = allThreads
-              .where((thread) => thread.isClub)
-              .toList();
+          final clubThreads = allThreads.where(_belongsToClubSection).toList();
           return Stack(
             children: [
               _buildInboxBackdrop(showingClubs),
@@ -505,8 +509,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   // ── Header (big title + unread pill + compose) ──────────────────────────────
   Widget _buildChatFilters(List<ChatThreadSummary> threads) {
-    final studentThreads = threads.where((thread) => !thread.isClub).toList();
-    final clubThreads = threads.where((thread) => thread.isClub).toList();
+    final studentThreads = threads
+        .where((thread) => !_belongsToClubSection(thread))
+        .toList();
+    final clubThreads = threads.where(_belongsToClubSection).toList();
     final studentUnread = studentThreads.fold<int>(
       0,
       (total, thread) => total + thread.unread,
@@ -1020,6 +1026,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   Widget _row(ChatThreadSummary t) {
     final unread = t.unread;
+    final isPinnedClubRoom =
+        authService.currentAdmin != null &&
+        t.threadId == chatStore.managedCommunityThreadId(_myId);
     final club = t.clubId == null ? null : clubForId(t.clubId!);
     final groupMembers = t.isGroup
         ? chatStore.groupParticipants(t.threadId)
@@ -1123,6 +1132,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
+                          if (isPinnedClubRoom) ...[
+                            Tooltip(
+                              message: S.pinnedLabel,
+                              child: Icon(
+                                Icons.push_pin_rounded,
+                                key: const ValueKey('club-general-room-pinned'),
+                                size: 13,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
                           Text(
                             t.lastMessage == null
                                 ? ''
