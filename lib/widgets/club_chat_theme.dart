@@ -75,7 +75,9 @@ class ClubChatTheme {
       card: AppColors.card,
       sheet: AppColors.card,
       solid: AppColors.surfaceAlt,
-      input: AppColors.surfaceAlt,
+      // The club composer sits on the light card surface, so its input should
+      // stay white there. Keep the existing raised surface in dark mode.
+      input: dark ? AppColors.surfaceAlt : AppColors.card,
       text: AppColors.text,
       textSoft: dark
           ? Colors.white.withValues(alpha: 0.86)
