@@ -39,6 +39,15 @@ class ClubInsightsData {
   final int totalRsvps;
   final int totalLikes;
   final int totalViews;
+
+  /// Every post the club has published — [topPosts] only carries the leaders,
+  /// so the "across N posts" notes need the real total.
+  final int postCount;
+
+  /// The first day this club has any history: its creation date when known,
+  /// otherwise its earliest post or event. Every number here counts from here.
+  final DateTime since;
+
   final List<EventAttendanceStat> events;
   final List<PostStat> topPosts;
 
@@ -47,9 +56,22 @@ class ClubInsightsData {
     required this.totalRsvps,
     required this.totalLikes,
     required this.totalViews,
+    required this.postCount,
+    required this.since,
     required this.events,
     required this.topPosts,
   });
+
+  int get eventCount => events.length;
+
+  int get daysSinceStart {
+    final days = DateTime.now().difference(since).inDays;
+    return days < 0 ? 0 : days;
+  }
+
+  /// A club whose totals are still explained by its age rather than by how it
+  /// posts. Insights shows the "counts from day one" note while this holds.
+  bool get isEarlyDays => daysSinceStart < 30 || totalViews == 0;
 }
 
 /// Aggregates a club's engagement numbers from the same caches the rest of
@@ -103,6 +125,8 @@ class ClubInsightsService {
         ),
     ];
 
+    // Ranked by reach, the way the Insights screen labels the list; likes then
+    // recency break ties so the order never depends on list iteration order.
     final postStats = [
       for (final post in clubPosts)
         PostStat(
@@ -110,16 +134,43 @@ class ClubInsightsService {
           likes: postLikeCount(post.id),
           views: viewTracker.viewCount(post.id),
         ),
-    ]..sort((a, b) => b.likes.compareTo(a.likes));
+    ]..sort((a, b) {
+      final byViews = b.views.compareTo(a.views);
+      if (byViews != 0) return byViews;
+      final byLikes = b.likes.compareTo(a.likes);
+      if (byLikes != 0) return byLikes;
+      return b.post.createdAt.compareTo(a.post.createdAt);
+    });
 
     return ClubInsightsData(
       followers: clubMemberCount(club.id),
       totalRsvps: eventStats.fold(0, (sum, s) => sum + s.rsvpCount),
       totalLikes: postStats.fold(0, (sum, s) => sum + s.likes),
       totalViews: postStats.fold(0, (sum, s) => sum + s.views),
+      postCount: postStats.length,
+      since: _sinceFor(club, clubEvents, clubPosts),
       events: eventStats,
       topPosts: postStats.take(5).toList(),
     );
+  }
+
+  /// The earliest date we can attribute to the club. Event dates can sit in the
+  /// future, so the result is never later than today — "since tomorrow" would
+  /// read as a bug and would make [ClubInsightsData.daysSinceStart] useless.
+  DateTime _sinceFor(
+    Club club,
+    List<Event> clubEvents,
+    List<NewsPost> clubPosts,
+  ) {
+    final now = DateTime.now();
+    var earliest = club.createdAt ?? now;
+    for (final post in clubPosts) {
+      if (post.createdAt.isBefore(earliest)) earliest = post.createdAt;
+    }
+    for (final event in clubEvents) {
+      if (event.dateTime.isBefore(earliest)) earliest = event.dateTime;
+    }
+    return earliest.isAfter(now) ? now : earliest;
   }
 
   /// Pulls remote check-in counts into the local store so [compute] reflects

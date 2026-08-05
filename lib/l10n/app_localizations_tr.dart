@@ -2096,7 +2096,55 @@ class AppLocalizationsTr extends AppLocalizations {
   String get incorrectEmailOrPassword => 'E-posta veya şifre hatalı';
 
   @override
+  String insightsAcrossEvents(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count etkinlikte',
+      zero: 'henüz etkinlik yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String insightsAcrossPosts(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count gönderide',
+      zero: 'henüz gönderi yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get insightsAdminBadge => 'YÖNETİCİ';
+
+  @override
+  String get insightsAdminOnlyNote =>
+      'Yalnızca kulüp yöneticisi olarak sana görünür.';
+
+  @override
+  String get insightsAllTime => 'tüm zamanlar';
+
+  @override
+  String get insightsEarlyDaysNote =>
+      'Henüz başlangıç — buradaki her şey kulübü kurduğun günden itibaren sayılıyor, yani bu sayılar yalnızca artar.';
+
+  @override
+  String get insightsEntrySubtitle =>
+      'Takipçiler, katılımlar ve gönderi performansı';
+
+  @override
+  String insightsSince(String date) {
+    return '$date TARİHİNDEN BERİ';
+  }
+
+  @override
   String get insightsTitle => 'İstatistikler';
+
+  @override
+  String get insightsTopPostsByViews => 'tüm zamanlar, görüntülemeye göre';
 
   @override
   String interestMatchCount(num n) {
