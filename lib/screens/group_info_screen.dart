@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/chat_store.dart';
@@ -75,22 +76,21 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   Future<void> _confirmAndRemoveMember(String memberId) async {
     final memberName = _nameFor(memberId);
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Remove $memberName?'),
-        content: Text(
-          'Are you sure you want to remove $memberName from this group?',
-        ),
+        title: Text(l10n.removeMemberConfirmTitle(memberName)),
+        content: Text(l10n.removeMemberConfirmBody(memberName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             key: const ValueKey('confirm-remove-group-member'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove'),
+            child: Text(l10n.removeLabel),
           ),
         ],
       ),
@@ -104,22 +104,21 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   Future<void> _confirmAndLeaveGroup() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Leave group?'),
-        content: const Text(
-          'You will no longer receive messages from this group.',
-        ),
+        title: Text(l10n.leaveGroupConfirmTitle),
+        content: Text(l10n.leaveGroupConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             key: const ValueKey('confirm-leave-group'),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Leave group'),
+            child: Text(l10n.leaveGroupAction),
           ),
         ],
       ),
@@ -131,17 +130,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   Future<void> _confirmAndDeleteGroup() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete group?'),
-        content: const Text(
-          'This permanently deletes the group and its messages for everyone.',
-        ),
+        title: Text(l10n.deleteGroupConfirmTitle),
+        content: Text(l10n.deleteGroupConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             key: const ValueKey('confirm-delete-group'),
@@ -149,7 +147,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
             ),
-            child: const Text('Delete group'),
+            child: Text(l10n.deleteGroupAction),
           ),
         ],
       ),
@@ -194,6 +192,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       // The locally cached directory still provides a complete offline flow.
     }
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     var query = '';
     await showModalBottomSheet<void>(
       context: context,
@@ -236,7 +235,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Add members',
+                    l10n.addMembersTitle,
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
@@ -249,7 +248,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       autofocus: true,
                       onChanged: (value) => setSheetState(() => query = value),
                       decoration: InputDecoration(
-                        hintText: 'Search people',
+                        hintText: l10n.groupSearchPeopleHint,
                         prefixIcon: const Icon(Icons.search_rounded),
                         filled: true,
                         fillColor: AppColors.surfaceAlt,
@@ -272,7 +271,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     child: known.isEmpty
                         ? Center(
                             child: Text(
-                              'No more people to add',
+                              l10n.noMorePeopleToAdd,
                               style: TextStyle(color: AppColors.secondaryText),
                             ),
                           )
@@ -319,9 +318,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final group = chatStore.groupForThread(widget.threadId);
     if (group == null) {
-      return const Scaffold(body: Center(child: Text('Group unavailable')));
+      return Scaffold(body: Center(child: Text(l10n.groupUnavailable)));
     }
     final canManage = group.isAdmin(widget.myId);
     final canLeave = group.memberIds.contains(widget.myId) && !canManage;
@@ -336,7 +336,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.text,
-        title: const Text('Group info'),
+        title: Text(l10n.groupInfoTitle),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
@@ -377,11 +377,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               textCapitalization: TextCapitalization.words,
               onSubmitted: (_) => _saveName(),
               decoration: InputDecoration(
-                labelText: 'Group name (optional)',
-                hintText: 'Enter group name',
+                labelText: l10n.groupNameOptionalLabel,
+                hintText: l10n.groupNameHint,
                 counterText: '',
                 suffixIcon: IconButton(
-                  tooltip: 'Save group name',
+                  tooltip: l10n.saveGroupNameTooltip,
                   onPressed: _saveName,
                   icon: const Icon(Icons.check_rounded),
                 ),
@@ -409,7 +409,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 key: const ValueKey('leave-group-button'),
                 onPressed: _confirmAndLeaveGroup,
                 icon: const Icon(Icons.logout_rounded, size: 18),
-                label: const Text('Leave group'),
+                label: Text(l10n.leaveGroupAction),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primaryRed,
                   side: BorderSide(color: AppColors.primaryRed),
@@ -425,7 +425,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 key: const ValueKey('delete-group-button'),
                 onPressed: _confirmAndDeleteGroup,
                 icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                label: const Text('Delete group'),
+                label: Text(l10n.deleteGroupAction),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primaryRed,
                   side: BorderSide(color: AppColors.primaryRed),
@@ -437,7 +437,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           Row(
             children: [
               Text(
-                '${group.memberIds.length} members',
+                l10n.groupMemberCount(group.memberIds.length),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -449,7 +449,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 TextButton.icon(
                   onPressed: _showAddMembers,
                   icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                  label: const Text('Add'),
+                  label: Text(l10n.add),
                 ),
             ],
           ),
@@ -466,21 +466,23 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 fontSize: 16,
               ),
               title: Text(
-                id == widget.myId ? '${_nameFor(id)} (You)' : _nameFor(id),
+                id == widget.myId
+                    ? l10n.memberNameYouSuffix(_nameFor(id))
+                    : _nameFor(id),
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   color: AppColors.text,
                 ),
               ),
               subtitle: isCreator
-                  ? const Text('Group creator · Admin')
+                  ? Text(l10n.groupCreatorAdminLabel)
                   : isAdmin
-                  ? const Text('Group admin')
+                  ? Text(l10n.groupAdminLabel)
                   : null,
               trailing: canActOnMember
                   ? PopupMenuButton<_GroupMemberAction>(
                       key: ValueKey('group-member-actions-$id'),
-                      tooltip: 'Member actions',
+                      tooltip: l10n.memberActionsTooltip,
                       onSelected: (action) => _handleMemberAction(action, id),
                       itemBuilder: (context) => [
                         PopupMenuItem(
@@ -489,14 +491,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                               : _GroupMemberAction.makeAdmin,
                           child: Text(
                             isAdmin
-                                ? 'Dismiss as group admin'
-                                : 'Make group admin',
+                                ? l10n.dismissAsGroupAdmin
+                                : l10n.makeGroupAdmin,
                           ),
                         ),
                         if (group.memberIds.length > 2)
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: _GroupMemberAction.remove,
-                            child: Text('Remove member'),
+                            child: Text(l10n.removeMemberAction),
                           ),
                       ],
                       icon: Icon(

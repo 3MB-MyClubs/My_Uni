@@ -78,6 +78,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  /// Guards the replay tap while the reset waits on its Supabase write.
+  bool _isReplayingTutorial = false;
+
   String get _userId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
@@ -534,8 +537,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  // reset() now clears the server flag too, so the round trip has to finish
+  // before the replay is requested; otherwise the tour could be marked complete
+  // again by a late write.
   Future<void> _replayTutorial() async {
-    await onboardingService.reset(_userId);
+    if (_isReplayingTutorial) return;
+    _isReplayingTutorial = true;
+    try {
+      await onboardingService.reset(_userId);
+    } finally {
+      _isReplayingTutorial = false;
+    }
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
     onboardingService.requestReplay();

@@ -200,6 +200,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
                             fontSize: 15,
                           ),
                           decoration: InputDecoration(
+                            filled: false,
                             counterText: '',
                             hintText: S.mediaCaptionHint,
                             hintStyle: const TextStyle(color: Colors.white60),

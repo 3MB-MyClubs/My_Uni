@@ -483,7 +483,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get pickFromLib => 'Fotoğraf kütüphanenizden seçin';
 
   @override
-  String get removePhoto => 'Fotoğrafı Kaldır';
+  String get removePhoto => 'Fotoğrafı kaldır';
 
   @override
   String get majorYearLabel => 'Bölüm & Yıl';
@@ -3664,4 +3664,152 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'Uygulama mağazası açılamadı. ClubUp\'ı mağazadan güncelledikten sonra tekrar deneyin.';
+
+  @override
+  String removeMemberConfirmTitle(String name) {
+    return '$name çıkarılsın mı?';
+  }
+
+  @override
+  String removeMemberConfirmBody(String name) {
+    return '$name adlı kişiyi bu gruptan çıkarmak istediğine emin misin?';
+  }
+
+  @override
+  String get leaveGroupConfirmTitle => 'Gruptan ayrılınsın mı?';
+
+  @override
+  String get leaveGroupConfirmBody => 'Bu gruptan artık mesaj almayacaksın.';
+
+  @override
+  String get leaveGroupAction => 'Gruptan ayrıl';
+
+  @override
+  String get deleteGroupConfirmTitle => 'Grup silinsin mi?';
+
+  @override
+  String get deleteGroupConfirmBody =>
+      'Bu işlem grubu ve mesajlarını herkes için kalıcı olarak siler.';
+
+  @override
+  String get deleteGroupAction => 'Grubu sil';
+
+  @override
+  String get addMembersTitle => 'Üye ekle';
+
+  @override
+  String get noMorePeopleToAdd => 'Eklenecek başka kimse yok';
+
+  @override
+  String get groupSearchPeopleHint => 'Kişi ara';
+
+  @override
+  String get groupUnavailable => 'Grup kullanılamıyor';
+
+  @override
+  String get groupInfoTitle => 'Grup bilgisi';
+
+  @override
+  String get groupNameOptionalLabel => 'Grup adı (isteğe bağlı)';
+
+  @override
+  String get groupNameHint => 'Grup adını gir';
+
+  @override
+  String get saveGroupNameTooltip => 'Grup adını kaydet';
+
+  @override
+  String groupMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count üye',
+      one: '1 üye',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String memberNameYouSuffix(String name) {
+    return '$name (Sen)';
+  }
+
+  @override
+  String get groupCreatorAdminLabel => 'Grup kurucusu · Yönetici';
+
+  @override
+  String get groupAdminLabel => 'Grup yöneticisi';
+
+  @override
+  String get memberActionsTooltip => 'Üye işlemleri';
+
+  @override
+  String get dismissAsGroupAdmin => 'Grup yöneticiliğinden al';
+
+  @override
+  String get makeGroupAdmin => 'Grup yöneticisi yap';
+
+  @override
+  String get removeMemberAction => 'Üyeyi çıkar';
+
+  @override
+  String get createGroupTitle => 'Grup Oluştur';
+
+  @override
+  String get addGroupPhoto => 'Grup fotoğrafı ekle';
+
+  @override
+  String get changeGroupPhoto => 'Grup fotoğrafını değiştir';
+
+  @override
+  String get groupPhotoSheetTitle => 'Grup fotoğrafı';
+
+  @override
+  String get photoEditorOpenFailed => 'Fotoğraf düzenleyici açılamadı.';
+
+  @override
+  String get startChat => 'Sohbeti Başlat';
+
+  @override
+  String get conversationUnavailableTitle => 'Sohbet kullanılamıyor';
+
+  @override
+  String get conversationUnavailableBody => 'Bu sohbete erişimin yok.';
+
+  @override
+  String get appTaglineCampusConnected => 'Kampüsün, bir arada';
+
+  @override
+  String clubSentAMessage(String clubName) {
+    return '$clubName bir mesaj gönderdi.';
+  }
+
+  @override
+  String groupSenderSentAMessage(String groupName, String senderName) {
+    return '$groupName: $senderName bir mesaj gönderdi.';
+  }
+
+  @override
+  String get academicYearPrep => 'Hazırlık';
+
+  @override
+  String get academicYear1 => '1. Sınıf';
+
+  @override
+  String get academicYear2 => '2. Sınıf';
+
+  @override
+  String get academicYear3 => '3. Sınıf';
+
+  @override
+  String get academicYear4 => '4. Sınıf';
+
+  @override
+  String get academicYear5 => '5. Sınıf';
+
+  @override
+  String get academicYearGrad => 'Mezun';
+
+  @override
+  String get academicYearGraduate => 'Mezun';
 }

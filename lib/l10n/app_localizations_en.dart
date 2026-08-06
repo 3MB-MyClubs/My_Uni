@@ -3676,4 +3676,154 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'We couldn\'t open the app store. Please update ClubUp there, then try again.';
+
+  @override
+  String removeMemberConfirmTitle(String name) {
+    return 'Remove $name?';
+  }
+
+  @override
+  String removeMemberConfirmBody(String name) {
+    return 'Are you sure you want to remove $name from this group?';
+  }
+
+  @override
+  String get leaveGroupConfirmTitle => 'Leave group?';
+
+  @override
+  String get leaveGroupConfirmBody =>
+      'You will no longer receive messages from this group.';
+
+  @override
+  String get leaveGroupAction => 'Leave group';
+
+  @override
+  String get deleteGroupConfirmTitle => 'Delete group?';
+
+  @override
+  String get deleteGroupConfirmBody =>
+      'This permanently deletes the group and its messages for everyone.';
+
+  @override
+  String get deleteGroupAction => 'Delete group';
+
+  @override
+  String get addMembersTitle => 'Add members';
+
+  @override
+  String get noMorePeopleToAdd => 'No more people to add';
+
+  @override
+  String get groupSearchPeopleHint => 'Search people';
+
+  @override
+  String get groupUnavailable => 'Group unavailable';
+
+  @override
+  String get groupInfoTitle => 'Group info';
+
+  @override
+  String get groupNameOptionalLabel => 'Group name (optional)';
+
+  @override
+  String get groupNameHint => 'Enter group name';
+
+  @override
+  String get saveGroupNameTooltip => 'Save group name';
+
+  @override
+  String groupMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '1 member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String memberNameYouSuffix(String name) {
+    return '$name (You)';
+  }
+
+  @override
+  String get groupCreatorAdminLabel => 'Group creator · Admin';
+
+  @override
+  String get groupAdminLabel => 'Group admin';
+
+  @override
+  String get memberActionsTooltip => 'Member actions';
+
+  @override
+  String get dismissAsGroupAdmin => 'Dismiss as group admin';
+
+  @override
+  String get makeGroupAdmin => 'Make group admin';
+
+  @override
+  String get removeMemberAction => 'Remove member';
+
+  @override
+  String get createGroupTitle => 'Create Group';
+
+  @override
+  String get addGroupPhoto => 'Add group photo';
+
+  @override
+  String get changeGroupPhoto => 'Change group photo';
+
+  @override
+  String get groupPhotoSheetTitle => 'Group photo';
+
+  @override
+  String get photoEditorOpenFailed => 'Could not open the photo editor.';
+
+  @override
+  String get startChat => 'Start Chat';
+
+  @override
+  String get conversationUnavailableTitle => 'Conversation unavailable';
+
+  @override
+  String get conversationUnavailableBody =>
+      'You don\'t have access to this conversation.';
+
+  @override
+  String get appTaglineCampusConnected => 'Your campus, connected';
+
+  @override
+  String clubSentAMessage(String clubName) {
+    return '$clubName sent a message.';
+  }
+
+  @override
+  String groupSenderSentAMessage(String groupName, String senderName) {
+    return '$groupName: $senderName sent a message.';
+  }
+
+  @override
+  String get academicYearPrep => 'Prep';
+
+  @override
+  String get academicYear1 => '1st Year';
+
+  @override
+  String get academicYear2 => '2nd Year';
+
+  @override
+  String get academicYear3 => '3rd Year';
+
+  @override
+  String get academicYear4 => '4th Year';
+
+  @override
+  String get academicYear5 => '5th Year';
+
+  @override
+  String get academicYearGrad => 'Grad';
+
+  @override
+  String get academicYearGraduate => 'Graduate';
 }

@@ -333,6 +333,7 @@ class _ClubComposerState extends State<ClubComposer> {
                                 color: t.text,
                               ),
                               decoration: InputDecoration(
+                                filled: false,
                                 isDense: true,
                                 // The pill owns its theme-aware background.
                                 // Avoid the app-wide field fill adding a grey

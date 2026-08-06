@@ -286,10 +286,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editMajorAndYear(BuildContext context, String userId) async {
-    final savedMajor = userState.majors[userId];
-    String? selectedMajor = kAcademicPrograms.contains(savedMajor)
+    final savedMajor = userState.majors[userId]?.trim();
+    String? selectedMajor = (savedMajor != null && savedMajor.isNotEmpty)
         ? savedMajor
         : null;
+    // A saved major missing from the hardcoded list is offered alongside it
+    // rather than discarded — the database spells some programs with "&" where
+    // [kAcademicPrograms] spells them "and".
+    final majorOptions =
+        (selectedMajor == null || kAcademicPrograms.contains(selectedMajor))
+        ? kAcademicPrograms
+        : [...kAcademicPrograms, selectedMajor];
     var selectedYear = userState.years[userId];
 
     await showDialog<void>(
@@ -317,6 +324,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final result = await showAcademicProgramPicker(
                     context: ctx,
                     title: AppLocalizations.of(context)!.selectMajor,
+                    programs: majorOptions,
                     selected: selectedMajor == null
                         ? const []
                         : [selectedMajor!],
@@ -992,7 +1000,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               major:
                   userState.majors[user.id] ??
                   AppLocalizations.of(context)!.majorNotAdded,
-              year: year ?? AppLocalizations.of(context)!.yearNotAdded,
+              year: year == null
+                  ? AppLocalizations.of(context)!.yearNotAdded
+                  : academicYearDisplayName(year),
               bio:
                   userState.bios[user.id] ??
                   AppLocalizations.of(context)!.addBioIntro,
@@ -1483,7 +1493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                year.toUpperCase(),
+                                academicYearDisplayName(year).toUpperCase(),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10.5,
@@ -1573,11 +1583,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Text(
                         [
                               if (major.isNotEmpty) major,
-                              if (year.isNotEmpty) year,
+                              if (year.isNotEmpty)
+                                academicYearDisplayName(year),
                             ].join(' · ').isNotEmpty
                             ? [
                                 if (major.isNotEmpty) major,
-                                if (year.isNotEmpty) year,
+                                if (year.isNotEmpty)
+                                  academicYearDisplayName(year),
                               ].join(' · ')
                             : AppLocalizations.of(context)!.addMajorYear,
                         style: TextStyle(

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
@@ -1002,7 +1003,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
           ),
           ListenableBuilder(
-            listenable: Listenable.merge([chatStore, userState, ?_communityInfo]),
+            listenable: Listenable.merge([
+              chatStore,
+              userState,
+              ?_communityInfo,
+            ]),
             builder: (context, _) {
               final canAccess = chatStore.canAccessThread(
                 widget.threadId,
@@ -1392,7 +1397,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Conversation unavailable',
+                    AppLocalizations.of(context)!.conversationUnavailableTitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 17,
@@ -1402,7 +1407,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    'You don\'t have access to this conversation.',
+                    AppLocalizations.of(context)!.conversationUnavailableBody,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,

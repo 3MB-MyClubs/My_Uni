@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+
 /// Branded first Flutter frame shown while the app finishes local startup.
 class AppLaunchScreen extends StatefulWidget {
   const AppLaunchScreen({super.key});
@@ -121,7 +123,9 @@ class _AppLaunchScreenState extends State<AppLaunchScreen>
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Your campus, connected',
+                          AppLocalizations.of(
+                            context,
+                          )!.appTaglineCampusConnected,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.78),
                             fontSize: 13,
