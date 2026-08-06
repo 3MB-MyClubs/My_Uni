@@ -757,6 +757,7 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
                 onChanged: (v) => setState(() => _query = v),
                 style: TextStyle(fontSize: 14, color: AppColors.text),
                 decoration: InputDecoration(
+                  filled: false,
                   isCollapsed: true,
                   border: InputBorder.none,
                   hintText: AppLocalizations.of(context)!.search,

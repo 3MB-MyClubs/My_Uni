@@ -332,6 +332,7 @@ class _ClubComposerState extends State<ClubComposer> {
                                 color: t.text,
                               ),
                               decoration: InputDecoration(
+                                filled: false,
                                 isDense: true,
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
