@@ -693,10 +693,17 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   void _scrollToLatest() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      // Flying back from deep in the history is an unreadable blur at this
+      // duration, so close the gap first and animate only the last screenful.
+      final animatedTravel = position.viewportDimension * 1.5;
+      if (position.pixels > animatedTravel) {
+        _scrollController.jumpTo(animatedTravel);
+      }
       _scrollController.animateTo(
         0,
-        duration: const Duration(milliseconds: 440),
-        curve: const Cubic(0.20, 0.72, 0.24, 1),
+        duration: sentMessageEntranceDuration,
+        curve: sentMessageEntranceCurve,
       );
     });
   }

@@ -332,13 +332,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _scrollToLatest() {
     // reverse:true list — offset 0 is the newest message at the bottom.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 440),
-          curve: const Cubic(0.20, 0.72, 0.24, 1),
-        );
+      if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      // Flying back from deep in the history is an unreadable blur at this
+      // duration, so close the gap first and animate only the last screenful.
+      final animatedTravel = position.viewportDimension * 1.5;
+      if (position.pixels > animatedTravel) {
+        _scrollController.jumpTo(animatedTravel);
       }
+      _scrollController.animateTo(
+        0,
+        duration: sentMessageEntranceDuration,
+        curve: sentMessageEntranceCurve,
+      );
     });
   }
 
@@ -1673,12 +1679,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         : null;
     final filePath = videoPath == null ? attachedFilePath : null;
     final hasMedia = photoPath != null || videoPath != null || filePath != null;
+    final hasPhoto = photoPath != null;
+    final bubbleRadius = hasPhoto ? 16.0 : 20.0;
 
     final bubble = Container(
+      key: ValueKey('chat-message-bubble-${m.id}'),
       constraints: BoxConstraints(
         maxWidth: MediaQuery.sizeOf(context).width * 0.76,
       ),
-      padding: hasMedia
+      padding: hasPhoto
+          ? const EdgeInsets.all(1)
+          : hasMedia
           ? const EdgeInsets.all(5)
           : const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
       decoration: BoxDecoration(
@@ -1695,20 +1706,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               )
             : null,
         borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(20),
-          topRight: const Radius.circular(20),
-          bottomLeft: Radius.circular(mine ? 20 : 6),
-          bottomRight: Radius.circular(mine ? 6 : 20),
+          topLeft: Radius.circular(bubbleRadius),
+          topRight: Radius.circular(bubbleRadius),
+          bottomLeft: Radius.circular(mine ? bubbleRadius : 6),
+          bottomRight: Radius.circular(mine ? 6 : bubbleRadius),
         ),
-        border: mine ? null : Border.all(color: AppColors.glassEdge),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: mine ? 0.14 : 0.08),
-            blurRadius: 10,
-            spreadRadius: -4,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: hasPhoto
+            ? Border.all(
+                color: mine ? AppColors.primaryRed : AppColors.glassEdge,
+                width: 0.5,
+              )
+            : mine
+            ? null
+            : Border.all(color: AppColors.glassEdge),
+        boxShadow: hasPhoto
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: mine ? 0.14 : 0.08),
+                  blurRadius: 10,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2045,12 +2065,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : null,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(15),
-        child: Container(
+        child: SizedBox(
           width: 200,
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.glassEdge),
-            borderRadius: BorderRadius.circular(15),
-          ),
           child: AspectRatio(
             aspectRatio: 4 / 3,
             child: !exists
@@ -2210,154 +2226,164 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_replyingTo case final replied?) ...[
-              _composerReplyPreview(replied),
-              const SizedBox(height: 9),
-            ],
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // "+" — photo or camera.
-                _composerCircleButton(
-                  key: const ValueKey('chat-attach-button'),
-                  size: 40,
-                  icon: Icons.add_rounded,
-                  iconSize: 21,
-                  iconColor: AppColors.primaryRed,
-                  onTap: enabled ? _openAttachSheet : null,
-                  semanticLabel: S.attachToMessage,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceAlt,
-                      borderRadius: const BorderRadius.all(Radius.circular(22)),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _inputController,
-                            focusNode: _inputFocusNode,
-                            enabled: enabled,
-                            minLines: 1,
-                            maxLines: 1,
-                            textInputAction: TextInputAction.send,
-                            textAlignVertical: TextAlignVertical.center,
-                            textCapitalization: TextCapitalization.sentences,
-                            onSubmitted: enabled ? (_) => _send() : null,
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              color: AppColors.text,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: S.typeMessage,
-                              hintStyle: TextStyle(
+        // Sending a reply drops the quoted preview, and an instant collapse
+        // jolts the whole thread up by its height at the same moment the new
+        // bubble is arriving. Let the bar close on the same clock instead.
+        child: AnimatedSize(
+          duration: sentMessageEntranceDuration,
+          curve: sentMessageEntranceCurve,
+          alignment: Alignment.bottomCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_replyingTo case final replied?) ...[
+                _composerReplyPreview(replied),
+                const SizedBox(height: 9),
+              ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // "+" — photo or camera.
+                  _composerCircleButton(
+                    key: const ValueKey('chat-attach-button'),
+                    size: 40,
+                    icon: Icons.add_rounded,
+                    iconSize: 21,
+                    iconColor: AppColors.primaryRed,
+                    onTap: enabled ? _openAttachSheet : null,
+                    semanticLabel: S.attachToMessage,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(22),
+                        ),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _inputController,
+                              focusNode: _inputFocusNode,
+                              enabled: enabled,
+                              minLines: 1,
+                              maxLines: 1,
+                              textInputAction: TextInputAction.send,
+                              textAlignVertical: TextAlignVertical.center,
+                              textCapitalization: TextCapitalization.sentences,
+                              onSubmitted: enabled ? (_) => _send() : null,
+                              style: TextStyle(
                                 fontSize: 14.5,
-                                color: AppColors.secondaryText,
+                                color: AppColors.text,
                               ),
-                              isDense: true,
-                              // The pill already paints the background; avoid
-                              // stacking the global field fill on top of it.
-                              filled: false,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                4,
-                                0,
+                              decoration: InputDecoration(
+                                hintText: S.typeMessage,
+                                hintStyle: TextStyle(
+                                  fontSize: 14.5,
+                                  color: AppColors.secondaryText,
+                                ),
+                                isDense: true,
+                                // The pill already paints the background; avoid
+                                // stacking the global field fill on top of it.
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  4,
+                                  0,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        // Quick camera capture, docked inside the pill.
-                        _composerCircleButton(
-                          key: const ValueKey('chat-camera-button'),
-                          size: 34,
-                          icon: Icons.photo_camera_outlined,
-                          iconSize: 19,
-                          iconColor: AppColors.secondaryText,
-                          filled: false,
-                          onTap: enabled
-                              ? () => _pickAttachment(_ChatAttachment.camera)
-                              : null,
-                          semanticLabel: S.takePhoto,
-                        ),
-                        const SizedBox(width: 4),
-                      ],
+                          // Quick camera capture, docked inside the pill.
+                          _composerCircleButton(
+                            key: const ValueKey('chat-camera-button'),
+                            size: 34,
+                            icon: Icons.photo_camera_outlined,
+                            iconSize: 19,
+                            iconColor: AppColors.secondaryText,
+                            filled: false,
+                            onTap: enabled
+                                ? () => _pickAttachment(_ChatAttachment.camera)
+                                : null,
+                            semanticLabel: S.takePhoto,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 9),
-                // Send once there is a draft. The disabled send affordance keeps
-                // the composer layout stable without offering voice notes.
-                ListenableBuilder(
-                  listenable: _inputController,
-                  builder: (context, _) {
-                    final hasDraft =
-                        enabled && _inputController.text.trim().isNotEmpty;
-                    return AppPressable(
-                      key: const ValueKey('chat-send-button'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: enabled && hasDraft ? _send : null,
-                      pressedScale: 0.92,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: hasDraft ? null : AppColors.surfaceAlt,
-                          gradient: hasDraft
-                              ? LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    AppColors.primaryRed,
-                                    AppColors.darkRed,
-                                  ],
-                                )
-                              : null,
-                          shape: BoxShape.circle,
-                          border: hasDraft
-                              ? null
-                              : Border.all(color: AppColors.divider),
-                          boxShadow: hasDraft
-                              ? [
-                                  BoxShadow(
-                                    color: AppColors.primaryRed.withValues(
-                                      alpha: 0.33,
+                  const SizedBox(width: 9),
+                  // Send once there is a draft. The disabled send affordance keeps
+                  // the composer layout stable without offering voice notes.
+                  ListenableBuilder(
+                    listenable: _inputController,
+                    builder: (context, _) {
+                      final hasDraft =
+                          enabled && _inputController.text.trim().isNotEmpty;
+                      return AppPressable(
+                        key: const ValueKey('chat-send-button'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: enabled && hasDraft ? _send : null,
+                        pressedScale: 0.92,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: hasDraft ? null : AppColors.surfaceAlt,
+                            gradient: hasDraft
+                                ? LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppColors.primaryRed,
+                                      AppColors.darkRed,
+                                    ],
+                                  )
+                                : null,
+                            shape: BoxShape.circle,
+                            border: hasDraft
+                                ? null
+                                : Border.all(color: AppColors.divider),
+                            boxShadow: hasDraft
+                                ? [
+                                    BoxShadow(
+                                      color: AppColors.primaryRed.withValues(
+                                        alpha: 0.33,
+                                      ),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 4),
                                     ),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ]
-                              : null,
+                                  ]
+                                : null,
+                          ),
+                          child: Icon(
+                            Icons.send_rounded,
+                            size: 21,
+                            color: hasDraft
+                                ? Colors.white
+                                : AppColors.secondaryText,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.send_rounded,
-                          size: 21,
-                          color: hasDraft
-                              ? Colors.white
-                              : AppColors.secondaryText,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
