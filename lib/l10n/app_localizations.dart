@@ -3530,11 +3530,65 @@ abstract class AppLocalizations {
   /// **'Incorrect email or password'**
   String get incorrectEmailOrPassword;
 
+  /// No description provided for @insightsAcrossEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =0{no events yet} one{across 1 event} other{across {count} events}}'**
+  String insightsAcrossEvents(num count);
+
+  /// No description provided for @insightsAcrossPosts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =0{no posts yet} one{across 1 post} other{across {count} posts}}'**
+  String insightsAcrossPosts(num count);
+
+  /// No description provided for @insightsAdminBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'ADMIN'**
+  String get insightsAdminBadge;
+
+  /// No description provided for @insightsAdminOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Visible only to you as club admin.'**
+  String get insightsAdminOnlyNote;
+
+  /// No description provided for @insightsAllTime.
+  ///
+  /// In en, this message translates to:
+  /// **'all time'**
+  String get insightsAllTime;
+
+  /// No description provided for @insightsEarlyDaysNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Early days — everything here counts from the day you created the club, so these numbers only ever grow.'**
+  String get insightsEarlyDaysNote;
+
+  /// No description provided for @insightsEntrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Followers, RSVPs and post performance'**
+  String get insightsEntrySubtitle;
+
+  /// No description provided for @insightsSince.
+  ///
+  /// In en, this message translates to:
+  /// **'SINCE {date}'**
+  String insightsSince(String date);
+
   /// No description provided for @insightsTitle.
   ///
   /// In en, this message translates to:
   /// **'Insights'**
   String get insightsTitle;
+
+  /// No description provided for @insightsTopPostsByViews.
+  ///
+  /// In en, this message translates to:
+  /// **'all time, by views'**
+  String get insightsTopPostsByViews;
 
   /// No description provided for @interestMatchCount.
   ///

@@ -3,44 +3,23 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'app_presence_service.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
 import 'supabase_read_cache.dart';
 
-/// Returns the number of unique authenticated online users who are members of
-/// one club. Kept pure so the membership rule is shared and directly testable.
-int onlineClubMemberCount({
-  required Iterable<String> onlineUserIds,
-  required Iterable<String> memberUserIds,
-}) {
-  final members = memberUserIds.toSet();
-  return onlineUserIds.toSet().where(members.contains).length;
-}
-
 /// Live information for one opened club community.
 ///
 /// Member totals use the existing aggregate view. A single filtered realtime
-/// subscription maintains just this club's member-id set, which is intersected
-/// with app-wide Supabase Presence for the online count.
+/// subscription maintains just this club's member-id set.
 class ClubCommunityInfoController extends ChangeNotifier {
   ClubCommunityInfoController({
     required this.clubId,
     required int fallbackMemberCount,
-    AppPresenceService? presenceService,
     Iterable<String> fallbackMemberIds = const [],
   }) : _memberCount = fallbackMemberCount,
-       _memberIds = fallbackMemberIds.toSet(),
-       _presenceService = presenceService ?? appPresenceService {
-    _onlineCount = onlineClubMemberCount(
-      onlineUserIds: _presenceService.onlineUserIds,
-      memberUserIds: _memberIds,
-    );
-    _presenceService.addListener(_handlePresenceChanged);
-  }
+       _memberIds = fallbackMemberIds.toSet();
 
   final String clubId;
-  final AppPresenceService _presenceService;
   final Set<String> _memberIds;
 
   static const _snapshotTtl = Duration(seconds: 30);
@@ -54,10 +33,8 @@ class ClubCommunityInfoController extends ChangeNotifier {
   bool _started = false;
   bool _disposed = false;
   int _memberCount;
-  int _onlineCount = 0;
 
   int get memberCount => _memberCount;
-  int get onlineCount => _onlineCount;
 
   SupabaseClient? get _configuredClient {
     if (!SupabaseConfig.isConfigured) return null;
@@ -163,7 +140,6 @@ class ClubCommunityInfoController extends ChangeNotifier {
       _memberIds
         ..clear()
         ..addAll(nextIds);
-      _recalculateOnlineCount();
     } catch (_) {
       // Preserve the last complete membership snapshot while offline.
     }
@@ -183,7 +159,6 @@ class ClubCommunityInfoController extends ChangeNotifier {
       } else {
         _memberIds.add(profileId);
       }
-      _recalculateOnlineCount();
     }
 
     // Coalesce bursts (for example an admin importing several members) into
@@ -195,23 +170,10 @@ class ClubCommunityInfoController extends ChangeNotifier {
     });
   }
 
-  void _handlePresenceChanged() => _recalculateOnlineCount();
-
-  void _recalculateOnlineCount() {
-    final next = onlineClubMemberCount(
-      onlineUserIds: _presenceService.onlineUserIds,
-      memberUserIds: _memberIds,
-    );
-    if (_disposed || next == _onlineCount) return;
-    _onlineCount = next;
-    notifyListeners();
-  }
-
   @override
   void dispose() {
     _disposed = true;
     _countRefreshDebounce?.cancel();
-    _presenceService.removeListener(_handlePresenceChanged);
     final client = _client;
     final channel = _membershipChannel;
     _client = null;

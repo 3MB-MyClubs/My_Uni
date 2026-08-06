@@ -1118,7 +1118,37 @@
     }
   },
   "incorrectEmailOrPassword": "Incorrect email or password",
+  "insightsAcrossEvents": "{count,plural, =0{no events yet} one{across 1 event} other{across {count} events}}",
+  "@insightsAcrossEvents": {
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "insightsAcrossPosts": "{count,plural, =0{no posts yet} one{across 1 post} other{across {count} posts}}",
+  "@insightsAcrossPosts": {
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "insightsAdminBadge": "ADMIN",
+  "insightsAdminOnlyNote": "Visible only to you as club admin.",
+  "insightsAllTime": "all time",
+  "insightsEarlyDaysNote": "Early days — everything here counts from the day you created the club, so these numbers only ever grow.",
+  "insightsEntrySubtitle": "Followers, RSVPs and post performance",
+  "insightsSince": "SINCE {date}",
+  "@insightsSince": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "insightsTitle": "Insights",
+  "insightsTopPostsByViews": "all time, by views",
   "interestMatchCount": "{n,plural, one{1 interest match} other{{n} interest matches}}",
   "@interestMatchCount": {
     "placeholders": {

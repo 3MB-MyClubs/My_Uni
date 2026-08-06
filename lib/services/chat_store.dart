@@ -2269,8 +2269,9 @@ class ChatStore extends ChangeNotifier {
   // ── Reads ────────────────────────────────────────────────────────────────────
 
   /// All threads [userId] can see: every DM thread they participate in plus
-  /// one room per accessible club (even rooms with no messages yet). Sorted
-  /// by last activity, newest first; empty club rooms last, alphabetically.
+  /// one room per accessible club (even rooms with no messages yet). A club
+  /// account's shared community is pinned first; the remaining conversations
+  /// are sorted by last activity, newest first, with empty rooms last.
   List<ChatThreadSummary> threadsFor(String userId) {
     if (_box == null || userId.isEmpty) return const [];
 
@@ -2340,7 +2341,12 @@ class ChatStore extends ChangeNotifier {
     List<ChatThreadSummary> result,
     String userId,
   ) {
+    final pinnedThreadId = managedCommunityThreadId(userId);
     result.sort((a, b) {
+      final aPinned = a.threadId == pinnedThreadId;
+      final bPinned = b.threadId == pinnedThreadId;
+      if (aPinned != bPinned) return aPinned ? -1 : 1;
+
       final aLast = a.lastMessage;
       final bLast = b.lastMessage;
       if (aLast != null && bLast != null) {
@@ -3217,8 +3223,6 @@ class ChatStore extends ChangeNotifier {
     if (markedSeen) unawaited(_flushRemoteChanges());
   }
 
-  // ── Demo presence ────────────────────────────────────────────────────────────
-
   void _createGroupMessageNotifications(ChatMessage message) {
     final group = groupForThread(message.threadId);
     if (group == null) return;
@@ -3316,7 +3320,7 @@ final chatStore = ChatStore();
 /// Lightweight view model for the inbox list; derived, never persisted.
 class ChatThreadSummary {
   final String threadId;
-  final String? clubId; // set for club rooms
+  final String? clubId; // set for shared club rooms and private club inboxes
   final String? clubInboxId; // set for private student ↔ club inboxes
   final String? groupId; // set for student-created groups
   final String? peerId; // set for DM threads
@@ -3333,7 +3337,12 @@ class ChatThreadSummary {
     required this.unread,
   });
 
-  bool get isClub => clubId != null;
+  /// Whether this summary is the club's shared community room.
+  ///
+  /// Private student ↔ club inboxes also retain [clubId] so their title and
+  /// avatar can use the club identity, but they belong alongside direct and
+  /// group conversations in the personal inbox.
+  bool get isClub => clubId != null && clubInboxId == null;
   bool get isClubInbox => clubInboxId != null;
   bool get isGroup => groupId != null;
 }

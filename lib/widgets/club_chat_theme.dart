@@ -33,7 +33,6 @@ class ClubChatTheme {
   final Color textSoft;
   final Color textMuted;
   final Color sub;
-  final Color online;
 
   const ClubChatTheme._({
     required this.isDark,
@@ -54,7 +53,6 @@ class ClubChatTheme {
     required this.textSoft,
     required this.textMuted,
     required this.sub,
-    required this.online,
   });
 
   factory ClubChatTheme.of(Color accent) {
@@ -75,14 +73,15 @@ class ClubChatTheme {
       card: AppColors.card,
       sheet: AppColors.card,
       solid: AppColors.surfaceAlt,
-      input: AppColors.surfaceAlt,
+      // The club composer sits on the light card surface, so its input should
+      // stay white there. Keep the existing raised surface in dark mode.
+      input: dark ? AppColors.surfaceAlt : AppColors.card,
       text: AppColors.text,
       textSoft: dark
           ? Colors.white.withValues(alpha: 0.86)
           : const Color(0xFF3A1828),
       textMuted: AppColors.secondaryText,
       sub: AppColors.secondaryText.withValues(alpha: dark ? 0.75 : 0.9),
-      online: dark ? const Color(0xFF3FC477) : const Color(0xFF2E9E5B),
     );
   }
 

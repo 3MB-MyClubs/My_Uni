@@ -520,192 +520,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _openClubCategoriesSheet(Club club) {
-    final selected = _clubCategories(club).toSet();
-    final extra = selected
-        .where((category) => !_clubCategoryOptions.contains(category))
-        .join(', ');
-    final controller = TextEditingController(text: extra);
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          List<String> categories() {
-            final custom = controller.text
-                .split(',')
-                .map((category) => category.trim())
-                .where((category) => category.isNotEmpty);
-            return {...selected, ...custom}.toList()..sort();
-          }
-
-          final values = categories();
-          final nextValue = values.join(', ');
-          final currentValue = _clubCategories(club).join(', ');
-          final canSave = nextValue != currentValue;
-
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.divider,
-                        borderRadius: BorderRadius.all(Radius.circular(2)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    AppLocalizations.of(context)!.clubCategories,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    AppLocalizations.of(context)!.chooseTagsHint,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final category in _clubCategoryOptions)
-                        FilterChip(
-                          label: Text(_localizedClubCategory(ctx, category)),
-                          selected: selected.contains(category),
-                          selectedColor: AppColors.lightRed,
-                          checkmarkColor: AppColors.primaryRed,
-                          labelStyle: TextStyle(
-                            color: selected.contains(category)
-                                ? AppColors.primaryRed
-                                : AppColors.text,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          side: BorderSide(color: AppColors.divider),
-                          onSelected: (value) {
-                            setSheetState(() {
-                              if (value) {
-                                selected.add(category);
-                              } else {
-                                selected.remove(category);
-                              }
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: controller,
-                    style: TextStyle(color: AppColors.text, fontSize: 14),
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.customTags,
-                      hintText: AppLocalizations.of(context)!.customTagsHint,
-                      helperText: AppLocalizations.of(
-                        context,
-                      )!.separateWithCommas,
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                        borderSide: BorderSide(
-                          color: AppColors.primaryRed,
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                    onChanged: (_) => setSheetState(() {}),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text(
-                            AppLocalizations.of(context)!.cancel,
-                            style: TextStyle(color: AppColors.secondaryText),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: canSave
-                                ? AppColors.primaryRed
-                                : AppColors.divider,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(12),
-                              ),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          onPressed: canSave
-                              ? () {
-                                  club.categoryName = nextValue.isEmpty
-                                      ? null
-                                      : nextValue;
-                                  userState.bumpClubInfo();
-                                  if (mounted) setState(() {});
-                                  Navigator.of(ctx).pop();
-                                  unawaited(
-                                    userPrefsService
-                                        .saveClubCategory(
-                                          club.id,
-                                          club.categoryName,
-                                        )
-                                        .catchError((_) {}),
-                                  );
-                                }
-                              : null,
-                          child: Text(
-                            AppLocalizations.of(context)!.saveCategories,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      builder: (_) => _ClubCategoriesSheet(
+        club: club,
+        categoryOptions: _clubCategoryOptions,
+        localizeCategory: _localizedClubCategory,
       ),
-    ).whenComplete(controller.dispose);
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _replayTutorial() async {
@@ -1671,6 +1497,221 @@ class _ThemeSwitch extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet for editing a club's discovery categories. The controller is
+/// owned by the sheet so it survives the dismissal animation and is disposed
+/// only when the sheet widget is actually removed.
+class _ClubCategoriesSheet extends StatefulWidget {
+  final Club club;
+  final List<String> categoryOptions;
+  final String Function(BuildContext context, String category) localizeCategory;
+
+  const _ClubCategoriesSheet({
+    required this.club,
+    required this.categoryOptions,
+    required this.localizeCategory,
+  });
+
+  @override
+  State<_ClubCategoriesSheet> createState() => _ClubCategoriesSheetState();
+}
+
+class _ClubCategoriesSheetState extends State<_ClubCategoriesSheet> {
+  late final Set<String> _selected;
+  late final TextEditingController _controller;
+
+  List<String> _clubCategories() {
+    final raw = widget.club.categoryName?.trim();
+    if (raw == null || raw.isEmpty) return const [];
+    return raw
+        .split(',')
+        .map((category) => category.trim())
+        .where((category) => category.isNotEmpty)
+        .toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = _clubCategories().toSet();
+    final extra = _selected
+        .where((category) => !widget.categoryOptions.contains(category))
+        .join(', ');
+    _controller = TextEditingController(text: extra);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<String> _categories() {
+    final custom = _controller.text
+        .split(',')
+        .map((category) => category.trim())
+        .where((category) => category.isNotEmpty);
+    return {..._selected, ...custom}.toList()..sort();
+  }
+
+  void _save() {
+    final nextValue = _categories().join(', ');
+    final currentValue = _clubCategories().join(', ');
+    if (nextValue == currentValue) return;
+
+    widget.club.categoryName = nextValue.isEmpty ? null : nextValue;
+    userState.bumpClubInfo();
+    Navigator.of(context).pop();
+    unawaited(
+      userPrefsService
+          .saveClubCategory(widget.club.id, widget.club.categoryName)
+          .catchError((_) {}),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final nextValue = _categories().join(', ');
+    final currentValue = _clubCategories().join(', ');
+    final canSave = nextValue != currentValue;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.all(Radius.circular(2)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              l10n.clubCategories,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l10n.chooseTagsHint,
+              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final category in widget.categoryOptions)
+                  FilterChip(
+                    label: Text(widget.localizeCategory(context, category)),
+                    selected: _selected.contains(category),
+                    selectedColor: AppColors.lightRed,
+                    checkmarkColor: AppColors.primaryRed,
+                    labelStyle: TextStyle(
+                      color: _selected.contains(category)
+                          ? AppColors.primaryRed
+                          : AppColors.text,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    side: BorderSide(color: AppColors.divider),
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          _selected.add(category);
+                        } else {
+                          _selected.remove(category);
+                        }
+                      });
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _controller,
+              style: TextStyle(color: AppColors.text, fontSize: 14),
+              decoration: InputDecoration(
+                labelText: l10n.customTags,
+                hintText: l10n.customTagsHint,
+                helperText: l10n.separateWithCommas,
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryRed,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      l10n.cancel,
+                      style: TextStyle(color: AppColors.secondaryText),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canSave
+                          ? AppColors.primaryRed
+                          : AppColors.divider,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: canSave ? _save : null,
+                    child: Text(
+                      l10n.saveCategories,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

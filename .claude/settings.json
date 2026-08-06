@@ -68,7 +68,9 @@
       "Bash(cd /c/flutter/packages/flutter/lib/src/material && grep -n \"filled: filled\\\\|final bool? filled\\\\|this.filled\\\\|bool get _filled\\\\|decoration.filled\" input_decorator.dart | head -20)",
       "Read(//c/flutter/packages/flutter/lib/src/material/**)",
       "Bash(git diff *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(rm -rf test/failures)",
+      "Bash(echo \"grep exit: $? \\(1=empty\\)\")"
     ],
     "additionalDirectories": [
       "/tmp",

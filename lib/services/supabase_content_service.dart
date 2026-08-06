@@ -48,7 +48,7 @@ class SupabaseContentService {
       client
           .from('clubs')
           .select(
-            'id, name, short_name, description, logo_url, category_id, email, club_categories(name)',
+            'id, name, short_name, description, logo_url, category_id, email, created_at, club_categories(name)',
           ),
       if (includeModerationArchive)
         _fetchAllRows(client, table: 'events', columns: _eventSelectColumns)
@@ -315,6 +315,7 @@ class SupabaseContentService {
       categoryName: _categoryName(row),
       email: _nullableString(row, ['email']),
       adminUserIds: adminIds,
+      createdAt: _date(row, ['created_at', 'createdAt']),
       boardMemberIds: _stringList(
         row['board_member_ids'] ?? row['boardMemberIds'],
       ),

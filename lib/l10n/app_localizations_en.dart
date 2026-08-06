@@ -2107,7 +2107,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get incorrectEmailOrPassword => 'Incorrect email or password';
 
   @override
+  String insightsAcrossEvents(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'across $count events',
+      one: 'across 1 event',
+      zero: 'no events yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String insightsAcrossPosts(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'across $count posts',
+      one: 'across 1 post',
+      zero: 'no posts yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get insightsAdminBadge => 'ADMIN';
+
+  @override
+  String get insightsAdminOnlyNote => 'Visible only to you as club admin.';
+
+  @override
+  String get insightsAllTime => 'all time';
+
+  @override
+  String get insightsEarlyDaysNote =>
+      'Early days — everything here counts from the day you created the club, so these numbers only ever grow.';
+
+  @override
+  String get insightsEntrySubtitle => 'Followers, RSVPs and post performance';
+
+  @override
+  String insightsSince(String date) {
+    return 'SINCE $date';
+  }
+
+  @override
   String get insightsTitle => 'Insights';
+
+  @override
+  String get insightsTopPostsByViews => 'all time, by views';
 
   @override
   String interestMatchCount(num n) {

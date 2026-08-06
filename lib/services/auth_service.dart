@@ -17,7 +17,6 @@ import 'supabase_config.dart';
 import 'push_notification_service.dart';
 import 'auth_session_store.dart';
 import 'user_state.dart';
-import 'app_presence_service.dart';
 import 'lazy_content_loader.dart';
 import 'people_service.dart';
 import 'terms_acceptance_service.dart';
@@ -575,7 +574,6 @@ class AuthService {
 
   Future<void> logout() async {
     final wasClubUpMockSession = isClubUpMockAdmin(_currentAdmin);
-    final presenceStop = appPresenceService.stop();
     lazyContentLoader.invalidate();
     _currentUser = null;
     _currentAdmin = null;
@@ -601,7 +599,6 @@ class AuthService {
         // Tests may exercise logout without bootstrapping Supabase.
       }
     }
-    await presenceStop;
   }
 
   void _clearPlatformAdminIdentity() {

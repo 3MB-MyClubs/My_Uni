@@ -11,7 +11,6 @@ import '../models/club.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
-import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/chat_attachment_staging.dart';
@@ -31,7 +30,6 @@ import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
-import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
@@ -40,16 +38,11 @@ import '../widgets/shared_event_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
-import 'club_profile_screen.dart';
 import 'group_info_screen.dart';
 import 'media_preview_screen.dart';
-import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
 enum _ChatAttachment { photo, camera }
-
-/// The presence green shared by the header dot and the avatar dots.
-const Color _onlineGreen = Color(0xFF2E7D32);
 
 /// A single direct message, student-created group, or club community thread.
 class ChatThreadScreen extends StatefulWidget {
@@ -203,16 +196,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isDirect) {
           final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
-          if (peerId != null) {
-            if (_userForId(peerId) == null) {
-              unawaited(_hydratePeerProfile(peerId));
-            } else {
-              unawaited(
-                appPresenceService.hydrateLastSeenForUsers([
-                  peerId,
-                ], force: true),
-              );
-            }
+          if (peerId != null && _userForId(peerId) == null) {
+            unawaited(_hydratePeerProfile(peerId));
           }
         } else {
           _requestedParticipantProfileIds.removeWhere(
@@ -273,10 +258,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _hydratePeerProfile(String peerId) async {
-    await Future.wait([
-      peopleService.hydrateProfilesByIds([peerId]),
-      appPresenceService.hydrateLastSeenForUsers([peerId]),
-    ]);
+    await peopleService.hydrateProfilesByIds([peerId]);
     if (mounted) setState(() {});
   }
 
@@ -969,56 +951,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return (userState.displayNameFor(senderId, ''), false);
   }
 
-  void _openHeaderProfile() {
-    if (_isClubInbox) {
-      final conversation = _clubInbox;
-      if (conversation != null && conversation.profileId != _myId) {
-        _openUserProfileById(conversation.profileId);
-        return;
-      }
-    }
-    final club = _club;
-    if (club != null) {
-      Navigator.push(
-        context,
-        ChatPageRoute(
-          builder: (_) =>
-              ClubProfileScreen(club: club, color: _colorForClub(club.id)),
-        ),
-      ).then((_) => _markVisibleMessagesSeen());
-      return;
-    }
-    if (_isGroup) {
-      Navigator.push(
-        context,
-        ChatPageRoute(
-          builder: (_) =>
-              GroupInfoScreen(threadId: widget.threadId, myId: _myId),
-        ),
-      ).then((leftGroup) {
-        if (leftGroup == true && mounted) {
-          Navigator.pop(context);
-        } else {
-          _markVisibleMessagesSeen();
-        }
-      });
-      return;
-    }
-    final peer = _peer;
-    if (peer != null) {
-      Navigator.push(
-        context,
-        ChatPageRoute(builder: (_) => UserProfileScreen(user: peer)),
-      ).then((_) => _markVisibleMessagesSeen());
-    }
-  }
-
-  void _openUserProfileById(String userId) {
-    final user = _userForId(userId);
-    if (user == null) return;
+  void _openGroupInfo() {
     Navigator.push(
       context,
-      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
+      ChatPageRoute(
+        builder: (_) => GroupInfoScreen(threadId: widget.threadId, myId: _myId),
+      ),
+    ).then((leftGroup) {
+      if (leftGroup == true && mounted) {
+        Navigator.pop(context);
+      } else {
+        _markVisibleMessagesSeen();
+      }
+    });
+  }
+
+  void _openDirectChatById(String userId) {
+    final user = _userForId(userId);
+    if (user == null) return;
+    final threadId = chatStore.ensureDirectThread(_myId, userId);
+    if (threadId == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(
+        builder: (_) => ChatThreadScreen(threadId: threadId, recipient: user),
+      ),
     ).then((_) => _markVisibleMessagesSeen());
   }
 
@@ -1045,12 +1002,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
           ),
           ListenableBuilder(
-            listenable: Listenable.merge([
-              chatStore,
-              userState,
-              appPresenceService,
-              ?_communityInfo,
-            ]),
+            listenable: Listenable.merge([chatStore, userState, ?_communityInfo]),
             builder: (context, _) {
               final canAccess = chatStore.canAccessThread(
                 widget.threadId,
@@ -1099,47 +1051,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final name = peer != null
         ? userState.displayNameFor(peer.id, peer.name)
         : '';
-    final online = appPresenceService.onlineUserIds.contains(peerId ?? '');
     final academicSummary = userState.academicSummaryFor(peerId ?? '');
 
     return _headerShell(
-      leading: PresenceAvatar(
+      leading: UserAvatar(
         userId: peer?.id ?? peerId ?? '',
         name: peer?.name ?? '',
         size: 38,
         fontSize: 15,
-        online: online,
       ),
       title: name,
-      // Presence leads, and the peer's programme trails it so the header still
-      // says who you are talking to.
+      // The peer's programme is what the header carries under the name.
       subtitle: Row(
         children: [
-          if (online) ...[
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: _onlineGreen,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            online
-                ? S.activeNowLabel
-                : S.lastOnlineLabel(
-                    appPresenceService.lastSeenAtFor(peerId ?? ''),
-                  ),
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: online ? _onlineGreen : AppColors.secondaryText,
-            ),
-          ),
-          if (academicSummary.isNotEmpty) ...[
-            _subtitleDot(),
+          if (academicSummary.isNotEmpty)
             Flexible(
               child: Text(
                 academicSummary,
@@ -1152,7 +1077,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               ),
             ),
-          ],
         ],
       ),
     );
@@ -1194,23 +1118,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const SizedBox(width: 4),
           ],
           Expanded(
-            child: InkWell(
+            child: KeyedSubtree(
               key: const ValueKey('club-inbox-profile-header'),
-              onTap: _openHeaderProfile,
-              borderRadius: BorderRadius.circular(14),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
                   children: [
                     if (showingStudent)
-                      PresenceAvatar(
+                      UserAvatar(
                         userId: conversation.profileId,
                         name: title,
                         size: 40,
                         fontSize: 15,
-                        online: appPresenceService.onlineUserIds.contains(
-                          conversation.profileId,
-                        ),
                       )
                     else if (club != null)
                       ClubAvatar(
@@ -1311,16 +1230,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
       showChevron: true,
+      onTap: _openGroupInfo,
     );
   }
-
-  Widget _subtitleDot() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 5),
-    child: Text(
-      '·',
-      style: TextStyle(fontSize: 11.5, color: AppColors.secondaryText),
-    ),
-  );
 
   /// One bar for both thread kinds: back button, identity, optional drill-in
   /// chevron. Keeping the metrics in a single place stops the direct-message
@@ -1332,6 +1244,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     Widget? leadingOverlay,
     Key? tapKey,
     bool showChevron = false,
+    VoidCallback? onTap,
   }) {
     return Container(
       // A solid bar, so the campus wallpaper stops cleanly at the header edge
@@ -1395,7 +1308,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           Expanded(
             child: InkWell(
               key: tapKey,
-              onTap: _openHeaderProfile,
+              onTap: onTap,
               borderRadius: BorderRadius.circular(14),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -1600,14 +1513,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       alpha: themeService.isDark ? 0.13 : 0.07,
                     ),
                   ),
-                  child: PresenceAvatar(
+                  child: UserAvatar(
                     userId: peer?.id ?? peerId ?? '',
                     name: peer?.name ?? '',
                     size: 72,
                     fontSize: 27,
-                    online: appPresenceService.onlineUserIds.contains(
-                      peerId ?? '',
-                    ),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -1709,9 +1619,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final showClubInboxSenderLabel =
         _isClubInbox && (mine ? _isClubInboxBoardViewer : true);
     final showAvatar = isMultiParticipant;
-    final VoidCallback? openSenderProfile =
-        !mine && !senderIsAdmin && _userForId(senderId) != null
-        ? () => _openUserProfileById(senderId)
+    final VoidCallback? openSenderChat =
+        !mine && !senderIsAdmin && _userForId(m.senderId) != null
+        ? () => _openDirectChatById(m.senderId)
         : null;
     final senderAvatar = Container(
       key: _isGroup ? ValueKey('group-message-avatar-${m.id}') : null,
@@ -1854,7 +1764,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               padding: const EdgeInsets.only(right: 8, bottom: 15),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: openSenderProfile,
+                onTap: openSenderChat,
                 child: senderAvatar,
               ),
             ),
@@ -1874,7 +1784,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           child: GestureDetector(
                             key: ValueKey('chat-sender-profile-name-${m.id}'),
                             behavior: HitTestBehavior.opaque,
-                            onTap: openSenderProfile,
+                            onTap: openSenderChat,
                             child: Text(
                               senderName,
                               maxLines: 1,
