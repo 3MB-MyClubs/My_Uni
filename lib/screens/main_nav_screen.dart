@@ -212,7 +212,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     themeService.addListener(_onThemeOrLocaleChanged);
     localeService.addListener(_onThemeOrLocaleChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startInitialExperience();
+      unawaited(_startInitialExperience());
       unawaited(
         appBootstrap.ready.then((_) {
           if (!mounted) return;
@@ -281,14 +281,18 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   // Students get the student tour; club admins get the separate club tour.
   // Neither runs for the super admin.
-  void _startInitialExperience() {
+  Future<void> _startInitialExperience() async {
+    if (!mounted) return;
+    // The tour decision belongs to the server flag, so wait for it before
+    // deciding; a failed load resolves as "already complete".
+    await onboardingService.loadFor(_currentUserId);
     if (!mounted) return;
     if ((authService.isStudentSession || _isClubAdmin) &&
         !onboardingService.isComplete(_currentUserId)) {
       _startOnboarding(isReplay: false);
       return;
     }
-    _requestCalendarIfNeeded();
+    await _requestCalendarIfNeeded();
   }
 
   void _onOnboardingReplayRequested() {
