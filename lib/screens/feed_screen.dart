@@ -3344,7 +3344,7 @@ class _PostCardState extends State<_PostCard>
                   isScrollControlled: true,
                   builder: (_) => _ViewersSheet(
                     contentId: widget.post.id,
-                    title: 'Post Viewers',
+                    title: AppLocalizations.of(context)!.postViewersTitle,
                   ),
                 ),
                 onLikeTap: _showLikersSheet,

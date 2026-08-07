@@ -4,6 +4,7 @@ import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/club.dart';
 import '../models/user.dart';
+import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
@@ -906,7 +907,9 @@ class _ExploreScreenState extends State<ExploreScreen>
     final major = userState.majors[u.id]?.trim();
     final year = userState.years[u.id]?.trim();
     if (major != null && major.isNotEmpty) {
-      return year != null && year.isNotEmpty ? '$major · $year' : major;
+      return year != null && year.isNotEmpty
+          ? '$major · ${academicYearDisplayName(year)}'
+          : major;
     }
     return u.email.isNotEmpty
         ? u.email

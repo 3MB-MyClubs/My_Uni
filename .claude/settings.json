@@ -70,7 +70,9 @@
       "Bash(git diff *)",
       "Bash(git check-ignore *)",
       "Bash(rm -rf test/failures)",
-      "Bash(echo \"grep exit: $? \\(1=empty\\)\")"
+      "Bash(echo \"grep exit: $? \\(1=empty\\)\")",
+      "Bash(awk 'NR>=1380 && NR<=1512 && \\(/Widget build\\\\\\(BuildContext/ || /^class /\\)' lib/screens/chats_screen.dart)",
+      "Bash(awk -F: '$1<1505')"
     ],
     "additionalDirectories": [
       "/tmp",

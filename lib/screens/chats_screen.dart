@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_message.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
@@ -1565,7 +1566,9 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                     ),
                   ),
                   child: Text(
-                    _selected.length <= 1 ? 'Start Chat' : 'Next',
+                    _selected.length <= 1
+                        ? AppLocalizations.of(context)!.startChat
+                        : AppLocalizations.of(context)!.next,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
