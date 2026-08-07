@@ -3753,4 +3753,131 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'Uygulama mağazası açılamadı. ClubUp\'ı mağazadan güncelledikten sonra tekrar deneyin.';
+
+  @override
+  String get eventsAndActivities => 'Etkinlikler ve aktiviteler';
+
+  @override
+  String get activityTitle => 'Aktivite';
+
+  @override
+  String get activityOwnerSubtitle => 'Herkese açık profilinde görünür';
+
+  @override
+  String activityVisitorSubtitle(String name) {
+    return '$name adlı kişinin kampüs etkinlik geçmişi';
+  }
+
+  @override
+  String activityOtherTitle(String name) {
+    return '$name adlı kişinin aktivitesi';
+  }
+
+  @override
+  String activitySeeAllCount(int count) {
+    return '$count etkinliğin tümü';
+  }
+
+  @override
+  String get activityViewFullHistory => 'Tüm geçmişi gör';
+
+  @override
+  String get activityFilterAll => 'Tümü';
+
+  @override
+  String get activityFilterUpcoming => 'Yaklaşan';
+
+  @override
+  String get activityFilterPast => 'Geçmiş';
+
+  @override
+  String activityGoingSection(int count) {
+    return 'Gidiyor · $count';
+  }
+
+  @override
+  String activityPastSection(int count) {
+    return 'Katıldı · $count';
+  }
+
+  @override
+  String get activityGoingBadge => 'Gidiyor';
+
+  @override
+  String get activityLiveBadge => 'Şu anda';
+
+  @override
+  String get activityAttendedBadge => 'Katıldı';
+
+  @override
+  String get activityUnconfirmedBadge => 'Okutulmadı';
+
+  @override
+  String get activityStatAttended => 'Katıldı';
+
+  @override
+  String get activityStatUpcoming => 'Yaklaşan';
+
+  @override
+  String get activityStatClubs => 'Kulüp';
+
+  @override
+  String get activityCheckinFootnote => 'Katılım, etkinlik girişinde onaylanır';
+
+  @override
+  String activityEventCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count etkinlik',
+      one: '1 etkinlik',
+      zero: 'Etkinlik yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String activityAcademicYear(String label) {
+    return '$label akademik yılı';
+  }
+
+  @override
+  String get activityEmptyTitle => 'Henüz etkinlik yok';
+
+  @override
+  String get activityEmptyBody =>
+      'Bir kampüs etkinliğine katılacağını belirt; gideceğin ve katıldığın her şeyin kaydı burada birikir.';
+
+  @override
+  String activityEmptyBodyVisitor(String name) {
+    return '$name henüz hiçbir kampüs etkinliğine katılmadı.';
+  }
+
+  @override
+  String get activityBrowseEvents => 'Bu haftanın etkinliklerine göz at';
+
+  @override
+  String get activityNoUpcoming => 'Yaklaşan bir şey yok';
+
+  @override
+  String get activityNoUpcomingBody =>
+      'Katılacağını belirttiğin etkinlikler, gerçekleşmeden önce burada görünür.';
+
+  @override
+  String get activityNoPast => 'Henüz geçmiş yok';
+
+  @override
+  String get activityNoPastBody =>
+      'Etkinlikler sona erdiğinde geçmişine eklenir.';
+
+  @override
+  String activityShareSummary(String name, int attended, int upcoming) {
+    return '$name · ClubUp\'ta $attended etkinliğe katıldı, $upcoming etkinliği yaklaşıyor';
+  }
+
+  @override
+  String get activitySummaryCopied => 'Aktivite özeti kopyalandı';
+
+  @override
+  String get activityShareTooltip => 'Aktiviteyi paylaş';
 }

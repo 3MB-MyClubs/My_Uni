@@ -6175,6 +6175,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We couldn\'t open the app store. Please update ClubUp there, then try again.'**
   String get updateRequiredStoreError;
+
+  /// No description provided for @eventsAndActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Events & activities'**
+  String get eventsAndActivities;
+
+  /// No description provided for @activityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activityTitle;
+
+  /// No description provided for @activityOwnerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Visible on your public profile'**
+  String get activityOwnerSubtitle;
+
+  /// No description provided for @activityVisitorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s campus event record'**
+  String activityVisitorSubtitle(String name);
+
+  /// No description provided for @activityOtherTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s activity'**
+  String activityOtherTitle(String name);
+
+  /// No description provided for @activitySeeAllCount.
+  ///
+  /// In en, this message translates to:
+  /// **'See all {count}'**
+  String activitySeeAllCount(int count);
+
+  /// No description provided for @activityViewFullHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'View full history'**
+  String get activityViewFullHistory;
+
+  /// No description provided for @activityFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get activityFilterAll;
+
+  /// No description provided for @activityFilterUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get activityFilterUpcoming;
+
+  /// No description provided for @activityFilterPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Past'**
+  String get activityFilterPast;
+
+  /// No description provided for @activityGoingSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Going · {count}'**
+  String activityGoingSection(int count);
+
+  /// No description provided for @activityPastSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Been there · {count}'**
+  String activityPastSection(int count);
+
+  /// No description provided for @activityGoingBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Going'**
+  String get activityGoingBadge;
+
+  /// No description provided for @activityLiveBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Happening now'**
+  String get activityLiveBadge;
+
+  /// No description provided for @activityAttendedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get activityAttendedBadge;
+
+  /// No description provided for @activityUnconfirmedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Not scanned'**
+  String get activityUnconfirmedBadge;
+
+  /// No description provided for @activityStatAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get activityStatAttended;
+
+  /// No description provided for @activityStatUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get activityStatUpcoming;
+
+  /// No description provided for @activityStatClubs.
+  ///
+  /// In en, this message translates to:
+  /// **'Clubs'**
+  String get activityStatClubs;
+
+  /// No description provided for @activityCheckinFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Attendance is confirmed by event check-in'**
+  String get activityCheckinFootnote;
+
+  /// No description provided for @activityEventCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =0{No events} one{1 event} other{{count} events}}'**
+  String activityEventCount(int count);
+
+  /// No description provided for @activityAcademicYear.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} academic year'**
+  String activityAcademicYear(String label);
+
+  /// No description provided for @activityEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No events yet'**
+  String get activityEmptyTitle;
+
+  /// No description provided for @activityEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'RSVP to a campus event and it lands here — your record of everything you\'re going to and everything you took part in.'**
+  String get activityEmptyBody;
+
+  /// No description provided for @activityEmptyBodyVisitor.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} hasn\'t joined any campus events yet.'**
+  String activityEmptyBodyVisitor(String name);
+
+  /// No description provided for @activityBrowseEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse this week\'s events'**
+  String get activityBrowseEvents;
+
+  /// No description provided for @activityNoUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing coming up'**
+  String get activityNoUpcoming;
+
+  /// No description provided for @activityNoUpcomingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Events you RSVP to will show up here before they happen.'**
+  String get activityNoUpcomingBody;
+
+  /// No description provided for @activityNoPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing behind you yet'**
+  String get activityNoPast;
+
+  /// No description provided for @activityNoPastBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Events wrap up into your history once they\'re over.'**
+  String get activityNoPastBody;
+
+  /// No description provided for @activityShareSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {attended} events attended, {upcoming} coming up on ClubUp'**
+  String activityShareSummary(String name, int attended, int upcoming);
+
+  /// No description provided for @activitySummaryCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity summary copied'**
+  String get activitySummaryCopied;
+
+  /// No description provided for @activityShareTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Share activity'**
+  String get activityShareTooltip;
 }
 
 class _AppLocalizationsDelegate

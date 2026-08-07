@@ -36,7 +36,9 @@ class ClubLaneSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('club-lane-switch'),
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 11),
+      // Leave a little breathing room below the club identity/actions header
+      // so the three navigation lanes do not feel pressed against it.
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 11),
       decoration: BoxDecoration(
         color: t.body,
         border: Border(bottom: BorderSide(color: t.hair)),

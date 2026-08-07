@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/club.dart';
-import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
@@ -19,13 +17,11 @@ import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
-import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
 import '../widgets/academic_program_picker.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/app_pressable.dart';
 import 'club_profile_screen.dart';
-import 'event_detail_screen.dart';
 import 'user_profile_screen.dart';
 
 /// Discover Clubs + Find People.
@@ -51,10 +47,6 @@ class _ExploreScreenState extends State<ExploreScreen>
   // Clubs tab state
   final _clubSearchController = TextEditingController();
   String _clubQuery = '';
-
-  // Events & posts tab state
-  final _contentSearchController = TextEditingController();
-  String _contentQuery = '';
 
   // People tab state
   final _peopleSearchController = TextEditingController();
@@ -90,7 +82,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 3,
+      length: 2,
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
@@ -104,7 +96,6 @@ class _ExploreScreenState extends State<ExploreScreen>
   void dispose() {
     _tabController.dispose();
     _clubSearchController.dispose();
-    _contentSearchController.dispose();
     _peopleSearchController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
@@ -401,7 +392,6 @@ class _ExploreScreenState extends State<ExploreScreen>
           indicatorColor: AppColors.primaryRed,
           tabs: [
             Tab(text: AppLocalizations.of(context)!.discoverClubs),
-            Tab(text: AppLocalizations.of(context)!.exploreContentTab),
             Tab(text: AppLocalizations.of(context)!.findPeople),
           ],
         ),
@@ -411,12 +401,11 @@ class _ExploreScreenState extends State<ExploreScreen>
         // Builder defers each tab's filter/sort work from children-list
         // construction to the page actually building — TabBarView only builds
         // the visible page (plus its neighbor mid-swipe), so only that tab
-        // recomputes on a userState notify instead of all three.
+        // recomputes on a userState notify instead of both.
         builder: (context, _) => TabBarView(
           controller: _tabController,
           children: [
             Builder(builder: (_) => _buildClubsTab()),
-            Builder(builder: (_) => _buildContentTab()),
             Builder(builder: (_) => _buildPeopleTab()),
           ],
         ),
@@ -653,215 +642,6 @@ class _ExploreScreenState extends State<ExploreScreen>
                 ),
         ),
       ],
-    );
-  }
-
-  // ─── Events tab ──────────────────────────────────────────────────────────
-
-  Club? _clubById(String id) => clubForId(id);
-
-  List<Event> get _filteredEvents {
-    final q = _contentQuery.trim().toLowerCase();
-    final now = DateTime.now();
-    final list = events.where((e) {
-      if (moderationService.isClubBlocked(e.clubId)) return false;
-      if (q.isEmpty) return e.endTime.isAfter(now);
-      final clubName = _clubById(e.clubId)?.name.toLowerCase() ?? '';
-      return e.title.toLowerCase().contains(q) ||
-          clubName.contains(q) ||
-          e.location.toLowerCase().contains(q) ||
-          e.description.toLowerCase().contains(q);
-    }).toList()..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    return list;
-  }
-
-  Widget _buildContentTab() {
-    final searching = _contentQuery.trim().isNotEmpty;
-    final matchedEvents = _filteredEvents;
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: _searchField(
-            controller: _contentSearchController,
-            hint: AppLocalizations.of(context)!.searchEventsPosts,
-            value: _contentQuery,
-            onChanged: (v) => setState(() => _contentQuery = v),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: matchedEvents.isEmpty
-              ? _emptyState(
-                  AppLocalizations.of(context)!.noContentMatch,
-                  AppLocalizations.of(context)!.tryDifferentSearch,
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    0,
-                    16,
-                    MediaQuery.paddingOf(context).bottom + 112,
-                  ),
-                  itemCount: matchedEvents.length + 1,
-                  itemBuilder: (context, i) {
-                    if (i == 0) {
-                      return _sectionLabel(
-                        searching
-                            ? '${AppLocalizations.of(context)!.filterEvents} · ${matchedEvents.length}'
-                            : AppLocalizations.of(context)!.upcomingEvents,
-                      );
-                    }
-                    return _eventResultRow(matchedEvents[i - 1]);
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _eventResultRow(Event event) {
-    final club = _clubById(event.clubId);
-    final color = _hueFor(clubOrdinal(event.clubId));
-    final date = event.dateTime;
-    final time =
-        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-
-    return GestureDetector(
-      key: ValueKey(event.id),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EventDetailScreen(event: event, color: color),
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(20)),
-          border: Border.all(color: color.withValues(alpha: 0.24)),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 112,
-              height: 82,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  EventCoverImage(
-                    event: event,
-                    color: color,
-                    width: 112,
-                    height: 82,
-                    cacheWidth: 230,
-                    cacheHeight: 170,
-                    borderRadius: BorderRadius.all(Radius.circular(15)),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.all(Radius.circular(15)),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.02),
-                          Colors.black.withValues(alpha: 0.34),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 7,
-                    top: 7,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.66),
-                        borderRadius: BorderRadius.all(Radius.circular(999)),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12),
-                        ),
-                      ),
-                      child: Text(
-                        '${DateFormat.E(localeService.languageCode).format(date)}. $time',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white.withValues(alpha: 0.94),
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.text,
-                      height: 1.16,
-                      letterSpacing: -0.25,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 13,
-                        color: AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          event.location,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    club?.name ??
-                        AppLocalizations.of(context)!.campusEventFallback,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      height: 1.2,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: AppColors.secondaryText),
-          ],
-        ),
-      ),
     );
   }
 

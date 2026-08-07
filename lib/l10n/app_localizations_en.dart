@@ -3765,4 +3765,132 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'We couldn\'t open the app store. Please update ClubUp there, then try again.';
+
+  @override
+  String get eventsAndActivities => 'Events & activities';
+
+  @override
+  String get activityTitle => 'Activity';
+
+  @override
+  String get activityOwnerSubtitle => 'Visible on your public profile';
+
+  @override
+  String activityVisitorSubtitle(String name) {
+    return '$name\'s campus event record';
+  }
+
+  @override
+  String activityOtherTitle(String name) {
+    return '$name\'s activity';
+  }
+
+  @override
+  String activitySeeAllCount(int count) {
+    return 'See all $count';
+  }
+
+  @override
+  String get activityViewFullHistory => 'View full history';
+
+  @override
+  String get activityFilterAll => 'All';
+
+  @override
+  String get activityFilterUpcoming => 'Upcoming';
+
+  @override
+  String get activityFilterPast => 'Past';
+
+  @override
+  String activityGoingSection(int count) {
+    return 'Going · $count';
+  }
+
+  @override
+  String activityPastSection(int count) {
+    return 'Been there · $count';
+  }
+
+  @override
+  String get activityGoingBadge => 'Going';
+
+  @override
+  String get activityLiveBadge => 'Happening now';
+
+  @override
+  String get activityAttendedBadge => 'Attended';
+
+  @override
+  String get activityUnconfirmedBadge => 'Not scanned';
+
+  @override
+  String get activityStatAttended => 'Attended';
+
+  @override
+  String get activityStatUpcoming => 'Upcoming';
+
+  @override
+  String get activityStatClubs => 'Clubs';
+
+  @override
+  String get activityCheckinFootnote =>
+      'Attendance is confirmed by event check-in';
+
+  @override
+  String activityEventCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count events',
+      one: '1 event',
+      zero: 'No events',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String activityAcademicYear(String label) {
+    return '$label academic year';
+  }
+
+  @override
+  String get activityEmptyTitle => 'No events yet';
+
+  @override
+  String get activityEmptyBody =>
+      'RSVP to a campus event and it lands here — your record of everything you\'re going to and everything you took part in.';
+
+  @override
+  String activityEmptyBodyVisitor(String name) {
+    return '$name hasn\'t joined any campus events yet.';
+  }
+
+  @override
+  String get activityBrowseEvents => 'Browse this week\'s events';
+
+  @override
+  String get activityNoUpcoming => 'Nothing coming up';
+
+  @override
+  String get activityNoUpcomingBody =>
+      'Events you RSVP to will show up here before they happen.';
+
+  @override
+  String get activityNoPast => 'Nothing behind you yet';
+
+  @override
+  String get activityNoPastBody =>
+      'Events wrap up into your history once they\'re over.';
+
+  @override
+  String activityShareSummary(String name, int attended, int upcoming) {
+    return '$name · $attended events attended, $upcoming coming up on ClubUp';
+  }
+
+  @override
+  String get activitySummaryCopied => 'Activity summary copied';
+
+  @override
+  String get activityShareTooltip => 'Share activity';
 }

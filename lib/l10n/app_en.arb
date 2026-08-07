@@ -1996,5 +1996,107 @@
   "updateRequiredMessage": "Please update ClubUp to continue using the app.",
   "updateRequiredButton": "Update now",
   "updateRequiredRetry": "Check again",
-  "updateRequiredStoreError": "We couldn't open the app store. Please update ClubUp there, then try again."
+  "updateRequiredStoreError": "We couldn't open the app store. Please update ClubUp there, then try again.",
+  "eventsAndActivities": "Events & activities",
+  "activityTitle": "Activity",
+  "activityOwnerSubtitle": "Visible on your public profile",
+  "activityVisitorSubtitle": "{name}'s campus event record",
+  "@activityVisitorSubtitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityOtherTitle": "{name}'s activity",
+  "@activityOtherTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activitySeeAllCount": "See all {count}",
+  "@activitySeeAllCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityViewFullHistory": "View full history",
+  "activityFilterAll": "All",
+  "activityFilterUpcoming": "Upcoming",
+  "activityFilterPast": "Past",
+  "activityGoingSection": "Going · {count}",
+  "@activityGoingSection": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityPastSection": "Been there · {count}",
+  "@activityPastSection": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityGoingBadge": "Going",
+  "activityLiveBadge": "Happening now",
+  "activityAttendedBadge": "Attended",
+  "activityUnconfirmedBadge": "Not scanned",
+  "activityStatAttended": "Attended",
+  "activityStatUpcoming": "Upcoming",
+  "activityStatClubs": "Clubs",
+  "activityCheckinFootnote": "Attendance is confirmed by event check-in",
+  "activityEventCount": "{count,plural, =0{No events} one{1 event} other{{count} events}}",
+  "@activityEventCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "activityAcademicYear": "{label} academic year",
+  "@activityAcademicYear": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "activityEmptyTitle": "No events yet",
+  "activityEmptyBody": "RSVP to a campus event and it lands here — your record of everything you're going to and everything you took part in.",
+  "activityEmptyBodyVisitor": "{name} hasn't joined any campus events yet.",
+  "@activityEmptyBodyVisitor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "activityBrowseEvents": "Browse this week's events",
+  "activityNoUpcoming": "Nothing coming up",
+  "activityNoUpcomingBody": "Events you RSVP to will show up here before they happen.",
+  "activityNoPast": "Nothing behind you yet",
+  "activityNoPastBody": "Events wrap up into your history once they're over.",
+  "activityShareSummary": "{name} · {attended} events attended, {upcoming} coming up on ClubUp",
+  "@activityShareSummary": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "attended": {
+        "type": "int"
+      },
+      "upcoming": {
+        "type": "int"
+      }
+    }
+  },
+  "activitySummaryCopied": "Activity summary copied",
+  "activityShareTooltip": "Share activity"
 }

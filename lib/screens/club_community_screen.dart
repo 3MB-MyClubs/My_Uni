@@ -1810,7 +1810,11 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       // Chat lane. The club profile lives behind the ••• menu.
       onOpenClub: () => _switchTab(ClubCommunityTab.chat),
       t: t,
-      topInset: widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top,
+      // The main navigation deliberately extends tab content edge-to-edge and
+      // does not wrap it in a top SafeArea. Embedded club rooms therefore need
+      // the same stable status-bar/notch inset as pushed rooms; otherwise the
+      // identity and action buttons sit underneath the system UI.
+      topInset: MediaQuery.viewPaddingOf(context).top,
       muted: clubChatPrefs.isMuted(widget.threadId),
       onBack: widget.embedded ? null : () => Navigator.maybePop(context),
       onToggleMute: () => clubChatPrefs.setMuted(

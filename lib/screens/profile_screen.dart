@@ -11,7 +11,6 @@ import 'package:path_provider/path_provider.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../models/club.dart';
-import '../models/event.dart';
 import '../models/user.dart';
 import '../services/personalization_service.dart';
 import '../services/academic_year_options.dart';
@@ -38,7 +37,6 @@ import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'explore_screen.dart';
-import 'my_calendar_screen.dart';
 import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
 import 'settings_screen.dart';
@@ -467,44 +465,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _graduationLabel(String? year) {
     final value = year?.trim();
     return value == null || value.isEmpty ? '' : value.toUpperCase();
-  }
-
-  Event? _nextUpcomingEvent(String userId) {
-    final now = DateTime.now();
-    final upcoming =
-        events
-            .where(
-              (event) =>
-                  event.endTime.isAfter(now) &&
-                  event.attendeeUserIds.contains(userId),
-            )
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    return upcoming.isEmpty ? null : upcoming.first;
-  }
-
-  StudentEventData _eventDataFor(Event event) {
-    final club = clubs.cast<Club?>().firstWhere(
-      (club) => club?.id == event.clubId,
-      orElse: () => null,
-    );
-    final hour = event.dateTime.hour.toString().padLeft(2, '0');
-    final minute = event.dateTime.minute.toString().padLeft(2, '0');
-
-    return StudentEventData(
-      month: _monthAbbr(event.dateTime.month),
-      day: event.dateTime.day.toString(),
-      title: event.title,
-      clubLine:
-          '${club?.name ?? AppLocalizations.of(context)!.campusEventFallback} · '
-          '${DateFormat.E(localeService.languageCode).format(event.dateTime)} · $hour:$minute',
-      location: event.location,
-    );
-  }
-
-  Color _colorForClubId(String clubId) {
-    final idx = clubOrdinal(clubId);
-    return _clubColor(idx < 0 ? 0 : idx);
   }
 
   /// Copies a shareable profile link to the clipboard and confirms via snackbar.
@@ -968,7 +928,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final following = _followingUsers();
           final name = userState.displayNameFor(user.id, user.name);
           final year = userState.years[user.id];
-          final nextEvent = _nextUpcomingEvent(user.id);
 
           final clubDetails = followedClubs.map((club) {
             final memberCount = clubMemberCount(club.id);
@@ -1001,7 +960,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               following: following.length,
               minors: userState.minors[user.id] ?? const [],
               doubleMajors: userState.doubleMajors[user.id] ?? const [],
-              nextEvent: nextEvent == null ? null : _eventDataFor(nextEvent),
               clubDetails: clubDetails,
             ),
             onSettings: () => Navigator.push(
@@ -1016,21 +974,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               MaterialPageRoute(builder: (_) => const ExploreScreen()),
             ),
-            onSeeAllEvents: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
-            ),
-            onEventTap: nextEvent == null
-                ? null
-                : () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EventDetailScreen(
-                        event: nextEvent,
-                        color: _colorForClubId(nextEvent.clubId),
-                      ),
-                    ),
-                  ),
             onFollowersTap: () => _showFollowersSheet(followers),
             onFollowingTap: () => _showFollowingSheet(following),
             followedClubs: followedClubs,
