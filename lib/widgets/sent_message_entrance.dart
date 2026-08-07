@@ -1,7 +1,29 @@
 import 'package:flutter/material.dart';
 
-/// Gives a freshly sent message the short upward hand-off used by modern chat
-/// apps: it starts near the composer, then settles into its list position.
+/// How long a freshly sent message takes to travel from the composer into the
+/// thread. Short on purpose: the list's scroll-to-bottom runs on the same
+/// clock, so the bubble and the conversation above it move as one gesture.
+const sentMessageEntranceDuration = Duration(milliseconds: 300);
+
+/// Decelerating, with no overshoot. This curve drives the row's *height*, so an
+/// overshooting one would shove the messages above their resting place and pull
+/// them back — the exact wobble this animation exists to avoid.
+const sentMessageEntranceCurve = Cubic(0.22, 1, 0.36, 1);
+
+/// Opacity is finished well before the slide is, so the bubble is only
+/// translucent while it is still half-hidden behind the composer edge.
+const _sentMessageFadeCurve = Interval(0, 0.5, curve: Curves.easeOut);
+
+/// Gives a freshly sent message the hand-off used by modern chat apps: the row
+/// opens from zero height while the bubble rides up through the opening, so the
+/// bubble appears to slide out from behind the composer and the rest of the
+/// conversation is pushed up in lockstep instead of jumping by a full bubble.
+///
+/// Both effects come from one clock, which is what makes it read as a single
+/// rigid movement: [SizeTransition] with `axisAlignment: -1` pins the child's
+/// top to the growing box and clips its bottom, so in a `reverse: true` list —
+/// where the newest row's bottom sits at the bottom of the viewport — the child
+/// translates upward by exactly the amount the row grows.
 ///
 /// The animation is opt-in so messages loaded from storage or received from
 /// another participant never replay it during ordinary list rebuilds.
@@ -23,11 +45,9 @@ class SentMessageEntrance extends StatefulWidget {
 
 class _SentMessageEntranceState extends State<SentMessageEntrance>
     with SingleTickerProviderStateMixin {
-  static const _duration = Duration(milliseconds: 440);
-  static const _settleCurve = Cubic(0.20, 0.72, 0.24, 1);
-
   late final AnimationController _controller;
-  late final Animation<double> _settle;
+  late final CurvedAnimation _reveal;
+  late final CurvedAnimation _fade;
   bool _reportedCompletion = false;
 
   @override
@@ -35,10 +55,14 @@ class _SentMessageEntranceState extends State<SentMessageEntrance>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: _duration,
+      duration: sentMessageEntranceDuration,
       value: widget.animate ? 0 : 1,
     );
-    _settle = CurvedAnimation(parent: _controller, curve: _settleCurve);
+    _reveal = CurvedAnimation(
+      parent: _controller,
+      curve: sentMessageEntranceCurve,
+    );
+    _fade = CurvedAnimation(parent: _controller, curve: _sentMessageFadeCurve);
     if (widget.animate) _start();
   }
 
@@ -64,6 +88,8 @@ class _SentMessageEntranceState extends State<SentMessageEntrance>
 
   @override
   void dispose() {
+    _reveal.dispose();
+    _fade.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -73,23 +99,19 @@ class _SentMessageEntranceState extends State<SentMessageEntrance>
     if (!widget.animate || MediaQuery.disableAnimationsOf(context)) {
       return widget.child;
     }
-    return AnimatedBuilder(
-      animation: _settle,
-      child: widget.child,
-      builder: (context, child) {
-        final progress = _settle.value;
-        return Opacity(
-          opacity: 0.78 + (0.22 * progress),
-          child: Transform.translate(
-            offset: Offset(0, 34 * (1 - progress)),
-            child: Transform.scale(
-              alignment: Alignment.bottomRight,
-              scale: 0.975 + (0.025 * progress),
-              child: child,
-            ),
-          ),
-        );
-      },
+    // Both transitions are RenderObject-driven and take the row as a cached
+    // `child`, so a frame of this animation costs one relayout of the box and
+    // no rebuild of the bubble underneath it.
+    return SizeTransition(
+      sizeFactor: _reveal,
+      axisAlignment: -1,
+      child: FadeTransition(
+        opacity: _fade,
+        // The alignment inside SizeTransition hands the row loose constraints;
+        // without this the row could size to its content mid-flight and the
+        // bubble would re-wrap and shift sideways as it arrives.
+        child: SizedBox(width: double.infinity, child: widget.child),
+      ),
     );
   }
 }
