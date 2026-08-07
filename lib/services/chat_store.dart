@@ -449,6 +449,86 @@ class ChatStore extends ChangeNotifier {
     }
   }
 
+  void _clearPrivateClubInboxCache() {
+    final hadPrivateMessages = _messages.any(
+      (message) => isClubInboxThread(message.threadId),
+    );
+    final changed =
+        hadPrivateMessages ||
+        _clubInboxes.isNotEmpty ||
+        _pendingRemoteClubInboxMessageIds.isNotEmpty ||
+        _pendingRemoteDeleteThreadIds.keys.any(
+          (messageId) => _messages.any((message) => message.id == messageId),
+        );
+    if (!changed) return;
+
+    _messages.removeWhere((message) => isClubInboxThread(message.threadId));
+    _clubInboxes.clear();
+    _pendingRemoteClubInboxMessageIds.clear();
+    _pendingRemoteDeleteThreadIds.removeWhere(
+      (_, threadId) => isClubInboxThread(threadId),
+    );
+    for (final reads in _lastRead.values) {
+      reads.removeWhere((threadId, _) => isClubInboxThread(threadId));
+    }
+    scheduleSave();
+    notifyListeners();
+  }
+
+  void _clearAccountScopedChatCache() {
+    final hasAccountScopedMessages = _messages.any(
+      (message) =>
+          isDirectThread(message.threadId) ||
+          isGroupThread(message.threadId) ||
+          isClubInboxThread(message.threadId),
+    );
+    final changed =
+        hasAccountScopedMessages ||
+        _directThreadIds.isNotEmpty ||
+        _groups.isNotEmpty ||
+        _clubInboxes.isNotEmpty ||
+        _pendingRemoteMessageIds.isNotEmpty ||
+        _pendingRemoteGroupIds.isNotEmpty ||
+        _pendingRemoteGroupMessageIds.isNotEmpty ||
+        _pendingRemoteClubInboxMessageIds.isNotEmpty ||
+        _pendingSeenThreadIds.isNotEmpty;
+    if (!changed) return;
+
+    _messages.removeWhere(
+      (message) =>
+          isDirectThread(message.threadId) ||
+          isGroupThread(message.threadId) ||
+          isClubInboxThread(message.threadId),
+    );
+    _directThreadIds.clear();
+    _groups.clear();
+    _clubInboxes.clear();
+    _pendingRemoteMessageIds.clear();
+    _pendingRemoteGroupIds.clear();
+    _pendingRemoteGroupMessageIds.clear();
+    _pendingRemoteClubInboxMessageIds.clear();
+    _pendingSeenThreadIds.clear();
+    _pendingRemoteGroupLeaveUserIds.clear();
+    _pendingRemoteGroupDeleteActorIds.clear();
+    _pendingRemoteDeleteThreadIds.removeWhere(
+      (_, threadId) =>
+          isDirectThread(threadId) ||
+          isGroupThread(threadId) ||
+          isClubInboxThread(threadId),
+    );
+    for (final reads in _lastRead.values) {
+      reads.removeWhere(
+        (threadId, _) =>
+            isDirectThread(threadId) ||
+            isGroupThread(threadId) ||
+            isClubInboxThread(threadId),
+      );
+    }
+    _signedChatAttachmentUrls.clear();
+    scheduleSave();
+    notifyListeners();
+  }
+
   /// Starts authenticated realtime streams for direct and group messages,
   /// then reconciles the local Hive mirror and outboxes.
   Future<void> startDirectMessageSync(String userId) async {
@@ -461,6 +541,13 @@ class ChatStore extends ChangeNotifier {
       await _reconcileRemoteMessages(client, userId);
       await _reconcileRemoteGroups(client, userId);
       return;
+    }
+
+    // Hive is shared by the whole app, not by the signed-in account. Do not
+    // carry direct/group/private-inbox data or outbox work from the previous
+    // account into this session.
+    if (_syncedUserId != null && _syncedUserId != userId) {
+      _clearAccountScopedChatCache();
     }
 
     final oldChannel = _directMessageChannel;
@@ -565,6 +652,9 @@ class ChatStore extends ChangeNotifier {
   /// whose in-app sender identity is the managed club ID.
   Future<void> startClubMessageSync(String actorId) async {
     if (actorId.isEmpty) return;
+    if (_clubSyncedActorId != null && _clubSyncedActorId != actorId) {
+      _clearPrivateClubInboxCache();
+    }
     _clubSyncedActorId = actorId;
     final client = _client;
     final authId = client?.auth.currentUser?.id ?? '';
@@ -641,6 +731,15 @@ class ChatStore extends ChangeNotifier {
           )
           .inFilter('club_id', clubIds)
           .order('created_at');
+      final remoteMessageIds = _remoteMessageIds(rows);
+      final pruned = _pruneMessagesAbsentFromSnapshot(
+        inScope: (threadId) {
+          final clubId = clubIdOf(threadId);
+          return clubId != null && clubIds.contains(clubId);
+        },
+        remoteMessageIds: remoteMessageIds,
+        pendingMessageIds: _pendingRemoteClubMessageIds,
+      );
       for (final raw in rows) {
         await _mergeRemoteClubMessage(
           Map<String, dynamic>.from(raw),
@@ -649,6 +748,10 @@ class ChatStore extends ChangeNotifier {
         );
       }
       await _reconcileRemoteClubPollVotes(client, rows, actorId);
+      if (pruned) {
+        scheduleSave();
+        notifyListeners();
+      }
       await _flushClubMessages();
     } catch (_) {
       _scheduleSyncRetry();
@@ -853,6 +956,12 @@ class ChatStore extends ChangeNotifier {
       }
       _clubInboxes.removeWhere((id, _) => !visibleIds.contains(id));
       if (visibleIds.isEmpty) {
+        final pruned = _pruneMessagesAbsentFromSnapshot(
+          inScope: isClubInboxThread,
+          remoteMessageIds: const <String>{},
+          pendingMessageIds: _pendingRemoteClubInboxMessageIds,
+        );
+        if (pruned) scheduleSave();
         notifyListeners();
         return;
       }
@@ -863,12 +972,21 @@ class ChatStore extends ChangeNotifier {
           )
           .inFilter('thread_id', visibleIds.toList(growable: false))
           .order('created_at');
+      final pruned = _pruneMessagesAbsentFromSnapshot(
+        inScope: isClubInboxThread,
+        remoteMessageIds: _remoteMessageIds(messages),
+        pendingMessageIds: _pendingRemoteClubInboxMessageIds,
+      );
       for (final raw in messages) {
         await _mergeRemoteClubInboxMessage(
           Map<String, dynamic>.from(raw),
           actorId,
           notifyRecipient: false,
         );
+      }
+      if (pruned) {
+        scheduleSave();
+        notifyListeners();
       }
       notifyListeners();
       await _flushClubInboxMessages();
@@ -1042,6 +1160,14 @@ class ChatStore extends ChangeNotifier {
             .inFilter('group_id', groupIds)
             .order('created_at'),
       ]);
+      _pruneMessagesAbsentFromSnapshot(
+        inScope: (threadId) {
+          final groupId = groupIdOf(threadId);
+          return groupId != null && groupIds.contains(groupId);
+        },
+        remoteMessageIds: _remoteMessageIds(results[2]),
+        pendingMessageIds: _pendingRemoteGroupMessageIds,
+      );
       final membersByGroup = <String, List<String>>{};
       for (final raw in results[1]) {
         final row = Map<String, dynamic>.from(raw as Map);
@@ -1337,6 +1463,13 @@ class ChatStore extends ChangeNotifier {
           )
           .or('sender_id.eq.$userId,receiver_id.eq.$userId')
           .order('created_at');
+      final pruned = _pruneMessagesAbsentFromSnapshot(
+        inScope: (threadId) =>
+            isDirectThread(threadId) &&
+            dmParticipants(threadId).contains(userId),
+        remoteMessageIds: _remoteMessageIds(rows),
+        pendingMessageIds: _pendingRemoteMessageIds,
+      );
       await peopleService.hydrateProfilesByIds(
         rows.expand(
           (row) => [
@@ -1346,6 +1479,10 @@ class ChatStore extends ChangeNotifier {
         ),
       );
       await _mergeRemoteRows(rows);
+      if (pruned) {
+        scheduleSave();
+        notifyListeners();
+      }
       await _flushRemoteChanges();
     } catch (_) {
       _scheduleSyncRetry();
@@ -1497,6 +1634,56 @@ class ChatStore extends ChangeNotifier {
     _messages.removeAt(index);
     scheduleSave();
     notifyListeners();
+  }
+
+  Set<String> _remoteMessageIds(Iterable<dynamic> rows) {
+    return {
+      for (final raw in rows)
+        if (raw is Map && raw['id'] != null) raw['id'].toString(),
+    };
+  }
+
+  /// Makes a successful Supabase read authoritative for the message scope it
+  /// covered. Hive is intentionally local-first, so merge-only reconciliation
+  /// would otherwise resurrect rows that were deleted remotely (for example
+  /// by an account cascade).
+  bool _pruneMessagesAbsentFromSnapshot({
+    required bool Function(String threadId) inScope,
+    required Set<String> remoteMessageIds,
+    required Set<String> pendingMessageIds,
+  }) {
+    final removedThreadIds = <String>{};
+    final staleMessageIds = <String>{};
+    for (final message in _messages) {
+      if (!inScope(message.threadId) ||
+          remoteMessageIds.contains(message.id) ||
+          pendingMessageIds.contains(message.id)) {
+        continue;
+      }
+      staleMessageIds.add(message.id);
+      removedThreadIds.add(message.threadId);
+    }
+    if (staleMessageIds.isEmpty) return false;
+
+    _messages.removeWhere((message) => staleMessageIds.contains(message.id));
+
+    // Keep intentionally opened empty DMs. Remove only threads that had
+    // cached history and became empty because that history disappeared.
+    final emptyDirectThreads = removedThreadIds
+        .where(isDirectThread)
+        .where(
+          (threadId) =>
+              _directThreadIds.contains(threadId) &&
+              !_messages.any((message) => message.threadId == threadId),
+        )
+        .toList(growable: false);
+    _directThreadIds.removeAll(emptyDirectThreads);
+    for (final reads in _lastRead.values) {
+      reads.removeWhere(
+        (threadId, _) => emptyDirectThreads.contains(threadId),
+      );
+    }
+    return true;
   }
 
   void _mergeRemoteMessages(Iterable<ChatMessage> remoteMessages) {
