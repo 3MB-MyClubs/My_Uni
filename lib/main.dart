@@ -14,6 +14,7 @@ import 'screens/app_launch_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 import 'screens/update_required_screen.dart';
+import 'screens/terms_acceptance_screen.dart';
 // import 'screens/feed_screen.dart';
 // import 'screens/admin_dashboard.dart';
 import 'screens/main_nav_screen.dart';
@@ -109,7 +110,7 @@ void main() async {
   // Supabase restores its token pair from device storage. Reconstruct the
   // matching app user/admin before the root router chooses its destination.
   final restoredSession = await authService.restorePersistedSession();
-  if (restoredSession) {
+  if (restoredSession && termsAcceptanceService.hasAcceptedCurrentTerms) {
     await _loadAccountPreferences();
     if (accountPreferencesService.hasAuthenticatedUser &&
         !accountPreferencesService.hasThemePreference) {
@@ -127,15 +128,15 @@ void main() async {
   );
 
   // The app opens on the lightweight launch screen, so none of this needs to
-  // finish before first paint: push listeners, local hydration, and the
-  // network cleanup call are deferred to right after.
+  // finish before first paint: push listeners and local hydration are
+  // deferred to right after. Authenticated network work starts only after the
+  // root Terms gate grants access.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(
       appBootstrap.ready.then((_) {
         unawaited(pushNotificationService.initialize());
 
         contentStore.applyToLists();
-        unawaited(eventCleanupService.cleanupExpiredEvents());
         contentStore.loadBoardMemberIds();
         contentStore.loadBoardMemberTitles();
         // Restore any dynamic notifications that were generated at runtime.
@@ -244,7 +245,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     if (authService.currentUser != null || authService.currentAdmin != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _activateAuthenticatedServices();
+        if (mounted && _termsPermitAuthenticatedAccess) {
+          _activateAuthenticatedServices();
+        }
       });
     }
     if (widget.minimumLaunchDuration == Duration.zero) {
@@ -325,7 +328,44 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showSignUp = false;
       _isPreparingAccountPreferences = currentUserId != null;
     });
-    unawaited(_finishLogin(currentUserId));
+    unawaited(_finishLoginAfterTermsCheck(currentUserId));
+  }
+
+  bool get _termsPermitAuthenticatedAccess {
+    return !termsAcceptanceService.hasAuthenticatedUser ||
+        termsAcceptanceService.hasAcceptedCurrentTerms;
+  }
+
+  Future<void> _finishLoginAfterTermsCheck(String? currentUserId) async {
+    if (termsAcceptanceService.hasAuthenticatedUser &&
+        !termsAcceptanceService.isLoadedForCurrentUser) {
+      await termsAcceptanceService.loadForCurrentUser();
+    }
+    if (!_termsPermitAuthenticatedAccess) {
+      if (mounted) {
+        setState(() => _isPreparingAccountPreferences = false);
+      }
+      return;
+    }
+    await _finishLogin(currentUserId);
+  }
+
+  Future<void> _acceptCurrentTerms() async {
+    await termsAcceptanceService.acceptCurrentTerms();
+    if (!mounted || !termsAcceptanceService.hasAcceptedCurrentTerms) return;
+    setState(() => _isPreparingAccountPreferences = true);
+    final currentUserId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id;
+    await _finishLogin(currentUserId);
+  }
+
+  Future<void> _retryCurrentTermsCheck() async {
+    await termsAcceptanceService.loadForCurrentUser();
+    if (!mounted || !termsAcceptanceService.hasAcceptedCurrentTerms) return;
+    setState(() => _isPreparingAccountPreferences = true);
+    final currentUserId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id;
+    await _finishLogin(currentUserId);
   }
 
   Future<void> _finishLogin(String? currentUserId) async {
@@ -345,11 +385,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _activateAuthenticatedServices() {
+    if (!_termsPermitAuthenticatedAccess) return;
     final currentUserId =
         authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
+      authService.activateAcceptedSession();
       unawaited(pushNotificationService.activateForCurrentUser());
       unawaited(moderationService.activateForUser(currentUserId));
+      unawaited(eventCleanupService.cleanupExpiredEvents());
       _prefsLoadedForUserId = currentUserId;
       userPrefsService.load(currentUserId);
       personalizationService.load(currentUserId);
@@ -537,17 +580,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         themeService,
         localeService,
         accountPreferencesService,
+        termsAcceptanceService,
       ]),
       builder: (context, _) {
         final isDark = themeService.isDark;
         Widget homeWidget;
+        Widget Function()? sessionGateBuilder;
         String destinationKey;
-        // No Terms gate lives in this chain. The agreement is made once, on
-        // the sign-up flow's last step, and recorded against the account by
-        // [SignupService]. The gate that used to sit here keyed off a
-        // device-local SharedPreferences flag rather than that account-level
-        // record, so signing in on a second device — or after a reinstall —
-        // re-prompted people who had already agreed.
         if (_isCheckingForUpdate) {
           // Keep the branded launch screen up while the minimum-version check
           // is in flight. No authenticated or cached destination is exposed
@@ -572,6 +611,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             onLogIn: () => unawaited(_dismissIntro(showSignUp: false)),
           );
           destinationKey = 'onboarding';
+        } else if ((authService.currentUser != null ||
+                authService.currentAdmin != null) &&
+            termsAcceptanceService.hasAuthenticatedUser &&
+            !termsAcceptanceService.hasAcceptedCurrentTerms) {
+          if (termsAcceptanceService.status == TermsAcceptanceStatus.checking ||
+              termsAcceptanceService.status ==
+                  TermsAcceptanceStatus.signedOut) {
+            homeWidget = const AppLaunchScreen();
+            sessionGateBuilder = () => const AppLaunchScreen();
+            destinationKey = 'terms-check';
+          } else {
+            Widget buildTermsGate() => TermsAcceptanceScreen(
+              onAccepted: _acceptCurrentTerms,
+              onRetryCheck: _retryCurrentTermsCheck,
+              verificationFailed:
+                  termsAcceptanceService.status == TermsAcceptanceStatus.error,
+            );
+
+            homeWidget = buildTermsGate();
+            sessionGateBuilder = buildTermsGate;
+            destinationKey = 'terms-acceptance';
+          }
         } else if (_isPreparingAccountPreferences) {
           homeWidget = const AppLaunchScreen();
           destinationKey = 'account-preferences-loading';
@@ -655,7 +716,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           destinationKey = 'login';
         }
         final visibleHome = AnimatedSwitcher(
-          duration: widget.minimumLaunchDuration == Duration.zero
+          duration:
+              sessionGateBuilder != null ||
+                  widget.minimumLaunchDuration == Duration.zero
               ? Duration.zero
               : destinationKey == 'sign-up'
               ? const Duration(milliseconds: 1100)
@@ -736,6 +799,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           scrollBehavior: const _ClubUpScrollBehavior(),
           builder: (context, child) {
             final navigator = child ?? const SizedBox.shrink();
+            final sessionGate = sessionGateBuilder?.call();
+            if (sessionGate != null) {
+              if (destinationKey == 'terms-check') return sessionGate;
+              return _WebEntryFrame(child: sessionGate);
+            }
             if (_isLaunching || destinationKey == 'main-navigation') {
               return navigator;
             }

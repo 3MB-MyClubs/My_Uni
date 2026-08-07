@@ -69,7 +69,7 @@ void main() {
                   name: fallbackAcademicYearNames[index],
                 ),
             ],
-            onNext: (_, _, _, _, _, _) async => null,
+            onNext: (_, _, _, _, _, _, _) async => null,
           ),
         ),
       ),

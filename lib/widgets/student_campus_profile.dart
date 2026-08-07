@@ -120,6 +120,10 @@ class StudentCampusProfileView extends StatelessWidget {
   final Widget trailing;
   final Widget? primaryAction;
   final Widget? supplementalContent;
+
+  /// The "Events & activities" block, rendered under the clubs grid. Supplied
+  /// by the profile screens so this view stays free of event/RSVP wiring.
+  final Widget? activitySection;
   final List<StudentCampusMembership> memberships;
   final String clubsTitle;
   final String? clubsActionLabel;
@@ -139,6 +143,7 @@ class StudentCampusProfileView extends StatelessWidget {
     required this.clubsTitle,
     this.primaryAction,
     this.supplementalContent,
+    this.activitySection,
     this.clubsActionLabel,
     this.onClubsAction,
     this.onClubTap,
@@ -249,6 +254,8 @@ class StudentCampusProfileView extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (activitySection != null)
+                  SliverToBoxAdapter(child: activitySection!),
                 SliverToBoxAdapter(child: SizedBox(height: bottomInset + 24)),
               ],
             ),

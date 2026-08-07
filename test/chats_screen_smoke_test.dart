@@ -4,11 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/screens/chats_screen.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/models/app_admin.dart';
+import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
+import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
@@ -129,7 +131,14 @@ void main() {
     });
 
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: ChatsScreen())),
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(viewPadding: EdgeInsets.only(top: 47)),
+            child: ChatsScreen(),
+          ),
+        ),
+      ),
     );
     await tester.pump();
 
@@ -293,10 +302,33 @@ void main() {
   testWidgets('KUACM admin opens only the embedded KUACM community', (
     tester,
   ) async {
-    authService.login('kuacm@ku.edu.tr', '11111111');
+    final club = Club(
+      id: 'club-admin-solo-chat-fixture',
+      name: 'Bilgisayar Kulübü (KUACM)',
+      description: 'Club admin Solo Chat regression fixture',
+      adminUserIds: const [],
+    );
+    clubs.add(club);
+    addTearDown(() => clubs.remove(club));
+    authService.setClubAdmin(
+      AppAdmin(
+        id: club.id,
+        name: club.name,
+        email: 'kuacm.fixture@ku.edu.tr',
+        password: '',
+      ),
+      checkTerms: false,
+    );
 
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: ChatsScreen())),
+      const ProviderScope(
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(viewPadding: EdgeInsets.only(top: 47)),
+            child: ChatsScreen(),
+          ),
+        ),
+      ),
     );
     await tester.pump();
 
@@ -305,12 +337,22 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Bilgisayar Kulübü (KUACM)'), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Bilgisayar Kulübü (KUACM)')).dy,
+      greaterThanOrEqualTo(47),
+    );
     expect(find.text(S.searchStudents), findsNothing);
     expect(find.byKey(const ValueKey('chat-filter-students')), findsNothing);
     expect(find.byKey(const ValueKey('chat-filter-clubs')), findsNothing);
     expect(find.byIcon(Icons.edit_square), findsNothing);
     expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('club-lane-solo')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('club-solo-chat-empty')), findsOneWidget);
+    expect(find.text(S.soloChatAllTitle), findsOneWidget);
+    expect(find.byKey(const ValueKey('club-solo-chat-start')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -7,21 +7,28 @@ import '../services/app_strings.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
+import '../services/checkin_store.dart';
 import '../services/club_role_localization.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
+import '../services/rsvp_store.dart';
+import '../services/student_activity_service.dart';
 import '../services/student_club_role_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/moderation_reason_sheet.dart';
+import '../widgets/student_activity_section.dart';
 import '../widgets/student_campus_profile.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
+import 'event_detail_screen.dart';
 import 'saved_posts_screen.dart';
+import 'student_activity_screen.dart';
+import 'this_week_screen.dart';
 
 // ── Design palette ─────────────────────────────────────────────────────────────
 const _burgundy = Color(0xFF8C1D40);
@@ -346,6 +353,51 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
   }
 
+  /// The events & activities block — what this student is going to and what
+  /// they have already been to. Rebuilds with the RSVP and check-in stores so
+  /// it stays in step with the event screens.
+  Widget _buildActivitySection(User user) {
+    final displayName = userState.displayNameFor(user.id, user.name);
+    return ListenableBuilder(
+      listenable: Listenable.merge([rsvpStore, checkinStore]),
+      builder: (context, _) {
+        final summary = studentActivityService.summaryFor(user.id);
+        // A visitor looking at an empty record gets nothing useful from a
+        // placeholder card, so the whole block stays out of their way.
+        if (summary.isEmpty && !_isOwnProfile) return const SizedBox.shrink();
+
+        return StudentActivityPreview(
+          summary: summary,
+          isOwnProfile: _isOwnProfile,
+          studentName: displayName,
+          onSeeAll: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StudentActivityScreen(
+                userId: user.id,
+                studentName: displayName,
+                isOwnProfile: _isOwnProfile,
+              ),
+            ),
+          ),
+          onEntryTap: (entry) => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  EventDetailScreen(event: entry.event, color: entry.color),
+            ),
+          ),
+          onBrowseEvents: _isOwnProfile
+              ? () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
+                )
+              : null,
+        );
+      },
+    );
+  }
+
   void _openUserProfile(User u) {
     Navigator.push(
       context,
@@ -461,6 +513,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ],
                 )
               : null,
+          activitySection: _buildActivitySection(user),
           memberships: memberships,
           clubsTitle: AppLocalizations.of(
             context,

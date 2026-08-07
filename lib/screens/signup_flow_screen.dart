@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../services/signup_service.dart';
 import '../widgets/language_toggle.dart';
 import 'signup_steps/signup_theme.dart';
@@ -83,7 +84,12 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     String academicYearId,
     String academicYearName,
     String? imagePath,
+    bool termsAccepted,
   ) async {
+    if (!termsAccepted) {
+      return AppLocalizations.of(context)!.safetyIntro;
+    }
+
     _name = name;
     _majorId = majorId;
     _major = majorName;
@@ -99,6 +105,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
       academicYearId: _academicYearId,
       interestIds: const [],
       imagePath: _profileImagePath,
+      termsAccepted: termsAccepted,
     );
     if (!result.success) return result.error;
     widget.onSignUp(_email);

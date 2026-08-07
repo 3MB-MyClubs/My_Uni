@@ -28,6 +28,7 @@ class StepProfile extends StatefulWidget {
     String academicYearId,
     String academicYearName,
     String? imagePath,
+    bool termsAccepted,
   )
   onNext;
   final SignupImagePicker? imagePickerOverride;
@@ -372,11 +373,10 @@ class _StepProfileState extends State<StepProfile> {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
-  /// Presents the full Community Safety Terms in an in-app bottom sheet
-  /// (rather than handing off to the external browser) so the student can
-  /// review them without leaving the sign-up flow.
-  void _showTermsSheet() {
-    showModalBottomSheet(
+  /// Presents the full Terms in-app. Dismissing this sheet returns no value,
+  /// so only the explicit acceptance action can update sign-up state.
+  Future<void> _showTermsSheet() async {
+    final accepted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: SC.card,
@@ -406,18 +406,45 @@ class _StepProfileState extends State<StepProfile> {
               child: SingleChildScrollView(
                 controller: scrollController,
                 padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
-                child: const TermsContent(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const TermsContent(includeFullTerms: true),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        key: const ValueKey('signup-terms-accept'),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: SC.primaryButtonStyle(),
+                        child: Text(AppLocalizations.of(context)!.iAccept),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+
+    if (accepted == true && mounted) {
+      setState(() {
+        _agreedToTerms = true;
+        _submitError = null;
+      });
+    }
   }
 
   // ── Submit ─────────────────────────────────────────────────────
   Future<void> _submit() async {
     if (_isSubmitting) return;
+    if (!_agreedToTerms) {
+      setState(() => _submitError = AppLocalizations.of(context)!.safetyIntro);
+      return;
+    }
     final name = _nameController.text.trim();
     final major = _majorController.text.trim();
     bool hasError = false;
@@ -487,6 +514,7 @@ class _StepProfileState extends State<StepProfile> {
       _selectedYearId,
       _selectedYearName,
       _imagePath,
+      _agreedToTerms,
     );
     if (!mounted) return;
     setState(() {
@@ -681,51 +709,64 @@ class _StepProfileState extends State<StepProfile> {
                 ),
                 const SizedBox(height: 12),
               ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Checkbox(
-                    value: _agreedToTerms,
-                    activeColor: SC.burgundy,
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    onChanged: (value) =>
-                        setState(() => _agreedToTerms = value ?? false),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
+              Semantics(
+                button: true,
+                checked: _agreedToTerms,
+                label: AppLocalizations.of(context)!.agreeToSafetyTerms,
+                onTap: _showTermsSheet,
+                child: InkWell(
+                  key: const ValueKey('signup-terms-review'),
+                  onTap: _showTermsSheet,
+                  borderRadius: const BorderRadius.all(Radius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          AppLocalizations.of(context)!.agreeToSafetyTerms,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: SC.body,
-                            height: 1.35,
+                        IgnorePointer(
+                          child: ExcludeSemantics(
+                            child: Checkbox(
+                              value: _agreedToTerms,
+                              activeColor: SC.burgundy,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (_) {},
+                            ),
                           ),
                         ),
-                        GestureDetector(
-                          onTap: _showTermsSheet,
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 6),
-                            child: Text(
-                              AppLocalizations.of(context)!.readFullTerms,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: SC.burgundy,
-                                fontWeight: FontWeight.w600,
-                                height: 1.35,
-                                decoration: TextDecoration.underline,
-                                decorationColor: SC.burgundy,
-                              ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: AppLocalizations.of(
+                                    context,
+                                  )!.agreeToSafetyTerms,
+                                  style: TextStyle(color: SC.body),
+                                ),
+                                const TextSpan(text: '  '),
+                                TextSpan(
+                                  text: AppLocalizations.of(
+                                    context,
+                                  )!.readFullTerms,
+                                  style: TextStyle(
+                                    color: SC.burgundy,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: SC.burgundy,
+                                  ),
+                                ),
+                              ],
                             ),
+                            style: const TextStyle(fontSize: 13, height: 1.35),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
               const SizedBox(height: 12),
               SizedBox(

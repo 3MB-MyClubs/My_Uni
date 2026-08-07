@@ -338,7 +338,7 @@ class _ClubComposerState extends State<ClubComposer> {
                                 // The pill owns its theme-aware background.
                                 // Avoid the app-wide field fill adding a grey
                                 // layer, including while disabled or focused.
-                                filled: false,
+                                
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,

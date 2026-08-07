@@ -702,6 +702,95 @@ class AppLocalizationsTr extends AppLocalizations {
   String get agreeAndContinue => 'Kabul et ve devam et';
 
   @override
+  String get iAccept => 'Kabul Ediyorum';
+
+  @override
+  String get updatedTermsTitle => 'Kullanım Koşullarımızı güncelledik';
+
+  @override
+  String get updatedTermsMessage =>
+      'ClubUp\'ı kullanmaya devam etmek için lütfen güncellenen koşulları inceleyip kabul et.';
+
+  @override
+  String get termsAcceptanceSaveFailed =>
+      'Kabulün kaydedilemedi. Hesabın hâlâ kilitli. Bağlantını kontrol edip tekrar dene.';
+
+  @override
+  String get termsVerificationFailed =>
+      'Bu hesabın kabul ettiği Kullanım Koşulları sürümünü doğrulayamadık. Doğrulama başarılı olana veya güncel koşulları kabul edene kadar erişim kilitli kalır.';
+
+  @override
+  String get retry => 'Tekrar dene';
+
+  @override
+  String get termsReviewSummary =>
+      'Bu koşullar ClubUp kullanım kurallarını ve kampüs topluluğunu nasıl güvende tuttuğumuzu açıklar.';
+
+  @override
+  String get termsEffectiveMetadata =>
+      'Yürürlük: 18 Temmuz 2026  •  Son güncelleme: 18 Temmuz 2026  •  İşleten: 3MB MyClubs';
+
+  @override
+  String get termsZeroToleranceNotice =>
+      'ClubUp, sakıncalı içeriklere ve kötü niyetli kullanıcılara karşı sıfır tolerans uygular.';
+
+  @override
+  String get termsAgreementTitle => '1. Koşulların kabulü';
+
+  @override
+  String get termsAgreementBody =>
+      'Hesap oluşturarak, giriş yaparak veya ClubUp\'ı kullanarak bu Kullanım Koşullarını ve Gizlilik Politikamızı kabul edersin. Kabul etmiyorsan hizmeti kullanma. Uygulama içi sözleşme kayıt sırasında ve güncellenen koşullar yeniden kabul gerektirdiğinde sunulur.';
+
+  @override
+  String get termsEligibilityTitle => '2. Uygunluk ve hesaplar';
+
+  @override
+  String get termsEligibilityBody =>
+      'ClubUp, desteklenen üniversite topluluğunun uygun üyeleri içindir. Doğru bilgi ver, giriş bilgilerini koru, başka bir kişiyi taklit etme ve hesabını paylaşma. Hesabınla gerçekleştirilen faaliyetlerden sorumlusun.';
+
+  @override
+  String get termsSafetyTitle => '3. Topluluk güvenliği ve yasak davranışlar';
+
+  @override
+  String get termsSafetyBody =>
+      'Şunları paylaşamaz, gönderemez, teşvik edemez veya yapamazsın:\n\n• Taciz, zorbalık, takip, tehdit, yıldırma veya hedefli kötüye kullanım.\n• Korunan bir niteliğe dayalı nefret söylemi veya ayrımcılık.\n• Çıplaklık, cinsel sömürü, rıza dışı cinsel içerik veya çocukların cinsel istismarına ilişkin herhangi bir materyal.\n• Şiddet, kendine zarar vermeyi teşvik, tehlikeli davranış veya ciddi zarar tehdidi.\n• Dolandırıcılık, spam, kötü amaçlı bağlantı, yasa dışı faaliyet veya aldatıcı kimliğe bürünme.\n• Gizliliği, fikrî mülkiyeti, hukuku ya da başka bir kişinin haklarını ihlal eden içerik.\n• Denetimden kaçma, bildirim yapanlardan intikam alma veya askıya alınan bir kullanıcının geri dönmesine yardım etme.';
+
+  @override
+  String get termsContentTitle => '4. İçeriğin';
+
+  @override
+  String get termsContentBody =>
+      'Gönderdiğin içerikten sen sorumlusun. ClubUp\'a yalnızca hizmeti işletmek için gereken barındırma, görüntüleme, işleme ve denetleme iznini verirsin. Paylaşma iznin olmayan materyalleri yükleme.';
+
+  @override
+  String get termsReportingTitle => '5. Bildirim ve engelleme';
+
+  @override
+  String get termsReportingBody =>
+      'Sakıncalı materyalleri bildirmek için uygulamadaki Gönderiyi bildir veya Kullanıcıyı bildir seçeneklerini kullan. Kullanıcıyı engelle ve bildir seçeneği ClubUp\'ı bilgilendirir ve kullanıcıyı ve içeriğini deneyiminden hemen kaldırır. Acil güvenlik endişeleri için dev3mb@gmail.com adresine yaz.\n\nUygulama içi güvenlik bildirimlerini 24 saat içinde inceleriz.';
+
+  @override
+  String get termsEnforcementTitle => '6. Yaptırım';
+
+  @override
+  String get termsEnforcementBody =>
+      'İçerik veya davranış bu koşulları ihlal ettiğinde ClubUp; içeriği kaldırma, özellikleri kısıtlama, kanıtları koruma, hesabı askıya alma ve ihlalli içeriği sağlayan kullanıcıyı kalıcı olarak hizmetten çıkarma dâhil uygun işlemleri yapar. Ciddi veya tekrarlanan ihlaller gerektiğinde üniversiteye ya da yetkili makamlara bildirilebilir.';
+
+  @override
+  String get termsServiceTitle => '7. Hizmet';
+
+  @override
+  String get termsServiceBody =>
+      'ClubUp özellikleri değiştirebilir, askıya alabilir veya sonlandırabilir ve kesintisiz kullanılabilirliği garanti etmez. ClubUp bir öğrenci topluluğu ürünüdür ve Koç Üniversitesinin resmî bir hizmeti değildir.';
+
+  @override
+  String get termsChangesTitle => '8. Değişiklikler ve iletişim';
+
+  @override
+  String get termsChangesBody =>
+      'Bu koşulları güncelleyebilir ve güncel tarihi burada yayımlarız. Önemli bir güncelleme uygulama içinde yeniden kabul gerektirebilir. Sorular ve güvenlik endişeleri için dev3mb@gmail.com adresine yaz veya ClubUp Destek sayfasını kullan.';
+
+  @override
   String get couldNotOpenThisPage => 'Bu sayfa açılamadı.';
 
   @override
@@ -3664,6 +3753,133 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'Uygulama mağazası açılamadı. ClubUp\'ı mağazadan güncelledikten sonra tekrar deneyin.';
+
+  @override
+  String get eventsAndActivities => 'Etkinlikler ve aktiviteler';
+
+  @override
+  String get activityTitle => 'Aktivite';
+
+  @override
+  String get activityOwnerSubtitle => 'Herkese açık profilinde görünür';
+
+  @override
+  String activityVisitorSubtitle(String name) {
+    return '$name adlı kişinin kampüs etkinlik geçmişi';
+  }
+
+  @override
+  String activityOtherTitle(String name) {
+    return '$name adlı kişinin aktivitesi';
+  }
+
+  @override
+  String activitySeeAllCount(int count) {
+    return '$count etkinliğin tümü';
+  }
+
+  @override
+  String get activityViewFullHistory => 'Tüm geçmişi gör';
+
+  @override
+  String get activityFilterAll => 'Tümü';
+
+  @override
+  String get activityFilterUpcoming => 'Yaklaşan';
+
+  @override
+  String get activityFilterPast => 'Geçmiş';
+
+  @override
+  String activityGoingSection(int count) {
+    return 'Gidiyor · $count';
+  }
+
+  @override
+  String activityPastSection(int count) {
+    return 'Katıldı · $count';
+  }
+
+  @override
+  String get activityGoingBadge => 'Gidiyor';
+
+  @override
+  String get activityLiveBadge => 'Şu anda';
+
+  @override
+  String get activityAttendedBadge => 'Katıldı';
+
+  @override
+  String get activityUnconfirmedBadge => 'Okutulmadı';
+
+  @override
+  String get activityStatAttended => 'Katıldı';
+
+  @override
+  String get activityStatUpcoming => 'Yaklaşan';
+
+  @override
+  String get activityStatClubs => 'Kulüp';
+
+  @override
+  String get activityCheckinFootnote => 'Katılım, etkinlik girişinde onaylanır';
+
+  @override
+  String activityEventCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count etkinlik',
+      one: '1 etkinlik',
+      zero: 'Etkinlik yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String activityAcademicYear(String label) {
+    return '$label akademik yılı';
+  }
+
+  @override
+  String get activityEmptyTitle => 'Henüz etkinlik yok';
+
+  @override
+  String get activityEmptyBody =>
+      'Bir kampüs etkinliğine katılacağını belirt; gideceğin ve katıldığın her şeyin kaydı burada birikir.';
+
+  @override
+  String activityEmptyBodyVisitor(String name) {
+    return '$name henüz hiçbir kampüs etkinliğine katılmadı.';
+  }
+
+  @override
+  String get activityBrowseEvents => 'Bu haftanın etkinliklerine göz at';
+
+  @override
+  String get activityNoUpcoming => 'Yaklaşan bir şey yok';
+
+  @override
+  String get activityNoUpcomingBody =>
+      'Katılacağını belirttiğin etkinlikler, gerçekleşmeden önce burada görünür.';
+
+  @override
+  String get activityNoPast => 'Henüz geçmiş yok';
+
+  @override
+  String get activityNoPastBody =>
+      'Etkinlikler sona erdiğinde geçmişine eklenir.';
+
+  @override
+  String activityShareSummary(String name, int attended, int upcoming) {
+    return '$name · ClubUp\'ta $attended etkinliğe katıldı, $upcoming etkinliği yaklaşıyor';
+  }
+
+  @override
+  String get activitySummaryCopied => 'Aktivite özeti kopyalandı';
+
+  @override
+  String get activityShareTooltip => 'Aktiviteyi paylaş';
 
   @override
   String removeMemberConfirmTitle(String name) {

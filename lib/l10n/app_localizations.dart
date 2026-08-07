@@ -1364,6 +1364,156 @@ abstract class AppLocalizations {
   /// **'Agree and continue'**
   String get agreeAndContinue;
 
+  /// No description provided for @iAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'I Accept'**
+  String get iAccept;
+
+  /// No description provided for @updatedTermsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ve updated our Terms of Service'**
+  String get updatedTermsTitle;
+
+  /// No description provided for @updatedTermsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please review and accept the updated terms to continue using ClubUp.'**
+  String get updatedTermsMessage;
+
+  /// No description provided for @termsAcceptanceSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t save your acceptance. Your account is still locked. Check your connection and try again.'**
+  String get termsAcceptanceSaveFailed;
+
+  /// No description provided for @termsVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t verify the Terms version accepted by this account. Access remains locked until verification succeeds or you accept the current terms.'**
+  String get termsVerificationFailed;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// No description provided for @termsReviewSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'These terms set the rules for using ClubUp and explain how we keep the campus community safe.'**
+  String get termsReviewSummary;
+
+  /// No description provided for @termsEffectiveMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Effective: July 18, 2026  •  Last updated: July 18, 2026  •  Operator: 3MB MyClubs'**
+  String get termsEffectiveMetadata;
+
+  /// No description provided for @termsZeroToleranceNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'ClubUp has zero tolerance for objectionable content or abusive users.'**
+  String get termsZeroToleranceNotice;
+
+  /// No description provided for @termsAgreementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'1. Agreement to these terms'**
+  String get termsAgreementTitle;
+
+  /// No description provided for @termsAgreementBody.
+  ///
+  /// In en, this message translates to:
+  /// **'By creating an account, signing in, or using ClubUp, you agree to these Terms of Use and our Privacy Policy. If you do not agree, do not use the service. The in-app agreement is presented during registration and whenever updated terms require renewed acceptance.'**
+  String get termsAgreementBody;
+
+  /// No description provided for @termsEligibilityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'2. Eligibility and accounts'**
+  String get termsEligibilityTitle;
+
+  /// No description provided for @termsEligibilityBody.
+  ///
+  /// In en, this message translates to:
+  /// **'ClubUp is intended for eligible members of the supported university community. Provide accurate information, protect your credentials, and do not impersonate another person or share an account. You are responsible for activity performed through your account.'**
+  String get termsEligibilityBody;
+
+  /// No description provided for @termsSafetyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'3. Community safety and prohibited conduct'**
+  String get termsSafetyTitle;
+
+  /// No description provided for @termsSafetyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You must not post, send, promote, or engage in:\n\n• Harassment, bullying, stalking, threats, intimidation, or targeted abuse.\n• Hate speech or discrimination based on a protected characteristic.\n• Nudity, sexual exploitation, non-consensual sexual content, or any child sexual abuse material.\n• Violence, self-harm encouragement, dangerous conduct, or credible threats of harm.\n• Fraud, scams, spam, malicious links, illegal activity, or deceptive impersonation.\n• Content that violates privacy, intellectual-property rights, law, or another person\'s rights.\n• Attempts to evade moderation, retaliate against reporters, or help a suspended user return.'**
+  String get termsSafetyBody;
+
+  /// No description provided for @termsContentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'4. Your content'**
+  String get termsContentTitle;
+
+  /// No description provided for @termsContentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You remain responsible for content you submit. You grant ClubUp the limited permission needed to host, display, process, and moderate that content to operate the service. Do not upload material you do not have permission to share. You may remove content where the app offers that control.'**
+  String get termsContentBody;
+
+  /// No description provided for @termsReportingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'5. Reporting and blocking'**
+  String get termsReportingTitle;
+
+  /// No description provided for @termsReportingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Report post or Report user in the app to flag objectionable material. Use Block and report user to notify ClubUp and immediately remove that user and their content from your experience. For urgent safety concerns, email dev3mb@gmail.com.\n\nWe review in-app safety reports within 24 hours. Reports should be made honestly; knowingly false or abusive reports may themselves violate these terms.'**
+  String get termsReportingBody;
+
+  /// No description provided for @termsEnforcementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'6. Enforcement'**
+  String get termsEnforcementTitle;
+
+  /// No description provided for @termsEnforcementBody.
+  ///
+  /// In en, this message translates to:
+  /// **'When content or conduct violates these terms, ClubUp will take appropriate action, which may include removing content, limiting features, preserving evidence, suspending an account, and permanently ejecting the user who provided the offending content. Serious or repeated violations may be reported to the university or appropriate authorities when legally required or necessary to protect safety.'**
+  String get termsEnforcementBody;
+
+  /// No description provided for @termsServiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'7. The service'**
+  String get termsServiceTitle;
+
+  /// No description provided for @termsServiceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'ClubUp may change, suspend, or discontinue features and does not guarantee uninterrupted availability. ClubUp is a student community product and is not an official Koç University service. To the extent permitted by law, the service is provided as available without implied warranties.'**
+  String get termsServiceBody;
+
+  /// No description provided for @termsChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'8. Changes and contact'**
+  String get termsChangesTitle;
+
+  /// No description provided for @termsChangesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We may update these terms and will publish the updated date here. A material update may require a new in-app acceptance. Questions and safety concerns can be sent to dev3mb@gmail.com or through ClubUp Support.'**
+  String get termsChangesBody;
+
   /// No description provided for @couldNotOpenThisPage.
   ///
   /// In en, this message translates to:
@@ -6025,6 +6175,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We couldn\'t open the app store. Please update ClubUp there, then try again.'**
   String get updateRequiredStoreError;
+
+  /// No description provided for @eventsAndActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Events & activities'**
+  String get eventsAndActivities;
+
+  /// No description provided for @activityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activityTitle;
+
+  /// No description provided for @activityOwnerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Visible on your public profile'**
+  String get activityOwnerSubtitle;
+
+  /// No description provided for @activityVisitorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s campus event record'**
+  String activityVisitorSubtitle(String name);
+
+  /// No description provided for @activityOtherTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s activity'**
+  String activityOtherTitle(String name);
+
+  /// No description provided for @activitySeeAllCount.
+  ///
+  /// In en, this message translates to:
+  /// **'See all {count}'**
+  String activitySeeAllCount(int count);
+
+  /// No description provided for @activityViewFullHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'View full history'**
+  String get activityViewFullHistory;
+
+  /// No description provided for @activityFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get activityFilterAll;
+
+  /// No description provided for @activityFilterUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get activityFilterUpcoming;
+
+  /// No description provided for @activityFilterPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Past'**
+  String get activityFilterPast;
+
+  /// No description provided for @activityGoingSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Going · {count}'**
+  String activityGoingSection(int count);
+
+  /// No description provided for @activityPastSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Been there · {count}'**
+  String activityPastSection(int count);
+
+  /// No description provided for @activityGoingBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Going'**
+  String get activityGoingBadge;
+
+  /// No description provided for @activityLiveBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Happening now'**
+  String get activityLiveBadge;
+
+  /// No description provided for @activityAttendedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get activityAttendedBadge;
+
+  /// No description provided for @activityUnconfirmedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Not scanned'**
+  String get activityUnconfirmedBadge;
+
+  /// No description provided for @activityStatAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get activityStatAttended;
+
+  /// No description provided for @activityStatUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get activityStatUpcoming;
+
+  /// No description provided for @activityStatClubs.
+  ///
+  /// In en, this message translates to:
+  /// **'Clubs'**
+  String get activityStatClubs;
+
+  /// No description provided for @activityCheckinFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Attendance is confirmed by event check-in'**
+  String get activityCheckinFootnote;
+
+  /// No description provided for @activityEventCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count,plural, =0{No events} one{1 event} other{{count} events}}'**
+  String activityEventCount(int count);
+
+  /// No description provided for @activityAcademicYear.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} academic year'**
+  String activityAcademicYear(String label);
+
+  /// No description provided for @activityEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No events yet'**
+  String get activityEmptyTitle;
+
+  /// No description provided for @activityEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'RSVP to a campus event and it lands here — your record of everything you\'re going to and everything you took part in.'**
+  String get activityEmptyBody;
+
+  /// No description provided for @activityEmptyBodyVisitor.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} hasn\'t joined any campus events yet.'**
+  String activityEmptyBodyVisitor(String name);
+
+  /// No description provided for @activityBrowseEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse this week\'s events'**
+  String get activityBrowseEvents;
+
+  /// No description provided for @activityNoUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing coming up'**
+  String get activityNoUpcoming;
+
+  /// No description provided for @activityNoUpcomingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Events you RSVP to will show up here before they happen.'**
+  String get activityNoUpcomingBody;
+
+  /// No description provided for @activityNoPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing behind you yet'**
+  String get activityNoPast;
+
+  /// No description provided for @activityNoPastBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Events wrap up into your history once they\'re over.'**
+  String get activityNoPastBody;
+
+  /// No description provided for @activityShareSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {attended} events attended, {upcoming} coming up on ClubUp'**
+  String activityShareSummary(String name, int attended, int upcoming);
+
+  /// No description provided for @activitySummaryCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity summary copied'**
+  String get activitySummaryCopied;
+
+  /// No description provided for @activityShareTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Share activity'**
+  String get activityShareTooltip;
 
   /// No description provided for @removeMemberConfirmTitle.
   ///

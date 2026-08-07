@@ -53,7 +53,7 @@ void main() {
               return cameraResult.future;
             },
             imageCropperOverride: (sourcePath) async => CroppedFile(sourcePath),
-            onNext: (_, _, _, _, _, imagePath) async {
+            onNext: (_, _, _, _, _, imagePath, _) async {
               submittedImagePath = imagePath;
               return null;
             },
@@ -88,8 +88,12 @@ void main() {
     );
     expect(beforeTermsButton.onPressed, isNull);
 
-    await tester.tap(find.byType(Checkbox));
-    await tester.pump();
+    await tester.tapAt(tester.getCenter(find.byType(Checkbox)));
+    await tester.pumpAndSettle();
+    final acceptTerms = find.byKey(const ValueKey('signup-terms-accept'));
+    await tester.ensureVisible(acceptTerms);
+    await tester.tap(acceptTerms);
+    await tester.pumpAndSettle();
 
     final enabledContinueButton = tester.widget<ElevatedButton>(
       find.byKey(const ValueKey('signup-profile-continue')),

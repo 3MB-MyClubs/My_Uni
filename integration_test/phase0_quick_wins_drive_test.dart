@@ -102,21 +102,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Explore has an Events search tab', (tester) async {
+  testWidgets('Explore search is limited to clubs and people', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: ExploreScreen())),
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    await tester.tap(find.text('Events').first);
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(find.text('UPCOMING EVENTS'), findsOneWidget);
-
-    // An event search shows the events section with a count.
-    await tester.enterText(find.byType(TextField).first, events.first.title);
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.textContaining('EVENTS · '), findsOneWidget);
+    expect(find.text('Discover Clubs'), findsOneWidget);
+    expect(find.text('Find People'), findsOneWidget);
+    expect(find.text('Events'), findsNothing);
 
     await binding.takeScreenshot('phase0-explore-search');
     expect(tester.takeException(), isNull);

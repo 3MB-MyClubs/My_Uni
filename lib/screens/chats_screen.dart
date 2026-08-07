@@ -297,6 +297,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A club account owns one messaging destination: its community. Keep that
+    // room embedded in the Chats tab so Board / Chat / Solo Chat all share the
+    // main navigation's constraints and do not get pushed as a nested page.
+    // Private student conversations are surfaced by the room's Solo Chat lane.
+    if (authService.currentAdmin != null) {
+      final communityThreadId = chatStore.managedCommunityThreadId(_myId);
+      if (communityThreadId == null) return _buildNoCommunityAssigned();
+      return ChatThreadScreen(
+        key: const ValueKey('admin-community-thread'),
+        threadId: communityThreadId,
+        embedded: true,
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
@@ -383,6 +396,50 @@ class _ChatsScreenState extends State<ChatsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildNoCommunityAssigned() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 36),
+            child: Column(
+              key: const ValueKey('no-club-community-assigned'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.forum_outlined,
+                  size: 48,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No club community assigned',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.text,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This admin account does not have a club messaging space.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

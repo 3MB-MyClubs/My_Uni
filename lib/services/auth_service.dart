@@ -32,6 +32,8 @@ class AuthService {
   final AdminModerationService _moderationService;
   User? _currentUser;
   AppAdmin? _currentAdmin;
+  Map<String, dynamic>? _pendingStudentProfileRow;
+  String? _activatedStudentUserId;
 
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
@@ -42,22 +44,19 @@ class AuthService {
       _currentUser != null &&
       _currentUser!.role == 'student';
 
-  void setClubAdmin(AppAdmin admin) {
+  void setClubAdmin(AppAdmin admin, {bool checkTerms = true}) {
     lazyContentLoader.invalidate();
     if (isClubUpMockAdmin(admin)) ensureClubUpMockProfile();
     if (admin.isPlatformAdmin) appAdmin = admin;
     _currentAdmin = admin;
     _currentUser = null;
-    _syncTermsAcceptance();
+    _pendingStudentProfileRow = null;
+    _activatedStudentUserId = null;
+    if (checkTerms) _startTermsAcceptanceCheck();
   }
 
-  void _syncTermsAcceptance() {
-    unawaited(
-      termsAcceptanceService.syncForCurrentUser().catchError((_) {
-        // Retry on the next login. Terms synchronization should not turn a
-        // valid authenticated session into a failed login.
-      }),
-    );
+  void _startTermsAcceptanceCheck() {
+    unawaited(termsAcceptanceService.loadForCurrentUser());
   }
 
   static final RegExp _digitsOnly = RegExp(r'^[0-9]+$');
@@ -114,6 +113,8 @@ class AuthService {
         appAdmin.password == password) {
       _currentAdmin = appAdmin;
       _currentUser = null;
+      _pendingStudentProfileRow = null;
+      _activatedStudentUserId = null;
       return true;
     }
     final clubAdmin = clubAdmins.firstWhere(
@@ -130,6 +131,8 @@ class AuthService {
       }
       _currentAdmin = clubAdmin;
       _currentUser = null;
+      _pendingStudentProfileRow = null;
+      _activatedStudentUserId = null;
       return true;
     }
     final user = users.firstWhere(
@@ -153,6 +156,8 @@ class AuthService {
       }
       _currentUser = user;
       _currentAdmin = null;
+      _pendingStudentProfileRow = null;
+      _activatedStudentUserId = null;
       return true;
     }
     lastLoginFailure = AuthLoginFailure.invalidCredentials;
@@ -207,9 +212,9 @@ class AuthService {
         await authSessionStore.startNewSession();
         lazyContentLoader.invalidate();
 
-        // Login blocks only on the single `profiles` row (name/email/role/
-        // avatar/bio); interests, majors and minors hydrate in the background
-        // right after — the profile tab self-heals via its userState listener.
+        // Login first loads only the core `profiles` row needed to identify
+        // the account. All protected account hydration waits for the root
+        // Terms gate to grant this session access.
         Map<String, dynamic>? profileRow;
         try {
           profileRow = await studentProfileService.fetchProfileCore(
@@ -237,12 +242,14 @@ class AuthService {
         );
         unawaited(peopleService.registerLocalUser(_currentUser!));
         _currentAdmin = null;
+        _pendingStudentProfileRow = profileRow;
+        _activatedStudentUserId = null;
         if (profileRow != null) {
           studentProfileService.applyCoreToUserState(profileRow);
-          unawaited(studentProfileService.hydrateDetails(profileRow));
         }
-        unawaited(_hydrateStudentState(authUser.id));
-        _syncTermsAcceptance();
+        // Authentication succeeds even when this read fails, but the
+        // account remains behind the fail-closed root Terms gate.
+        await termsAcceptanceService.loadForCurrentUser();
         return true;
       } on AuthException {
         lastLoginFailure = AuthLoginFailure.invalidCredentials;
@@ -316,7 +323,9 @@ class AuthService {
             password: '',
             isPlatformAdmin: true,
           ),
+          checkTerms: false,
         );
+        await termsAcceptanceService.loadForCurrentUser();
         return true;
       }
 
@@ -355,7 +364,9 @@ class AuthService {
             email: clubEmail,
             password: '',
           ),
+          checkTerms: false,
         );
+        await termsAcceptanceService.loadForCurrentUser();
         return true;
       }
 
@@ -405,19 +416,40 @@ class AuthService {
       subscribedClubIds: const [],
     );
     _currentAdmin = null;
+    _pendingStudentProfileRow = profileRow;
+    _activatedStudentUserId = null;
     unawaited(peopleService.registerLocalUser(_currentUser!));
     if (profileRow != null) {
       studentProfileService.applyCoreToUserState(profileRow);
+    }
+    await termsAcceptanceService.loadForCurrentUser();
+  }
+
+  /// Starts account data hydration only after the root Terms gate grants the
+  /// authenticated session access. Repeated router/lifecycle calls are safe.
+  void activateAcceptedSession() {
+    final user = _currentUser;
+    if (user == null || _activatedStudentUserId == user.id) return;
+    if (termsAcceptanceService.hasAuthenticatedUser &&
+        !termsAcceptanceService.hasAcceptedCurrentTerms) {
+      return;
+    }
+
+    _activatedStudentUserId = user.id;
+    final profileRow = _pendingStudentProfileRow;
+    if (profileRow != null) {
       unawaited(studentProfileService.hydrateDetails(profileRow));
     }
-    unawaited(_hydrateStudentState(authUser.id.toString()));
-    _syncTermsAcceptance();
+    unawaited(_hydrateStudentState(user.id));
   }
 
   Future<void> _clearPersistedSession([SupabaseClient? client]) async {
     _currentUser = null;
     _currentAdmin = null;
+    _pendingStudentProfileRow = null;
+    _activatedStudentUserId = null;
     _clearPlatformAdminIdentity();
+    termsAcceptanceService.clear();
     try {
       await authSessionStore.clear();
     } catch (_) {
@@ -475,6 +507,8 @@ class AuthService {
     unawaited(peopleService.registerLocalUser(newUser));
     _currentUser = newUser;
     _currentAdmin = null;
+    _pendingStudentProfileRow = null;
+    _activatedStudentUserId = null;
     return true;
   }
 
@@ -577,7 +611,10 @@ class AuthService {
     lazyContentLoader.invalidate();
     _currentUser = null;
     _currentAdmin = null;
+    _pendingStudentProfileRow = null;
+    _activatedStudentUserId = null;
     _clearPlatformAdminIdentity();
+    termsAcceptanceService.clear();
     if (wasClubUpMockSession) removeClubUpMockProfile();
 
     try {
