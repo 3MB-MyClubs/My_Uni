@@ -9,6 +9,8 @@ interface ReqPayload {
   major_id: string;
   academic_year_id: string;
   interest_ids: string[];
+  terms_accepted: boolean;
+  terms_version: string;
 }
 
 const corsHeaders = {
@@ -68,6 +70,7 @@ Deno.serve(async (req) => {
     const fullName = payload.full_name?.trim();
     const majorId = payload.major_id?.trim();
     const academicYearId = payload.academic_year_id?.trim();
+    const termsVersion = payload.terms_version?.trim();
     const interestIds = Array.isArray(payload.interest_ids)
       ? [
           ...new Set(
@@ -97,6 +100,14 @@ Deno.serve(async (req) => {
 
     if (!academicYearId) {
       return json({ error: "Academic year is required." }, 400);
+    }
+
+    if (payload.terms_accepted !== true) {
+      return json({ error: "Terms acceptance is required." }, 400);
+    }
+
+    if (!termsVersion || termsVersion.length > 64) {
+      return json({ error: "A valid Terms version is required." }, 400);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -299,6 +310,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Acceptance is part of the account-creation boundary. The database owns
+    // accepted_at, and a failure rolls the new auth user/profile back through
+    // the existing ON DELETE CASCADE relationships before success is exposed.
+    const { data: termsAcceptance, error: termsAcceptanceError } =
+      await supabase
+        .from("terms_acceptances")
+        .insert({ user_id: userId, terms_version: termsVersion })
+        .select("terms_version, accepted_at")
+        .single();
+
+    if (termsAcceptanceError || !termsAcceptance) {
+      console.error("Terms acceptance insert failed", termsAcceptanceError);
+      await supabase.auth.admin.deleteUser(userId);
+      return json(
+        {
+          error: "Could not save Terms acceptance.",
+          details: termsAcceptanceError?.message,
+          code: termsAcceptanceError?.code,
+        },
+        500,
+      );
+    }
+
     const { error: cleanupError } = await supabase
       .from("pending_signups")
       .delete()
@@ -311,6 +345,8 @@ Deno.serve(async (req) => {
     return json({
       success: true,
       message: "Signup completed.",
+      accepted_terms_version: termsAcceptance.terms_version,
+      terms_accepted_at: termsAcceptance.accepted_at,
     });
   } catch (error) {
     console.error("complete-signup failed", error);
