@@ -69,7 +69,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('signup-terms-review')));
       await tester.pumpAndSettle();
       final acceptButton = find.byKey(const ValueKey('signup-terms-accept'));
-      await tester.ensureVisible(acceptButton);
+      // The acceptance action stays pinned below the scrollable legal text,
+      // so students can proceed without discovering that they must scroll.
       await tester.tap(acceptButton);
       await tester.pumpAndSettle();
 
