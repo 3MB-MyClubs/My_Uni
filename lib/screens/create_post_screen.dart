@@ -346,6 +346,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (!mounted) return;
       newsPosts.insert(0, post);
       unawaited(contentStore.saveNewsPosts());
+      contentStore.notifyContentChanged();
       unawaited(clubNotificationService.notifyFollowersAboutPost(post));
       clubNotificationService.notifyMentionedUsers(post);
       widget.onPosted?.call();

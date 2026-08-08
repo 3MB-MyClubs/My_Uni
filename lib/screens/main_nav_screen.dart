@@ -34,14 +34,11 @@ import 'chats_screen.dart';
 import 'profile_screen.dart';
 import 'admin_dashboard.dart';
 import 'create_event_screen.dart';
+import 'create_post_screen.dart';
 import 'notifications_screen.dart';
 import 'moderation_center_screen.dart';
 
-/// Presents the older club-admin create chooser used by visual drive tests and
-/// any explicit callers that still need a Post/Event split.
-///
-/// The center nav "+" does not call this helper anymore; it opens event
-/// creation directly.
+/// Presents the club-admin create chooser for posts and events.
 Future<void> showClubCreateSheet(
   BuildContext context, {
   required VoidCallback onPost,
@@ -51,6 +48,8 @@ Future<void> showClubCreateSheet(
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.42),
+    isScrollControlled: true,
+    useSafeArea: true,
     builder: (sheetContext) {
       final theme = Theme.of(sheetContext);
       final isDark = theme.brightness == Brightness.dark;
@@ -484,10 +483,27 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
   }
 
-  // The center "+" is event-creation only — club admins post from the quick
-  // composer inline in their feed instead, so this button skips straight to
-  // the event form rather than asking Post-or-Event first.
-  void _onAddTap() => _openCreateEvent();
+  void _openCreatePost() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const CreatePostScreen(),
+      ),
+    );
+  }
+
+  // Both dedicated club-admin sessions and linked club accounts can publish
+  // posts. Keep the center action useful for events as well, but make posting
+  // available from the same obvious entry point.
+  void _onAddTap() {
+    unawaited(
+      showClubCreateSheet(
+        context,
+        onPost: _openCreatePost,
+        onEvent: _openCreateEvent,
+      ),
+    );
+  }
 
   Widget _buildTabContent() {
     return AnimatedBuilder(
@@ -727,7 +743,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                         key: onboardingAnchors.keyFor(
                           OnboardingAnchors.clubCreateButton,
                         ),
-                        label: AppLocalizations.of(context)!.newEventTitle,
+                        label: AppLocalizations.of(context)!.createSheetTitle,
                         onTap: _onAddTap,
                       )
                     else

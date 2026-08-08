@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/club.dart';
+import 'package:flutter_application_1/screens/create_post_screen.dart';
 import 'package:flutter_application_1/screens/main_nav_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
@@ -79,6 +80,41 @@ void main() {
       find.byKey(const ValueKey('center-add-icon-motion')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('club admin create action offers a post composer', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MainNavScreen(isAdmin: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('center-add-icon-motion')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final postLabel = AppLocalizations.of(
+      tester.element(find.byType(MainNavScreen)),
+    )!.post;
+    expect(find.text(postLabel), findsOneWidget);
+    await tester.tap(find.text(postLabel));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(CreatePostScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
