@@ -406,22 +406,23 @@ class _StepProfileState extends State<StepProfile> {
               child: SingleChildScrollView(
                 controller: scrollController,
                 padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const TermsContent(includeFullTerms: true),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        key: const ValueKey('signup-terms-accept'),
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: SC.primaryButtonStyle(),
-                        child: Text(AppLocalizations.of(context)!.iAccept),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                child: const TermsContent(includeFullTerms: true),
+              ),
+            ),
+            Divider(height: 1, color: SC.hair),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 12, 22, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    key: const ValueKey('signup-terms-accept'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: SC.primaryButtonStyle(),
+                    child: Text(AppLocalizations.of(context)!.iAccept),
+                  ),
                 ),
               ),
             ),
