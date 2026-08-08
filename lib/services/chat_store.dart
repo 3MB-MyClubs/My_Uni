@@ -12,6 +12,7 @@ import '../models/chat_group.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/notification.dart';
+import 'account_switcher_service.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'image_cache_service.dart';
@@ -220,6 +221,17 @@ class ChatStore extends ChangeNotifier {
       return senderAuthId;
     }
     return message.senderClubId!;
+  }
+
+  /// A board member can write a private inbox message from either identity:
+  /// their personal account or the linked club account. Keep that choice in
+  /// the local optimistic message so the remote flush cannot change the
+  /// sender if the account switcher changes before the network request runs.
+  bool _sendsClubInboxAsClub(String clubId, String actorId) {
+    if (clubId.isEmpty || actorId.isEmpty) return false;
+    if (managedClubForAdmin(actorId)?.id == clubId) return true;
+    return authService.currentUser?.id == actorId &&
+        accountSwitcherService.activeClub?.id == clubId;
   }
 
   List<String> groupParticipants(String threadId) =>
@@ -1070,7 +1082,7 @@ class ChatStore extends ChangeNotifier {
     }
     _messages.add(message);
     _pendingRemoteClubInboxMessageIds.remove(id);
-    if (notifyRecipient && senderId != actorId) {
+    if (notifyRecipient && senderId != actorId && senderAuthId != actorId) {
       final conversation = _clubInboxes[inboxId]!;
       final title = senderId == conversation.clubId
           ? clubForId(conversation.clubId)?.name ?? ''
@@ -2261,10 +2273,11 @@ class ChatStore extends ChangeNotifier {
           failed = true;
           continue;
         }
-        final sendingAsClub =
-            authService.currentAdmin != null ||
-            (clubForId(conversation.clubId)?.boardMemberIds.contains(actorId) ??
-                false);
+        // Preserve the identity chosen when the message was created. A board
+        // member writing from Personal must remain a profile sender; only a
+        // selected linked Club account (or a dedicated club session) writes
+        // as the club.
+        final sendingAsClub = remoteMessage.senderClubId != null;
         await client.from('club_inbox_messages').insert({
           'id': remoteMessage.id,
           'thread_id': conversation.id,
@@ -2387,6 +2400,12 @@ class ChatStore extends ChangeNotifier {
   /// board/admin ID, so those identities are normalized here.
   bool isMessageOwner(ChatMessage message, String userId) {
     if (userId.isEmpty) return false;
+    // Remote club-inbox rows retain the Supabase auth actor separately from
+    // the public profile/club identity. This is the reliable ownership key
+    // for a board member or club admin viewing their own sent message.
+    if (message.senderId == userId || message.senderAuthId == userId) {
+      return true;
+    }
     final visibleSenderId = senderIdForViewer(message, userId);
     if (visibleSenderId == userId) return true;
     final clubId = isClubThread(message.threadId)
@@ -2418,6 +2437,17 @@ class ChatStore extends ChangeNotifier {
   /// Reading and writing are separate rights for club rooms: every member may
   /// read, while only the yönetim kurulu may post in the general Chat lane.
   bool canWriteThread(String threadId, String userId) {
+    if (isClubInboxThread(threadId)) {
+      final conversation = clubInboxForThread(threadId);
+      if (conversation == null || !canAccessThread(threadId, userId)) {
+        return false;
+      }
+      // A personal sender may write their own club inbox. Moderation replies
+      // must use the selected linked club account (or a dedicated club
+      // session), matching the Supabase insert policy.
+      return conversation.profileId == userId ||
+          _sendsClubInboxAsClub(conversation.clubId, userId);
+    }
     if (isClubThread(threadId)) {
       return canWriteClubThread(threadId, userId);
     }
@@ -2630,7 +2660,11 @@ class ChatStore extends ChangeNotifier {
     }
     final lastRead = _lastRead[userId]?[threadId];
     return candidates.where((m) {
-      if (m.senderId == userId) return false;
+      if (isClubInboxThread(threadId)) {
+        if (isMessageOwner(m, userId)) return false;
+      } else if (m.senderId == userId) {
+        return false;
+      }
       return lastRead == null || m.createdAt.isAfter(lastRead);
     }).length;
   }
@@ -3021,11 +3055,9 @@ class ChatStore extends ChangeNotifier {
     if (isClubInboxThread(threadId)) {
       final conversation = clubInboxForThread(threadId);
       final club = conversation == null ? null : clubForId(conversation.clubId);
-      final sendsAsClub =
-          club != null &&
-          (club.boardMemberIds.contains(senderId) ||
-              managedClubForAdmin(senderId)?.id == club.id);
-      if (sendsAsClub) localSenderClubId = club.id;
+      if (club != null && _sendsClubInboxAsClub(club.id, senderId)) {
+        localSenderClubId = club.id;
+      }
     }
 
     final now = DateTime.now();

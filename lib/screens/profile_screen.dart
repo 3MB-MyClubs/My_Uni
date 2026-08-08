@@ -13,6 +13,7 @@ import '../widgets/club_avatar.dart';
 import '../models/club.dart';
 import '../models/user.dart';
 import '../services/personalization_service.dart';
+import '../services/account_switcher_service.dart';
 import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -68,6 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
+    accountSwitcherService.addListener(_onLocaleChanged);
     _refreshClubMemberCounts();
   }
 
@@ -75,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
+    accountSwitcherService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -934,7 +937,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
           final followers = _followersForUser(user.id);
           final following = _followingUsers();
-          final name = userState.displayNameFor(user.id, user.name);
+          final personalName = userState.displayNameFor(user.id, user.name);
+          final activeClub = accountSwitcherService.activeClub;
+          final name = activeClub == null
+              ? personalName
+              : '$personalName (${activeClub.name} Admin)';
           final year = userState.years[user.id];
 
           final clubDetails = followedClubs.map((club) {
@@ -1001,10 +1008,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // A club account (any admin except the super admin) sees its OWN club
-    // profile page — the same v2 layout every visitor sees — as the Profile
-    // tab, with a settings gear for logout. Only the super admin keeps the
-    // all-clubs dashboard below.
+    // A dedicated club account (any admin except the super admin) sees its
+    // OWN club profile page — the same v2 layout every visitor sees — as the
+    // Profile tab, with a settings gear for logout. Linked board accounts
+    // keep their personal profile and are handled above.
     if (admin != null && admin.id != 'admin1') {
       final adminId = admin.id;
       final managed = managedClubForAdmin(adminId) ?? clubs.first;

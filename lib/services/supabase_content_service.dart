@@ -63,12 +63,15 @@ class SupabaseContentService {
         _fetchAllRows(
           client,
           table: 'club_posts',
-          columns: 'id, club_id, content, image_url, image_path, created_at',
+          columns:
+              'id, club_id, author_id, content, image_url, image_path, created_at',
         )
       else
         client
             .from('club_posts')
-            .select('id, club_id, content, image_url, image_path, created_at')
+            .select(
+              'id, club_id, author_id, content, image_url, image_path, created_at',
+            )
             .order('created_at', ascending: false)
             .limit(500),
     ]);

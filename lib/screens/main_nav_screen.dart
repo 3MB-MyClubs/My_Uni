@@ -9,6 +9,7 @@ import '../features/calendar/providers/calendar_state.dart';
 import '../services/app_bootstrap.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
+import '../services/account_switcher_service.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
 import '../services/theme_service.dart';
@@ -24,6 +25,7 @@ import '../onboarding/onboarding_steps.dart';
 import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../widgets/app_pressable.dart';
+import '../widgets/account_switcher_sheet.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -170,6 +172,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // True while the current run was requested from Settings, so finishing it
   // doesn't re-trigger the first-run calendar permission prompt.
   bool _isOnboardingReplay = false;
+  bool _accountSwitcherOpening = false;
   double? _navDragDx;
   final ChatsController _chatsController = ChatsController();
   final FeedController _feedController = FeedController();
@@ -211,6 +214,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     pushNotificationService.addListener(_onPushNotificationOpened);
     themeService.addListener(_onThemeOrLocaleChanged);
     localeService.addListener(_onThemeOrLocaleChanged);
+    accountSwitcherService.addListener(_onAccountChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_startInitialExperience());
       unawaited(
@@ -306,6 +310,15 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     _selectNavIndex(index);
   }
 
+  void _onAccountChanged() {
+    if (!mounted) return;
+    if ((_isClubAdmin || _isLinkedClubAccount) && _selectedIndex == 2) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+    setState(() {});
+  }
+
   void _startOnboarding({required bool isReplay}) {
     setState(() {
       _selectedIndex = 0;
@@ -367,6 +380,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     pushNotificationService.removeListener(_onPushNotificationOpened);
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
+    accountSwitcherService.removeListener(_onAccountChanged);
     _chatsController.dispose();
     _feedController.dispose();
     _tabTransitionController.dispose();
@@ -415,6 +429,36 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (enteringChats) _chatsController.showStudents();
   }
 
+  void _handleNavLongPressStart(
+    Offset localPosition,
+    double barWidth,
+    List<_NavSlot> slots,
+  ) {
+    if (_accountSwitcherOpening || slots.isEmpty || barWidth <= 0) return;
+    final slotWidth = barWidth / slots.length;
+    final slotIndex = (localPosition.dx / slotWidth).floor().clamp(
+      0,
+      slots.length - 1,
+    );
+    if (slots[slotIndex].index == 4) {
+      _endNavDrag();
+      unawaited(_openAccountSwitcher());
+      return;
+    }
+    _handleNavDragPosition(localPosition, barWidth, slots);
+  }
+
+  Future<void> _openAccountSwitcher() async {
+    if (_accountSwitcherOpening || !mounted) return;
+    _accountSwitcherOpening = true;
+    HapticFeedback.mediumImpact();
+    try {
+      await showAccountSwitcherSheet(context);
+    } finally {
+      _accountSwitcherOpening = false;
+    }
+  }
+
   void _endNavDrag() {
     if (_navDragDx == null) return;
     setState(() => _navDragDx = null);
@@ -424,6 +468,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     final admin = authService.currentAdmin;
     return admin != null && !isClubUpAdmin(admin);
   }
+
+  bool get _isLinkedClubAccount => accountSwitcherService.isClubAccountActive;
 
   bool get _isPlatformModerator => isClubUpAdmin(authService.currentAdmin);
 
@@ -554,14 +600,14 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       // Platform moderators still need campus-wide discovery so they can find
       // the people, clubs, posts, and events they are responsible for
       // reviewing. Ordinary club admins keep their focused club workflow.
-      if (!_isClubAdmin)
+      if (!_isClubAdmin && !_isLinkedClubAccount)
         _NavSlot(
           index: 2,
           icon: Icons.search_outlined,
           activeIcon: Icons.search_rounded,
           label: AppLocalizations.of(context)!.search,
         ),
-      if (_isClubAdmin) const _NavSlot.center(),
+      if (_isClubAdmin || _isLinkedClubAccount) const _NavSlot.center(),
       if (_isPlatformModerator)
         _NavSlot(
           index: 3,
@@ -693,6 +739,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                         selected: _selectedIndex == slot.index,
                         badge: slot.badge,
                         onTap: () => _selectNavIndex(slot.index!),
+                        onLongPress: slot.index == 4
+                            ? () => unawaited(_openAccountSwitcher())
+                            : null,
                       ),
                     const SizedBox(height: 6),
                   ],
@@ -786,7 +835,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
                   return GestureDetector(
                     behavior: HitTestBehavior.translucent,
-                    onLongPressStart: (details) => _handleNavDragPosition(
+                    onLongPressStart: (details) => _handleNavLongPressStart(
                       details.localPosition,
                       barWidth,
                       slots,
@@ -927,6 +976,11 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                         badge: slot.badge,
                                         onTap: () =>
                                             _selectNavIndex(slot.index!),
+                                        onLongPress: slot.index == 4
+                                            ? () => unawaited(
+                                                _openAccountSwitcher(),
+                                              )
+                                            : null,
                                       ),
                             ],
                           ),
@@ -987,6 +1041,7 @@ class _DesktopNavItem extends StatelessWidget {
   final bool selected;
   final int badge;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _DesktopNavItem({
     super.key,
@@ -995,6 +1050,7 @@ class _DesktopNavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.onLongPress,
     this.badge = 0,
   });
 
@@ -1019,6 +1075,7 @@ class _DesktopNavItem extends StatelessWidget {
             mouseCursor: SystemMouseCursors.click,
             borderRadius: radius,
             onTap: onTap,
+            onLongPress: onLongPress,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
@@ -1239,6 +1296,7 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final int badge;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _NavItem({
     super.key,
@@ -1247,6 +1305,7 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.onLongPress,
     this.badge = 0,
   });
 
@@ -1256,6 +1315,7 @@ class _NavItem extends StatelessWidget {
       child: AppPressable(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
+        onLongPress: onLongPress,
         pressedScale: 0.94,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),

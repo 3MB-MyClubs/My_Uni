@@ -12,6 +12,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
+import '../services/account_switcher_service.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_notification_service.dart';
@@ -236,6 +237,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   String? get _adminClubId {
+    final linkedClub = accountSwitcherService.activeClub;
+    if (linkedClub != null) return linkedClub.id;
     final admin = authService.currentAdmin;
     if (admin == null) return null;
     try {
@@ -545,7 +548,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
       final ok = contentStore.updateEvent(
         saved,
-        authService.currentAdmin?.id ?? '',
+        accountSwitcherService.actorId,
       );
       if (!mounted) return;
       if (ok) {
@@ -574,7 +577,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       endTime: _endDate,
       attendeeUserIds: [],
       imagePath: _imagePath,
-      createdByUserId: authService.currentAdmin?.id,
+      createdByUserId: accountSwitcherService.actorId,
       tags: List.from(_selectedTags),
       schedule: schedule,
       registrationUrl: (_externalReg && regUrl.isNotEmpty) ? regUrl : null,

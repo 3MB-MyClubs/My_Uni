@@ -268,4 +268,22 @@ void main() {
     expect(store.isMessageOwner(message, 'board-member'), isTrue);
     expect(store.isMessageOwner(message, 'regular-follower'), isFalse);
   });
+
+  test('club inbox ownership also recognizes the authenticated sender', () {
+    final message = ChatMessage(
+      id: 'club-inbox-auth-owner',
+      threadId: ChatStore.clubInboxThreadId('inbox-2'),
+      senderId: club.id,
+      senderAuthId: 'club-auth-uuid',
+      senderClubId: club.id,
+      content: 'Sent from the linked club session.',
+      createdAt: DateTime(2026, 8, 5),
+    );
+
+    // Supabase keeps the public club identity in sender_id while retaining
+    // the authenticated actor separately. The actor must still get the
+    // outgoing/right-hand bubble and own-message actions.
+    expect(store.isMessageOwner(message, 'club-auth-uuid'), isTrue);
+    expect(store.isMessageOwner(message, 'board-member-two'), isFalse);
+  });
 }

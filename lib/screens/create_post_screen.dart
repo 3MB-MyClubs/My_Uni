@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
+import '../services/account_switcher_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
@@ -234,10 +235,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void initState() {
     super.initState();
     final adminId = authService.currentAdmin?.id ?? '';
-    _myClubs = clubs
-        .where((c) => clubIsManagedByAdmin(c, adminId))
-        .map((c) => _ClubOption(id: c.id, name: c.name))
-        .toList();
+    final linkedClub = accountSwitcherService.activeClub;
+    _myClubs =
+        (linkedClub != null
+                ? [linkedClub]
+                : clubs.where((c) => clubIsManagedByAdmin(c, adminId)))
+            .map((c) => _ClubOption(id: c.id, name: c.name))
+            .toList();
     if (_myClubs.length == 1) _selectedClub = _myClubs.first;
   }
 
@@ -331,7 +335,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     try {
       final post = await supabasePostService.createPost(
         clubId: _selectedClub!.id,
-        authorId: authService.currentAdmin?.id ?? '',
+        authorId: accountSwitcherService.actorId,
         content: content,
         taggedClubIds: _extractTaggedClubIds(content),
         taggedUserIds: _extractTaggedUserIds(content),
