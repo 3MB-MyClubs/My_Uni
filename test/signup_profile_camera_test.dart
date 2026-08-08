@@ -91,7 +91,6 @@ void main() {
     await tester.tapAt(tester.getCenter(find.byType(Checkbox)));
     await tester.pumpAndSettle();
     final acceptTerms = find.byKey(const ValueKey('signup-terms-accept'));
-    await tester.ensureVisible(acceptTerms);
     await tester.tap(acceptTerms);
     await tester.pumpAndSettle();
 
