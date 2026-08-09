@@ -1,70 +1,242 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_config.dart';
 
-/// Stores acceptance of the current ClubUp Terms of Use on this installation.
+enum TermsAcceptanceStatus {
+  signedOut,
+  checking,
+  acceptanceRequired,
+  accepted,
+  error,
+}
+
+@immutable
+class TermsAcceptanceRecord {
+  const TermsAcceptanceRecord({
+    required this.version,
+    required this.acceptedAt,
+  });
+
+  final String version;
+  final DateTime acceptedAt;
+
+  factory TermsAcceptanceRecord.fromRow(Map<String, dynamic> row) {
+    final version = row['terms_version']?.toString().trim() ?? '';
+    final acceptedAt = DateTime.tryParse(row['accepted_at']?.toString() ?? '');
+    if (version.isEmpty || acceptedAt == null) {
+      throw const FormatException('Invalid Terms acceptance record.');
+    }
+    return TermsAcceptanceRecord(
+      version: version,
+      acceptedAt: acceptedAt.toUtc(),
+    );
+  }
+}
+
+typedef TermsAcceptanceRowLoader =
+    Future<TermsAcceptanceRecord?> Function(String userId);
+typedef TermsAcceptanceRecorder =
+    Future<TermsAcceptanceRecord> Function(String userId, String version);
+
+/// Account-scoped, backend-authoritative Terms acceptance state.
 ///
-/// Changing [currentVersion] presents the agreement again before any account
-/// can register or sign in.
-class TermsAcceptanceService {
-  TermsAcceptanceService({SupabaseClient? Function()? clientProvider})
-    : _clientProvider = clientProvider;
+/// [currentVersion] is the only client-side value that changes when a new
+/// Terms document is published. Authenticated sessions remain closed until a
+/// matching row has been read from, or successfully written to, Supabase.
+class TermsAcceptanceService extends ChangeNotifier {
+  TermsAcceptanceService({
+    SupabaseClient? Function()? clientProvider,
+    String? Function()? userIdProvider,
+    TermsAcceptanceRowLoader? rowLoader,
+    TermsAcceptanceRecorder? recorder,
+  }) : _clientProvider = clientProvider,
+       _userIdProvider = userIdProvider,
+       _rowLoader = rowLoader,
+       _recorder = recorder;
 
   static const currentVersion = '2026-07-18';
-  static const _preferenceKey = 'accepted_terms_version';
 
   final SupabaseClient? Function()? _clientProvider;
+  final String? Function()? _userIdProvider;
+  final TermsAcceptanceRowLoader? _rowLoader;
+  final TermsAcceptanceRecorder? _recorder;
 
-  bool _accepted = false;
+  TermsAcceptanceStatus _status = TermsAcceptanceStatus.signedOut;
+  String? _loadedUserId;
+  TermsAcceptanceRecord? _latestAcceptance;
+  Object? _lastError;
+  int _requestGeneration = 0;
 
-  bool get hasAcceptedCurrentTerms => _accepted;
+  TermsAcceptanceStatus get status => _status;
+  TermsAcceptanceRecord? get latestAcceptance => _latestAcceptance;
+  String? get acceptedTermsVersion => _latestAcceptance?.version;
+  DateTime? get termsAcceptedAt => _latestAcceptance?.acceptedAt;
+  Object? get lastError => _lastError;
+
+  bool get hasAuthenticatedUser => _currentUserId != null;
+
+  bool get isLoadedForCurrentUser {
+    final userId = _currentUserId;
+    return userId != null && _loadedUserId == userId;
+  }
+
+  bool get hasAcceptedCurrentTerms {
+    final userId = _currentUserId;
+    return userId != null &&
+        _loadedUserId == userId &&
+        _status == TermsAcceptanceStatus.accepted &&
+        _latestAcceptance?.version == currentVersion;
+  }
 
   SupabaseClient? get _client {
     if (_clientProvider != null) return _clientProvider();
     if (!SupabaseConfig.isConfigured) return null;
     try {
       return Supabase.instance.client;
-    } on AssertionError {
-      // Unit tests and local-only callers may use this service before the
-      // application has initialized Supabase.
+    } catch (_) {
       return null;
     }
   }
 
-  Future<void> initialize() async {
-    final preferences = await SharedPreferences.getInstance();
-    _accepted = preferences.getString(_preferenceKey) == currentVersion;
+  String? get _currentUserId {
+    final provided = _userIdProvider?.call();
+    if (provided != null && provided.isNotEmpty) return provided;
+    return _client?.auth.currentUser?.id;
   }
 
-  Future<void> accept({bool requireAuthenticatedRecord = false}) async {
-    final recorded = await _recordForCurrentUser();
-    if (requireAuthenticatedRecord && !recorded) {
+  /// Resets process state. Acceptance is deliberately never restored from
+  /// device preferences; the account row is the sole source of truth.
+  Future<void> initialize() async => clear();
+
+  /// Loads the most recently accepted Terms version for the signed-in account.
+  ///
+  /// Errors fail closed: the caller remains gated and can retry the check or
+  /// explicitly accept the current version.
+  Future<void> loadForCurrentUser() async {
+    final userId = _currentUserId;
+    final generation = ++_requestGeneration;
+    if (userId == null) {
+      clear();
+      return;
+    }
+
+    _status = TermsAcceptanceStatus.checking;
+    _loadedUserId = userId;
+    _latestAcceptance = null;
+    _lastError = null;
+    notifyListeners();
+
+    try {
+      final record = _rowLoader != null
+          ? await _rowLoader(userId)
+          : await _loadLatestSupabaseRecord(userId);
+      if (!_isCurrentRequest(userId, generation)) return;
+
+      _latestAcceptance = record;
+      _status = record?.version == currentVersion
+          ? TermsAcceptanceStatus.accepted
+          : TermsAcceptanceStatus.acceptanceRequired;
+      notifyListeners();
+    } catch (error) {
+      if (!_isCurrentRequest(userId, generation)) return;
+      _lastError = error;
+      _status = TermsAcceptanceStatus.error;
+      notifyListeners();
+    }
+  }
+
+  /// Records the current version and grants access only after Supabase returns
+  /// the server-generated acceptance timestamp.
+  Future<void> acceptCurrentTerms() async {
+    final userId = _currentUserId;
+    if (userId == null) {
       throw StateError('An authenticated user is required to accept Terms.');
     }
 
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_preferenceKey, currentVersion);
-    _accepted = true;
+    final generation = ++_requestGeneration;
+    _loadedUserId = userId;
+    _lastError = null;
+
+    try {
+      final record = _recorder != null
+          ? await _recorder(userId, currentVersion)
+          : await _recordSupabaseAcceptance(userId);
+      if (!_isCurrentRequest(userId, generation)) {
+        throw StateError('The authenticated account changed while saving.');
+      }
+      if (record.version != currentVersion) {
+        throw StateError('Supabase did not confirm the current Terms version.');
+      }
+
+      _latestAcceptance = record;
+      _status = TermsAcceptanceStatus.accepted;
+      notifyListeners();
+    } catch (error) {
+      if (_isCurrentRequest(userId, generation)) {
+        _lastError = error;
+        _status = TermsAcceptanceStatus.error;
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
-  /// Replays a device-local acceptance after login. The database RPC is
-  /// idempotent, so calling this on every authenticated session is safe and
-  /// also covers users who accepted a new version before signing in.
-  Future<void> syncForCurrentUser() async {
-    if (!_accepted) return;
-    await _recordForCurrentUser();
+  void clear() {
+    _requestGeneration++;
+    final changed =
+        _status != TermsAcceptanceStatus.signedOut ||
+        _loadedUserId != null ||
+        _latestAcceptance != null ||
+        _lastError != null;
+    _status = TermsAcceptanceStatus.signedOut;
+    _loadedUserId = null;
+    _latestAcceptance = null;
+    _lastError = null;
+    if (changed) notifyListeners();
   }
 
-  Future<bool> _recordForCurrentUser() async {
+  bool _isCurrentRequest(String userId, int generation) {
+    return generation == _requestGeneration && _currentUserId == userId;
+  }
+
+  Future<TermsAcceptanceRecord?> _loadLatestSupabaseRecord(
+    String userId,
+  ) async {
     final client = _client;
-    if (client?.auth.currentUser == null) return false;
+    if (client == null) {
+      throw StateError('Supabase is required to verify Terms acceptance.');
+    }
 
-    await client!.rpc(
+    final row = await client
+        .from('terms_acceptances')
+        .select('terms_version, accepted_at')
+        .eq('user_id', userId)
+        .order('accepted_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    if (row == null) return null;
+    return TermsAcceptanceRecord.fromRow(Map<String, dynamic>.from(row));
+  }
+
+  Future<TermsAcceptanceRecord> _recordSupabaseAcceptance(String userId) async {
+    final client = _client;
+    if (client == null || client.auth.currentUser?.id != userId) {
+      throw StateError('An authenticated user is required to accept Terms.');
+    }
+
+    final result = await client.rpc(
       'record_terms_acceptance',
       params: {'p_terms_version': currentVersion},
     );
-    return true;
+    final acceptedAt = DateTime.tryParse(result?.toString() ?? '');
+    if (acceptedAt == null) {
+      throw StateError('Supabase did not confirm Terms acceptance.');
+    }
+    return TermsAcceptanceRecord(
+      version: currentVersion,
+      acceptedAt: acceptedAt.toUtc(),
+    );
   }
 }
 

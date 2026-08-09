@@ -36,6 +36,85 @@ class AppLocalizationsTr extends AppLocalizations {
   String get seeAll => 'Hepsini gör';
 
   @override
+  String get bringYourFriends => 'Arkadaşlarını da getir';
+
+  @override
+  String get invite => 'Davet et';
+
+  @override
+  String get invited => 'Davet edildi';
+
+  @override
+  String get shareEventAction => 'Etkinliği paylaş';
+
+  @override
+  String get shareThisEvent => 'Bu etkinliği paylaş';
+
+  @override
+  String get qrCodeAction => 'QR kodu';
+
+  @override
+  String get searchPeopleOnCampus => 'Kampüsteki kişileri ara';
+
+  @override
+  String get sentAction => 'Gönderildi';
+
+  @override
+  String inviteFriendsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count arkadaşını davet et',
+      one: '1 arkadaşını davet et',
+      zero: 'Arkadaşlarını davet et',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInvitesSentCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count davet gönderildi',
+      one: 'Davet gönderildi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noPeopleMatchSearch => 'Aramanla eşleşen kişi bulunamadı.';
+
+  @override
+  String get scanToOpenEvent => 'Etkinliği açmak için tara';
+
+  @override
+  String followedPeopleAttending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Takip ettiğin $count kişi katılıyor',
+      zero: 'Takip ettiklerinden henüz katılan yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInviteSent(String name) {
+    return '$name davet edildi.';
+  }
+
+  @override
+  String mutualClubsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ortak kulüp',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get fromYourClubs => 'KULÜPLERİNDEN';
 
   @override
@@ -404,7 +483,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get pickFromLib => 'Fotoğraf kütüphanenizden seçin';
 
   @override
-  String get removePhoto => 'Fotoğrafı Kaldır';
+  String get removePhoto => 'Fotoğrafı kaldır';
 
   @override
   String get majorYearLabel => 'Bölüm & Yıl';
@@ -621,6 +700,95 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get agreeAndContinue => 'Kabul et ve devam et';
+
+  @override
+  String get iAccept => 'Kabul Ediyorum';
+
+  @override
+  String get updatedTermsTitle => 'Kullanım Koşullarımızı güncelledik';
+
+  @override
+  String get updatedTermsMessage =>
+      'ClubUp\'ı kullanmaya devam etmek için lütfen güncellenen koşulları inceleyip kabul et.';
+
+  @override
+  String get termsAcceptanceSaveFailed =>
+      'Kabulün kaydedilemedi. Hesabın hâlâ kilitli. Bağlantını kontrol edip tekrar dene.';
+
+  @override
+  String get termsVerificationFailed =>
+      'Bu hesabın kabul ettiği Kullanım Koşulları sürümünü doğrulayamadık. Doğrulama başarılı olana veya güncel koşulları kabul edene kadar erişim kilitli kalır.';
+
+  @override
+  String get retry => 'Tekrar dene';
+
+  @override
+  String get termsReviewSummary =>
+      'Bu koşullar ClubUp kullanım kurallarını ve kampüs topluluğunu nasıl güvende tuttuğumuzu açıklar.';
+
+  @override
+  String get termsEffectiveMetadata =>
+      'Yürürlük: 18 Temmuz 2026  •  Son güncelleme: 18 Temmuz 2026  •  İşleten: 3MB MyClubs';
+
+  @override
+  String get termsZeroToleranceNotice =>
+      'ClubUp, sakıncalı içeriklere ve kötü niyetli kullanıcılara karşı sıfır tolerans uygular.';
+
+  @override
+  String get termsAgreementTitle => '1. Koşulların kabulü';
+
+  @override
+  String get termsAgreementBody =>
+      'Hesap oluşturarak, giriş yaparak veya ClubUp\'ı kullanarak bu Kullanım Koşullarını ve Gizlilik Politikamızı kabul edersin. Kabul etmiyorsan hizmeti kullanma. Uygulama içi sözleşme kayıt sırasında ve güncellenen koşullar yeniden kabul gerektirdiğinde sunulur.';
+
+  @override
+  String get termsEligibilityTitle => '2. Uygunluk ve hesaplar';
+
+  @override
+  String get termsEligibilityBody =>
+      'ClubUp, desteklenen üniversite topluluğunun uygun üyeleri içindir. Doğru bilgi ver, giriş bilgilerini koru, başka bir kişiyi taklit etme ve hesabını paylaşma. Hesabınla gerçekleştirilen faaliyetlerden sorumlusun.';
+
+  @override
+  String get termsSafetyTitle => '3. Topluluk güvenliği ve yasak davranışlar';
+
+  @override
+  String get termsSafetyBody =>
+      'Şunları paylaşamaz, gönderemez, teşvik edemez veya yapamazsın:\n\n• Taciz, zorbalık, takip, tehdit, yıldırma veya hedefli kötüye kullanım.\n• Korunan bir niteliğe dayalı nefret söylemi veya ayrımcılık.\n• Çıplaklık, cinsel sömürü, rıza dışı cinsel içerik veya çocukların cinsel istismarına ilişkin herhangi bir materyal.\n• Şiddet, kendine zarar vermeyi teşvik, tehlikeli davranış veya ciddi zarar tehdidi.\n• Dolandırıcılık, spam, kötü amaçlı bağlantı, yasa dışı faaliyet veya aldatıcı kimliğe bürünme.\n• Gizliliği, fikrî mülkiyeti, hukuku ya da başka bir kişinin haklarını ihlal eden içerik.\n• Denetimden kaçma, bildirim yapanlardan intikam alma veya askıya alınan bir kullanıcının geri dönmesine yardım etme.';
+
+  @override
+  String get termsContentTitle => '4. İçeriğin';
+
+  @override
+  String get termsContentBody =>
+      'Gönderdiğin içerikten sen sorumlusun. ClubUp\'a yalnızca hizmeti işletmek için gereken barındırma, görüntüleme, işleme ve denetleme iznini verirsin. Paylaşma iznin olmayan materyalleri yükleme.';
+
+  @override
+  String get termsReportingTitle => '5. Bildirim ve engelleme';
+
+  @override
+  String get termsReportingBody =>
+      'Sakıncalı materyalleri bildirmek için uygulamadaki Gönderiyi bildir veya Kullanıcıyı bildir seçeneklerini kullan. Kullanıcıyı engelle ve bildir seçeneği ClubUp\'ı bilgilendirir ve kullanıcıyı ve içeriğini deneyiminden hemen kaldırır. Acil güvenlik endişeleri için dev3mb@gmail.com adresine yaz.\n\nUygulama içi güvenlik bildirimlerini 24 saat içinde inceleriz.';
+
+  @override
+  String get termsEnforcementTitle => '6. Yaptırım';
+
+  @override
+  String get termsEnforcementBody =>
+      'İçerik veya davranış bu koşulları ihlal ettiğinde ClubUp; içeriği kaldırma, özellikleri kısıtlama, kanıtları koruma, hesabı askıya alma ve ihlalli içeriği sağlayan kullanıcıyı kalıcı olarak hizmetten çıkarma dâhil uygun işlemleri yapar. Ciddi veya tekrarlanan ihlaller gerektiğinde üniversiteye ya da yetkili makamlara bildirilebilir.';
+
+  @override
+  String get termsServiceTitle => '7. Hizmet';
+
+  @override
+  String get termsServiceBody =>
+      'ClubUp özellikleri değiştirebilir, askıya alabilir veya sonlandırabilir ve kesintisiz kullanılabilirliği garanti etmez. ClubUp bir öğrenci topluluğu ürünüdür ve Koç Üniversitesinin resmî bir hizmeti değildir.';
+
+  @override
+  String get termsChangesTitle => '8. Değişiklikler ve iletişim';
+
+  @override
+  String get termsChangesBody =>
+      'Bu koşulları güncelleyebilir ve güncel tarihi burada yayımlarız. Önemli bir güncelleme uygulama içinde yeniden kabul gerektirebilir. Sorular ve güvenlik endişeleri için dev3mb@gmail.com adresine yaz veya ClubUp Destek sayfasını kullan.';
 
   @override
   String get couldNotOpenThisPage => 'Bu sayfa açılamadı.';
@@ -2017,7 +2185,55 @@ class AppLocalizationsTr extends AppLocalizations {
   String get incorrectEmailOrPassword => 'E-posta veya şifre hatalı';
 
   @override
+  String insightsAcrossEvents(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count etkinlikte',
+      zero: 'henüz etkinlik yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String insightsAcrossPosts(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count gönderide',
+      zero: 'henüz gönderi yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get insightsAdminBadge => 'YÖNETİCİ';
+
+  @override
+  String get insightsAdminOnlyNote =>
+      'Yalnızca kulüp yöneticisi olarak sana görünür.';
+
+  @override
+  String get insightsAllTime => 'tüm zamanlar';
+
+  @override
+  String get insightsEarlyDaysNote =>
+      'Henüz başlangıç — buradaki her şey kulübü kurduğun günden itibaren sayılıyor, yani bu sayılar yalnızca artar.';
+
+  @override
+  String get insightsEntrySubtitle =>
+      'Takipçiler, katılımlar ve gönderi performansı';
+
+  @override
+  String insightsSince(String date) {
+    return '$date TARİHİNDEN BERİ';
+  }
+
+  @override
   String get insightsTitle => 'İstatistikler';
+
+  @override
+  String get insightsTopPostsByViews => 'tüm zamanlar, görüntülemeye göre';
 
   @override
   String interestMatchCount(num n) {
@@ -3537,4 +3753,279 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'Uygulama mağazası açılamadı. ClubUp\'ı mağazadan güncelledikten sonra tekrar deneyin.';
+
+  @override
+  String get eventsAndActivities => 'Etkinlikler ve aktiviteler';
+
+  @override
+  String get activityTitle => 'Aktivite';
+
+  @override
+  String get activityOwnerSubtitle => 'Herkese açık profilinde görünür';
+
+  @override
+  String activityVisitorSubtitle(String name) {
+    return '$name adlı kişinin kampüs etkinlik geçmişi';
+  }
+
+  @override
+  String activityOtherTitle(String name) {
+    return '$name adlı kişinin aktivitesi';
+  }
+
+  @override
+  String activitySeeAllCount(int count) {
+    return '$count etkinliğin tümü';
+  }
+
+  @override
+  String get activityViewFullHistory => 'Tüm geçmişi gör';
+
+  @override
+  String get activityFilterAll => 'Tümü';
+
+  @override
+  String get activityFilterUpcoming => 'Yaklaşan';
+
+  @override
+  String get activityFilterPast => 'Geçmiş';
+
+  @override
+  String activityGoingSection(int count) {
+    return 'Gidiyor · $count';
+  }
+
+  @override
+  String activityPastSection(int count) {
+    return 'Katıldı · $count';
+  }
+
+  @override
+  String get activityGoingBadge => 'Gidiyor';
+
+  @override
+  String get activityLiveBadge => 'Şu anda';
+
+  @override
+  String get activityAttendedBadge => 'Katıldı';
+
+  @override
+  String get activityUnconfirmedBadge => 'Okutulmadı';
+
+  @override
+  String get activityStatAttended => 'Katıldı';
+
+  @override
+  String get activityStatUpcoming => 'Yaklaşan';
+
+  @override
+  String get activityStatClubs => 'Kulüp';
+
+  @override
+  String get activityCheckinFootnote => 'Katılım, etkinlik girişinde onaylanır';
+
+  @override
+  String activityEventCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count etkinlik',
+      one: '1 etkinlik',
+      zero: 'Etkinlik yok',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String activityAcademicYear(String label) {
+    return '$label akademik yılı';
+  }
+
+  @override
+  String get activityEmptyTitle => 'Henüz etkinlik yok';
+
+  @override
+  String get activityEmptyBody =>
+      'Bir kampüs etkinliğine katılacağını belirt; gideceğin ve katıldığın her şeyin kaydı burada birikir.';
+
+  @override
+  String activityEmptyBodyVisitor(String name) {
+    return '$name henüz hiçbir kampüs etkinliğine katılmadı.';
+  }
+
+  @override
+  String get activityBrowseEvents => 'Bu haftanın etkinliklerine göz at';
+
+  @override
+  String get activityNoUpcoming => 'Yaklaşan bir şey yok';
+
+  @override
+  String get activityNoUpcomingBody =>
+      'Katılacağını belirttiğin etkinlikler, gerçekleşmeden önce burada görünür.';
+
+  @override
+  String get activityNoPast => 'Henüz geçmiş yok';
+
+  @override
+  String get activityNoPastBody =>
+      'Etkinlikler sona erdiğinde geçmişine eklenir.';
+
+  @override
+  String activityShareSummary(String name, int attended, int upcoming) {
+    return '$name · ClubUp\'ta $attended etkinliğe katıldı, $upcoming etkinliği yaklaşıyor';
+  }
+
+  @override
+  String get activitySummaryCopied => 'Aktivite özeti kopyalandı';
+
+  @override
+  String get activityShareTooltip => 'Aktiviteyi paylaş';
+
+  @override
+  String removeMemberConfirmTitle(String name) {
+    return '$name çıkarılsın mı?';
+  }
+
+  @override
+  String removeMemberConfirmBody(String name) {
+    return '$name adlı kişiyi bu gruptan çıkarmak istediğine emin misin?';
+  }
+
+  @override
+  String get leaveGroupConfirmTitle => 'Gruptan ayrılınsın mı?';
+
+  @override
+  String get leaveGroupConfirmBody => 'Bu gruptan artık mesaj almayacaksın.';
+
+  @override
+  String get leaveGroupAction => 'Gruptan ayrıl';
+
+  @override
+  String get deleteGroupConfirmTitle => 'Grup silinsin mi?';
+
+  @override
+  String get deleteGroupConfirmBody =>
+      'Bu işlem grubu ve mesajlarını herkes için kalıcı olarak siler.';
+
+  @override
+  String get deleteGroupAction => 'Grubu sil';
+
+  @override
+  String get addMembersTitle => 'Üye ekle';
+
+  @override
+  String get noMorePeopleToAdd => 'Eklenecek başka kimse yok';
+
+  @override
+  String get groupSearchPeopleHint => 'Kişi ara';
+
+  @override
+  String get groupUnavailable => 'Grup kullanılamıyor';
+
+  @override
+  String get groupInfoTitle => 'Grup bilgisi';
+
+  @override
+  String get groupNameOptionalLabel => 'Grup adı (isteğe bağlı)';
+
+  @override
+  String get groupNameHint => 'Grup adını gir';
+
+  @override
+  String get saveGroupNameTooltip => 'Grup adını kaydet';
+
+  @override
+  String groupMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count üye',
+      one: '1 üye',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String memberNameYouSuffix(String name) {
+    return '$name (Sen)';
+  }
+
+  @override
+  String get groupCreatorAdminLabel => 'Grup kurucusu · Yönetici';
+
+  @override
+  String get groupAdminLabel => 'Grup yöneticisi';
+
+  @override
+  String get memberActionsTooltip => 'Üye işlemleri';
+
+  @override
+  String get dismissAsGroupAdmin => 'Grup yöneticiliğinden al';
+
+  @override
+  String get makeGroupAdmin => 'Grup yöneticisi yap';
+
+  @override
+  String get removeMemberAction => 'Üyeyi çıkar';
+
+  @override
+  String get createGroupTitle => 'Grup Oluştur';
+
+  @override
+  String get addGroupPhoto => 'Grup fotoğrafı ekle';
+
+  @override
+  String get changeGroupPhoto => 'Grup fotoğrafını değiştir';
+
+  @override
+  String get groupPhotoSheetTitle => 'Grup fotoğrafı';
+
+  @override
+  String get photoEditorOpenFailed => 'Fotoğraf düzenleyici açılamadı.';
+
+  @override
+  String get startChat => 'Sohbeti Başlat';
+
+  @override
+  String get conversationUnavailableTitle => 'Sohbet kullanılamıyor';
+
+  @override
+  String get conversationUnavailableBody => 'Bu sohbete erişimin yok.';
+
+  @override
+  String get appTaglineCampusConnected => 'Kampüsün, bir arada';
+
+  @override
+  String clubSentAMessage(String clubName) {
+    return '$clubName bir mesaj gönderdi.';
+  }
+
+  @override
+  String groupSenderSentAMessage(String groupName, String senderName) {
+    return '$groupName: $senderName bir mesaj gönderdi.';
+  }
+
+  @override
+  String get academicYearPrep => 'Hazırlık';
+
+  @override
+  String get academicYear1 => '1. Sınıf';
+
+  @override
+  String get academicYear2 => '2. Sınıf';
+
+  @override
+  String get academicYear3 => '3. Sınıf';
+
+  @override
+  String get academicYear4 => '4. Sınıf';
+
+  @override
+  String get academicYear5 => '5. Sınıf';
+
+  @override
+  String get academicYearGrad => 'Mezun';
+
+  @override
+  String get academicYearGraduate => 'Mezun';
 }

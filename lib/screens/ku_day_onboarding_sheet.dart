@@ -22,6 +22,21 @@ Future<void> showKuDayOnboarding(BuildContext context) async {
   );
 }
 
+/// Display-only label for a [kInterests] entry. The English string stays the
+/// stored value — selection state and persistence compare against it.
+String _interestLabel(AppLocalizations l10n, String interest) =>
+    switch (interest) {
+      'Tech' => l10n.categoryTech,
+      'Arts' => l10n.categoryArts,
+      'Music' => l10n.categoryMusic,
+      'Sports' => l10n.categorySports,
+      'Academic' => l10n.categoryAcademic,
+      'Career' => l10n.categoryCareer,
+      'Wellness' => l10n.categoryWellness,
+      'Social Impact' => l10n.categorySocialImpact,
+      _ => interest,
+    };
+
 class _OnboardingSheet extends StatefulWidget {
   const _OnboardingSheet();
 
@@ -276,7 +291,7 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
                       const SizedBox(width: 5),
                     ],
                     Text(
-                      tag,
+                      _interestLabel(AppLocalizations.of(context)!, tag),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,

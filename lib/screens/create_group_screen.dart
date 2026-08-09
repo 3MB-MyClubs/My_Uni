@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_group.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -128,6 +129,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final canCreate = _selected.length >= 2;
 
     return Scaffold(
@@ -136,9 +138,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.text,
-        title: const Text(
-          'Create Group',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        title: Text(
+          l10n.createGroupTitle,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
       ),
       body: SafeArea(
@@ -163,8 +165,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   const SizedBox(height: 7),
                   Text(
                     _photoPath == null
-                        ? 'Add group photo'
-                        : 'Change group photo',
+                        ? l10n.addGroupPhoto
+                        : l10n.changeGroupPhoto,
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
@@ -195,7 +197,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     textCapitalization: TextCapitalization.words,
                     style: TextStyle(color: AppColors.text),
                     decoration: InputDecoration(
-                      hintText: 'Enter group name',
+                      hintText: l10n.groupNameHint,
                       counterText: '',
                       prefixIcon: const Icon(Icons.edit_rounded, size: 20),
                       filled: true,
@@ -263,7 +265,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     onChanged: (value) => setState(() => _query = value),
                     style: TextStyle(fontSize: 13.5, color: AppColors.text),
                     decoration: InputDecoration(
-                      hintText: 'Search people',
+                      hintText: l10n.groupSearchPeopleHint,
                       prefixIcon: const Icon(Icons.search_rounded, size: 19),
                       isDense: true,
                       filled: true,
@@ -369,9 +371,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    'Create Group',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                  child: Text(
+                    l10n.createGroupTitle,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
               ),

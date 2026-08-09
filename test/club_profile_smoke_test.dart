@@ -96,7 +96,7 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: ExploreScreen(initialTabIndex: 2),
+          home: ExploreScreen(initialTabIndex: 1),
         ),
       ),
     );

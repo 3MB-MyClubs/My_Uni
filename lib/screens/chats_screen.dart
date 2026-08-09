@@ -2,13 +2,12 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_message.dart';
-import '../models/club.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
-import '../services/app_presence_service.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
 import '../services/locale_service.dart';
@@ -20,11 +19,9 @@ import '../onboarding/onboarding_anchors.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
-import '../widgets/presence_avatar.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
 import 'create_group_screen.dart';
-import 'user_profile_screen.dart';
 
 /// Lets the main navigation reset Chats to its default student view whenever
 /// the tab is selected again, while pushed standalone inboxes remain simple.
@@ -34,10 +31,9 @@ class ChatsController extends ChangeNotifier {
 
 enum _ChatInboxFilter { students, clubs }
 
-/// The chats inbox: every conversation the current user can see — direct
-/// messages plus one members-only room per club they follow (or manage, for
-/// club-admin sessions). Hosted as a main-nav tab and also pushed from the
-/// feed's paper-plane button.
+/// The main Chats inbox: direct messages plus one public community room per
+/// club the current user can access. Private club inboxes intentionally stay
+/// inside the club community's Solo Chat lane.
 class ChatsScreen extends StatefulWidget {
   /// True only for the instance hosted in the main nav bar's IndexedStack, so
   /// the app tour's compose anchor attaches to a single widget.
@@ -85,10 +81,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (authService.isStudentSession) {
         unawaited(chatStore.startDirectMessageSync(_myId));
-        unawaited(_hydrateDmProfiles());
         unawaited(_hydratePeopleDirectory());
       }
       unawaited(chatStore.startClubMessageSync(_myId));
+      // Club inbox rows are visible to the club admin as well as the student.
+      // Hydrate the student profile for both sessions so the private thread
+      // has an identity and the private label, not an empty title.
+      unawaited(_hydrateDmProfiles());
     });
   }
 
@@ -106,7 +105,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   void _onChatStoreChanged() {
-    if (!mounted || !authService.isStudentSession) return;
+    if (!mounted) return;
     unawaited(_hydrateDmProfiles());
   }
 
@@ -130,11 +129,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   Future<void> _hydrateDmProfiles() async {
     final memberIds = <String>{};
-    final directPeerIds = <String>{};
     for (final thread in chatStore.threadsFor(_myId)) {
       if (thread.peerId case final peerId?) {
         memberIds.add(peerId);
-        directPeerIds.add(peerId);
       }
       if (thread.isGroup) {
         memberIds.addAll(
@@ -147,13 +144,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
     memberIds
       ..removeWhere((id) => _userForId(id) != null)
       ..removeAll(_requestedProfileIds);
-    if (memberIds.isNotEmpty) _requestedProfileIds.addAll(memberIds);
-    await Future.wait([
-      if (memberIds.isNotEmpty) peopleService.hydrateProfilesByIds(memberIds),
-      if (directPeerIds.isNotEmpty)
-        appPresenceService.hydrateLastSeenForUsers(directPeerIds),
-    ]);
-    if (memberIds.isNotEmpty) _requestedProfileIds.removeAll(memberIds);
+    if (memberIds.isNotEmpty) {
+      _requestedProfileIds.addAll(memberIds);
+      await peopleService.hydrateProfilesByIds(memberIds);
+      _requestedProfileIds.removeAll(memberIds);
+    }
     if (mounted) setState(() {});
   }
 
@@ -194,6 +189,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return userState.displayNameFor(userId, _userForId(userId)?.name ?? '');
   }
 
+  /// Student-facing club sections contain only the shared community rooms.
+  /// Club accounts have no personal/club switch, so their private student
+  /// inboxes remain visible in their single messaging list.
+  bool _belongsToClubSection(ChatThreadSummary thread) =>
+      thread.isClub || (!authService.isStudentSession && thread.isClubInbox);
+
   String _preview(ChatThreadSummary t) {
     // A club room previews its Chat lane: a notice belongs to the Board, so it
     // never becomes the inbox line. The badge still counts both lanes.
@@ -210,13 +211,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
         (last.title ?? '').trim().isEmpty ? last.content : last.title!,
       _ => last.content,
     };
-    if (last.senderId == _myId) return '${S.you}: $body';
+    final senderId = chatStore.senderIdForViewer(last, _myId);
+    if (senderId == _myId) return '${S.you}: $body';
     if (t.isClub || t.isGroup) {
       final conversation = chatStore.clubInboxForThread(t.threadId);
-      final senderName =
-          conversation != null && last.senderId == conversation.clubId
+      final senderName = conversation != null && senderId == conversation.clubId
           ? clubForId(conversation.clubId)?.name ?? ''
-          : _nameForUser(last.senderId);
+          : _nameForUser(senderId);
       return '$senderName: $body';
     }
     return body;
@@ -238,15 +239,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }.any(value.endsWith);
   }
 
-  String _threadSubtitle(ChatThreadSummary thread) {
-    final preview = _preview(thread);
-    if (!ChatStore.isDirectThread(thread.threadId)) return preview;
-    final peerId = thread.peerId ?? '';
-    final status = appPresenceService.onlineUserIds.contains(peerId)
-        ? S.activeNowLabel
-        : S.lastOnlineLabel(appPresenceService.lastSeenAtFor(peerId));
-    return preview.isEmpty ? status : '$status · $preview';
-  }
+  String _threadSubtitle(ChatThreadSummary thread) => _preview(thread);
 
   void _openThread(String threadId, {User? recipient}) {
     Navigator.push(
@@ -261,32 +254,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _openDmWith(User user) {
     final threadId = chatStore.ensureDirectThread(_myId, user.id);
     if (threadId != null) _openThread(threadId, recipient: user);
-  }
-
-  void _openUserProfile(User? user) {
-    if (user == null) return;
-    Navigator.push(
-      context,
-      ChatPageRoute(builder: (_) => UserProfileScreen(user: user)),
-    );
-  }
-
-  /// Opens the identity represented by a conversation title without opening
-  /// the conversation itself. Club titles are the exception: throughout the
-  /// Chats area they always lead to their existing chat thread.
-  void _openProfileForThread(ChatThreadSummary thread) {
-    if (thread.isGroup) return;
-    final inbox = chatStore.clubInboxForThread(thread.threadId);
-    if (inbox != null && inbox.profileId != _myId) {
-      _openUserProfile(_userForId(inbox.profileId));
-      return;
-    }
-    final clubId = thread.clubId ?? inbox?.clubId;
-    if (clubId != null) {
-      _openThread(thread.threadId);
-      return;
-    }
-    _openUserProfile(_userForId(thread.peerId ?? ''));
   }
 
   Future<void> _openCompose() async {
@@ -330,18 +297,27 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A club account owns one messaging destination: its community. Keep that
+    // room embedded in the Chats tab so Board / Chat / Solo Chat all share the
+    // main navigation's constraints and do not get pushed as a nested page.
+    // Private student conversations are surfaced by the room's Solo Chat lane.
+    if (authService.currentAdmin != null) {
+      final communityThreadId = chatStore.managedCommunityThreadId(_myId);
+      if (communityThreadId == null) return _buildNoCommunityAssigned();
+      return ChatThreadScreen(
+        key: const ValueKey('admin-community-thread'),
+        threadId: communityThreadId,
+        embedded: true,
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
-        listenable: Listenable.merge([
-          chatStore,
-          userState,
-          appPresenceService,
-          moderationService,
-        ]),
+        listenable: Listenable.merge([chatStore, userState, moderationService]),
         builder: (context, _) {
           final query = _query.trim().toLowerCase();
           final allThreads = chatStore.threadsFor(_myId).where((thread) {
+            if (thread.isClubInbox) return false;
             final peerId = thread.peerId;
             return peerId == null || !moderationService.isUserBlocked(peerId);
           }).toList();
@@ -362,7 +338,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 }).toList()
               : const <User>[];
           final threads = allThreads
-              .where((thread) => thread.isClub == showingClubs)
+              .where((thread) => _belongsToClubSection(thread) == showingClubs)
               .where(
                 (t) =>
                     query.isEmpty || _titleFor(t).toLowerCase().contains(query),
@@ -372,19 +348,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
             0,
             (total, thread) => total + thread.unread,
           );
-          final onlineStudents = authService.isStudentSession && !showingClubs
-              ? peopleService.cachedPeople
-                    .where(
-                      (u) =>
-                          u.id != _myId &&
-                          !moderationService.isUserBlocked(u.id) &&
-                          appPresenceService.onlineUserIds.contains(u.id),
-                    )
-                    .toList()
-              : const <User>[];
-          final clubThreads = allThreads
-              .where((thread) => thread.isClub)
-              .toList();
           return Stack(
             children: [
               _buildInboxBackdrop(showingClubs),
@@ -397,10 +360,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     if (authService.currentAdmin == null)
                       _buildChatFilters(allThreads),
                     _buildSearchBar(),
-                    if (query.isEmpty && showingClubs && clubThreads.isNotEmpty)
-                      _buildClubOnlineRail(clubThreads)
-                    else if (query.isEmpty && onlineStudents.isNotEmpty)
-                      _buildOnlineRail(onlineStudents),
                     Expanded(
                       child: searchingPeople
                           ? _buildPeopleSearchResults(peopleResults)
@@ -425,7 +384,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       child: _sectionLabel(
                                         showingClubs
                                             ? S.clubChats
-                                            : S.studentChats,
+                                            : S.messagesLabel,
                                       ),
                                     )
                                   : _row(threads[i - 1]),
@@ -437,6 +396,50 @@ class _ChatsScreenState extends State<ChatsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildNoCommunityAssigned() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 36),
+            child: Column(
+              key: const ValueKey('no-club-community-assigned'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.forum_outlined,
+                  size: 48,
+                  color: AppColors.secondaryText,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No club community assigned',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.text,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This admin account does not have a club messaging space.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -505,8 +508,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   // ── Header (big title + unread pill + compose) ──────────────────────────────
   Widget _buildChatFilters(List<ChatThreadSummary> threads) {
-    final studentThreads = threads.where((thread) => !thread.isClub).toList();
-    final clubThreads = threads.where((thread) => thread.isClub).toList();
+    final studentThreads = threads
+        .where((thread) => !_belongsToClubSection(thread))
+        .toList();
+    final clubThreads = threads.where(_belongsToClubSection).toList();
     final studentUnread = studentThreads.fold<int>(
       0,
       (total, thread) => total + thread.unread,
@@ -834,192 +839,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  // ── Online-now rail ─────────────────────────────────────────────────────────
-  Widget _buildOnlineRail(List<User> online) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 2, 0, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: _sectionLabel(S.onlineNow),
-          ),
-          SizedBox(
-            height: 84,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: online.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 14),
-              itemBuilder: (context, i) {
-                final user = online[i];
-                final displayName = userState.displayNameFor(
-                  user.id,
-                  user.name,
-                );
-                return GestureDetector(
-                  onTap: () => _openDmWith(user),
-                  child: Column(
-                    children: [
-                      PresenceAvatar(
-                        userId: user.id,
-                        name: user.name,
-                        size: 52,
-                        fontSize: 19,
-                        online: true,
-                      ),
-                      const SizedBox(height: 5),
-                      SizedBox(
-                        width: 88,
-                        child: GestureDetector(
-                          key: ValueKey('chat-online-profile-name-${user.id}'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _openUserProfile(user),
-                          child: Text(
-                            displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── A single thread row ─────────────────────────────────────────────────────
-  String _shortClubName(Club club) {
-    final shortName = club.shortName?.trim();
-    if (shortName != null && shortName.isNotEmpty) return shortName;
-    final match = RegExp(r'\(([^)]+)\)').firstMatch(club.name);
-    if (match != null) return match.group(1)!;
-    return club.name;
-  }
-
-  int _onlineCountForClub(String clubId) {
-    return peopleService.cachedPeople.where((user) {
-      return user.subscribedClubIds.contains(clubId) &&
-          appPresenceService.onlineUserIds.contains(user.id);
-    }).length;
-  }
-
-  Widget _buildClubOnlineRail(List<ChatThreadSummary> threads) {
-    final communities = threads
-        .map((thread) => (thread, clubForId(thread.clubId ?? '')))
-        .where(
-          (entry) => entry.$2 != null && _onlineCountForClub(entry.$2!.id) > 0,
-        )
-        .toList();
-    if (communities.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 2, 0, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: _sectionLabel(S.onlineNow),
-          ),
-          SizedBox(
-            height: 82,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: communities.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 14),
-              itemBuilder: (context, index) {
-                final (thread, clubValue) = communities[index];
-                final club = clubValue!;
-                final onlineCount = _onlineCountForClub(club.id);
-                return GestureDetector(
-                  key: ValueKey('club-online-${club.id}'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _openThread(thread.threadId),
-                  child: SizedBox(
-                    width: 72,
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          width: 50,
-                          height: 50,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              IgnorePointer(
-                                child: ClubAvatar(
-                                  clubId: club.id,
-                                  clubName: club.name,
-                                  color: _colorForClub(club.id),
-                                  imageUrl: club.logoUrl,
-                                  size: 50,
-                                  fontSize: 18,
-                                  shape: 'circle',
-                                ),
-                              ),
-                              Positioned(
-                                right: -1,
-                                bottom: -1,
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF2E7D32),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: AppColors.background,
-                                      width: 2,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        GestureDetector(
-                          key: ValueKey('chat-online-club-name-${club.id}'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _openThread(thread.threadId),
-                          child: Text(
-                            '${_shortClubName(club)} · ${S.onlineMembers(onlineCount)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _row(ChatThreadSummary t) {
     final unread = t.unread;
+    final isPinnedClubRoom =
+        authService.currentAdmin != null &&
+        t.threadId == chatStore.managedCommunityThreadId(_myId);
     final club = t.clubId == null ? null : clubForId(t.clubId!);
     final groupMembers = t.isGroup
         ? chatStore.groupParticipants(t.threadId)
@@ -1034,13 +859,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ? AppColors.primaryRed
         : _colorForClub(club.id);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Material(
+        // Rows read as one continuous list: no outline or shadow boxing each
+        // conversation off. Unread threads keep a faint tint for emphasis.
         color: unread > 0
-            ? AppColors.card
-            : AppColors.card.withValues(
-                alpha: themeService.isDark ? 0.74 : 0.88,
-              ),
+            ? clubColor.withValues(alpha: themeService.isDark ? 0.12 : 0.06)
+            : Colors.transparent,
         borderRadius: const BorderRadius.all(Radius.circular(18)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1049,34 +874,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
             recipient: t.peerId == null ? null : _userForId(t.peerId!),
           ),
           child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: unread > 0
-                    ? clubColor.withValues(alpha: 0.34)
-                    : AppColors.glassEdge,
-              ),
-              borderRadius: const BorderRadius.all(Radius.circular(18)),
-              boxShadow: [
-                BoxShadow(
-                  color: clubColor.withValues(alpha: unread > 0 ? 0.09 : 0.035),
-                  blurRadius: 18,
-                  spreadRadius: -8,
-                  offset: const Offset(0, 7),
-                ),
-              ],
-            ),
             padding: const EdgeInsets.fromLTRB(12, 11, 13, 11),
             child: Row(
               children: [
                 if (showStudentInboxAvatar)
-                  PresenceAvatar(
+                  UserAvatar(
                     userId: inbox.profileId,
                     name: title,
                     size: 48,
                     fontSize: 18,
-                    online: appPresenceService.onlineUserIds.contains(
-                      inbox.profileId,
-                    ),
                   )
                 else if (club != null)
                   ClubAvatar(
@@ -1096,14 +902,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     size: 48,
                   )
                 else
-                  PresenceAvatar(
+                  UserAvatar(
                     userId: t.peerId ?? '',
                     name: title,
                     size: 48,
                     fontSize: 18,
-                    online: appPresenceService.onlineUserIds.contains(
-                      t.peerId ?? '',
-                    ),
                   ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1115,14 +918,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Expanded(
-                            child: GestureDetector(
+                            child: KeyedSubtree(
                               key: ValueKey(
                                 'chat-thread-profile-name-${t.threadId}',
                               ),
-                              behavior: HitTestBehavior.opaque,
-                              onTap: t.isGroup
-                                  ? null
-                                  : () => _openProfileForThread(t),
                               child: Text(
                                 title,
                                 maxLines: 1,
@@ -1138,7 +937,30 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               ),
                             ),
                           ),
+                          if (t.isClubInbox) ...[
+                            const SizedBox(width: 6),
+                            Semantics(
+                              label: S.privateSoloChat,
+                              child: Icon(
+                                Icons.lock_rounded,
+                                size: 14,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                          ],
                           const SizedBox(width: 8),
+                          if (isPinnedClubRoom) ...[
+                            Tooltip(
+                              message: S.pinnedLabel,
+                              child: Icon(
+                                Icons.push_pin_rounded,
+                                key: const ValueKey('club-general-room-pinned'),
+                                size: 13,
+                                color: AppColors.primaryRed,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
                           Text(
                             t.lastMessage == null
                                 ? ''
@@ -1228,7 +1050,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (index == 0) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: _sectionLabel(S.studentChats),
+            child: _sectionLabel(S.messagesLabel),
           );
         }
         return _personSearchResult(people[index - 1]);
@@ -1245,17 +1067,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
       onTap: () => _openDmWith(user),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.divider)),
-        ),
         child: Row(
           children: [
-            PresenceAvatar(
+            UserAvatar(
               userId: user.id,
               name: displayName,
               size: 48,
               fontSize: 18,
-              online: appPresenceService.onlineUserIds.contains(user.id),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1748,7 +1566,9 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                     ),
                   ),
                   child: Text(
-                    _selected.length <= 1 ? 'Start Chat' : 'Next',
+                    _selected.length <= 1
+                        ? AppLocalizations.of(context)!.startChat
+                        : AppLocalizations.of(context)!.next,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,

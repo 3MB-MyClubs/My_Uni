@@ -36,6 +36,87 @@ class AppLocalizationsEn extends AppLocalizations {
   String get seeAll => 'See all';
 
   @override
+  String get bringYourFriends => 'Bring your friends';
+
+  @override
+  String get invite => 'Invite';
+
+  @override
+  String get invited => 'Invited';
+
+  @override
+  String get shareEventAction => 'Share event';
+
+  @override
+  String get shareThisEvent => 'Share this event';
+
+  @override
+  String get qrCodeAction => 'QR code';
+
+  @override
+  String get searchPeopleOnCampus => 'Search people on campus';
+
+  @override
+  String get sentAction => 'Sent';
+
+  @override
+  String inviteFriendsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Invite $count friends',
+      one: 'Invite 1 friend',
+      zero: 'Invite friends',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInvitesSentCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count invitations sent',
+      one: 'Invitation sent',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noPeopleMatchSearch => 'No people match your search.';
+
+  @override
+  String get scanToOpenEvent => 'Scan to open this event';
+
+  @override
+  String followedPeopleAttending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people you follow are going',
+      one: '1 person you follow is going',
+      zero: 'No one you follow is going yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String eventInviteSent(String name) {
+    return '$name has been invited.';
+  }
+
+  @override
+  String mutualClubsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count mutual clubs',
+      one: '1 mutual club',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get fromYourClubs => 'FROM YOUR CLUBS';
 
   @override
@@ -624,6 +705,95 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agreeAndContinue => 'Agree and continue';
+
+  @override
+  String get iAccept => 'I Accept';
+
+  @override
+  String get updatedTermsTitle => 'We\'ve updated our Terms of Service';
+
+  @override
+  String get updatedTermsMessage =>
+      'Please review and accept the updated terms to continue using ClubUp.';
+
+  @override
+  String get termsAcceptanceSaveFailed =>
+      'We couldn\'t save your acceptance. Your account is still locked. Check your connection and try again.';
+
+  @override
+  String get termsVerificationFailed =>
+      'We couldn\'t verify the Terms version accepted by this account. Access remains locked until verification succeeds or you accept the current terms.';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get termsReviewSummary =>
+      'These terms set the rules for using ClubUp and explain how we keep the campus community safe.';
+
+  @override
+  String get termsEffectiveMetadata =>
+      'Effective: July 18, 2026  •  Last updated: July 18, 2026  •  Operator: 3MB MyClubs';
+
+  @override
+  String get termsZeroToleranceNotice =>
+      'ClubUp has zero tolerance for objectionable content or abusive users.';
+
+  @override
+  String get termsAgreementTitle => '1. Agreement to these terms';
+
+  @override
+  String get termsAgreementBody =>
+      'By creating an account, signing in, or using ClubUp, you agree to these Terms of Use and our Privacy Policy. If you do not agree, do not use the service. The in-app agreement is presented during registration and whenever updated terms require renewed acceptance.';
+
+  @override
+  String get termsEligibilityTitle => '2. Eligibility and accounts';
+
+  @override
+  String get termsEligibilityBody =>
+      'ClubUp is intended for eligible members of the supported university community. Provide accurate information, protect your credentials, and do not impersonate another person or share an account. You are responsible for activity performed through your account.';
+
+  @override
+  String get termsSafetyTitle => '3. Community safety and prohibited conduct';
+
+  @override
+  String get termsSafetyBody =>
+      'You must not post, send, promote, or engage in:\n\n• Harassment, bullying, stalking, threats, intimidation, or targeted abuse.\n• Hate speech or discrimination based on a protected characteristic.\n• Nudity, sexual exploitation, non-consensual sexual content, or any child sexual abuse material.\n• Violence, self-harm encouragement, dangerous conduct, or credible threats of harm.\n• Fraud, scams, spam, malicious links, illegal activity, or deceptive impersonation.\n• Content that violates privacy, intellectual-property rights, law, or another person\'s rights.\n• Attempts to evade moderation, retaliate against reporters, or help a suspended user return.';
+
+  @override
+  String get termsContentTitle => '4. Your content';
+
+  @override
+  String get termsContentBody =>
+      'You remain responsible for content you submit. You grant ClubUp the limited permission needed to host, display, process, and moderate that content to operate the service. Do not upload material you do not have permission to share. You may remove content where the app offers that control.';
+
+  @override
+  String get termsReportingTitle => '5. Reporting and blocking';
+
+  @override
+  String get termsReportingBody =>
+      'Use Report post or Report user in the app to flag objectionable material. Use Block and report user to notify ClubUp and immediately remove that user and their content from your experience. For urgent safety concerns, email dev3mb@gmail.com.\n\nWe review in-app safety reports within 24 hours. Reports should be made honestly; knowingly false or abusive reports may themselves violate these terms.';
+
+  @override
+  String get termsEnforcementTitle => '6. Enforcement';
+
+  @override
+  String get termsEnforcementBody =>
+      'When content or conduct violates these terms, ClubUp will take appropriate action, which may include removing content, limiting features, preserving evidence, suspending an account, and permanently ejecting the user who provided the offending content. Serious or repeated violations may be reported to the university or appropriate authorities when legally required or necessary to protect safety.';
+
+  @override
+  String get termsServiceTitle => '7. The service';
+
+  @override
+  String get termsServiceBody =>
+      'ClubUp may change, suspend, or discontinue features and does not guarantee uninterrupted availability. ClubUp is a student community product and is not an official Koç University service. To the extent permitted by law, the service is provided as available without implied warranties.';
+
+  @override
+  String get termsChangesTitle => '8. Changes and contact';
+
+  @override
+  String get termsChangesBody =>
+      'We may update these terms and will publish the updated date here. A material update may require a new in-app acceptance. Questions and safety concerns can be sent to dev3mb@gmail.com or through ClubUp Support.';
 
   @override
   String get couldNotOpenThisPage => 'Could not open this page.';
@@ -2026,7 +2196,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get incorrectEmailOrPassword => 'Incorrect email or password';
 
   @override
+  String insightsAcrossEvents(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'across $count events',
+      one: 'across 1 event',
+      zero: 'no events yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String insightsAcrossPosts(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'across $count posts',
+      one: 'across 1 post',
+      zero: 'no posts yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get insightsAdminBadge => 'ADMIN';
+
+  @override
+  String get insightsAdminOnlyNote => 'Visible only to you as club admin.';
+
+  @override
+  String get insightsAllTime => 'all time';
+
+  @override
+  String get insightsEarlyDaysNote =>
+      'Early days — everything here counts from the day you created the club, so these numbers only ever grow.';
+
+  @override
+  String get insightsEntrySubtitle => 'Followers, RSVPs and post performance';
+
+  @override
+  String insightsSince(String date) {
+    return 'SINCE $date';
+  }
+
+  @override
   String get insightsTitle => 'Insights';
+
+  @override
+  String get insightsTopPostsByViews => 'all time, by views';
 
   @override
   String interestMatchCount(num n) {
@@ -3547,4 +3765,282 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateRequiredStoreError =>
       'We couldn\'t open the app store. Please update ClubUp there, then try again.';
+
+  @override
+  String get eventsAndActivities => 'Events & activities';
+
+  @override
+  String get activityTitle => 'Activity';
+
+  @override
+  String get activityOwnerSubtitle => 'Visible on your public profile';
+
+  @override
+  String activityVisitorSubtitle(String name) {
+    return '$name\'s campus event record';
+  }
+
+  @override
+  String activityOtherTitle(String name) {
+    return '$name\'s activity';
+  }
+
+  @override
+  String activitySeeAllCount(int count) {
+    return 'See all $count';
+  }
+
+  @override
+  String get activityViewFullHistory => 'View full history';
+
+  @override
+  String get activityFilterAll => 'All';
+
+  @override
+  String get activityFilterUpcoming => 'Upcoming';
+
+  @override
+  String get activityFilterPast => 'Past';
+
+  @override
+  String activityGoingSection(int count) {
+    return 'Going · $count';
+  }
+
+  @override
+  String activityPastSection(int count) {
+    return 'Been there · $count';
+  }
+
+  @override
+  String get activityGoingBadge => 'Going';
+
+  @override
+  String get activityLiveBadge => 'Happening now';
+
+  @override
+  String get activityAttendedBadge => 'Attended';
+
+  @override
+  String get activityUnconfirmedBadge => 'Not scanned';
+
+  @override
+  String get activityStatAttended => 'Attended';
+
+  @override
+  String get activityStatUpcoming => 'Upcoming';
+
+  @override
+  String get activityStatClubs => 'Clubs';
+
+  @override
+  String get activityCheckinFootnote =>
+      'Attendance is confirmed by event check-in';
+
+  @override
+  String activityEventCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count events',
+      one: '1 event',
+      zero: 'No events',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String activityAcademicYear(String label) {
+    return '$label academic year';
+  }
+
+  @override
+  String get activityEmptyTitle => 'No events yet';
+
+  @override
+  String get activityEmptyBody =>
+      'RSVP to a campus event and it lands here — your record of everything you\'re going to and everything you took part in.';
+
+  @override
+  String activityEmptyBodyVisitor(String name) {
+    return '$name hasn\'t joined any campus events yet.';
+  }
+
+  @override
+  String get activityBrowseEvents => 'Browse this week\'s events';
+
+  @override
+  String get activityNoUpcoming => 'Nothing coming up';
+
+  @override
+  String get activityNoUpcomingBody =>
+      'Events you RSVP to will show up here before they happen.';
+
+  @override
+  String get activityNoPast => 'Nothing behind you yet';
+
+  @override
+  String get activityNoPastBody =>
+      'Events wrap up into your history once they\'re over.';
+
+  @override
+  String activityShareSummary(String name, int attended, int upcoming) {
+    return '$name · $attended events attended, $upcoming coming up on ClubUp';
+  }
+
+  @override
+  String get activitySummaryCopied => 'Activity summary copied';
+
+  @override
+  String get activityShareTooltip => 'Share activity';
+
+  @override
+  String removeMemberConfirmTitle(String name) {
+    return 'Remove $name?';
+  }
+
+  @override
+  String removeMemberConfirmBody(String name) {
+    return 'Are you sure you want to remove $name from this group?';
+  }
+
+  @override
+  String get leaveGroupConfirmTitle => 'Leave group?';
+
+  @override
+  String get leaveGroupConfirmBody =>
+      'You will no longer receive messages from this group.';
+
+  @override
+  String get leaveGroupAction => 'Leave group';
+
+  @override
+  String get deleteGroupConfirmTitle => 'Delete group?';
+
+  @override
+  String get deleteGroupConfirmBody =>
+      'This permanently deletes the group and its messages for everyone.';
+
+  @override
+  String get deleteGroupAction => 'Delete group';
+
+  @override
+  String get addMembersTitle => 'Add members';
+
+  @override
+  String get noMorePeopleToAdd => 'No more people to add';
+
+  @override
+  String get groupSearchPeopleHint => 'Search people';
+
+  @override
+  String get groupUnavailable => 'Group unavailable';
+
+  @override
+  String get groupInfoTitle => 'Group info';
+
+  @override
+  String get groupNameOptionalLabel => 'Group name (optional)';
+
+  @override
+  String get groupNameHint => 'Enter group name';
+
+  @override
+  String get saveGroupNameTooltip => 'Save group name';
+
+  @override
+  String groupMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '1 member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String memberNameYouSuffix(String name) {
+    return '$name (You)';
+  }
+
+  @override
+  String get groupCreatorAdminLabel => 'Group creator · Admin';
+
+  @override
+  String get groupAdminLabel => 'Group admin';
+
+  @override
+  String get memberActionsTooltip => 'Member actions';
+
+  @override
+  String get dismissAsGroupAdmin => 'Dismiss as group admin';
+
+  @override
+  String get makeGroupAdmin => 'Make group admin';
+
+  @override
+  String get removeMemberAction => 'Remove member';
+
+  @override
+  String get createGroupTitle => 'Create Group';
+
+  @override
+  String get addGroupPhoto => 'Add group photo';
+
+  @override
+  String get changeGroupPhoto => 'Change group photo';
+
+  @override
+  String get groupPhotoSheetTitle => 'Group photo';
+
+  @override
+  String get photoEditorOpenFailed => 'Could not open the photo editor.';
+
+  @override
+  String get startChat => 'Start Chat';
+
+  @override
+  String get conversationUnavailableTitle => 'Conversation unavailable';
+
+  @override
+  String get conversationUnavailableBody =>
+      'You don\'t have access to this conversation.';
+
+  @override
+  String get appTaglineCampusConnected => 'Your campus, connected';
+
+  @override
+  String clubSentAMessage(String clubName) {
+    return '$clubName sent a message.';
+  }
+
+  @override
+  String groupSenderSentAMessage(String groupName, String senderName) {
+    return '$groupName: $senderName sent a message.';
+  }
+
+  @override
+  String get academicYearPrep => 'Prep';
+
+  @override
+  String get academicYear1 => '1st Year';
+
+  @override
+  String get academicYear2 => '2nd Year';
+
+  @override
+  String get academicYear3 => '3rd Year';
+
+  @override
+  String get academicYear4 => '4th Year';
+
+  @override
+  String get academicYear5 => '5th Year';
+
+  @override
+  String get academicYearGrad => 'Grad';
+
+  @override
+  String get academicYearGraduate => 'Graduate';
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
+import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/club_role_localization.dart';
 import '../services/theme_service.dart';
@@ -119,6 +120,10 @@ class StudentCampusProfileView extends StatelessWidget {
   final Widget trailing;
   final Widget? primaryAction;
   final Widget? supplementalContent;
+
+  /// The "Events & activities" block, rendered under the clubs grid. Supplied
+  /// by the profile screens so this view stays free of event/RSVP wiring.
+  final Widget? activitySection;
   final List<StudentCampusMembership> memberships;
   final String clubsTitle;
   final String? clubsActionLabel;
@@ -138,6 +143,7 @@ class StudentCampusProfileView extends StatelessWidget {
     required this.clubsTitle,
     this.primaryAction,
     this.supplementalContent,
+    this.activitySection,
     this.clubsActionLabel,
     this.onClubsAction,
     this.onClubTap,
@@ -248,6 +254,8 @@ class StudentCampusProfileView extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (activitySection != null)
+                  SliverToBoxAdapter(child: activitySection!),
                 SliverToBoxAdapter(child: SizedBox(height: bottomInset + 24)),
               ],
             ),
@@ -431,7 +439,7 @@ class StudentCampusIdCard extends StatelessWidget {
                             const SizedBox(height: 1),
                             Text(
                               [
-                                profile.year.trim(),
+                                academicYearDisplayName(profile.year.trim()),
                                 profile.email.trim(),
                               ].where((value) => value.isNotEmpty).join(' · '),
                               maxLines: 1,

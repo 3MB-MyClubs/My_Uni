@@ -129,27 +129,59 @@ void main() {
     expect(signUpTapped, isTrue);
   });
 
-  testWidgets('community safety agreement can switch to Turkish', (
+  testWidgets(
+    'mandatory updated Terms screen cannot pop and can switch locale',
+    (WidgetTester tester) async {
+      await localeService.setLanguage('en');
+      await tester.pumpWidget(
+        ListenableBuilder(
+          listenable: localeService,
+          builder: (context, _) => MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: Locale(localeService.languageCode),
+            home: TermsAcceptanceScreen(onAccepted: () async {}),
+          ),
+        ),
+      );
+
+      expect(tester.widget<PopScope>(find.byType(PopScope)).canPop, isFalse);
+      expect(
+        find.byKey(const ValueKey('accept-updated-terms')),
+        findsOneWidget,
+      );
+      expect(find.text('1. Agreement to these terms'), findsOneWidget);
+
+      await tester.tap(find.text('TR'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kullanım Koşullarımızı güncelledik'), findsOneWidget);
+      expect(find.text('Kabul Ediyorum'), findsOneWidget);
+      await localeService.setLanguage('en');
+    },
+  );
+
+  testWidgets('failed acceptance stays on the mandatory screen with retry', (
     WidgetTester tester,
   ) async {
-    await localeService.setLanguage('en');
     await tester.pumpWidget(
-      ListenableBuilder(
-        listenable: localeService,
-        builder: (context, _) => MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: Locale(localeService.languageCode),
-          home: TermsAcceptanceScreen(onAccepted: () async {}),
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: TermsAcceptanceScreen(
+          onAccepted: () async => throw Exception('save failed'),
         ),
       ),
     );
 
-    await tester.tap(find.text('TR'));
+    await tester.tap(find.byKey(const ValueKey('accept-updated-terms')));
     await tester.pumpAndSettle();
 
-    expect(find.text('TOPLULUK GÜVENLİĞİ KOŞULLARI'), findsOneWidget);
-    expect(find.text('Kabul et ve devam et'), findsOneWidget);
-    await localeService.setLanguage('en');
+    expect(find.byType(TermsAcceptanceScreen), findsOneWidget);
+    expect(
+      find.textContaining("We couldn't save your acceptance"),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('accept-updated-terms')), findsOneWidget);
   });
 }

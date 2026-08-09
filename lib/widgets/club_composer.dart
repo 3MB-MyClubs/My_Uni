@@ -307,6 +307,7 @@ class _ClubComposerState extends State<ClubComposer> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Container(
+                      key: const ValueKey('club-message-input-container'),
                       constraints: const BoxConstraints(minHeight: 42),
                       padding: const EdgeInsets.only(left: 15, right: 6),
                       decoration: BoxDecoration(
@@ -332,7 +333,12 @@ class _ClubComposerState extends State<ClubComposer> {
                                 color: t.text,
                               ),
                               decoration: InputDecoration(
+                                filled: false,
                                 isDense: true,
+                                // The pill owns its theme-aware background.
+                                // Avoid the app-wide field fill adding a grey
+                                // layer, including while disabled or focused.
+                                
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,

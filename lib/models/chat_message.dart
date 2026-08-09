@@ -56,6 +56,16 @@ class ChatMessage {
   final String id;
   final String threadId;
   final String senderId;
+
+  /// The authenticated actor that wrote a club-inbox message. Club replies
+  /// can be authored by a board member while being presented publicly as the
+  /// club, so this is kept separately from [senderId].
+  final String? senderAuthId;
+
+  /// The public club identity for a board-authored club-inbox message. A
+  /// student sees this identity, while an authorized board viewer may see
+  /// [senderAuthId].
+  final String? senderClubId;
   final String content;
   final DateTime createdAt;
   final DateTime deliveredAt;
@@ -97,6 +107,24 @@ class ChatMessage {
 
   /// Event this message links to (for the inline event card).
   final String? eventId;
+
+  /// Resolves both current structured shares and older/plaintext event links.
+  /// The content fallback keeps received cards tappable if a remote row was
+  /// written before the structured payload was available on that device.
+  String? get linkedEventId {
+    final structuredId = eventId?.trim() ?? '';
+    if (structuredId.isNotEmpty) return structuredId;
+    for (final token in content.split(RegExp(r'\s+'))) {
+      final uri = Uri.tryParse(token.trim());
+      if (uri?.scheme == 'kuclubs' &&
+          uri?.host == 'event' &&
+          uri!.pathSegments.isNotEmpty) {
+        final id = Uri.decodeComponent(uri.pathSegments.first).trim();
+        if (id.isNotEmpty) return id;
+      }
+    }
+    return null;
+  }
 
   /// Post shared into a DM, user-created group, or club conversation.
   final String? sharedPostId;
@@ -148,6 +176,8 @@ class ChatMessage {
     required this.id,
     required this.threadId,
     required this.senderId,
+    this.senderAuthId,
+    this.senderClubId,
     required this.content,
     required this.createdAt,
     DateTime? deliveredAt,
@@ -185,6 +215,8 @@ class ChatMessage {
     String? id,
     String? threadId,
     String? senderId,
+    String? senderAuthId,
+    String? senderClubId,
     String? content,
     DateTime? createdAt,
     DateTime? deliveredAt,
@@ -210,6 +242,8 @@ class ChatMessage {
     id: id ?? this.id,
     threadId: threadId ?? this.threadId,
     senderId: senderId ?? this.senderId,
+    senderAuthId: senderAuthId ?? this.senderAuthId,
+    senderClubId: senderClubId ?? this.senderClubId,
     content: content ?? this.content,
     createdAt: createdAt ?? this.createdAt,
     deliveredAt: deliveredAt ?? this.deliveredAt,
@@ -237,6 +271,8 @@ class ChatMessage {
     'id': id,
     'threadId': threadId,
     'senderId': senderId,
+    if (senderAuthId != null) 'senderAuthId': senderAuthId,
+    if (senderClubId != null) 'senderClubId': senderClubId,
     'content': content,
     'createdAt': createdAt.toIso8601String(),
     'deliveredAt': deliveredAt.toIso8601String(),
@@ -268,6 +304,8 @@ class ChatMessage {
     id: m['id'] as String,
     threadId: m['threadId'] as String,
     senderId: m['senderId'] as String,
+    senderAuthId: _nullableString(m['senderAuthId']),
+    senderClubId: _nullableString(m['senderClubId']),
     content: m['content'] as String,
     createdAt: DateTime.parse(m['createdAt'] as String),
     deliveredAt: m['deliveredAt'] == null
@@ -312,4 +350,9 @@ class ChatMessage {
     sharedPostId: m['sharedPostId']?.toString(),
     pinned: m['pinned'] == true,
   );
+
+  static String? _nullableString(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
 }

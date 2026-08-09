@@ -14,7 +14,7 @@ import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/widgets/chat_campus_backdrop.dart';
 import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
-import 'package:flutter_application_1/widgets/presence_avatar.dart';
+import 'package:flutter_application_1/widgets/user_avatar.dart';
 import 'package:hive/hive.dart';
 
 /// Verifies the "New chat" design (campus wallpaper, intro card, composer) on
@@ -229,7 +229,7 @@ void main() {
     expect(back, findsOneWidget);
     expect(tester.getSize(back), const Size(44, 44));
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
-    final dmHeaderHeight = tester.getSize(find.byType(PresenceAvatar).first);
+    final dmHeaderHeight = tester.getSize(find.byType(UserAvatar).first);
     expect(dmHeaderHeight.height, 38);
 
     // Group: same back button and avatar box, plus the drill-in chevron. The

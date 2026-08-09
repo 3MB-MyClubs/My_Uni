@@ -11,9 +11,9 @@ import 'package:path_provider/path_provider.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../models/club.dart';
-import '../models/event.dart';
 import '../models/user.dart';
 import '../services/personalization_service.dart';
+import '../services/account_switcher_service.dart';
 import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
@@ -38,7 +38,6 @@ import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'explore_screen.dart';
-import 'my_calendar_screen.dart';
 import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
 import 'settings_screen.dart';
@@ -70,6 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
+    accountSwitcherService.addListener(_onLocaleChanged);
     _refreshClubMemberCounts();
   }
 
@@ -77,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
+    accountSwitcherService.removeListener(_onLocaleChanged);
     super.dispose();
   }
 
@@ -286,10 +287,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editMajorAndYear(BuildContext context, String userId) async {
-    final savedMajor = userState.majors[userId];
-    String? selectedMajor = kAcademicPrograms.contains(savedMajor)
+    final savedMajor = userState.majors[userId]?.trim();
+    String? selectedMajor = (savedMajor != null && savedMajor.isNotEmpty)
         ? savedMajor
         : null;
+    // A saved major missing from the hardcoded list is offered alongside it
+    // rather than discarded — the database spells some programs with "&" where
+    // [kAcademicPrograms] spells them "and".
+    final majorOptions =
+        (selectedMajor == null || kAcademicPrograms.contains(selectedMajor))
+        ? kAcademicPrograms
+        : [...kAcademicPrograms, selectedMajor];
     var selectedYear = userState.years[userId];
 
     await showDialog<void>(
@@ -317,6 +325,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   final result = await showAcademicProgramPicker(
                     context: ctx,
                     title: AppLocalizations.of(context)!.selectMajor,
+                    programs: majorOptions,
                     selected: selectedMajor == null
                         ? const []
                         : [selectedMajor!],
@@ -467,44 +476,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _graduationLabel(String? year) {
     final value = year?.trim();
     return value == null || value.isEmpty ? '' : value.toUpperCase();
-  }
-
-  Event? _nextUpcomingEvent(String userId) {
-    final now = DateTime.now();
-    final upcoming =
-        events
-            .where(
-              (event) =>
-                  event.endTime.isAfter(now) &&
-                  event.attendeeUserIds.contains(userId),
-            )
-            .toList()
-          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    return upcoming.isEmpty ? null : upcoming.first;
-  }
-
-  StudentEventData _eventDataFor(Event event) {
-    final club = clubs.cast<Club?>().firstWhere(
-      (club) => club?.id == event.clubId,
-      orElse: () => null,
-    );
-    final hour = event.dateTime.hour.toString().padLeft(2, '0');
-    final minute = event.dateTime.minute.toString().padLeft(2, '0');
-
-    return StudentEventData(
-      month: _monthAbbr(event.dateTime.month),
-      day: event.dateTime.day.toString(),
-      title: event.title,
-      clubLine:
-          '${club?.name ?? AppLocalizations.of(context)!.campusEventFallback} · '
-          '${DateFormat.E(localeService.languageCode).format(event.dateTime)} · $hour:$minute',
-      location: event.location,
-    );
-  }
-
-  Color _colorForClubId(String clubId) {
-    final idx = clubOrdinal(clubId);
-    return _clubColor(idx < 0 ? 0 : idx);
   }
 
   /// Copies a shareable profile link to the clipboard and confirms via snackbar.
@@ -966,9 +937,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
           final followers = _followersForUser(user.id);
           final following = _followingUsers();
-          final name = userState.displayNameFor(user.id, user.name);
+          final personalName = userState.displayNameFor(user.id, user.name);
+          final activeClub = accountSwitcherService.activeClub;
+          final name = activeClub == null
+              ? personalName
+              : '$personalName (${activeClub.name} Admin)';
           final year = userState.years[user.id];
-          final nextEvent = _nextUpcomingEvent(user.id);
 
           final clubDetails = followedClubs.map((club) {
             final memberCount = clubMemberCount(club.id);
@@ -992,7 +966,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               major:
                   userState.majors[user.id] ??
                   AppLocalizations.of(context)!.majorNotAdded,
-              year: year ?? AppLocalizations.of(context)!.yearNotAdded,
+              year: year == null
+                  ? AppLocalizations.of(context)!.yearNotAdded
+                  : academicYearDisplayName(year),
               bio:
                   userState.bios[user.id] ??
                   AppLocalizations.of(context)!.addBioIntro,
@@ -1001,7 +977,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               following: following.length,
               minors: userState.minors[user.id] ?? const [],
               doubleMajors: userState.doubleMajors[user.id] ?? const [],
-              nextEvent: nextEvent == null ? null : _eventDataFor(nextEvent),
               clubDetails: clubDetails,
             ),
             onSettings: () => Navigator.push(
@@ -1016,21 +991,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               MaterialPageRoute(builder: (_) => const ExploreScreen()),
             ),
-            onSeeAllEvents: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
-            ),
-            onEventTap: nextEvent == null
-                ? null
-                : () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EventDetailScreen(
-                        event: nextEvent,
-                        color: _colorForClubId(nextEvent.clubId),
-                      ),
-                    ),
-                  ),
             onFollowersTap: () => _showFollowersSheet(followers),
             onFollowingTap: () => _showFollowingSheet(following),
             followedClubs: followedClubs,
@@ -1048,10 +1008,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // A club account (any admin except the super admin) sees its OWN club
-    // profile page — the same v2 layout every visitor sees — as the Profile
-    // tab, with a settings gear for logout. Only the super admin keeps the
-    // all-clubs dashboard below.
+    // A dedicated club account (any admin except the super admin) sees its
+    // OWN club profile page — the same v2 layout every visitor sees — as the
+    // Profile tab, with a settings gear for logout. Linked board accounts
+    // keep their personal profile and are handled above.
     if (admin != null && admin.id != 'admin1') {
       final adminId = admin.id;
       final managed = managedClubForAdmin(adminId) ?? clubs.first;
@@ -1483,7 +1443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                year.toUpperCase(),
+                                academicYearDisplayName(year).toUpperCase(),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10.5,
@@ -1573,11 +1533,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Text(
                         [
                               if (major.isNotEmpty) major,
-                              if (year.isNotEmpty) year,
+                              if (year.isNotEmpty)
+                                academicYearDisplayName(year),
                             ].join(' · ').isNotEmpty
                             ? [
                                 if (major.isNotEmpty) major,
-                                if (year.isNotEmpty) year,
+                                if (year.isNotEmpty)
+                                  academicYearDisplayName(year),
                               ].join(' · ')
                             : AppLocalizations.of(context)!.addMajorYear,
                         style: TextStyle(

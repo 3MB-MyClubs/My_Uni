@@ -83,7 +83,6 @@ void main() {
     // ── Club room: open KUACM, send a message ──
     await tester.tap(find.byKey(const ValueKey('chat-filter-clubs')));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text(S.onlineNow.toUpperCase()), findsNothing);
     await tester.tap(find.text('Bilgisayar Kulübü (KUACM)').first);
     await tester.pump(const Duration(milliseconds: 700));
     await binding.takeScreenshot('chats-03-club-room');

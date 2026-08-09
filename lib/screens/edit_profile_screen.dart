@@ -49,8 +49,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _loadError;
 
   String get _userId => widget.userId;
-  List<String> get _majorNames =>
-      _majors.isEmpty ? kAcademicPrograms : _majors.map((m) => m.name).toList();
+
+  /// Options for the major picker. A saved major that the option list does not
+  /// contain is appended rather than dropped: the database spells some programs
+  /// with "&" where [kAcademicPrograms] spells them "and", and the list is still
+  /// empty on the first frame while [_loadRemoteData] is in flight. Recomputing
+  /// on every read is what re-reconciles once that load completes.
+  List<String> get _majorNames {
+    final options = _majors.isEmpty
+        ? kAcademicPrograms
+        : _majors.map((m) => m.name).toList();
+    final saved = _major?.trim() ?? '';
+    if (saved.isEmpty || options.contains(saved)) return options;
+    return [...options, saved];
+  }
+
   List<String> get _yearOptions => _academicYears.isEmpty
       ? fallbackAcademicYearNames
       : _academicYears.map((year) => year.name).toList();
@@ -59,8 +72,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void initState() {
     super.initState();
     _bioCtrl = TextEditingController(text: userState.bios[_userId] ?? '');
-    final savedMajor = userState.majors[_userId];
-    _major = kAcademicPrograms.contains(savedMajor) ? savedMajor : null;
+    final savedMajor = userState.majors[_userId]?.trim();
+    _major = (savedMajor != null && savedMajor.isNotEmpty) ? savedMajor : null;
     final y = userState.years[_userId];
     _year = (y != null && y.isNotEmpty) ? y : null;
     _doubleMajor = userState.doubleMajors[_userId]?.firstOrNull;

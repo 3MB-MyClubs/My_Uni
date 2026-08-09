@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
@@ -10,7 +11,6 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
 import '../services/app_colors.dart';
-import '../services/app_presence_service.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
@@ -44,12 +44,15 @@ import 'event_detail_screen.dart';
 import 'media_preview_screen.dart';
 import 'user_profile_screen.dart';
 
-/// The club room, in the two lanes of the Club Board + Chat handoff.
+/// The club room, in the Club Board + Chat handoff plus a private Solo Chat
+/// surface.
 ///
 /// **Board** is the official notice area and the landing lane: one grouped list,
 /// one row per notice, and a composer only for members holding a role in the
 /// club. **Chat** is the room — board-member replies, polls, photos and mentions live here,
 /// and a notice appears as a card so the conversation around it still reads.
+/// **Solo Chat** is the private inbox: one thread for a regular member, or all
+/// student-to-club threads for board members and the linked club admin.
 ///
 /// A notice is one object: the record published on the Board is the same message
 /// that shows as a card in Chat. Replies never sit under a notice — "Reply in
@@ -95,8 +98,10 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   /// lane being marked read a frame later.
   Set<String> _unreadNoticeIds = const {};
 
-  /// Which lane is showing. Board is the landing lane.
-  late ClubChatLane _lane = widget.initialLane;
+  /// Which room tab is showing. Board is the landing tab.
+  late ClubCommunityTab _tab = widget.initialLane == ClubChatLane.board
+      ? ClubCommunityTab.board
+      : ClubCommunityTab.chat;
 
   bool _showJumpButton = false;
   String? _animatingSentMessageId;
@@ -273,8 +278,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     });
   }
 
-  void _switchLane(ClubChatLane lane) {
-    if (_lane == lane) return;
+  void _switchTab(ClubCommunityTab tab) {
+    if (_tab == tab) return;
+    if (tab == ClubCommunityTab.solo) {
+      setState(() => _tab = tab);
+      return;
+    }
+    final lane = tab == ClubCommunityTab.board
+        ? ClubChatLane.board
+        : ClubChatLane.chat;
     // Whatever arrived in the other lane while it was hidden is still new to
     // this reader, so it keeps its dot / divider on the way in.
     final incoming = chatStore.unreadIdsInClubLane(
@@ -283,7 +295,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       lane,
     );
     setState(() {
-      _lane = lane;
+      _tab = tab;
       if (lane == ClubChatLane.board) {
         _unreadNoticeIds = {..._unreadNoticeIds, ...incoming};
       } else if (incoming.isNotEmpty) {
@@ -295,6 +307,14 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (lane == ClubChatLane.chat) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _revealUnread());
     }
+  }
+
+  void _switchLane(ClubChatLane lane) {
+    _switchTab(
+      lane == ClubChatLane.board
+          ? ClubCommunityTab.board
+          : ClubCommunityTab.chat,
+    );
   }
 
   /// Brings the "left off here" divider into view when it is close enough to
@@ -320,9 +340,14 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) return;
-    // One count per segment: reading the Board never clears what is waiting in
-    // Chat, and the other way round.
-    chatStore.markClubLaneRead(widget.threadId, _myId, _lane);
+    // One count per public segment: reading the Board never clears what is
+    // waiting in Chat, and the other way round. Solo Chat owns separate inbox
+    // threads, whose receipts are handled by ChatThreadScreen.
+    if (_tab == ClubCommunityTab.board) {
+      chatStore.markClubLaneRead(widget.threadId, _myId, ClubChatLane.board);
+    } else if (_tab == ClubCommunityTab.chat) {
+      chatStore.markClubLaneRead(widget.threadId, _myId, ClubChatLane.chat);
+    }
   }
 
   void _hydrateVisibleParticipants() {
@@ -419,7 +444,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         name: club.name,
         role: S.adminLabel,
         isClubAccount: true,
-        online: true,
       );
     }
     final adminIndex = clubAdmins.indexWhere((admin) => admin.id == userId);
@@ -429,7 +453,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         name: clubAdmins[adminIndex].name,
         role: S.adminLabel,
         isClubAccount: true,
-        online: true,
       );
     }
     if (userId == appAdmin.id) {
@@ -460,7 +483,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       role: club == null
           ? null
           : studentClubRoleService.roleTitleFor(club, userId),
-      online: appPresenceService.onlineUserIds.contains(userId),
     );
   }
 
@@ -468,7 +490,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   List<ClubPerson> get _members {
     final club = _club;
     if (club == null) return const [];
-    final online = appPresenceService.onlineUserIds;
     final people = <ClubPerson>[];
     final seen = <String>{};
     for (final user in _memberUsers) {
@@ -479,7 +500,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           id: user.id,
           name: mine ? S.you : userState.displayNameFor(user.id, user.name),
           role: studentClubRoleService.roleTitleFor(club, user.id),
-          online: online.contains(user.id),
         ),
       );
     }
@@ -566,14 +586,18 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     setState(() => _animatingSentMessageId = null);
   }
 
-  Future<void> _messageClubPrivately() async {
+  Future<String?> _ensureClubInboxThread() async {
     final club = _club;
     final profileId = authService.currentUser?.id ?? '';
-    if (club == null || profileId.isEmpty) return;
-    final threadId = await chatStore.ensureClubInboxThread(
+    if (club == null || profileId.isEmpty) return null;
+    return chatStore.ensureClubInboxThread(
       profileId: profileId,
       clubId: club.id,
     );
+  }
+
+  Future<void> _messageClubPrivately() async {
+    final threadId = await _ensureClubInboxThread();
     if (!mounted) return;
     if (threadId == null) {
       ScaffoldMessenger.of(
@@ -587,13 +611,100 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
+  Future<void> _openSoloChatThread(String threadId) async {
+    await Navigator.push(
+      context,
+      ChatPageRoute(builder: (_) => ChatThreadScreen(threadId: threadId)),
+    );
+    if (!mounted) return;
+    _requestedParticipantProfileIds.removeWhere(
+      (id) => !_hasResolvedProfile(id),
+    );
+    _hydrateVisibleParticipants();
+  }
+
+  List<ClubSoloChatEntry> _soloChatEntries() {
+    final club = _club;
+    if (club == null) return const [];
+    final entries = <ClubSoloChatEntry>[];
+    final summaries = chatStore
+        .threadsFor(_myId)
+        .where((thread) => thread.isClubInbox && thread.clubId == club.id);
+    for (final summary in summaries) {
+      final conversation = chatStore.clubInboxForThread(summary.threadId);
+      if (conversation == null) continue;
+      // A regular member sees only their own club inbox. Board members and
+      // the linked club account see every student conversation for this club.
+      if (!_canModerate && conversation.profileId != _myId) continue;
+      final isOwnConversation = conversation.profileId == _myId;
+      final person = isOwnConversation
+          ? null
+          : _personFor(conversation.profileId);
+      final title = isOwnConversation
+          ? club.name
+          : (person?.name.trim().isNotEmpty == true
+                ? person!.name
+                : S.studentProfile);
+      final last = summary.lastMessage;
+      final preview = _soloChatPreview(last);
+      entries.add(
+        ClubSoloChatEntry(
+          threadId: summary.threadId,
+          title: title,
+          preview: preview,
+          whenLabel: last == null ? '' : _timeLabel(last.createdAt),
+          unread: summary.unread,
+          avatar: isOwnConversation
+              ? ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: _accent,
+                  imageUrl: club.logoUrl,
+                  size: 46,
+                  fontSize: 17,
+                  shape: 'circle',
+                )
+              : UserAvatar(
+                  userId: conversation.profileId,
+                  name: title,
+                  size: 46,
+                  fontSize: 17,
+                ),
+        ),
+      );
+    }
+    return entries;
+  }
+
+  String _soloChatPreview(ChatMessage? message) {
+    if (message == null) return S.chatNoMessagesYet;
+    final body = switch (message.kind) {
+      ChatMessageKind.postShare => S.sharedPost,
+      ChatMessageKind.photo => S.attachPhoto,
+      ChatMessageKind.file => S.attachFile,
+      ChatMessageKind.announcement =>
+        (message.title ?? '').trim().isEmpty ? message.content : message.title!,
+      _ => message.content,
+    };
+    final senderId = chatStore.senderIdForViewer(message, _myId);
+    final sender = senderId == _myId ? S.you : _personFor(senderId).name;
+    return sender.trim().isEmpty ? body : '$sender: $body';
+  }
+
   void _scrollToLatest() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      // Flying back from deep in the history is an unreadable blur at this
+      // duration, so close the gap first and animate only the last screenful.
+      final animatedTravel = position.viewportDimension * 1.5;
+      if (position.pixels > animatedTravel) {
+        _scrollController.jumpTo(animatedTravel);
+      }
       _scrollController.animateTo(
         0,
-        duration: const Duration(milliseconds: 440),
-        curve: const Cubic(0.20, 0.72, 0.24, 1),
+        duration: sentMessageEntranceDuration,
+        curve: sentMessageEntranceCurve,
       );
     });
   }
@@ -971,7 +1082,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
     // One object: the notice is now both the newest row on the Board and a card
     // in Chat. Land the author on the Board, where they published it.
-    if (mounted) setState(() => _lane = ClubChatLane.board);
+    if (mounted) setState(() => _tab = ClubCommunityTab.board);
   }
 
   // ── Message actions ─────────────────────────────────────────────────────────
@@ -982,7 +1093,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (!_canWrite) return;
     setState(() {
       _replyingTo = message;
-      _lane = ClubChatLane.chat;
+      _tab = ClubCommunityTab.chat;
     });
     _markVisibleMessagesSeen();
     _scrollToLatest();
@@ -1233,17 +1344,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   unawaited(_composeAnnouncement());
                 },
               ),
-            if (authService.isStudentSession && !_canPostNotice)
-              _ActionRow(
-                key: const ValueKey('message-club-privately'),
-                icon: Icons.lock_outline_rounded,
-                label: S.messageClub,
-                t: t,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  unawaited(_messageClubPrivately());
-                },
-              ),
             if (_canChangeBackground)
               _ActionRow(
                 icon: Icons.wallpaper_rounded,
@@ -1464,7 +1564,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         listenable: Listenable.merge([
           chatStore,
           userState,
-          appPresenceService,
           _memberDirectoryRevision,
         ]),
         builder: (sheetContext, _) => ClubCommunitySheet(
@@ -1478,8 +1577,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   Widget _membersPanel(ClubChatTheme t) {
     final people = _members;
-    final online = people.where((person) => person.online).toList();
-    final offline = people.where((person) => !person.online).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1504,10 +1601,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               ),
             ),
           ),
-        ClubSheetLabel(label: S.activeNowGroup(online.length), t: t),
-        for (final person in online) _memberRow(person, t),
-        ClubSheetLabel(label: S.offlineGroup(offline.length), t: t, top: true),
-        for (final person in offline) _memberRow(person, t),
+        ClubSheetLabel(label: S.chatMembers(people.length), t: t),
+        for (final person in people) _memberRow(person, t),
       ],
     );
   }
@@ -1518,26 +1613,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _avatarFor(person, 38),
-              if (person.online)
-                Positioned(
-                  right: -1,
-                  bottom: -1,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: t.online,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: t.sheet, width: 2.5),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+          _avatarFor(person, 38),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -1565,15 +1641,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                       show: clubChatPrefs.showRoles,
                     ),
                   ],
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  person.online ? S.activeNowLabel : S.offlineLabel,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: person.online ? t.online : t.sub,
-                  ),
                 ),
               ],
             ),
@@ -1673,7 +1740,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         listenable: Listenable.merge([
           chatStore,
           userState,
-          appPresenceService,
           rsvpStore,
           ?_communityInfo,
         ]),
@@ -1706,16 +1772,22 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
               children: [
                 _buildHeader(club, t),
                 ClubLaneSwitch(
-                  lane: _lane,
-                  onLane: _switchLane,
+                  tab: _tab,
+                  onTab: _switchTab,
                   boardUnread: _laneUnread(ClubChatLane.board),
                   chatUnread: _laneUnread(ClubChatLane.chat),
+                  soloUnread: _soloChatEntries().fold<int>(
+                    0,
+                    (total, entry) => total + entry.unread,
+                  ),
                   t: t,
                 ),
                 Expanded(
-                  child: _lane == ClubChatLane.board
+                  child: _tab == ClubCommunityTab.board
                       ? _buildBoardLane(t)
-                      : _buildChatLane(t),
+                      : _tab == ClubCommunityTab.chat
+                      ? _buildChatLane(t)
+                      : _buildSoloChatLane(t),
                 ),
               ],
             ),
@@ -1734,19 +1806,25 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       club: club,
       avatarColor: _accent,
       memberCount: memberCount,
-      activeCount: _members.where((person) => person.online).length,
       viewerRoleTitle: studentClubRoleService.roleTitleFor(club, _myId),
       // Inside the room the identity is not a link out: tapping it opens the
       // Chat lane. The club profile lives behind the ••• menu.
-      onOpenClub: () => _switchLane(ClubChatLane.chat),
+      onOpenClub: () => _switchTab(ClubCommunityTab.chat),
       t: t,
-      topInset: widget.embedded ? 0 : MediaQuery.viewPaddingOf(context).top,
+      // The main navigation deliberately extends tab content edge-to-edge and
+      // does not wrap it in a top SafeArea. Embedded club rooms therefore need
+      // the same stable status-bar/notch inset as pushed rooms; otherwise the
+      // identity and action buttons sit underneath the system UI.
+      topInset: MediaQuery.viewPaddingOf(context).top,
       muted: clubChatPrefs.isMuted(widget.threadId),
       onBack: widget.embedded ? null : () => Navigator.maybePop(context),
       onToggleMute: () => clubChatPrefs.setMuted(
         widget.threadId,
         !clubChatPrefs.isMuted(widget.threadId),
       ),
+      onMessagePrivately: authService.isStudentSession && !_canPostNotice
+          ? () => unawaited(_messageClubPrivately())
+          : null,
       onOpenSettings: _openSettingsSheet,
     );
   }
@@ -1754,8 +1832,22 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   /// The count on a segment: what is waiting in the lane the reader is not
   /// looking at. The lane on screen is being read, so it shows nothing.
   int _laneUnread(ClubChatLane lane) {
-    if (_lane == lane) return 0;
+    final tab = lane == ClubChatLane.board
+        ? ClubCommunityTab.board
+        : ClubCommunityTab.chat;
+    if (_tab == tab) return 0;
     return chatStore.unreadInClubLane(widget.threadId, _myId, lane);
+  }
+
+  Widget _buildSoloChatLane(ClubChatTheme t) {
+    final entries = _soloChatEntries();
+    return ClubSoloChatLane(
+      showAll: _canModerate,
+      entries: entries,
+      t: t,
+      onOpen: (threadId) => unawaited(_openSoloChatThread(threadId)),
+      onStart: _canModerate ? null : () => unawaited(_messageClubPrivately()),
+    );
   }
 
   // ── Board lane ──────────────────────────────────────────────────────────────
@@ -2223,8 +2315,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     bool showRoles,
     ClubChatTheme t,
   ) {
-    final mine = chatStore.isMessageOwner(message, _myId);
     final sender = _personFor(message.senderId);
+    // A club admin is the authenticated actor, but the public community
+    // message is authored by the club. Keep ownership separate for actions
+    // such as delete, while rendering the club account as an incoming sender
+    // so its logo and identity remain visible to everyone — including the
+    // admin who sent it.
+    final isClubAuthoredMessage =
+        ChatStore.isClubThread(message.threadId) && sender.isClubAccount;
+    final mine =
+        !isClubAuthoredMessage && chatStore.isMessageOwner(message, _myId);
     final head =
         !mine ||
         previous == null ||
@@ -2376,7 +2476,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   Icon(Icons.lock_outline_rounded, size: 44, color: t.sub),
                   const SizedBox(height: 14),
                   Text(
-                    'Conversation unavailable',
+                    AppLocalizations.of(context)!.conversationUnavailableTitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 17,
@@ -2386,7 +2486,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    "You don't have access to this conversation.",
+                    AppLocalizations.of(context)!.conversationUnavailableBody,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,

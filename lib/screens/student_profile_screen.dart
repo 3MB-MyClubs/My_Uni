@@ -2,9 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
+import '../services/checkin_store.dart';
+import '../services/rsvp_store.dart';
+import '../services/student_activity_service.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/student_activity_section.dart';
 import '../widgets/student_campus_profile.dart';
 import '../onboarding/widgets/starter_checklist_card.dart';
+import 'event_detail_screen.dart';
+import 'student_activity_screen.dart';
+import 'this_week_screen.dart';
 
 class StudentClubDetail {
   final Club club;
@@ -32,7 +39,6 @@ class StudentProfileData {
   final int following;
   final List<String> minors;
   final List<String> doubleMajors;
-  final StudentEventData? nextEvent;
   final List<StudentClubDetail> clubDetails;
 
   const StudentProfileData({
@@ -49,24 +55,7 @@ class StudentProfileData {
     this.email = '',
     this.minors = const [],
     this.doubleMajors = const [],
-    this.nextEvent,
     this.clubDetails = const [],
-  });
-}
-
-class StudentEventData {
-  final String month;
-  final String day;
-  final String title;
-  final String clubLine;
-  final String location;
-
-  const StudentEventData({
-    required this.month,
-    required this.day,
-    required this.title,
-    required this.clubLine,
-    required this.location,
   });
 }
 
@@ -74,8 +63,10 @@ class StudentProfileScreen extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback? onShare;
   final VoidCallback? onFindClubs;
+
+  /// Overrides the default "See all" destination for the events & activities
+  /// block. Defaults to this student's full [StudentActivityScreen] history.
   final VoidCallback? onSeeAllEvents;
-  final VoidCallback? onEventTap;
   final VoidCallback? onFollowersTap;
   final VoidCallback? onFollowingTap;
   final List<Club> followedClubs;
@@ -89,7 +80,6 @@ class StudentProfileScreen extends StatelessWidget {
     this.onShare,
     this.onFindClubs,
     this.onSeeAllEvents,
-    this.onEventTap,
     this.onFollowersTap,
     this.onFollowingTap,
     this.followedClubs = const [],
@@ -135,6 +125,7 @@ class StudentProfileScreen extends StatelessWidget {
         onTap: onSettings,
       ),
       supplementalContent: const StarterChecklistCard(),
+      activitySection: _buildActivitySection(context),
       memberships: memberships,
       clubsTitle: AppLocalizations.of(context)!.myClubs,
       clubsActionLabel: onFindClubs == null
@@ -145,6 +136,47 @@ class StudentProfileScreen extends StatelessWidget {
       onClubsTap: () => _showFollowedClubsSheet(context),
       onFollowingTap: onFollowingTap,
       onFollowersTap: onFollowersTap,
+    );
+  }
+
+  /// The events & activities block. Watches the RSVP and check-in stores
+  /// directly so joining or leaving an event updates the profile in place.
+  Widget _buildActivitySection(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([rsvpStore, checkinStore]),
+      builder: (context, _) {
+        final summary = studentActivityService.summaryFor(data.userId);
+        return StudentActivityPreview(
+          summary: summary,
+          isOwnProfile: true,
+          studentName: data.name,
+          onSeeAll: onSeeAllEvents ?? () => _openActivityHistory(context),
+          onEntryTap: (entry) => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  EventDetailScreen(event: entry.event, color: entry.color),
+            ),
+          ),
+          onBrowseEvents: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openActivityHistory(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentActivityScreen(
+          userId: data.userId,
+          studentName: data.name,
+          isOwnProfile: true,
+        ),
+      ),
     );
   }
 

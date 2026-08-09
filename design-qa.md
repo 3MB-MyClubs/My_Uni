@@ -1,59 +1,48 @@
-# Design QA
+# Club Insights Design QA
 
-- Source visual truth: user-provided notification-center reference image in the conversation (displayed at 720 x 1436 px; no local source path was exposed).
-- Implementation screenshot: unavailable.
-- Intended viewport: mobile portrait; responsive widget behavior exercised at Flutter's default widget-test viewport.
-- Density normalization: unavailable because neither the conversation attachment nor a rendered implementation capture could be opened as a local image pair.
-- State: populated notification center in light and dark themes.
+**Comparison target**
 
-## Full-view comparison evidence
+- Source visual truth: user-provided conversation attachment (`622 × 1337` px), showing the dark Club Insights screen with KUADK sample data.
+- Implementation screenshot: `design-qa-club-insights-simulator.png` (`1206 × 2622` px).
+- Widget-test capture: `design-qa-club-insights-implementation.png` (`393 × 852` px; Ahem test font, used only for layout regression coverage).
+- Viewport: iPhone 17 simulator, `402 × 874` logical px at device pixel ratio `3.0`; focused responsive coverage also ran at `393 × 852` logical px.
+- Normalization: the source is an approximately `393 × 845` mobile viewport at roughly `1.58×` density. The `393 × 852` widget capture verifies the source-width layout, while the native simulator capture verifies real fonts and icons. Native status-bar and home-indicator differences are device-owned and excluded from app-content findings.
+- State: dark theme, KUADK club identity, four populated all-time metrics, five ranked posts, first row highlighted.
 
-The implementation follows the reference hierarchy in code: title and unread pill, mark-all-read action, collapsible follow-request strip, unread `NEW` section, chronological groups, avatar/type badges, follow buttons, content previews, and read/unread row treatment. A same-state screenshot comparison could not be completed.
+**Findings**
 
-## Focused region comparison evidence
+- No actionable P0, P1, or P2 differences remain.
+- Fonts and typography: native system sans-serif, weights, sizes, uppercase tracking, hierarchy, truncation, and two-line metric labels match the reference closely. Text remains readable at the target viewport.
+- Spacing and layout rhythm: header, 24 px content margins, two-column metric grid, 10 px gutters, rounded cards, section dividers, compact ranked rows, and progress-bar alignment match the source composition. No viewport overflow remains.
+- Colors and visual tokens: warm near-black background, raised red-tinted surfaces, muted gray supporting copy, crimson semantic emphasis, subtle borders, and blue back-button outline match the reference while using the app's existing theme tokens.
+- Image quality and asset fidelity: the screen contains no raster imagery. All visible symbols use Flutter's Material icon library; no custom drawn or placeholder assets are present.
+- Copy and content: title, club handle, since label, all-time helpers, event/post counts, top-post qualifier, dates, ranks, views, and likes reproduce the supplied content structure. English and Turkish copy use the existing localization system.
+- Interaction and accessibility: back navigation, ranked-post drill-in, return navigation, pull-to-refresh, semantic metric summaries, ellipsis behavior, and always-scrollable empty states are implemented. Native debug run produced no console errors.
 
-Blocked. No Flutter simulator or physical device was available. The Flutter web build compiled and served locally, but the in-app browser reported no available browser backend, so it could not be opened or captured.
+**Comparison history**
 
-## Automated interaction evidence
+- Pass 1 found a P2 narrow-screen overflow in the `TOP POSTS / all time, by views` heading at `393 × 852`.
+- Fix: made the trailing qualifier flexible with one-line ellipsis behavior while retaining the central divider.
+- Post-fix evidence: `design-qa-club-insights-simulator.png` shows the full header at the target width without clipping or overflow; the focused widget test and native simulator run both pass.
 
-- Home bell exists, exposes a notification semantic label and unread badge, and opens `NotificationsScreen`.
-- Mark-all-read and individual-row read state pass.
-- Follow-request collapse, expand, confirm, and delete pass.
-- Follow, Following, and Requested accessory states pass.
-- Pull-to-refresh confirmation passes.
-- Light and dark theme surface assertions pass.
-- Thirty-day retention behavior passes.
-- `flutter analyze` passes with no issues.
+**Focused region comparison evidence**
 
-## Fidelity surfaces
+- Header: centered title/identity, 44 px outlined back affordance, divider, and device-owned safe area were checked against the reference.
+- Metric grid: icon tiles, numerical hierarchy, label wrapping, card radii/borders, and 2 × 2 rhythm were checked at full native density.
+- Ranked posts: leader treatment, rank chips, single-line titles, dates, chevrons, proportional view bars, and view/like pairs were checked for all five sample rows.
 
-- Fonts and typography: source hierarchy is represented with matching heavy title/name weights, compact timestamps, and uppercase group labels; screenshot-level comparison is blocked.
-- Spacing and layout rhythm: responsive row, section, header, and action spacing is implemented; screenshot-level comparison is blocked.
-- Colors and visual tokens: KU burgundy, warm light surfaces, and warm near-black dark surfaces use the app's theme tokens; both theme states pass widget assertions.
-- Image quality and asset fidelity: real user/club avatars and real post/event thumbnails are used when available; standard Material icons are used for notification types. Screenshot-level comparison is blocked.
-- Copy and content: English and Turkish notification-center copy is generated from ARB localization files.
+**Implementation checklist**
 
-## Findings
+- [x] Reference-matched responsive layout.
+- [x] Live totals and all-time context.
+- [x] Ranking by views with like/recency tie-breakers.
+- [x] Post-detail navigation and return behavior.
+- [x] Pull-to-refresh and empty state.
+- [x] English/Turkish localization.
+- [x] Focused widget test, golden layout regression, analyzer, and native simulator verification.
 
-- [P2] Rendered visual comparison is unavailable.
-  - Location: complete notification center, light and dark states.
-  - Evidence: no Flutter device was available and the in-app browser backend list was empty.
-  - Impact: exact pixel fidelity, text wrapping, and device-specific safe-area rendering cannot be signed off from a rendered artifact.
-  - Fix: launch the app on an iOS or Android simulator, open the Home bell, capture populated light and dark states, and compare them beside the supplied reference.
+**Follow-up polish**
 
-## Comparison history
+- Device-owned status time and system indicators naturally differ from the static reference and require no app change.
 
-- Initial implementation QA found that expanded request actions could overlap the sticky notification list in a constrained viewport.
-- Fix made: expanded request rows now participate directly in sliver layout rather than animating their size under a pinned header.
-- Post-fix evidence: confirm/delete hit testing and all notification widget tests pass; rendered visual evidence remains unavailable.
-
-## Implementation checklist
-
-- [x] Implement reference hierarchy and notification-row variants.
-- [x] Connect Home bell, unread badge, realtime inbox, and read state.
-- [x] Implement light and dark themes.
-- [x] Test core interactions and theme states.
-- [x] Pass static analysis.
-- [ ] Capture and compare light and dark simulator screenshots.
-
-final result: blocked
+final result: passed

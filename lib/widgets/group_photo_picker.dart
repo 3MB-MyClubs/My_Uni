@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../l10n/app_localizations.dart';
 import '../services/app_colors.dart';
 import 'group_avatar_stack.dart';
 import 'group_photo_editor.dart';
@@ -43,8 +44,8 @@ class GroupPhotoPicker extends StatelessWidget {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Could not open the photo editor.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.photoEditorOpenFailed),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -52,6 +53,7 @@ class GroupPhotoPicker extends StatelessWidget {
   }
 
   void _showPicker(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -78,7 +80,7 @@ class GroupPhotoPicker extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Group photo',
+                  l10n.groupPhotoSheetTitle,
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -93,7 +95,7 @@ class GroupPhotoPicker extends StatelessWidget {
                     color: AppColors.primaryRed,
                   ),
                   title: Text(
-                    'Take a photo',
+                    l10n.takePhotoOption,
                     style: TextStyle(color: AppColors.text),
                   ),
                   onTap: () {
@@ -108,7 +110,7 @@ class GroupPhotoPicker extends StatelessWidget {
                     color: AppColors.primaryRed,
                   ),
                   title: Text(
-                    'Choose from library',
+                    l10n.chooseFromLibraryOption,
                     style: TextStyle(color: AppColors.text),
                   ),
                   onTap: () {
@@ -123,9 +125,9 @@ class GroupPhotoPicker extends StatelessWidget {
                       Icons.delete_outline_rounded,
                       color: Colors.red,
                     ),
-                    title: const Text(
-                      'Remove photo',
-                      style: TextStyle(color: Colors.red),
+                    title: Text(
+                      l10n.removePhoto,
+                      style: const TextStyle(color: Colors.red),
                     ),
                     onTap: () {
                       Navigator.pop(sheetContext);
@@ -144,7 +146,9 @@ class GroupPhotoPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: imagePath == null ? 'Add group photo' : 'Change group photo',
+      label: imagePath == null
+          ? AppLocalizations.of(context)!.addGroupPhoto
+          : AppLocalizations.of(context)!.changeGroupPhoto,
       child: SizedBox(
         width: size,
         height: size,

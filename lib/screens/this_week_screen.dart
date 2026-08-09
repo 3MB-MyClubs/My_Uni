@@ -174,6 +174,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     if (e.title.toLowerCase().contains(q)) return true;
     if (e.description.toLowerCase().contains(q)) return true;
     if (e.location.toLowerCase().contains(q)) return true;
+    if (e.tags.any((tag) => tag.toLowerCase().contains(q))) return true;
     return clubForId(e.clubId)?.name.toLowerCase().contains(q) ?? false;
   }
 

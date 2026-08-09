@@ -64,6 +64,35 @@ export type Database = {
           },
         ]
       }
+      club_account_contexts: {
+        Row: {
+          club_id: string
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          club_id: string
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          club_id?: string
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_account_contexts_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_categories: {
         Row: {
           created_at: string
@@ -138,6 +167,7 @@ export type Database = {
       }
       club_posts: {
         Row: {
+          author_id: string | null
           club_id: string
           content: string
           created_at: string
@@ -147,6 +177,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          author_id?: string | null
           club_id: string
           content: string
           created_at?: string
@@ -156,6 +187,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          author_id?: string | null
           club_id?: string
           content?: string
           created_at?: string

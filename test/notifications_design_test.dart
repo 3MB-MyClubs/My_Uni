@@ -672,4 +672,44 @@ void main() {
     expect(find.byType(NotificationsScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the Home refresh indicator shares the ClubUp title row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: FeedScreen(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    final titleRow = find.byKey(const ValueKey('home-top-bar-row'));
+    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
+
+    expect(titleRow, findsOneWidget);
+    expect(find.ancestor(of: logo, matching: titleRow), findsOneWidget);
+    expect(find.ancestor(of: refresh, matching: titleRow), findsOneWidget);
+    expect(
+      tester.getCenter(refresh).dx,
+      moreOrLessEquals(tester.getCenter(titleRow).dx, epsilon: 0.1),
+    );
+    expect(tester.widget<AnimatedOpacity>(refresh).opacity, 0);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(CustomScrollView)),
+    );
+    await gesture.moveBy(const Offset(0, 100));
+    await tester.pump();
+
+    expect(tester.widget<AnimatedOpacity>(refresh).opacity, 1);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(tester.takeException(), isNull);
+  });
 }

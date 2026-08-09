@@ -20,17 +20,13 @@ class ClubPerson {
   /// Board title ("President", "Vice President", …) or the admin label.
   /// `null` for a plain member — the design hides the chip for those.
   final String? role;
-  final bool online;
   final bool isClubAccount;
-  final String? lastSeenLabel;
 
   const ClubPerson({
     required this.id,
     required this.name,
     this.role,
-    this.online = false,
     this.isClubAccount = false,
-    this.lastSeenLabel,
   });
 }
 

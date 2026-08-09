@@ -9,6 +9,7 @@ import '../models/news_post.dart';
 import '../models/notification.dart';
 import '../models/share.dart';
 import 'auth_service.dart';
+import 'account_switcher_service.dart';
 import 'club_admin_access.dart';
 import 'mock_data.dart';
 import 'mock_clubup_profile.dart';
@@ -255,8 +256,14 @@ class ContentStore extends ChangeNotifier {
   // Club admins can delete only their club's content. The verified platform
   // administrator can delete any post or event.
 
-  bool _isClubAdmin(String clubId, String userId) =>
-      clubs.any((c) => c.id == clubId && clubIsManagedByAdmin(c, userId));
+  bool _isClubAdmin(String clubId, String userId) {
+    if (clubs.any((c) => c.id == clubId && clubIsManagedByAdmin(c, userId))) {
+      return true;
+    }
+
+    return accountSwitcherService.actorId == userId &&
+        accountSwitcherService.activeClub?.id == clubId;
+  }
 
   bool _isPlatformAdmin(String userId) {
     final admin = authService.currentAdmin;

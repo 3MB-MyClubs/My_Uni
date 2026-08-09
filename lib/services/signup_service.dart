@@ -107,8 +107,13 @@ class SignupService {
     required String majorId,
     required String academicYearId,
     required List<String> interestIds,
+    required bool termsAccepted,
     String? imagePath,
   }) async {
+    if (!termsAccepted) {
+      return SignupResult.failure(_l10n.safetyIntro);
+    }
+
     if (!authService.isValidNewStudentPassword(password)) {
       return SignupResult.failure(_l10n.studentPasswordRule);
     }
@@ -120,12 +125,17 @@ class SignupService {
       'major_id': majorId,
       'academic_year_id': academicYearId,
       'interest_ids': interestIds,
+      'terms_accepted': true,
+      'terms_version': TermsAcceptanceService.currentVersion,
     });
     if (!result.success) return result;
 
+    final client = _client;
+    if (client == null || imagePath == null || imagePath.isEmpty) {
+      return result;
+    }
+
     try {
-      final client = _client;
-      if (client == null) return result;
       final authResponse = await client.auth.signInWithPassword(
         email: email,
         password: password,
@@ -136,21 +146,14 @@ class SignupService {
           return SignupResult.failure(_l10n.signupRequestFailed);
         }
 
-        // The final signup button is disabled until the Terms checkbox is
-        // selected. Persist that acceptance while this new account is
-        // authenticated, even when the student did not choose an avatar.
-        await termsAcceptanceService.accept(requireAuthenticatedRecord: true);
-
-        if (imagePath != null && imagePath.isNotEmpty) {
-          try {
-            await studentProfileService.uploadAvatar(
-              userId: userId,
-              bytes: await File(imagePath).readAsBytes(),
-            );
-          } catch (_) {
-            // The account and its Terms acceptance are already durable. The
-            // optional avatar can be added later from Edit Profile.
-          }
+        try {
+          await studentProfileService.uploadAvatar(
+            userId: userId,
+            bytes: await File(imagePath).readAsBytes(),
+          );
+        } catch (_) {
+          // The account and its Terms acceptance are already durable. The
+          // optional avatar can be added later from Edit Profile.
         }
       } finally {
         try {
@@ -161,7 +164,9 @@ class SignupService {
         }
       }
     } catch (_) {
-      return SignupResult.failure(_l10n.signupRequestFailed);
+      // Account creation and Terms persistence already succeeded. A failure
+      // in the optional avatar follow-up must not turn signup into a false
+      // failure that invites the user to create the same account again.
     }
     return result;
   }

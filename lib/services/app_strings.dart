@@ -1,5 +1,4 @@
 import 'locale_service.dart';
-import 'presence_status.dart';
 
 class S {
   S._();
@@ -52,6 +51,10 @@ class S {
     'Gönderi paylaşmadan önce bir öğrenci sohbeti başlat.',
   );
   static String get sharedPost => _t('Shared post', 'Paylaşılan gönderi');
+  static String get eventUnavailable =>
+      _t('Event unavailable', 'Etkinlik kullanılamıyor');
+  static String get loadingEvent =>
+      _t('Loading event…', 'Etkinlik yükleniyor…');
   static String get clubMightLike =>
       _t('Club You Might Like', 'Beğenebileceğin Kulüp');
   static String get today => _t('Today', 'Bugün');
@@ -864,6 +867,8 @@ class S {
   );
   static String get clubChat => _t('Club chat', 'Kulüp sohbeti');
   static String get clubInbox => _t('Club inbox', 'Kulüp gelen kutusu');
+  static String get privateSoloChat =>
+      _t('Private solo chat', 'Özel birebir sohbet');
   static String get privateClubMessage =>
       _t('Private club message', 'Özel kulüp mesajı');
   static String get messageClub => _t('Message club', 'Kulübe mesaj yaz');
@@ -878,7 +883,6 @@ class S {
   static String chatMembers(int n) => _t('$n members', '$n üye');
   static String communityMembers(int n) =>
       n >= 100 ? _t('100+ Members', '100+ Üye') : _t('$n Members', '$n Üye');
-  static String communityOnline(int n) => _t('$n Online', '$n Çevrimiçi');
   static String get message => _t('Message', 'Mesaj');
 
   /// Sits under the club name on an empty community room. The empty screen
@@ -887,33 +891,6 @@ class S {
       _t('Say hello to your club', 'Kulübüne merhaba de');
   static String get adminLabel => _t('Admin', 'Yönetici');
   static String get you => _t('You', 'Sen');
-  static String get onlineNow => _t('Online now', 'Şimdi çevrimiçi');
-  static String onlineMembers(int n) => _t('$n online', '$n çevrimiçi');
-  static String get lastSeenRecently =>
-      _t('Last seen recently', 'Son görülme az önce');
-  static String lastOnlineLabel(DateTime? lastSeenAt, {DateTime? now}) {
-    final relative = relativeLastSeen(lastSeenAt, now: now);
-    return switch (relative.period) {
-      LastSeenPeriod.unknown => lastSeenRecently,
-      LastSeenPeriod.justNow => _t(
-        'Last online just now',
-        'Son çevrimiçi: az önce',
-      ),
-      LastSeenPeriod.minutes => _t(
-        'Last online ${relative.value} min ago',
-        'Son çevrimiçi: ${relative.value} dk önce',
-      ),
-      LastSeenPeriod.hours => _t(
-        'Last online ${relative.value} ${relative.value == 1 ? 'hour' : 'hours'} ago',
-        'Son çevrimiçi: ${relative.value} saat önce',
-      ),
-      LastSeenPeriod.days => _t(
-        'Last online ${relative.value} ${relative.value == 1 ? 'day' : 'days'} ago',
-        'Son çevrimiçi: ${relative.value} gün önce',
-      ),
-    };
-  }
-
   static String get typing => _t('typing…', 'yazıyor…');
   static String get sent => _t('Sent', 'Gönderildi');
   static String get delivered => _t('Delivered', 'Teslim edildi');
@@ -967,19 +944,34 @@ class S {
   static String get attachToMessage => _t('Add to message', 'Mesaja ekle');
 
   // ── Club community
-  static String communityActiveNow(int n) =>
-      _t('$n active now', '$n şu an aktif');
   static String get communityMembersButton => _t('Members', 'Üyeler');
   static String communityEventsButton(int n) =>
       _t('Events · $n', 'Etkinlikler · $n');
   static String get communityNotices => _t('Notices', 'Duyurular');
 
-  // ── Club Board + Chat (two lanes of one club room)
+  // ── Club Board + Chat + Solo Chat
   /// The official notice area — the lane a club room lands on.
   static String get clubBoardTab => _t('Board', 'Pano');
 
   /// The room itself, where board-member replies live.
   static String get clubChatTab => _t('Chat', 'Sohbet');
+  static String get clubSoloChatTab => _t('Solo Chat', 'Birebir Sohbet');
+  static String get soloChatWithClubTitle =>
+      _t('Your private chat with the club', 'Kulüple özel sohbetin');
+  static String get soloChatAllTitle =>
+      _t('All private chats', 'Tüm özel sohbetler');
+  static String get soloChatEmptyTitle =>
+      _t('No solo chat yet', 'Henüz birebir sohbet yok');
+  static String get soloChatEmptyHint => _t(
+    'Start a private conversation with the club. Only you and the club team can see it.',
+    'Kulüple özel bir sohbet başlat. Bu sohbeti yalnızca sen ve kulüp ekibi görebilir.',
+  );
+  static String get soloChatAllEmptyHint => _t(
+    'Student conversations with the club will appear here.',
+    'Öğrencilerin kulüple yaptığı sohbetler burada görünecek.',
+  );
+  static String get startSoloChat =>
+      _t('Start solo chat', 'Birebir sohbet başlat');
   static String get boardGroupPinned => _t('Pinned', 'Sabitlenen');
   static String boardGroupNew(int n) => _t('New · $n', 'Yeni · $n');
   static String get boardGroupEarlier => _t('Earlier', 'Daha önce');
@@ -1023,10 +1015,6 @@ class S {
   static String typingMany(String names) =>
       _t('$names are typing', '$names yazıyor');
   static String get jumpToLatest => _t('Jump to latest', 'En sona git');
-  static String activeNowGroup(int n) => _t('Active now · $n', 'Aktif · $n');
-  static String offlineGroup(int n) => _t('Offline · $n', 'Çevrimdışı · $n');
-  static String get activeNowLabel => _t('Active now', 'Şu an aktif');
-  static String get offlineLabel => _t('Offline', 'Çevrimdışı');
   static String seenCount(int n) => _t('$n seen', '$n görüntüleme');
   static String get attachMedia =>
       _t('Photos & videos', 'Fotoğraf ve videolar');

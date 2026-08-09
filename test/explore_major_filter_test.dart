@@ -69,7 +69,7 @@ void main() {
           locale: Locale(localeService.languageCode),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: const ExploreScreen(initialTabIndex: 2),
+          home: const ExploreScreen(initialTabIndex: 1),
         ),
       ),
     );
@@ -88,6 +88,27 @@ void main() {
     await tester.tap(find.byKey(ValueKey('academic-program-$major')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('Explore search contains clubs and people, but not events', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          locale: Locale(localeService.languageCode),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const ExploreScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Discover Clubs'), findsOneWidget);
+    expect(find.text('Find People'), findsOneWidget);
+    expect(find.text('Events'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'major-only filtering includes only exact primary-major matches',

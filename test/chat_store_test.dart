@@ -48,6 +48,31 @@ void main() {
       expect(ChatStore.dmPeerOf('dm:u2|u5', 'u9'), isNull);
     });
 
+    test('only shared club rooms are classified as club chats', () {
+      final sharedRoom = ChatThreadSummary(
+        threadId: 'club:c4',
+        clubId: 'c4',
+        groupId: null,
+        peerId: null,
+        lastMessage: null,
+        unread: 0,
+      );
+      final privateClubInbox = ChatThreadSummary(
+        threadId: 'clubdm:inbox-1',
+        clubId: 'c4',
+        clubInboxId: 'inbox-1',
+        groupId: null,
+        peerId: null,
+        lastMessage: null,
+        unread: 0,
+      );
+
+      expect(sharedRoom.isClub, isTrue);
+      expect(sharedRoom.isClubInbox, isFalse);
+      expect(privateClubInbox.isClub, isFalse);
+      expect(privateClubInbox.isClubInbox, isTrue);
+    });
+
     test(
       'opening a new DM registers an empty conversation by participant IDs',
       () {

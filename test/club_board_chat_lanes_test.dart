@@ -16,7 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
-/// The Club Board + Chat surface: one club room, two lanes.
+/// The Club Board + Chat + Solo Chat surface: one club room, three tabs.
 void main() {
   late Directory tempDir;
 
@@ -113,7 +113,15 @@ void main() {
 
     // The Board is the landing lane, one grouped row per notice.
     expect(find.byKey(const ValueKey('club-lane-switch')), findsOneWidget);
-    expect(find.byKey(ValueKey('club-notice-row-${notice.id}')), findsOneWidget);
+    expect(find.byKey(const ValueKey('club-lane-solo')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('message-club-privately')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('club-notice-row-${notice.id}')),
+      findsOneWidget,
+    );
     expect(find.text(notice.title!), findsOneWidget);
 
     // A headline only, until it is tapped.
@@ -137,6 +145,12 @@ void main() {
       find.byKey(const ValueKey('club-chat-locked-strip')),
       findsOneWidget,
     );
+
+    // A regular member gets one private-inbox doorway for this club.
+    await tester.tap(find.byKey(const ValueKey('club-lane-solo')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('club-solo-chat-empty')), findsOneWidget);
+    expect(find.byKey(const ValueKey('club-solo-chat-start')), findsOneWidget);
     await settleStoreSave(tester);
   });
 
@@ -171,7 +185,16 @@ void main() {
 
     await pumpRoom(tester);
 
+    await tester.tap(find.byKey(const ValueKey('club-lane-solo')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('club-solo-chat-empty')), findsOneWidget);
+    expect(find.text(S.soloChatAllTitle), findsOneWidget);
+    expect(find.byKey(const ValueKey('club-solo-chat-start')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('club-lane-board')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const ValueKey('club-post-notice')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message-club-privately')), findsNothing);
     expect(find.text(S.boardPostNotice), findsOneWidget);
     expect(find.byKey(const ValueKey('club-board-locked-strip')), findsNothing);
     // The reader's own role sits next to the club name.
