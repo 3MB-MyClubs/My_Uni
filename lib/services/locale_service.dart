@@ -4,15 +4,20 @@ import 'package:hive/hive.dart';
 import 'account_preferences_service.dart';
 
 class LocaleService extends ChangeNotifier {
-  LocaleService({Future<void> Function(String)? accountSaver})
-    : _accountSaver = accountSaver;
+  LocaleService({
+    Future<void> Function(String)? accountSaver,
+    String? Function()? accountIdProvider,
+  }) : _accountSaver = accountSaver,
+       _accountIdProvider = accountIdProvider;
 
   static const _boxName = 'locale_box';
   final Future<void> Function(String)? _accountSaver;
+  final String? Function()? _accountIdProvider;
   static const defaultLanguageCode = 'tr';
   Box<dynamic>? _box;
   String _languageCode = defaultLanguageCode;
   final Set<String> _chosenLanguageUsers = {};
+  final Map<String, String> _languageByUser = {};
 
   String get languageCode => _languageCode;
 
@@ -26,16 +31,39 @@ class LocaleService extends ChangeNotifier {
     if (stored != null) {
       _chosenLanguageUsers.addAll(List<String>.from(stored as List));
     }
+    final storedByUser = _box!.get('languageByUser');
+    if (storedByUser is Map) {
+      for (final entry in storedByUser.entries) {
+        final userId = entry.key?.toString() ?? '';
+        final code = entry.value?.toString() ?? '';
+        if (userId.isNotEmpty && _isSupported(code)) {
+          _languageByUser[userId] = code;
+          _chosenLanguageUsers.add(userId);
+        }
+      }
+    }
   }
 
   bool hasChosenLanguage(String userId) =>
       _chosenLanguageUsers.contains(userId);
 
-  Future<void> setLanguage(String code, {bool persistToAccount = true}) async {
-    if (code != 'en' && code != 'tr') return;
+  String? cachedLanguageFor(String userId) => _languageByUser[userId];
+
+  Future<void> setLanguage(
+    String code, {
+    bool persistToAccount = true,
+    bool rethrowAccountSaveFailure = false,
+  }) async {
+    if (!_isSupported(code)) return;
     final changed = _languageCode != code;
     _languageCode = code;
     await _box?.put('languageCode', code);
+    if (persistToAccount) {
+      final accountId = _accountIdProvider?.call();
+      if (accountId != null && accountId.isNotEmpty) {
+        await _cacheLanguage(accountId, code);
+      }
+    }
     if (changed) notifyListeners();
     if (persistToAccount) {
       try {
@@ -43,31 +71,47 @@ class LocaleService extends ChangeNotifier {
       } catch (_) {
         // The local selection remains usable offline. The account write will
         // be retried the next time the user changes this setting.
+        if (rethrowAccountSaveFailure) rethrow;
       }
     }
   }
 
   Future<void> markLanguageChosen(String userId, String code) async {
-    if (code != 'en' && code != 'tr') return;
+    if (!_isSupported(code)) return;
     _languageCode = code;
     await _accountSaver?.call(code);
-    _chosenLanguageUsers.add(userId);
+    await _cacheLanguage(userId, code);
+    final accountId = _accountIdProvider?.call();
+    if (accountId != null && accountId.isNotEmpty && accountId != userId) {
+      await _cacheLanguage(accountId, code);
+    }
     await _box?.put('languageCode', code);
-    await _box?.put('chosenLanguageUsers', _chosenLanguageUsers.toList());
     notifyListeners();
   }
 
   Future<void> applyAccountLanguage(String userId, String code) async {
-    if (code != 'en' && code != 'tr') return;
+    if (!_isSupported(code)) return;
     final changed = _languageCode != code;
     _languageCode = code;
-    _chosenLanguageUsers.add(userId);
+    await _cacheLanguage(userId, code);
     await _box?.put('languageCode', code);
-    await _box?.put('chosenLanguageUsers', _chosenLanguageUsers.toList());
     if (changed) notifyListeners();
   }
+
+  Future<void> _cacheLanguage(String userId, String code) async {
+    _languageByUser[userId] = code;
+    _chosenLanguageUsers.add(userId);
+    await _box?.put(
+      'languageByUser',
+      Map<String, String>.from(_languageByUser),
+    );
+    await _box?.put('chosenLanguageUsers', _chosenLanguageUsers.toList());
+  }
+
+  static bool _isSupported(String code) => code == 'en' || code == 'tr';
 }
 
 final localeService = LocaleService(
   accountSaver: accountPreferencesService.saveLanguage,
+  accountIdProvider: () => accountPreferencesService.authenticatedUserId,
 );

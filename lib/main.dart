@@ -112,10 +112,6 @@ void main() async {
   final restoredSession = await authService.restorePersistedSession();
   if (restoredSession && termsAcceptanceService.hasAcceptedCurrentTerms) {
     await _loadAccountPreferences();
-    if (accountPreferencesService.hasAuthenticatedUser &&
-        !accountPreferencesService.hasThemePreference) {
-      await themeService.setDark(false, persistToAccount: false);
-    }
   }
 
   runApp(
@@ -177,19 +173,41 @@ Future<void> _loadAccountPreferences() async {
   final appUserId = authService.currentUser?.id ?? authService.currentAdmin?.id;
   if (appUserId == null) return;
 
+  final cacheUserId =
+      accountPreferencesService.authenticatedUserId ?? appUserId;
+  AccountPreferences? preferences;
+
   try {
-    final preferences = await accountPreferencesService.loadForCurrentUser();
-    final languageCode = preferences.languageCode;
-    if (languageCode != null) {
-      await localeService.applyAccountLanguage(appUserId, languageCode);
-    }
-    final isDark = preferences.isDark;
-    if (isDark != null) {
-      await themeService.applyAccountTheme(appUserId, isDark);
-    }
+    preferences = await accountPreferencesService.loadForCurrentUser();
   } catch (_) {
-    // A valid authenticated session remains usable if preferences cannot be
-    // reached. Missing choices fall back to the one-time picker flow.
+    // A failed fetch is an unknown state, never evidence that the user has not
+    // chosen. Apply this account's cache (or neutral defaults) and continue;
+    // the router suppresses preference onboarding until a later fetch succeeds.
+  }
+
+  final currentAppUserId =
+      authService.currentUser?.id ?? authService.currentAdmin?.id;
+  if (currentAppUserId != appUserId) return;
+
+  final languageCode = preferences?.languageCode;
+  if (languageCode != null) {
+    await localeService.applyAccountLanguage(cacheUserId, languageCode);
+  } else {
+    await localeService.setLanguage(
+      localeService.cachedLanguageFor(cacheUserId) ??
+          LocaleService.defaultLanguageCode,
+      persistToAccount: false,
+    );
+  }
+
+  final isDark = preferences?.isDark;
+  if (isDark != null) {
+    await themeService.applyAccountTheme(cacheUserId, isDark);
+  } else {
+    await themeService.setDark(
+      themeService.cachedThemeFor(cacheUserId) ?? false,
+      persistToAccount: false,
+    );
   }
 }
 
@@ -371,13 +389,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _finishLogin(String? currentUserId) async {
     if (currentUserId != null) {
       await _loadAccountPreferences();
-      final hasSavedTheme = accountPreferencesService.hasAuthenticatedUser
-          ? accountPreferencesService.hasThemePreference
-          : themeService.hasChosenTheme(currentUserId);
-      // First-time accounts start in light before the mode picker appears.
-      if (!hasSavedTheme) {
-        await themeService.setDark(false, persistToAccount: false);
-      }
     }
     if (!mounted) return;
     setState(() => _isPreparingAccountPreferences = false);
@@ -647,28 +658,30 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
           }
-          final hasThemePreference =
+          final requiredAccountPreference =
+              accountPreferencesService.nextRequiredPreference;
+          final needsLanguagePreference =
               accountPreferencesService.hasAuthenticatedUser
-              ? accountPreferencesService.hasThemePreference
+              ? requiredAccountPreference == AccountPreferencePrompt.language
               : currentUserId != null &&
-                    themeService.hasChosenTheme(currentUserId);
-          final hasLanguagePreference =
+                    !localeService.hasChosenLanguage(currentUserId);
+          final needsThemePreference =
               accountPreferencesService.hasAuthenticatedUser
-              ? accountPreferencesService.hasLanguagePreference
+              ? requiredAccountPreference == AccountPreferencePrompt.theme
               : currentUserId != null &&
-                    localeService.hasChosenLanguage(currentUserId);
-          if (currentUserId != null && !hasThemePreference) {
-            homeWidget = ThemeChoiceScreen(
-              onChoose: (dark) =>
-                  themeService.markThemeChosen(currentUserId, dark),
-            );
-            destinationKey = 'theme-choice';
-          } else if (currentUserId != null && !hasLanguagePreference) {
+                    !themeService.hasChosenTheme(currentUserId);
+          if (currentUserId != null && needsLanguagePreference) {
             homeWidget = LanguageChoiceScreen(
               onChoose: (code) =>
                   localeService.markLanguageChosen(currentUserId, code),
             );
             destinationKey = 'language-choice';
+          } else if (currentUserId != null && needsThemePreference) {
+            homeWidget = ThemeChoiceScreen(
+              onChoose: (dark) =>
+                  themeService.markThemeChosen(currentUserId, dark),
+            );
+            destinationKey = 'theme-choice';
           } else {
             homeWidget = MainNavScreen(
               isAdmin: isAdmin,

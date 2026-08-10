@@ -142,28 +142,35 @@ class StudentProfileScreen extends StatelessWidget {
   /// The events & activities block. Watches the RSVP and check-in stores
   /// directly so joining or leaving an event updates the profile in place.
   Widget _buildActivitySection(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([rsvpStore, checkinStore]),
-      builder: (context, _) {
-        final summary = studentActivityService.summaryFor(data.userId);
-        return StudentActivityPreview(
-          summary: summary,
-          isOwnProfile: true,
-          studentName: data.name,
-          onSeeAll: onSeeAllEvents ?? () => _openActivityHistory(context),
-          onEntryTap: (entry) => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  EventDetailScreen(event: entry.event, color: entry.color),
+    return _StudentActivityHydrator(
+      userId: data.userId,
+      child: ListenableBuilder(
+        listenable: Listenable.merge([
+          rsvpStore,
+          checkinStore,
+          studentActivityService,
+        ]),
+        builder: (context, _) {
+          final summary = studentActivityService.summaryFor(data.userId);
+          return StudentActivityPreview(
+            summary: summary,
+            isOwnProfile: true,
+            studentName: data.name,
+            onSeeAll: onSeeAllEvents ?? () => _openActivityHistory(context),
+            onEntryTap: (entry) => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    EventDetailScreen(event: entry.event, color: entry.color),
+              ),
             ),
-          ),
-          onBrowseEvents: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
-          ),
-        );
-      },
+            onBrowseEvents: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -349,4 +356,34 @@ class StudentProfileScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StudentActivityHydrator extends StatefulWidget {
+  final String userId;
+  final Widget child;
+
+  const _StudentActivityHydrator({required this.userId, required this.child});
+
+  @override
+  State<_StudentActivityHydrator> createState() =>
+      _StudentActivityHydratorState();
+}
+
+class _StudentActivityHydratorState extends State<_StudentActivityHydrator> {
+  @override
+  void initState() {
+    super.initState();
+    studentActivityService.hydrateForUser(widget.userId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StudentActivityHydrator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      studentActivityService.hydrateForUser(widget.userId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

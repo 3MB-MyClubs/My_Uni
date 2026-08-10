@@ -4298,6 +4298,12 @@ abstract class AppLocalizations {
   /// **'No past events to show.'**
   String get noPastEventsToShow;
 
+  /// No description provided for @noPastEventsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No past events yet.'**
+  String get noPastEventsYet;
+
   /// No description provided for @noRepeatedNumbersSideBySide.
   ///
   /// In en, this message translates to:

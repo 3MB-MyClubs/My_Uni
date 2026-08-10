@@ -4,15 +4,20 @@ import 'package:hive/hive.dart';
 import 'account_preferences_service.dart';
 
 class ThemeService extends ChangeNotifier {
-  ThemeService({Future<void> Function(bool)? accountSaver})
-    : _accountSaver = accountSaver;
+  ThemeService({
+    Future<void> Function(bool)? accountSaver,
+    String? Function()? accountIdProvider,
+  }) : _accountSaver = accountSaver,
+       _accountIdProvider = accountIdProvider;
 
   static const _boxName = 'theme_box';
   final Future<void> Function(bool)? _accountSaver;
+  final String? Function()? _accountIdProvider;
   Box<dynamic>? _box;
   // First-time users always start in light; returning users keep their choice.
   bool _isDark = false;
   final Set<String> _themedUsers = {};
+  final Map<String, bool> _themeByUser = {};
 
   bool get isDark => _isDark;
 
@@ -23,15 +28,38 @@ class ThemeService extends ChangeNotifier {
     if (stored != null) {
       _themedUsers.addAll(List<String>.from(stored as List));
     }
+    final storedByUser = _box!.get('themeByUser');
+    if (storedByUser is Map) {
+      for (final entry in storedByUser.entries) {
+        final userId = entry.key?.toString() ?? '';
+        final dark = entry.value;
+        if (userId.isNotEmpty && dark is bool) {
+          _themeByUser[userId] = dark;
+          _themedUsers.add(userId);
+        }
+      }
+    }
   }
 
   /// Whether [userId] has already picked a theme (so we don't ask again).
   bool hasChosenTheme(String userId) => _themedUsers.contains(userId);
 
-  Future<void> setDark(bool value, {bool persistToAccount = true}) async {
+  bool? cachedThemeFor(String userId) => _themeByUser[userId];
+
+  Future<void> setDark(
+    bool value, {
+    bool persistToAccount = true,
+    bool rethrowAccountSaveFailure = false,
+  }) async {
     final changed = _isDark != value;
     _isDark = value;
     await _box?.put('isDark', value);
+    if (persistToAccount) {
+      final accountId = _accountIdProvider?.call();
+      if (accountId != null && accountId.isNotEmpty) {
+        await _cacheTheme(accountId, value);
+      }
+    }
     if (changed) notifyListeners();
     if (persistToAccount) {
       try {
@@ -39,6 +67,7 @@ class ThemeService extends ChangeNotifier {
       } catch (_) {
         // Keep the device preference available while offline. A later change
         // in Settings will retry the account write.
+        if (rethrowAccountSaveFailure) rethrow;
       }
     }
   }
@@ -47,22 +76,32 @@ class ThemeService extends ChangeNotifier {
   Future<void> markThemeChosen(String userId, bool dark) async {
     _isDark = dark;
     await _accountSaver?.call(dark);
-    _themedUsers.add(userId);
+    await _cacheTheme(userId, dark);
+    final accountId = _accountIdProvider?.call();
+    if (accountId != null && accountId.isNotEmpty && accountId != userId) {
+      await _cacheTheme(accountId, dark);
+    }
     await _box?.put('isDark', dark);
-    await _box?.put('themedUsers', _themedUsers.toList());
     notifyListeners();
   }
 
   Future<void> applyAccountTheme(String userId, bool dark) async {
     final changed = _isDark != dark;
     _isDark = dark;
-    _themedUsers.add(userId);
+    await _cacheTheme(userId, dark);
     await _box?.put('isDark', dark);
-    await _box?.put('themedUsers', _themedUsers.toList());
     if (changed) notifyListeners();
+  }
+
+  Future<void> _cacheTheme(String userId, bool dark) async {
+    _themeByUser[userId] = dark;
+    _themedUsers.add(userId);
+    await _box?.put('themeByUser', Map<String, bool>.from(_themeByUser));
+    await _box?.put('themedUsers', _themedUsers.toList());
   }
 }
 
 final themeService = ThemeService(
   accountSaver: accountPreferencesService.saveTheme,
+  accountIdProvider: () => accountPreferencesService.authenticatedUserId,
 );

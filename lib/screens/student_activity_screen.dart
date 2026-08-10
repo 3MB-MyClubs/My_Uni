@@ -41,6 +41,7 @@ class _StudentActivityScreenState extends State<StudentActivityScreen> {
   }
 
   Future<void> _hydrateAttendance() async {
+    await studentActivityService.hydrateForUser(widget.userId);
     final summary = studentActivityService.summaryFor(widget.userId);
     if (summary.past.isEmpty) return;
     await studentActivityService.hydrateAttendance(summary.past);
@@ -94,7 +95,11 @@ class _StudentActivityScreenState extends State<StudentActivityScreen> {
       body: SafeArea(
         bottom: false,
         child: ListenableBuilder(
-          listenable: Listenable.merge([rsvpStore, checkinStore]),
+          listenable: Listenable.merge([
+            rsvpStore,
+            checkinStore,
+            studentActivityService,
+          ]),
           builder: (context, _) {
             final summary = studentActivityService.summaryFor(widget.userId);
             final entries = summary.forFilter(_filter);

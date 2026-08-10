@@ -13,6 +13,24 @@ import 'supabase_config.dart';
 import 'supabase_club_service.dart';
 import 'user_state.dart';
 
+class StudentEventHistorySnapshot {
+  final List<Event> events;
+  final Set<String> rsvpEventIds;
+  final Set<String> checkinEventIds;
+
+  const StudentEventHistorySnapshot({
+    required this.events,
+    required this.rsvpEventIds,
+    required this.checkinEventIds,
+  });
+
+  static const empty = StudentEventHistorySnapshot(
+    events: [],
+    rsvpEventIds: <String>{},
+    checkinEventIds: <String>{},
+  );
+}
+
 class SupabaseContentService {
   static const _eventSelectColumns =
       'id, club_id, title, description, location, image_url, starts_at, '
@@ -28,7 +46,13 @@ class SupabaseContentService {
 
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
-    return Supabase.instance.client;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      // Unit/widget tests and local-only previews can use the in-memory content
+      // registries without initializing Supabase first.
+      return null;
+    }
   }
 
   Future<bool> refreshPublicContent({bool Function()? shouldApply}) async {
@@ -37,12 +61,12 @@ class SupabaseContentService {
     final preservedMockClub = clubUpMockClub;
     final includeModerationArchive = await _isPlatformAdmin(client);
 
-    // Events older than EventCleanupService's 24h-past-end retention window
-    // are already permanently deleted, so this cutoff (with margin for
-    // long-running events) doesn't hide anything the app doesn't already
-    // intend to remove — it just avoids re-downloading it every refresh.
+    // Keep the shared feed snapshot bounded. Complete historical rows remain in
+    // Supabase and are fetched by club/profile only when that history is opened.
+    // Filtering on the end time also keeps a long-running live event visible.
     final eventsCutoff = DateTime.now()
         .subtract(const Duration(days: 2))
+        .toUtc()
         .toIso8601String();
     final results = await Future.wait([
       client
@@ -56,7 +80,7 @@ class SupabaseContentService {
         client
             .from('events')
             .select(_eventSelectColumns)
-            .gte('starts_at', eventsCutoff)
+            .gte('ends_at', eventsCutoff)
             .order('starts_at', ascending: true)
             .limit(500),
       if (includeModerationArchive)
@@ -148,6 +172,164 @@ class SupabaseContentService {
       return event;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Loads one club's completed events only when its Past filter is opened.
+  ///
+  /// This avoids expanding the app-wide feed snapshot with every historical
+  /// event while still keeping the query bounded by club and end time.
+  Future<List<Event>> fetchPastEventsForClub(
+    String clubId, {
+    DateTime? before,
+    int limit = 200,
+  }) async {
+    final normalizedClubId = clubId.trim();
+    if (normalizedClubId.isEmpty) return const [];
+
+    final moment = before ?? DateTime.now();
+    final cached =
+        events
+            .where(
+              (event) =>
+                  event.clubId == normalizedClubId &&
+                  !event.endTime.isAfter(moment),
+            )
+            .toList()
+          ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+    final client = _client;
+    if (client == null) return cached;
+
+    try {
+      final rows = await client
+          .from('events')
+          .select(_eventSelectColumns)
+          .eq('club_id', normalizedClubId)
+          .lt('ends_at', moment.toUtc().toIso8601String())
+          .order('starts_at', ascending: false)
+          .limit(limit);
+      final fetched = rows
+          .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
+          .where((event) => event.id.isNotEmpty)
+          .toList();
+      await _hydrateEventRsvps(client, fetched);
+      _mergeEvents(fetched);
+      return fetched;
+    } catch (_) {
+      // A cached/local result is still useful offline and preserves the current
+      // Club Profile behavior if the targeted history read cannot complete.
+      return cached;
+    }
+  }
+
+  /// Fetches only events in the signed-in student's own RSVP/check-in record.
+  /// Other profiles continue to use the already-public in-memory activity data.
+  Future<StudentEventHistorySnapshot> fetchOwnStudentEventHistory(
+    String profileId,
+  ) async {
+    final normalizedProfileId = profileId.trim();
+    if (normalizedProfileId.isEmpty) return StudentEventHistorySnapshot.empty;
+
+    final client = _client;
+    // Without an authenticated Supabase client, the global in-memory events
+    // already are the source of truth. Do not copy them into the remote cache,
+    // which would otherwise outlive a local content refresh/test fixture.
+    if (client == null || client.auth.currentUser?.id != normalizedProfileId) {
+      return StudentEventHistorySnapshot.empty;
+    }
+
+    final participationRows = await Future.wait<List<dynamic>>([
+      client
+          .from('event_rsvps')
+          .select('event_id')
+          .eq('profile_id', normalizedProfileId)
+          .then<List<dynamic>>((rows) => List<dynamic>.from(rows))
+          .catchError((_) => <dynamic>[]),
+      client
+          .from('event_checkins')
+          .select('event_id')
+          .eq('profile_id', normalizedProfileId)
+          .then<List<dynamic>>((rows) => List<dynamic>.from(rows))
+          .catchError((_) => <dynamic>[]),
+    ]);
+    final rsvpIds = _eventIdsFromRows(participationRows[0]);
+    final checkinIds = _eventIdsFromRows(participationRows[1]);
+    final eventIds = {...rsvpIds, ...checkinIds}.toList();
+    if (eventIds.isEmpty) return StudentEventHistorySnapshot.empty;
+
+    try {
+      final rows = await client
+          .from('events')
+          .select(_eventSelectColumns)
+          .inFilter('id', eventIds)
+          .order('starts_at', ascending: false);
+      final fetched = rows
+          .map((row) => _eventFromRow(Map<String, dynamic>.from(row as Map)))
+          .where((event) => event.id.isNotEmpty)
+          .toList();
+      for (final event in fetched) {
+        if (rsvpIds.contains(event.id) &&
+            !event.attendeeUserIds.contains(normalizedProfileId)) {
+          event.attendeeUserIds.add(normalizedProfileId);
+        }
+      }
+      return StudentEventHistorySnapshot(
+        events: fetched,
+        rsvpEventIds: rsvpIds,
+        checkinEventIds: checkinIds,
+      );
+    } catch (_) {
+      return StudentEventHistorySnapshot.empty;
+    }
+  }
+
+  Set<String> _eventIdsFromRows(List<dynamic> rows) => rows
+      .map((row) => (row as Map)['event_id']?.toString() ?? '')
+      .where((eventId) => eventId.isNotEmpty)
+      .toSet();
+
+  Future<void> _hydrateEventRsvps(
+    SupabaseClient client,
+    List<Event> targetEvents,
+  ) async {
+    final eventIds = targetEvents.map((event) => event.id).toList();
+    if (eventIds.isEmpty) return;
+    try {
+      final rows = await client
+          .from('event_rsvps')
+          .select('event_id, profile_id')
+          .inFilter('event_id', eventIds);
+      final attendeesByEvent = <String, Set<String>>{};
+      for (final row in rows) {
+        final raw = row as Map;
+        final eventId = raw['event_id']?.toString() ?? '';
+        final profileId = raw['profile_id']?.toString() ?? '';
+        if (eventId.isEmpty || profileId.isEmpty) continue;
+        (attendeesByEvent[eventId] ??= {}).add(profileId);
+      }
+      for (final event in targetEvents) {
+        event.attendeeUserIds
+          ..clear()
+          ..addAll(attendeesByEvent[event.id] ?? const <String>{});
+      }
+    } catch (_) {
+      // Event history itself is public; attendee visibility is governed by a
+      // separate policy and should not prevent the cards from loading.
+    }
+  }
+
+  void _mergeEvents(List<Event> fetched) {
+    for (final event in fetched) {
+      final index = events.indexWhere((candidate) => candidate.id == event.id);
+      if (index == -1) {
+        events.add(event);
+        continue;
+      }
+      if (event.attendeeUserIds.isEmpty) {
+        event.attendeeUserIds.addAll(events[index].attendeeUserIds);
+      }
+      events[index] = event;
     }
   }
 

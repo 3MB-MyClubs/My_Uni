@@ -1,6 +1,6 @@
 import 'dart:async' show unawaited;
 import 'dart:ui' show ImageFilter;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,10 +166,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   static const double _desktopContentMaxWidth = 1040;
 
   int _selectedIndex = 0;
-  bool _showOnboarding = false;
-  // True while the current run was requested from Settings, so finishing it
-  // doesn't re-trigger the first-run calendar permission prompt.
-  bool _isOnboardingReplay = false;
+  TutorialLaunchSource? _tutorialLaunchSource;
+  bool _automaticTutorialCheckStarted = false;
   double? _navDragDx;
   final ChatsController _chatsController = ChatsController();
   final FeedController _feedController = FeedController();
@@ -282,14 +280,19 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // Students get the student tour; club admins get the separate club tour.
   // Neither runs for the super admin.
   Future<void> _startInitialExperience() async {
-    if (!mounted) return;
+    if (!mounted || _automaticTutorialCheckStarted) return;
+    _automaticTutorialCheckStarted = true;
+    final profileId = _currentUserId;
     // The tour decision belongs to the server flag, so wait for it before
     // deciding; a failed load resolves as "already complete".
-    await onboardingService.loadFor(_currentUserId);
-    if (!mounted) return;
+    await onboardingService.loadFor(profileId);
+    if (!mounted || profileId != _currentUserId) return;
+    // A manual replay may have been requested while the backend read was in
+    // flight. Let that run own the screen and suppress the initial prompt.
+    if (_tutorialLaunchSource != null) return;
     if ((authService.isStudentSession || _isClubAdmin) &&
-        !onboardingService.isComplete(_currentUserId)) {
-      _startOnboarding(isReplay: false);
+        !onboardingService.isComplete(profileId)) {
+      _startOnboarding(TutorialLaunchSource.automatic);
       return;
     }
     await _requestCalendarIfNeeded();
@@ -297,7 +300,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   void _onOnboardingReplayRequested() {
     if (!mounted || !(authService.isStudentSession || _isClubAdmin)) return;
-    _startOnboarding(isReplay: true);
+    _startOnboarding(TutorialLaunchSource.manual);
   }
 
   void _onTabRequested() {
@@ -306,25 +309,33 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     _selectNavIndex(index);
   }
 
-  void _startOnboarding({required bool isReplay}) {
+  void _startOnboarding(TutorialLaunchSource source) {
+    if (_tutorialLaunchSource != null) return;
     setState(() {
       _selectedIndex = 0;
-      _showOnboarding = true;
-      _isOnboardingReplay = isReplay;
+      _tutorialLaunchSource = source;
     });
   }
 
   // The flow starts the animated return Home before invoking this callback;
   // this method owns persistence and the post-tour checklist lifecycle.
   Future<void> _finishOnboarding() async {
-    if (!_showOnboarding) return;
-    setState(() => _showOnboarding = false);
-    await onboardingService.complete(_currentUserId);
+    final source = _tutorialLaunchSource;
+    if (source == null) return;
+    final profileId = _currentUserId;
+    setState(() => _tutorialLaunchSource = null);
+    try {
+      await onboardingService.finish(profileId, source: source);
+    } catch (error) {
+      debugPrint('Could not persist tutorial completion: $error');
+    }
     if (!mounted) return;
     if (authService.isStudentSession) {
-      await starterChecklistService.startFor(_currentUserId);
+      await starterChecklistService.startFor(profileId);
     }
-    if (mounted && !_isOnboardingReplay) await _requestCalendarIfNeeded();
+    if (mounted && source == TutorialLaunchSource.automatic) {
+      await _requestCalendarIfNeeded();
+    }
   }
 
   void _onOnboardingStepChanged(OnboardingStep step) {
@@ -384,7 +395,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     }
     if (index == 3 && !_isPlatformModerator) _chatsController.showStudents();
     if (_selectedIndex != index) {
-      if (_showOnboarding) _tabTransitionController.forward(from: 0);
+      if (_tutorialLaunchSource != null) {
+        _tabTransitionController.forward(from: 0);
+      }
       setState(() => _selectedIndex = index);
     }
   }
@@ -514,7 +527,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
               },
             ),
           ),
-          if (_showOnboarding)
+          if (_tutorialLaunchSource != null)
             Positioned.fill(
               child: OnboardingFlow(
                 steps: _isClubAdmin

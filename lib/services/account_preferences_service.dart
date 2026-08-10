@@ -8,6 +8,10 @@ typedef AccountPreferencesRowLoader =
 typedef AccountPreferencesRowWriter =
     Future<void> Function(String userId, Map<String, dynamic> values);
 
+enum AccountPreferencesStatus { signedOut, loading, loaded, error }
+
+enum AccountPreferencePrompt { none, language, theme }
+
 @immutable
 class AccountPreferences {
   final String? languageCode;
@@ -60,16 +64,41 @@ class AccountPreferencesService extends ChangeNotifier {
   final AccountPreferencesRowWriter? _rowWriter;
 
   AccountPreferences _preferences = const AccountPreferences();
+  AccountPreferencesStatus _status = AccountPreferencesStatus.signedOut;
   String? _loadedUserId;
+  Object? _lastError;
+  int _requestGeneration = 0;
 
   AccountPreferences get preferences => _preferences;
-  bool get hasLanguagePreference => _preferences.languageCode != null;
-  bool get hasThemePreference => _preferences.isDark != null;
+  AccountPreferencesStatus get status => _status;
+  Object? get lastError => _lastError;
+  bool get hasLanguagePreference =>
+      isLoadedForCurrentUser && _preferences.languageCode != null;
+  bool get hasThemePreference =>
+      isLoadedForCurrentUser && _preferences.isDark != null;
   String? get authenticatedUserId => _currentUserId;
   bool get hasAuthenticatedUser => _currentUserId != null;
   bool get isLoadedForCurrentUser {
     final userId = _currentUserId;
-    return userId != null && _loadedUserId == userId;
+    return userId != null &&
+        _loadedUserId == userId &&
+        _status == AccountPreferencesStatus.loaded;
+  }
+
+  /// A missing value is actionable only after Supabase successfully returned
+  /// the current account's row. A loading or failed request must never be
+  /// treated as first-time setup.
+  bool get needsLanguagePreference =>
+      isLoadedForCurrentUser && _preferences.languageCode == null;
+  bool get needsThemePreference =>
+      isLoadedForCurrentUser && _preferences.isDark == null;
+  AccountPreferencePrompt get nextRequiredPreference {
+    if (!isLoadedForCurrentUser) return AccountPreferencePrompt.none;
+    if (_preferences.languageCode == null) {
+      return AccountPreferencePrompt.language;
+    }
+    if (_preferences.isDark == null) return AccountPreferencePrompt.theme;
+    return AccountPreferencePrompt.none;
   }
 
   SupabaseClient? get _client {
@@ -84,59 +113,94 @@ class AccountPreferencesService extends ChangeNotifier {
 
   String? get _currentUserId {
     final provided = _userIdProvider?.call();
-    if (provided != null) return provided;
+    if (provided != null && provided.isNotEmpty) return provided;
     return _client?.auth.currentUser?.id;
   }
 
   Future<AccountPreferences> loadForCurrentUser() async {
     final userId = _currentUserId;
+    final generation = ++_requestGeneration;
     if (userId == null) {
       clear();
       return const AccountPreferences();
     }
 
-    final row = _rowLoader != null
-        ? await _rowLoader(userId)
-        : await _loadSupabaseRow(userId);
-
-    // Do not let a late response from the previous account overwrite the next
-    // account's state during a fast logout/login sequence.
-    if (_currentUserId != userId) return const AccountPreferences();
-
-    _preferences = AccountPreferences.fromRow(row);
+    _status = AccountPreferencesStatus.loading;
     _loadedUserId = userId;
+    _preferences = const AccountPreferences();
+    _lastError = null;
     notifyListeners();
-    return _preferences;
+
+    try {
+      final row = _rowLoader != null
+          ? await _rowLoader(userId)
+          : await _loadSupabaseRow(userId);
+
+      // Do not let a late response from the previous account overwrite the
+      // next account's state during a fast logout/login sequence.
+      if (!_isCurrentRequest(userId, generation)) {
+        return const AccountPreferences();
+      }
+
+      _preferences = AccountPreferences.fromRow(row);
+      _status = AccountPreferencesStatus.loaded;
+      notifyListeners();
+      return _preferences;
+    } catch (error) {
+      if (_isCurrentRequest(userId, generation)) {
+        _lastError = error;
+        _status = AccountPreferencesStatus.error;
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
   Future<void> saveLanguage(String code) async {
     if (code != 'en' && code != 'tr') return;
-    if (_currentUserId == null) return;
-    await _save({'language_code': code});
+    final userId = _currentUserId;
+    if (userId == null) return;
+    await _save(userId, {'language_code': code});
+    if (_currentUserId != userId) return;
     _preferences = _preferences.copyWith(languageCode: code);
+    _lastError = null;
     notifyListeners();
   }
 
   Future<void> saveTheme(bool isDark) async {
-    if (_currentUserId == null) return;
-    await _save({'theme_mode': isDark ? 'dark' : 'light'});
+    final userId = _currentUserId;
+    if (userId == null) return;
+    await _save(userId, {'theme_mode': isDark ? 'dark' : 'light'});
+    if (_currentUserId != userId) return;
     _preferences = _preferences.copyWith(isDark: isDark);
+    _lastError = null;
     notifyListeners();
   }
 
   void clear() {
+    _requestGeneration++;
     final changed =
+        _status != AccountPreferencesStatus.signedOut ||
         _loadedUserId != null ||
         _preferences.languageCode != null ||
-        _preferences.isDark != null;
+        _preferences.isDark != null ||
+        _lastError != null;
+    _status = AccountPreferencesStatus.signedOut;
     _loadedUserId = null;
     _preferences = const AccountPreferences();
+    _lastError = null;
     if (changed) notifyListeners();
+  }
+
+  bool _isCurrentRequest(String userId, int generation) {
+    return generation == _requestGeneration && _currentUserId == userId;
   }
 
   Future<Map<String, dynamic>?> _loadSupabaseRow(String userId) async {
     final client = _client;
-    if (client == null) return null;
+    if (client == null) {
+      throw StateError('Supabase is required to load account preferences.');
+    }
     final row = await client
         .from('user_preferences')
         .select('language_code, theme_mode')
@@ -145,22 +209,22 @@ class AccountPreferencesService extends ChangeNotifier {
     return row == null ? null : Map<String, dynamic>.from(row);
   }
 
-  Future<void> _save(Map<String, dynamic> values) async {
-    final userId = _currentUserId;
-    if (userId == null) return;
-
+  Future<void> _save(String userId, Map<String, dynamic> values) async {
     if (_rowWriter != null) {
       await _rowWriter(userId, values);
     } else {
       final client = _client;
-      if (client == null) return;
+      if (client == null || client.auth.currentUser?.id != userId) {
+        throw StateError(
+          'An authenticated Supabase user is required to save preferences.',
+        );
+      }
       await client.from('user_preferences').upsert({
         'user_id': userId,
         ...values,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'user_id');
     }
-    _loadedUserId = userId;
   }
 }
 

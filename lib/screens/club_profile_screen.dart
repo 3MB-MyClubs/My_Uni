@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
@@ -20,6 +22,7 @@ import '../services/content_store.dart';
 import '../services/event_access.dart';
 import '../services/student_club_role_service.dart';
 import '../services/supabase_event_service.dart';
+import '../services/supabase_content_service.dart';
 import '../services/supabase_post_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../services/chat_store.dart';
@@ -69,6 +72,7 @@ void _showClubRoleError(BuildContext context) {
 class ClubProfileScreen extends StatefulWidget {
   final Club club;
   final Color color;
+  final int initialTabIndex;
   // When provided, the nav bar shows a settings gear instead of the back
   // button — used when this screen IS the logged-in club's Profile tab root.
   final VoidCallback? onSettings;
@@ -78,7 +82,8 @@ class ClubProfileScreen extends StatefulWidget {
     required this.club,
     required this.color,
     this.onSettings,
-  });
+    this.initialTabIndex = 0,
+  }) : assert(initialTabIndex >= 0 && initialTabIndex < 3);
 
   @override
   State<ClubProfileScreen> createState() => _ClubProfileScreenState();
@@ -91,7 +96,11 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      initialIndex: widget.initialTabIndex,
+      vsync: this,
+    );
   }
 
   @override
@@ -106,7 +115,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   // Events by this club
-  List get _clubEvents =>
+  List<Event> get _clubEvents =>
       events.where((e) => e.clubId == widget.club.id).toList()
         ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
@@ -717,6 +726,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               },
             ),
             _EventsTab(
+              clubId: widget.club.id,
               events: clubEvents,
               monthAbbr: _monthAbbr,
               clubColor: widget.color,
@@ -1172,13 +1182,15 @@ class _ClubPostCompact extends StatelessWidget {
 // ─── Events Tab ───────────────────────────────────────────────────────────────
 
 class _EventsTab extends StatefulWidget {
-  final List events;
+  final String clubId;
+  final List<Event> events;
   final String Function(int) monthAbbr;
   final Color clubColor;
   final bool isAdmin;
   final VoidCallback onChanged;
 
   const _EventsTab({
+    required this.clubId,
     required this.events,
     required this.monthAbbr,
     required this.clubColor,
@@ -1191,45 +1203,95 @@ class _EventsTab extends StatefulWidget {
 }
 
 class _EventsTabState extends State<_EventsTab> {
-  // 'past' | 'now' | 'upcoming'  — defaults to upcoming (matches the design).
+  // 'past' | 'upcoming' — Club Profiles always open on Upcoming.
   String _filter = 'upcoming';
+  List<Event> _loadedPastEvents = const [];
+  bool _pastLoaded = false;
+  bool _loadingPast = false;
 
-  String _statusOf(dynamic e) {
-    final now = DateTime.now();
-    final start = e.dateTime as DateTime;
-    final end = e.endTime as DateTime;
-    if (end.isBefore(now)) return 'past';
+  String _statusOf(Event event, [DateTime? at]) {
+    final now = at ?? DateTime.now();
+    final start = event.dateTime;
+    final end = event.endTime;
+    if (!end.isAfter(now)) return 'past';
     if (!start.isAfter(now)) return 'now'; // started, not yet ended → live
     return 'upcoming';
   }
 
-  List _withStatus(String status) {
-    final list = widget.events.where((e) => _statusOf(e) == status).toList();
-    if (status == 'past') {
-      list.sort(
-        (a, b) => (b.dateTime as DateTime).compareTo(a.dateTime as DateTime),
-      );
-    } else {
-      list.sort(
-        (a, b) => (a.dateTime as DateTime).compareTo(b.dateTime as DateTime),
-      );
-    }
+  List<Event> _shownEvents(DateTime now) {
+    final source = _filter == 'past' && _pastLoaded
+        ? _loadedPastEvents
+        : widget.events;
+    final list = source.where((event) {
+      final status = _statusOf(event, now);
+      return _filter == 'past' ? status == 'past' : status != 'past';
+    }).toList();
+    list.sort(
+      _filter == 'past'
+          ? (a, b) => b.dateTime.compareTo(a.dateTime)
+          : (a, b) => a.dateTime.compareTo(b.dateTime),
+    );
     return list;
+  }
+
+  void _selectFilter(String filter) {
+    if (_filter == filter) return;
+    setState(() => _filter = filter);
+    if (filter == 'past') {
+      // Re-entering Past retries a transient/offline fetch while keeping the
+      // last successful history cached between filter switches.
+      unawaited(_loadPastEvents(force: _pastLoaded));
+    }
+  }
+
+  Future<void> _loadPastEvents({bool force = false}) async {
+    if (_loadingPast || (_pastLoaded && !force)) return;
+    setState(() => _loadingPast = true);
+    final fetched = await supabaseContentService.fetchPastEventsForClub(
+      widget.clubId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loadedPastEvents = fetched;
+      _pastLoaded = true;
+      _loadingPast = false;
+    });
+    // The targeted query is merged into the shared event cache, so update the
+    // Club Profile's event count without moving away from this filter.
+    widget.onChanged();
+  }
+
+  void _handleEventChanged() {
+    widget.onChanged();
+    if (_filter == 'past') unawaited(_loadPastEvents(force: true));
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clubId != widget.clubId) {
+      _filter = 'upcoming';
+      _loadedPastEvents = const [];
+      _pastLoaded = false;
+      _loadingPast = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
     final segments = [
-      ('now', loc.nowSegmentLabel),
       ('upcoming', loc.upcomingSegmentLabel),
+      ('past', loc.past),
     ];
-    final shown = _withStatus(_filter);
+    final now = DateTime.now();
+    final shown = _shownEvents(now);
     final panelColor = _clubPagePanel(context);
 
     return Column(
       children: [
-        // Segmented filter (Past / Now / Upcoming) with live counts.
+        // The Club Profile's one event area switches in place between its
+        // upcoming/live events and completed history.
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
           child: Container(
@@ -1241,12 +1303,17 @@ class _EventsTabState extends State<_EventsTab> {
             child: Row(
               children: segments.map((seg) {
                 final active = _filter == seg.$1;
-                final n = widget.events
-                    .where((e) => _statusOf(e) == seg.$1)
-                    .length;
+                final countSource = seg.$1 == 'past' && _pastLoaded
+                    ? _loadedPastEvents
+                    : widget.events;
+                final n = countSource.where((event) {
+                  final status = _statusOf(event, now);
+                  return seg.$1 == 'past' ? status == 'past' : status != 'past';
+                }).length;
                 return Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _filter = seg.$1),
+                    key: ValueKey('club-events-filter-${seg.$1}'),
+                    onTap: () => _selectFilter(seg.$1),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 160),
                       height: 32,
@@ -1295,7 +1362,9 @@ class _EventsTabState extends State<_EventsTab> {
 
         // Cards / empty state.
         Expanded(
-          child: shown.isEmpty
+          child: _filter == 'past' && _loadingPast && !_pastLoaded
+              ? const Center(child: CircularProgressIndicator())
+              : shown.isEmpty
               ? ListView(
                   children: [
                     Padding(
@@ -1306,30 +1375,26 @@ class _EventsTabState extends State<_EventsTab> {
                       child: Column(
                         children: [
                           Text(
-                            AppLocalizations.of(context)!.nothingHereRightNow,
+                            _filter == 'past'
+                                ? loc.noPastEventsYet
+                                : loc.nothingHereRightNow,
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
                               color: AppColors.text,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _filter == 'now'
-                                ? AppLocalizations.of(context)!.noLiveEventNow
-                                : _filter == 'past'
-                                ? AppLocalizations.of(
-                                    context,
-                                  )!.noPastEventsToShow
-                                : AppLocalizations.of(
-                                    context,
-                                  )!.checkBackSoonEvents,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.secondaryText,
+                          if (_filter != 'past') ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              loc.checkBackSoonEvents,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.secondaryText,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -1341,11 +1406,11 @@ class _EventsTabState extends State<_EventsTab> {
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, i) => _EventCardV2(
                     event: shown[i],
-                    status: _filter,
+                    status: _statusOf(shown[i], now),
                     monthAbbr: widget.monthAbbr,
                     clubColor: widget.clubColor,
                     isAdmin: widget.isAdmin,
-                    onChanged: widget.onChanged,
+                    onChanged: _handleEventChanged,
                   ),
                 ),
         ),
@@ -1467,6 +1532,7 @@ class _EventCardV2 extends StatelessWidget {
     final dim = isPast ? 0.82 : 1.0;
 
     return GestureDetector(
+      key: ValueKey('club-event-card-${event.id}'),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
