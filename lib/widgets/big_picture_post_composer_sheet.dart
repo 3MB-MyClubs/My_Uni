@@ -7,8 +7,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../screens/create_post_screen.dart' show buildPostBanner;
 import '../services/app_colors.dart';
+import '../services/account_switcher_service.dart';
 import '../l10n/app_localizations.dart';
-import '../services/auth_service.dart';
 import '../services/club_notification_service.dart';
 import '../services/content_safety_service.dart';
 import '../services/content_store.dart';
@@ -192,7 +192,7 @@ class _BigPicturePostComposerSheetState
     try {
       final post = await supabasePostService.createPost(
         clubId: club.id as String,
-        authorId: authService.currentAdmin?.id ?? '',
+        authorId: accountSwitcherService.actorId,
         content: content,
         taggedClubIds: const [],
         taggedUserIds: const [],

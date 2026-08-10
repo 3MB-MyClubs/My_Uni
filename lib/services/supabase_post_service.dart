@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/news_post.dart';
 import 'content_safety_service.dart';
+import 'auth_service.dart';
 import 'lazy_content_loader.dart';
 import 'supabase_config.dart';
 import 'supabase_interaction_service.dart';
@@ -75,12 +76,21 @@ class SupabasePostService {
       payload['image_path'] = uploadedImage.path;
       payload['image_url'] = uploadedImage.publicUrl;
     }
+    // Linked club accounts are still authenticated student profiles, so their
+    // actor can be recorded in `author_id`. Dedicated club-auth sessions use
+    // an auth.users UUID that has no matching public.profiles row; attaching
+    // that value would violate the nullable foreign key and reject the post.
+    if (authService.isStudentSession && _looksLikeUuid(authorId)) {
+      payload['author_id'] = authorId;
+    }
     if (isAnnouncement) payload['is_announcement'] = true;
 
     final row = await client
         .from('club_posts')
         .insert(payload)
-        .select('id, club_id, content, image_path, image_url, created_at')
+        .select(
+          'id, club_id, author_id, content, image_path, image_url, created_at',
+        )
         .single();
 
     final data = Map<String, dynamic>.from(row);
@@ -104,7 +114,7 @@ class SupabasePostService {
     return NewsPost(
       id: postId,
       clubId: data['club_id']?.toString() ?? clubId,
-      authorId: authorId,
+      authorId: data['author_id']?.toString() ?? authorId,
       content: data['content']?.toString() ?? content,
       createdAt:
           DateTime.tryParse(data['created_at']?.toString() ?? '') ??

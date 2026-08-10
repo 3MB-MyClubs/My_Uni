@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
+import '../services/account_switcher_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
@@ -389,6 +390,7 @@ class _FeedScreenState extends State<FeedScreen> {
     widget.controller?.addListener(_scrollToTop);
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
+    accountSwitcherService.addListener(_onAccountChanged);
     contentStore.addListener(_onContentChanged);
     moderationService.addListener(_onContentChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -404,6 +406,7 @@ class _FeedScreenState extends State<FeedScreen> {
     _scrollController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
+    accountSwitcherService.removeListener(_onAccountChanged);
     contentStore.removeListener(_onContentChanged);
     moderationService.removeListener(_onContentChanged);
     super.dispose();
@@ -420,6 +423,12 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _onLocaleChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onAccountChanged() {
+    if (!mounted) return;
+    _feedCache = null;
+    setState(() {});
   }
 
   void _onContentChanged() {
@@ -702,6 +711,8 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   String get _greetingName {
+    final activeClub = accountSwitcherService.activeClub;
+    if (activeClub != null) return activeClub.name;
     final student = authService.currentUser;
     if (authService.isStudentSession && student != null) {
       return _firstName(student.name);
@@ -1119,6 +1130,20 @@ class _FeedScreenState extends State<FeedScreen> {
   // club, mirroring the design's composer. Hidden for student sessions and
   // admins without a managed club, since only clubs author posts.
   Widget _buildComposer() {
+    final linkedClub = accountSwitcherService.activeClub;
+    if (linkedClub != null) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          key: onboardingAnchors.keyFor(OnboardingAnchors.clubQuickComposer),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+          child: _QuickPostComposer(
+            club: linkedClub,
+            color: _colorForClub(linkedClub.id),
+            onPosted: () => setState(() {}),
+          ),
+        ),
+      );
+    }
     final admin = authService.currentAdmin;
     if (admin == null) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
