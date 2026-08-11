@@ -7,6 +7,7 @@ import 'supabase_content_service.dart';
 import 'supabase_config.dart';
 import 'supabase_read_cache.dart';
 import 'people_service.dart';
+import 'student_activity_service.dart';
 
 typedef GuardedContentRefresh =
     Future<bool> Function(bool Function() shouldApply);
@@ -114,6 +115,7 @@ class LazyContentLoader {
     _countLoad = null;
     supabaseReadCache.clear();
     peopleService.clearRemoteCaches();
+    studentActivityService.clearRemoteHistory();
     if (clearRemoteContent) {
       supabaseContentService.clearSessionContent();
     }
@@ -147,6 +149,7 @@ class LazyContentLoader {
       _countLoad = null;
       supabaseReadCache.clear();
       peopleService.clearRemoteCaches();
+      studentActivityService.clearRemoteHistory();
       supabaseContentService.clearSessionContent();
     }
     return _CacheRequest(scope: scope, generation: _generation);

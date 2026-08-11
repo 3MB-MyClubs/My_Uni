@@ -4,6 +4,7 @@ import '../models/club.dart';
 import '../models/event.dart';
 import 'checkin_store.dart';
 import 'mock_data.dart';
+import 'supabase_content_service.dart';
 
 /// Where an event sits relative to "now" for a given student.
 enum StudentActivityPhase { upcoming, live, past }
@@ -86,8 +87,11 @@ class StudentActivitySummary {
   int get attendedCount => past.where((entry) => entry.checkedIn).length;
 
   /// Distinct clubs the student has taken part in, across both halves.
-  int get clubCount =>
-      all.map((entry) => entry.event.clubId).toSet().where((id) => id.isNotEmpty).length;
+  int get clubCount => all
+      .map((entry) => entry.event.clubId)
+      .toSet()
+      .where((id) => id.isNotEmpty)
+      .length;
 
   /// Entries inside the academic year containing [reference], newest first.
   List<StudentActivityEntry> forAcademicYear(DateTime reference) {
@@ -108,8 +112,46 @@ String academicYearLabel(DateTime date) {
 
 /// Builds a student's event record from the loaded events, their RSVPs and the
 /// check-in store. Pure read — safe to call from `build`.
-class StudentActivityService {
-  const StudentActivityService();
+class StudentActivityService extends ChangeNotifier {
+  final Map<String, StudentEventHistorySnapshot> _remoteHistoryByUser = {};
+  final Set<String> _hydratedUserIds = {};
+  final Set<String> _hydratingUserIds = {};
+  int _historyGeneration = 0;
+
+  /// Hydrates the signed-in student's complete RSVP/check-in event record.
+  /// The global feed intentionally contains only a recent event window, so a
+  /// separate per-user cache keeps older profile history available.
+  Future<void> hydrateForUser(String userId, {bool force = false}) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty ||
+        _hydratingUserIds.contains(normalizedUserId)) {
+      return;
+    }
+    if (!force && _hydratedUserIds.contains(normalizedUserId)) return;
+
+    final requestGeneration = _historyGeneration;
+    _hydratingUserIds.add(normalizedUserId);
+    try {
+      final snapshot = await supabaseContentService.fetchOwnStudentEventHistory(
+        normalizedUserId,
+      );
+      if (requestGeneration != _historyGeneration) return;
+      _remoteHistoryByUser[normalizedUserId] = snapshot;
+      _hydratedUserIds.add(normalizedUserId);
+      notifyListeners();
+    } finally {
+      _hydratingUserIds.remove(normalizedUserId);
+    }
+  }
+
+  void clearRemoteHistory() {
+    _historyGeneration++;
+    if (_remoteHistoryByUser.isEmpty && _hydratedUserIds.isEmpty) return;
+    _remoteHistoryByUser.clear();
+    _hydratedUserIds.clear();
+    _hydratingUserIds.clear();
+    notifyListeners();
+  }
 
   Color colorForClubId(String clubId) {
     final ordinal = clubOrdinal(clubId);
@@ -132,18 +174,29 @@ class StudentActivityService {
 
     final moment = now ?? DateTime.now();
     final clubsById = {for (final club in clubs) club.id: club};
+    final remoteHistory = _remoteHistoryByUser[userId];
+    final eventById = <String, Event>{
+      for (final event in events) event.id: event,
+    };
+    for (final event in remoteHistory?.events ?? const <Event>[]) {
+      eventById[event.id] = event;
+    }
 
     final upcoming = <StudentActivityEntry>[];
     final past = <StudentActivityEntry>[];
 
-    for (final event in events) {
-      final rsvped = event.attendeeUserIds.contains(userId);
-      final checkedIn = checkinStore.isCheckedIn(event.id, userId);
+    for (final event in eventById.values) {
+      final rsvped =
+          event.attendeeUserIds.contains(userId) ||
+          (remoteHistory?.rsvpEventIds.contains(event.id) ?? false);
+      final checkedIn =
+          checkinStore.isCheckedIn(event.id, userId) ||
+          (remoteHistory?.checkinEventIds.contains(event.id) ?? false);
       // A door scan counts even without an RSVP — walk-ins are still
       // attendance, and they are the only record some events have.
       if (!rsvped && !checkedIn) continue;
 
-      final phase = event.endTime.isBefore(moment)
+      final phase = !event.endTime.isAfter(moment)
           ? StudentActivityPhase.past
           : event.dateTime.isAfter(moment)
           ? StudentActivityPhase.upcoming
@@ -192,4 +245,4 @@ class StudentActivityService {
   }
 }
 
-const studentActivityService = StudentActivityService();
+final studentActivityService = StudentActivityService();

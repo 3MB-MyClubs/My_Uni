@@ -2623,6 +2623,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noPastEventsToShow => 'No past events to show.';
 
   @override
+  String get noPastEventsYet => 'No past events yet.';
+
+  @override
   String get noRepeatedNumbersSideBySide => 'No same numbers side by side';
 
   @override

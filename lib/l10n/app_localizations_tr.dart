@@ -2608,6 +2608,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noPastEventsToShow => 'Gösterilecek geçmiş etkinlik yok.';
 
   @override
+  String get noPastEventsYet => 'Henüz geçmiş etkinlik yok.';
+
+  @override
   String get noRepeatedNumbersSideBySide => 'Yan yana aynı rakamlar olmasın';
 
   @override

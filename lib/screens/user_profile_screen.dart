@@ -359,7 +359,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget _buildActivitySection(User user) {
     final displayName = userState.displayNameFor(user.id, user.name);
     return ListenableBuilder(
-      listenable: Listenable.merge([rsvpStore, checkinStore]),
+      listenable: Listenable.merge([
+        rsvpStore,
+        checkinStore,
+        studentActivityService,
+      ]),
       builder: (context, _) {
         final summary = studentActivityService.summaryFor(user.id);
         // A visitor looking at an empty record gets nothing useful from a
