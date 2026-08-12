@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -50,10 +52,12 @@ class TermsAcceptanceService extends ChangeNotifier {
     String? Function()? userIdProvider,
     TermsAcceptanceRowLoader? rowLoader,
     TermsAcceptanceRecorder? recorder,
+    Duration requestTimeout = const Duration(seconds: 5),
   }) : _clientProvider = clientProvider,
        _userIdProvider = userIdProvider,
        _rowLoader = rowLoader,
-       _recorder = recorder;
+       _recorder = recorder,
+       _requestTimeout = requestTimeout;
 
   static const currentVersion = '2026-07-18';
 
@@ -61,6 +65,7 @@ class TermsAcceptanceService extends ChangeNotifier {
   final String? Function()? _userIdProvider;
   final TermsAcceptanceRowLoader? _rowLoader;
   final TermsAcceptanceRecorder? _recorder;
+  final Duration _requestTimeout;
 
   TermsAcceptanceStatus _status = TermsAcceptanceStatus.signedOut;
   String? _loadedUserId;
@@ -128,9 +133,11 @@ class TermsAcceptanceService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final record = _rowLoader != null
-          ? await _rowLoader(userId)
-          : await _loadLatestSupabaseRecord(userId);
+      final record =
+          await (_rowLoader != null
+                  ? _rowLoader(userId)
+                  : _loadLatestSupabaseRecord(userId))
+              .timeout(_requestTimeout);
       if (!_isCurrentRequest(userId, generation)) return;
 
       _latestAcceptance = record;

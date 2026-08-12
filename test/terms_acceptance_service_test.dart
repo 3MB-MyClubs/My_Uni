@@ -81,6 +81,21 @@ void main() {
     expect(service.lastError, isNotNull);
   });
 
+  test('an unresponsive terms check leaves the loading state', () async {
+    final pendingRecord = Completer<TermsAcceptanceRecord?>();
+    final service = TermsAcceptanceService(
+      userIdProvider: () => userId,
+      requestTimeout: const Duration(milliseconds: 20),
+      rowLoader: (_) => pendingRecord.future,
+    );
+
+    await service.loadForCurrentUser();
+
+    expect(service.status, TermsAcceptanceStatus.error);
+    expect(service.lastError, isA<TimeoutException>());
+    expect(service.hasAcceptedCurrentTerms, isFalse);
+  });
+
   test('a late response from another account cannot grant access', () async {
     var activeUserId = 'user-1';
     final firstLoad = Completer<TermsAcceptanceRecord?>();
