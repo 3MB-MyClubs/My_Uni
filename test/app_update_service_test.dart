@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_application_1/services/app_update_service.dart';
@@ -96,6 +98,20 @@ void main() {
       configLoader: () async => throw StateError('offline'),
       installedAppInfoLoader: () async =>
           const InstalledAppInfo(version: '1.0.0', buildNumber: 1),
+    ).checkForRequiredUpdate();
+
+    expect(requirement, isNull);
+  });
+
+  test('fails open when the remote config request never completes', () async {
+    final pendingConfig = Completer<Map<String, dynamic>?>();
+    final requirement = await AppUpdateService(
+      targetPlatform: TargetPlatform.iOS,
+      isWeb: false,
+      checkTimeout: const Duration(milliseconds: 20),
+      configLoader: () => pendingConfig.future,
+      installedAppInfoLoader: () async =>
+          const InstalledAppInfo(version: '1.1.0', buildNumber: 9),
     ).checkForRequiredUpdate();
 
     expect(requirement, isNull);

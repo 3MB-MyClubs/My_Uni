@@ -78,12 +78,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  /// Guards the replay tap while the reset waits on its Supabase write.
-  bool _isReplayingTutorial = false;
-
-  String get _userId =>
-      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-
   bool get _isClubUpModerator => isClubUpAdmin(authService.currentAdmin);
 
   /// The club this account administers (null for students and the super admin).
@@ -102,6 +96,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     rsvpStore.clear();
     Navigator.of(context).popUntil((route) => route.isFirst);
     widget.onLogout();
+  }
+
+  Future<void> _setThemePreference(bool isDark) async {
+    try {
+      await themeService.setDark(isDark, rethrowAccountSaveFailure: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setLanguagePreference(String code) async {
+    try {
+      await localeService.setLanguage(code, rethrowAccountSaveFailure: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+        ),
+      );
+    }
   }
 
   static const List<String> _clubCategoryOptions = [
@@ -537,17 +557,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  // reset() now clears the server flag too, so the round trip has to finish
-  // before the replay is requested; otherwise the tour could be marked complete
-  // again by a late write.
-  Future<void> _replayTutorial() async {
-    if (_isReplayingTutorial) return;
-    _isReplayingTutorial = true;
-    try {
-      await onboardingService.reset(_userId);
-    } finally {
-      _isReplayingTutorial = false;
-    }
+  void _replayTutorial() {
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
     onboardingService.requestReplay();
@@ -774,16 +784,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: themeService.isDark
                   ? l10n.switchToLight
                   : l10n.switchToDark,
-              onTap: () => themeService.setDark(!themeService.isDark),
+              onTap: () => unawaited(_setThemePreference(!themeService.isDark)),
               trailing: _ThemeSwitch(
                 value: themeService.isDark,
-                onChanged: themeService.setDark,
+                onChanged: (value) => unawaited(_setThemePreference(value)),
               ),
             ),
             _SettingsRow(
               icon: Icons.language_rounded,
               title: l10n.language,
-              trailing: const LanguageToggle(),
+              trailing: LanguageToggle(
+                onLanguageSelected: (code) =>
+                    unawaited(_setLanguagePreference(code)),
+              ),
             ),
           ],
         ),

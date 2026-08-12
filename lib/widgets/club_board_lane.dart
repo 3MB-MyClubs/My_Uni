@@ -110,42 +110,51 @@ class ClubLaneSwitch extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 15, color: on ? t.red : t.sub),
-                const SizedBox(width: 7),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: on ? FontWeight.w900 : FontWeight.w700,
-                    letterSpacing: -0.2,
-                    color: on ? t.text : t.sub,
-                  ),
-                ),
-                if (unread > 0) ...[
+            // The equal-width segment remains the tap target. Only its rigid
+            // icon/label/badge group scales down when a compact screen or a
+            // longer translation cannot fit it at its natural width.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 15, color: on ? t.red : t.sub),
                   const SizedBox(width: 7),
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 18),
-                    height: 18,
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: on ? t.red : t.accent.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(9),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: on ? FontWeight.w900 : FontWeight.w700,
+                      letterSpacing: -0.2,
+                      color: on ? t.text : t.sub,
                     ),
-                    child: Text(
-                      unread > 99 ? '99+' : '$unread',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w900,
-                        color: on ? Colors.white : t.red,
+                  ),
+                  if (unread > 0) ...[
+                    const SizedBox(width: 7),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      height: 18,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: on ? t.red : t.accent.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        unread > 99 ? '99+' : '$unread',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                          color: on ? Colors.white : t.red,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

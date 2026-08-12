@@ -4,18 +4,35 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/supabase_config.dart';
 
+typedef TutorialCompletionLoader = Future<bool?> Function(String profileId);
+typedef TutorialCompletionWriter = Future<void> Function(String profileId);
+
+/// Why the existing tutorial is currently being shown.
+///
+/// Only [automatic] runs are allowed to persist first-time completion.
+enum TutorialLaunchSource { automatic, manual }
+
 /// Tracks whether a user has been through the first-run "campus tour"
 /// onboarding, and carries the replay / deep-link signals the flow needs.
 ///
-/// Completion lives in `public.user_preferences.onboarding_version` so the tour
-/// does not reappear on a second device; SharedPreferences stays behind it as
-/// an offline cache. Bumping [onboardingVersion] re-shows the tour to everyone
-/// exactly once.
+/// Completion lives in
+/// `public.user_preferences.has_completed_tutorial`, keyed by the authenticated
+/// Supabase account. That account key covers student profiles and club-account
+/// profiles even though the app-facing id for a club session is the club id.
+/// SharedPreferences is used only by offline/mock sessions with no backend.
 class OnboardingService {
-  static const int onboardingVersion = 1;
-  static const String _completionPrefix = 'onboarding_version_';
+  OnboardingService({
+    TutorialCompletionLoader? completionLoader,
+    TutorialCompletionWriter? completionWriter,
+  }) : _completionLoader = completionLoader,
+       _completionWriter = completionWriter;
+
+  static const String _completionPrefix = 'has_completed_tutorial_';
   static const String _table = 'user_preferences';
-  static const String _column = 'onboarding_version';
+  static const String _column = 'has_completed_tutorial';
+
+  final TutorialCompletionLoader? _completionLoader;
+  final TutorialCompletionWriter? _completionWriter;
 
   SharedPreferences? _preferences;
 
@@ -34,16 +51,28 @@ class OnboardingService {
     _preferences ??= await SharedPreferences.getInstance();
   }
 
-  /// Reads completion from Supabase into memory. Anything that stops us from
-  /// getting an answer — no client, no signed-in auth user, a network or RLS
-  /// failure — counts as complete so the tour never ambushes an existing user.
-  Future<void> loadFor(String userId) async {
-    if (userId.isEmpty) return;
+  /// Reads completion from Supabase into memory before the automatic tutorial
+  /// decision is made. A missing/null field is safely treated as incomplete;
+  /// a failed backend read is unknown and therefore fails closed (complete).
+  Future<void> loadFor(String profileId) async {
+    if (profileId.isEmpty) return;
+
+    final injectedLoader = _completionLoader;
+    if (injectedLoader != null) {
+      try {
+        _completion[profileId] = await injectedLoader(profileId) ?? false;
+      } catch (_) {
+        _completion[profileId] = true;
+      }
+      return;
+    }
 
     final client = _client;
     final authUserId = client?.auth.currentUser?.id;
     if (client == null || authUserId == null) {
-      _completion[userId] = true;
+      // Offline/mock app sessions have no account-level source of truth. Keep
+      // an explicit test/demo override, otherwise suppress automatic launch.
+      _completion.putIfAbsent(profileId, () => true);
       return;
     }
 
@@ -53,36 +82,72 @@ class OnboardingService {
           .select(_column)
           .eq('user_id', authUserId)
           .maybeSingle();
-      final complete = row?[_column] == onboardingVersion;
-      _completion[userId] = complete;
-      await _cacheLocally(userId, complete);
+      _completion[profileId] = row?[_column] == true;
     } catch (_) {
-      _completion[userId] = true;
+      _completion[profileId] = true;
     }
   }
 
-  bool isComplete(String userId) {
-    if (userId.isEmpty) return true;
-    final loaded = _completion[userId];
+  bool isComplete(String profileId) {
+    if (profileId.isEmpty) return true;
+    final loaded = _completion[profileId];
     if (loaded != null) return loaded;
-    // No server answer yet: fall back to the offline cache.
-    if (_preferences == null) return true;
-    return _preferences!.getInt('$_completionPrefix$userId') ==
-        onboardingVersion;
+    // A configured backend must be loaded before a first-time decision. Never
+    // infer remote state from device storage.
+    if (_completionLoader != null || _client?.auth.currentUser != null) {
+      return true;
+    }
+    return _mockCompletion(profileId);
   }
 
-  Future<void> complete(String userId) async {
-    if (userId.isEmpty) return;
-    _completion[userId] = true;
-    await _preferences?.setInt('$_completionPrefix$userId', onboardingVersion);
-    await _writeRemoteVersion(onboardingVersion);
+  /// Finishes a tutorial run without letting a Settings replay mutate the
+  /// account's first-time completion field.
+  Future<void> finish(
+    String profileId, {
+    required TutorialLaunchSource source,
+  }) async {
+    if (source == TutorialLaunchSource.manual) return;
+    await complete(profileId);
   }
 
-  Future<void> reset(String userId) async {
-    if (userId.isEmpty) return;
-    _completion[userId] = false;
-    await _preferences?.remove('$_completionPrefix$userId');
-    await _writeRemoteVersion(null);
+  /// Persists completion for an automatic first-time run.
+  ///
+  /// Backend writes happen before in-memory state changes so a failed write
+  /// cannot masquerade as durable cross-device completion.
+  Future<void> complete(String profileId) async {
+    if (profileId.isEmpty) return;
+
+    final injectedWriter = _completionWriter;
+    if (injectedWriter != null) {
+      await injectedWriter(profileId);
+    } else {
+      final client = _client;
+      final authUserId = client?.auth.currentUser?.id;
+      if (client != null && authUserId != null) {
+        await client.from(_table).upsert({
+          'user_id': authUserId,
+          _column: true,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'user_id');
+      } else if (client != null) {
+        throw StateError(
+          'An authenticated Supabase user is required to complete tutorial.',
+        );
+      } else {
+        await _preferences?.setBool('$_completionPrefix$profileId', true);
+      }
+    }
+    _completion[profileId] = true;
+  }
+
+  /// Test/demo-only reset. It intentionally never writes `false` remotely.
+  @visibleForTesting
+  Future<void> reset(String profileId) async {
+    if (profileId.isEmpty) return;
+    _completion[profileId] = false;
+    if (_completionLoader == null && _client == null) {
+      await _preferences?.remove('$_completionPrefix$profileId');
+    }
   }
 
   void requestReplay() {
@@ -103,32 +168,8 @@ class OnboardingService {
     }
   }
 
-  Future<void> _cacheLocally(String userId, bool complete) async {
-    final preferences = _preferences;
-    if (preferences == null) return;
-    if (complete) {
-      await preferences.setInt('$_completionPrefix$userId', onboardingVersion);
-    } else {
-      await preferences.remove('$_completionPrefix$userId');
-    }
-  }
-
-  /// Club admins reach this with a club id, which is not an `auth.users` row,
-  /// so the write is always keyed by the signed-in auth user. Failures are
-  /// swallowed: the local cache already carries the user through this session.
-  Future<void> _writeRemoteVersion(int? version) async {
-    final client = _client;
-    final authUserId = client?.auth.currentUser?.id;
-    if (client == null || authUserId == null) return;
-    try {
-      await client.from(_table).upsert({
-        'user_id': authUserId,
-        _column: version,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id');
-    } catch (_) {
-      // Offline or blocked by RLS; SharedPreferences keeps the local answer.
-    }
+  bool _mockCompletion(String profileId) {
+    return _preferences?.getBool('$_completionPrefix$profileId') ?? false;
   }
 }
 
