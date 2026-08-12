@@ -155,6 +155,8 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _scrolledUnder = false;
   double _refreshProgress = 0;
   bool _isRefreshing = false;
+  int _refreshCycle = 0;
+  Future<void>? _refreshTask;
   final ScrollController _scrollController = ScrollController();
 
   _FeedCache? _feedCache;
@@ -449,7 +451,25 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _onRefresh() async {
-    if (_isRefreshing) return;
+    final activeTask = _refreshTask;
+    if (activeTask != null) {
+      await activeTask;
+      return;
+    }
+
+    late final Future<void> refreshTask;
+    refreshTask = _performRefresh();
+    _refreshTask = refreshTask;
+    try {
+      await refreshTask;
+    } finally {
+      if (identical(_refreshTask, refreshTask)) {
+        _refreshTask = null;
+      }
+    }
+  }
+
+  Future<void> _performRefresh() async {
     if (mounted) setState(() => _isRefreshing = true);
     try {
       try {
@@ -464,6 +484,11 @@ class _FeedScreenState extends State<FeedScreen> {
         setState(() {
           _isRefreshing = false;
           _refreshProgress = 0;
+          // CupertinoSliverRefreshControl only accepts a new pull after its
+          // old sliver has fully retracted. Recreate it after completion so a
+          // completed refresh can never leave the next pull or tab gesture in
+          // the old `done` lifecycle state.
+          _refreshCycle++;
         });
       }
     }
@@ -528,6 +553,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
           slivers: [
             InstagramRefreshControl(
+              key: ValueKey('home-refresh-control-$_refreshCycle'),
               onRefresh: _onRefresh,
               showIndicator: false,
             ),
@@ -1098,6 +1124,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   for (var i = 0; i < labels.length; i++)
                     Expanded(
                       child: GestureDetector(
+                        key: ValueKey('home-feed-tab-$i'),
                         behavior: HitTestBehavior.opaque,
                         onTap: () => setState(() => _feedTab = i),
                         child: Center(

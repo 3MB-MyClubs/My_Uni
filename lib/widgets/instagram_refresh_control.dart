@@ -28,26 +28,27 @@ class InstagramRefreshControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoSliverRefreshControl(
+      key: key,
       refreshTriggerPullDistance: refreshTriggerPullDistance,
       refreshIndicatorExtent: refreshIndicatorExtent,
       onRefresh: onRefresh,
-      builder:
-          (
-            context,
-            refreshState,
-            pulledExtent,
-            triggerDistance,
-            indicatorExtent,
-          ) {
-            if (!showIndicator) return const SizedBox.shrink();
-            final progress = (pulledExtent / triggerDistance).clamp(0.0, 1.0);
-            return Center(
-              child: InstagramRefreshSpinner(
-                progress: progress,
-                spinning: refreshState == RefreshIndicatorMode.refresh,
-              ),
-            );
-          },
+      builder: showIndicator
+          ? (
+              context,
+              refreshState,
+              pulledExtent,
+              triggerDistance,
+              indicatorExtent,
+            ) {
+              final progress = (pulledExtent / triggerDistance).clamp(0.0, 1.0);
+              return Center(
+                child: InstagramRefreshSpinner(
+                  progress: progress,
+                  spinning: refreshState == RefreshIndicatorMode.refresh,
+                ),
+              );
+            }
+          : null,
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -100,17 +102,20 @@ class AppUpdateService {
     InstalledAppInfoLoader? installedAppInfoLoader,
     TargetPlatform? targetPlatform,
     bool? isWeb,
+    Duration checkTimeout = const Duration(seconds: 5),
   }) : _clientProvider = clientProvider,
        _configLoader = configLoader,
        _installedAppInfoLoader = installedAppInfoLoader,
        _targetPlatform = targetPlatform,
-       _isWeb = isWeb;
+       _isWeb = isWeb,
+       _checkTimeout = checkTimeout;
 
   final SupabaseClient? Function()? _clientProvider;
   final AppUpdateConfigRowLoader? _configLoader;
   final InstalledAppInfoLoader? _installedAppInfoLoader;
   final TargetPlatform? _targetPlatform;
   final bool? _isWeb;
+  final Duration _checkTimeout;
 
   TargetPlatform get targetPlatform => _targetPlatform ?? defaultTargetPlatform;
 
@@ -135,27 +140,31 @@ class AppUpdateService {
     if (!_supportsMandatoryUpdates) return null;
 
     try {
-      final config = AppUpdateConfig.fromRow(await _loadConfigRow());
-      final minimumBuild = config.minimumBuildFor(targetPlatform);
-      if (minimumBuild <= 0) return null;
-
-      final installed = await _loadInstalledAppInfo();
-      if (installed == null || installed.buildNumber >= minimumBuild) {
-        return null;
-      }
-
-      return AppUpdateRequirement(
-        platform: targetPlatform,
-        currentVersion: installed.version,
-        currentBuild: installed.buildNumber,
-        minimumBuild: minimumBuild,
-        storeUrl: config.storeUrlFor(targetPlatform),
-      );
+      return await _check().timeout(_checkTimeout);
     } catch (_) {
-      // An unavailable config service must not brick an otherwise usable app.
-      // The next launch/resume retries the check.
+      // An unavailable or unresponsive config service must not brick an
+      // otherwise usable app. The next launch/resume retries the check.
       return null;
     }
+  }
+
+  Future<AppUpdateRequirement?> _check() async {
+    final config = AppUpdateConfig.fromRow(await _loadConfigRow());
+    final minimumBuild = config.minimumBuildFor(targetPlatform);
+    if (minimumBuild <= 0) return null;
+
+    final installed = await _loadInstalledAppInfo();
+    if (installed == null || installed.buildNumber >= minimumBuild) {
+      return null;
+    }
+
+    return AppUpdateRequirement(
+      platform: targetPlatform,
+      currentVersion: installed.version,
+      currentBuild: installed.buildNumber,
+      minimumBuild: minimumBuild,
+      storeUrl: config.storeUrlFor(targetPlatform),
+    );
   }
 
   Future<Map<String, dynamic>?> _loadConfigRow() async {

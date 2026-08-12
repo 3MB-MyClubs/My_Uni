@@ -1,13 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/main.dart';
+import 'package:flutter_application_1/screens/app_launch_screen.dart';
 import 'package:flutter_application_1/screens/login_screen.dart';
 import 'package:flutter_application_1/screens/onboarding_carousel_screen.dart';
 import 'package:flutter_application_1/screens/terms_acceptance_screen.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
 import 'package:flutter_application_1/services/onboarding_intro_service.dart';
+import 'package:flutter_application_1/services/app_update_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -101,6 +105,33 @@ void main() {
 
     expect(find.byKey(const Key('app_launch_logo')), findsNothing);
     expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
+  });
+
+  testWidgets('unresponsive update service cannot hold launch indefinitely', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await onboardingIntroService.initialize();
+    final pendingConfig = Completer<Map<String, dynamic>?>();
+    final updateService = AppUpdateService(
+      targetPlatform: TargetPlatform.iOS,
+      isWeb: false,
+      checkTimeout: const Duration(milliseconds: 20),
+      configLoader: () => pendingConfig.future,
+      installedAppInfoLoader: () async =>
+          const InstalledAppInfo(version: '1.1', buildNumber: 9),
+    );
+
+    await tester.pumpWidget(
+      MyApp(minimumLaunchDuration: Duration.zero, updateService: updateService),
+    );
+    expect(find.byKey(AppLaunchScreen.progressKey), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 25));
+    await tester.pump();
+
+    expect(find.byType(OnboardingCarouselScreen), findsOneWidget);
+    expect(find.byKey(AppLaunchScreen.progressKey), findsNothing);
   });
 
   testWidgets('login screen "Sign up" hands off to the sign-up flow', (
