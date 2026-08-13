@@ -271,6 +271,10 @@ void main() {
     expect(find.text('No events yet'), findsOneWidget);
     expect(find.text("Browse this week's events"), findsOneWidget);
     expect(find.text('See all 0'), findsNothing);
+    expect(
+      tester.getCenter(find.text('No events yet')).dx,
+      closeTo(tester.getCenter(find.byType(Scaffold)).dx, 0.1),
+    );
     expect(tester.takeException(), isNull);
   });
 }

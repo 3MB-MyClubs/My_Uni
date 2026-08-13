@@ -261,8 +261,12 @@ class ContentStore extends ChangeNotifier {
       return true;
     }
 
+    // In production a dedicated club login has two IDs: the Supabase auth UUID
+    // used as actorId and the club UUID stored in authService.currentAdmin. If
+    // this is the real signed-in actor, authorize against the account currently
+    // represented by the UI instead of comparing the auth UUID to the club ID.
     return accountSwitcherService.actorId == userId &&
-        accountSwitcherService.activeClub?.id == clubId;
+        currentAccountManagesClubId(clubId);
   }
 
   bool _isPlatformAdmin(String userId) {
@@ -303,6 +307,20 @@ class ContentStore extends ChangeNotifier {
     if (!_isClubAdmin(updated.clubId, requestingUserId)) return false;
     events[idx] = updated;
     unawaited(saveEvents());
+    notifyContentChanged();
+    return true;
+  }
+
+  /// Replaces an event after checking the account currently represented by
+  /// the UI. This avoids mixing the Supabase auth UUID with the club UUID used
+  /// by dedicated club-admin sessions.
+  bool updateEventForCurrentAccount(Event updated) {
+    final idx = events.indexWhere((event) => event.id == updated.id);
+    if (idx == -1 || !currentAccountManagesClubId(updated.clubId)) {
+      return false;
+    }
+    events[idx] = updated;
+    if (_initialized) unawaited(saveEvents());
     notifyContentChanged();
     return true;
   }
