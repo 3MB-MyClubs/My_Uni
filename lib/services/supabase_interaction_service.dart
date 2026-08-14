@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../models/comment.dart';
 import '../models/user.dart';
+import 'feed_v2_service.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
 import 'supabase_read_cache.dart';
@@ -11,7 +12,12 @@ import 'supabase_read_cache.dart';
 class SupabaseInteractionService {
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
-    return Supabase.instance.client;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      // Widget/unit tests and local-only previews may not bootstrap Supabase.
+      return null;
+    }
   }
 
   static const _identityTtl = Duration(seconds: 60);
@@ -374,12 +380,19 @@ class SupabaseInteractionService {
     required String eventId,
     required bool attending,
   }) async {
-    final client = _client;
-    if (client == null || profileId.isEmpty || eventId.isEmpty) return;
+    if (profileId.isEmpty || eventId.isEmpty) return;
 
+    // Keep every read surface from restoring the pre-mutation snapshot after
+    // the optimistic store update. Feed v2 carries viewer RSVP state inside
+    // its cached page, while the other keys hold the profile/attendee reads.
     supabaseReadCache.invalidate(_key('rsvp-events', profileId));
     supabaseReadCache.invalidate(_key('event-attendees', eventId));
+    _invalidateBatch('event-rsvp-counts', eventId);
     _invalidateBatch('event-checkin-counts', eventId);
+    supabaseFeedV2Service.invalidateFirstPages();
+
+    final client = _client;
+    if (client == null) return;
 
     if (attending) {
       await _insertIgnoringDuplicate(client, 'event_rsvps', {
