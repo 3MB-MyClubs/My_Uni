@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
+import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/chat_message.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/user.dart';
@@ -231,6 +232,34 @@ void main() {
     expect(find.text(S.boardEmptyHintMember), findsOneWidget);
     await settleStoreSave(tester);
   });
+
+  test(
+    'a dedicated club admin marks public announcements as club-authored',
+    () {
+      authService.setClubAdmin(
+        AppAdmin(
+          id: club.id,
+          name: club.name,
+          email: 'club-admin@example.test',
+          password: '',
+        ),
+      );
+
+      final announcement = chatStore.sendMessage(
+        threadId: threadId,
+        senderId: club.id,
+        content: 'The room opens at 09:00.',
+        kind: ChatMessageKind.announcement,
+        title: 'Opening time',
+      );
+
+      expect(announcement, isNotNull);
+      // Chat v2 uses this marker to pass p_send_as_club=true. Without it, the
+      // RPC attempts a profile-authored insert and the RLS policy rejects the
+      // announcement with a misleading attachment error.
+      expect(announcement!.senderClubId, club.id);
+    },
+  );
 
   testWidgets('a non-member gets neither lane', (tester) async {
     expect(authService.login(member.email, member.password), isTrue);

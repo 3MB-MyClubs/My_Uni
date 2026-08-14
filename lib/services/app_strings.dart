@@ -1022,6 +1022,14 @@ class S {
   static String get attachVideo => _t('Video', 'Video');
   static String get couldNotAttachPhoto =>
       _t('Could not attach that photo.', 'Fotoğraf eklenemedi.');
+  static String get attachmentCouldNotSend => _t(
+    'This attachment could not be sent. Check its type, size, and your access, then choose it again.',
+    'Bu ek gönderilemedi. Türünü, boyutunu ve erişimini kontrol edip tekrar seç.',
+  );
+  static String get messageCouldNotSend => _t(
+    'This message could not be sent. Please try again.',
+    'Bu mesaj gönderilemedi. Lütfen tekrar dene.',
+  );
   static String get photoSavedLocallyUploadFailed => _t(
     'Photo saved locally, but upload failed.',
     'Fotoğraf cihaza kaydedildi ama yükleme başarısız oldu.',
