@@ -52,12 +52,18 @@ List<String> _monthLabels(BuildContext context) {
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
+  final SupabaseEventService? eventService;
 
   /// When provided, the form opens in edit mode pre-filled with this event and
   /// saves changes in place instead of creating a new event.
   final Event? existing;
 
-  const CreateEventScreen({super.key, this.onCreated, this.existing});
+  const CreateEventScreen({
+    super.key,
+    this.onCreated,
+    this.existing,
+    this.eventService,
+  });
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -133,6 +139,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   bool get _isEditing => widget.existing != null;
+
+  SupabaseEventService get _eventService =>
+      widget.eventService ?? supabaseEventService;
 
   @override
   void initState() {
@@ -530,7 +539,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
       Event saved;
       try {
-        saved = await supabaseEventService.updateEvent(
+        saved = await _eventService.updateEvent(
           updated,
           previousImagePath: ev.imagePath,
         );
@@ -549,10 +558,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         return;
       }
 
-      final ok = contentStore.updateEvent(
-        saved,
-        accountSwitcherService.actorId,
-      );
+      final ok = contentStore.updateEventForCurrentAccount(saved);
       if (!mounted) return;
       if (ok) {
         widget.onCreated?.call();
@@ -589,7 +595,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     setState(() => _isPosting = true);
     try {
-      final newEvent = await supabaseEventService.createEvent(draftEvent);
+      final newEvent = await _eventService.createEvent(draftEvent);
       if (!mounted) return;
       events.add(newEvent);
       unawaited(contentStore.saveEvents());

@@ -9,6 +9,7 @@ import '../models/chat_message.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
+import '../services/account_switcher_service.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
@@ -102,8 +103,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool get _canDeleteEvent =>
       contentStore.canDeleteEvent(_event.id, _currentAdminId);
 
-  // The owning club sees a dedicated, editable admin screen.
-  bool get _ownContent => currentAdminOwnsClubId(_event.clubId);
+  // Both dedicated club logins and linked board accounts see the editable
+  // management screen for the club account they currently represent.
+  bool get _ownContent => currentAccountManagesClubId(_event.clubId);
 
   bool get _isLive {
     final now = DateTime.now();
@@ -664,7 +666,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   List<User> _remoteAttendees = const [];
   bool _remoteAttendeesLoaded = false;
 
-  String get _adminId => authService.currentAdmin?.id ?? '';
+  String get _managementActorId => accountSwitcherService.actorId;
 
   bool get _isLive {
     final now = DateTime.now();
@@ -781,7 +783,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
           );
         return;
       }
-      contentStore.deleteEvent(_event.id, _adminId);
+      contentStore.deleteEvent(_event.id, _managementActorId);
       if (mounted) Navigator.pop(context);
     });
   }

@@ -276,6 +276,7 @@ class StudentActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: StudentCampusPalette.card,
@@ -478,7 +479,8 @@ class StudentActivityPreview extends StatelessWidget {
                             onTap: onEntryTap == null
                                 ? null
                                 : () => onEntryTap!(upcoming[i]),
-                            showDivider: i < upcoming.length - 1 || past.isNotEmpty,
+                            showDivider:
+                                i < upcoming.length - 1 || past.isNotEmpty,
                           ),
                       ],
                       if (past.isNotEmpty) ...[
