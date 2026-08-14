@@ -216,7 +216,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       unawaited(_startInitialExperience());
       unawaited(
         appBootstrap.ready.then((_) {
-          if (!mounted) return;
+          if (!mounted || !appBootstrap.localDataReady) return;
           if (authService.isStudentSession) {
             unawaited(chatStore.startDirectMessageSync(_currentUserId));
           }

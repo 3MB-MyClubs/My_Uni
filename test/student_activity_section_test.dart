@@ -114,14 +114,12 @@ void main() {
     await checkinStore.toggle(
       eventId: eventId,
       userId: _studentId,
-      actorId: 'door-staff',
     );
     addTearDown(() async {
       if (checkinStore.isCheckedIn(eventId, _studentId)) {
         await checkinStore.toggle(
           eventId: eventId,
           userId: _studentId,
-          actorId: 'door-staff',
         );
       }
     });

@@ -1329,8 +1329,6 @@ class _AdminAttendees extends StatelessWidget {
                                     onTap: () => checkinStore.toggle(
                                       eventId: event.id,
                                       userId: user.id,
-                                      actorId:
-                                          authService.currentAdmin?.id ?? '',
                                     ),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(

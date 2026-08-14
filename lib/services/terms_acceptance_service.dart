@@ -166,9 +166,11 @@ class TermsAcceptanceService extends ChangeNotifier {
     _lastError = null;
 
     try {
-      final record = _recorder != null
-          ? await _recorder(userId, currentVersion)
-          : await _recordSupabaseAcceptance(userId);
+      final record =
+          await (_recorder != null
+                  ? _recorder(userId, currentVersion)
+                  : _recordSupabaseAcceptance(userId))
+              .timeout(_requestTimeout);
       if (!_isCurrentRequest(userId, generation)) {
         throw StateError('The authenticated account changed while saving.');
       }

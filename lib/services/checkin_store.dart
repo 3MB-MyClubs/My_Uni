@@ -86,7 +86,6 @@ class CheckinStore extends ChangeNotifier {
   Future<bool> toggle({
     required String eventId,
     required String userId,
-    required String actorId,
     String method = 'manual',
   }) async {
     final wasCheckedIn = isCheckedIn(eventId, userId);
@@ -98,7 +97,6 @@ class CheckinStore extends ChangeNotifier {
           eventId: eventId,
           profileId: userId,
           checkedIn: !wasCheckedIn,
-          checkedInBy: actorId,
           method: method,
         );
       } catch (error) {
