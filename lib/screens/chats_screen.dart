@@ -589,7 +589,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     filter: _ChatInboxFilter.students,
                     label: S.studentChats,
                     icon: Icons.person_outline_rounded,
-                    count: studentThreads.length,
                     unread: studentUnread,
                   ),
                 ),
@@ -599,7 +598,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     filter: _ChatInboxFilter.clubs,
                     label: S.clubChats,
                     icon: Icons.groups_outlined,
-                    count: clubThreads.length,
                     unread: clubUnread,
                   ),
                 ),
@@ -616,14 +614,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     required _ChatInboxFilter filter,
     required String label,
     required IconData icon,
-    required int count,
     required int unread,
   }) {
     final selected = _filter == filter;
     return Semantics(
       button: true,
       selected: selected,
-      label: label,
+      label: unread > 0 ? '$label, ${S.nNew(unread)}' : label,
       child: GestureDetector(
         key: key,
         behavior: HitTestBehavior.opaque,
@@ -668,35 +665,30 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 5),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                constraints: const BoxConstraints(minWidth: 18),
-                height: 18,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: unread > 0
-                      ? AppColors.primaryRed
-                      : selected
-                      ? AppColors.lightRed
-                      : AppColors.background,
-                  borderRadius: const BorderRadius.all(Radius.circular(9)),
-                ),
-                child: Text(
-                  unread > 0 ? (unread > 9 ? '9+' : '$unread') : '$count',
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    color: unread > 0
-                        ? Colors.white
-                        : selected
-                        ? AppColors.primaryRed
-                        : AppColors.secondaryText,
+              if (unread > 0) ...[
+                const SizedBox(width: 5),
+                AnimatedContainer(
+                  key: ValueKey('chat-filter-${filter.name}-unread-badge'),
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                  constraints: const BoxConstraints(minWidth: 18),
+                  height: 18,
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: const BorderRadius.all(Radius.circular(9)),
+                  ),
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
