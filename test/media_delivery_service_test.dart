@@ -134,6 +134,26 @@ void main() {
         expect(dimensions.width, value.expected, reason: value.surface);
       }
     });
+
+    test('avatar surfaces share one thumbnail cache size', () {
+      final smallAvatar = mediaDimensionsFor(
+        rendition: MediaRendition.thumbnail,
+        logicalWidth: avatarCacheLogicalSize,
+        logicalHeight: avatarCacheLogicalSize,
+        devicePixelRatio: 3,
+      );
+      final largeAvatar = mediaDimensionsFor(
+        rendition: MediaRendition.thumbnail,
+        logicalWidth: avatarCacheLogicalSize,
+        logicalHeight: avatarCacheLogicalSize,
+        devicePixelRatio: 3,
+      );
+
+      expect(smallAvatar.width, 384);
+      expect(smallAvatar.height, 384);
+      expect(largeAvatar.width, smallAvatar.width);
+      expect(largeAvatar.height, smallAvatar.height);
+    });
   });
 
   group('stable identity and original preservation', () {

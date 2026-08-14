@@ -36,8 +36,8 @@ class GroupAvatarStack extends StatelessWidget {
             rendition: MediaRendition.thumbnail,
             width: size,
             height: size,
-            cacheWidth: size,
-            cacheHeight: size,
+            cacheWidth: avatarCacheLogicalSize,
+            cacheHeight: avatarCacheLogicalSize,
             fit: BoxFit.cover,
           ),
         );

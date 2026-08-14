@@ -31,20 +31,19 @@ is local UI state, and no server-side quiet-hours preference exists.
 ## V2 boundary and duplicate protection
 
 New Flutter post/event creation uses `create_club_post_v2` and
-`create_club_event_v2`. Chat already uses `send_message_v2`; that RPC now marks
-the transaction and enqueues the message event. Each RPC performs one action
-rate-limit charge, the canonical business insert, and one logical outbox insert
-in one transaction. It never falls back to a direct v1 insert.
+`create_club_event_v2`. Chat uses `send_message_v2`. Each RPC performs its
+rate-limit charge and canonical business insert in one transaction; the insert
+then fires the same database notification trigger used by released clients.
+The transaction-local `app.notification_pipeline = v2` marker is retained only
+for compatibility. It no longer suppresses notification triggers, and the
+legacy outbox helper is a no-op inside marked v2 transactions.
 
-The transaction-local `app.notification_pipeline = v2` marker makes legacy
-fan-out triggers disjoint for that mutation. Released clients do not set the
-marker, so their existing direct writes and synchronous legacy behavior remain.
-V2 canonical notification rows have `pipeline_version = 2`, which also excludes
-them from the legacy per-row `pg_net` push triggers.
-
-Post mentions create an explicit-recipient event and exclude those IDs from the
-general follower event. Club Chat mentions join explicit IDs back to
-`club_followers`; they no longer scan all followers merely to find named users.
+Post, event, direct-message, group-message, club-channel, club-inbox,
+follow, like, comment, and RSVP notifications are written synchronously by
+`AFTER INSERT` triggers. Each canonical row keeps the default
+`pipeline_version = 1`, so the existing per-row `pg_net` push trigger dispatches
+it immediately. The outbox tables remain as dormant rollback infrastructure;
+new v2 writes do not depend on them.
 
 ## Durable pipeline
 
@@ -54,9 +53,8 @@ general follower event. Club Chat mentions join explicit IDs back to
   existing canonical notification row.
 - `notification_deliveries_v2`: unique `(outbox_id, device_id)` state with
   independent attempts, lease, provider result, and terminal state.
-- Default batch: 250; RPCs clamp it to 1–500. At 250, SQL/HTTP payloads stay
-  bounded while a one-minute worker cadence can drain ordinary audiences
-  promptly. Production telemetry should decide whether to tune it.
+- The schema and worker RPCs are retained for rollback and historical data, but
+  marked v2 transactions do not enqueue new rows.
 - Claims use `FOR UPDATE SKIP LOCKED`, atomic status transitions, 90-second
   leases, and random lease tokens. Expired leases are reclaimable; exhausted
   crash leases become terminal rather than getting stuck.
@@ -70,29 +68,24 @@ general follower event. Club Chat mentions join explicit IDs back to
   no unsupported multicast endpoint is invented.
 - Completed deliveries/events are retained 30 days; terminal failures are kept
   90 days. `private.cleanup_notification_v2` deletes bounded batches.
-- `notification_v2_metrics()` reports queue depth, oldest pending event,
-  recipients, batches, retries, terminal work, and invalid-token counts. Worker
-  logs contain structured counts only, never tokens, credentials, or message
-  bodies.
+- `notification_v2_metrics()` remains available for inspecting historical outbox
+  rows. New notification delivery does not require a worker or cron job.
 
 ## Scheduling and rollout
 
 Deploying is deliberately not part of this change. In staging:
 
 1. Apply the migration.
-2. Deploy `notification-worker-v2` with `FIREBASE_SERVICE_ACCOUNT` and a random
-   `NOTIFICATION_WORKER_SECRET`.
-3. Store the project URL, service-role authorization value, and worker secret in
-   Vault. Configure Supabase Cron to POST to
-   `/functions/v1/notification-worker-v2` every minute with Authorization and
-   `x-worker-secret` headers. One minute is the supported standard cron cadence;
-   it avoids an uncontrolled loop while keeping normal push delay bounded.
-4. Schedule `select private.cleanup_notification_v2(5000)` daily.
-5. Release the new app paths only after queue, FCM, Realtime, and released-binary
+2. Store `notification_push_url` and `notification_push_anon_key` in Vault so
+   the notification insert trigger can enqueue the `send-push` request.
+3. Do not schedule `notification-worker-v2`; the migration removes the known
+   worker job because notification delivery is trigger-based.
+4. Release the new app paths only after notification, FCM, Realtime, and released-binary
    smoke tests pass. Do not remove legacy triggers until v1 retirement.
 
-This follows Supabase's documented Cron + `pg_net` scheduled Edge Function
-model. Secrets belong in Vault, not migration text.
+Secrets belong in Vault, not migration text. The database trigger remains
+asynchronous at the network boundary because `pg_net` queues the Edge Function
+request after the notification row is inserted.
 
 ## Compatibility and complexity
 
@@ -100,17 +93,12 @@ model. Secrets belong in Vault, not migration text.
 | --- | --- | --- | --- |
 | Notification inbox/read state | existing `notifications` | same table | preserved |
 | Realtime inbox payload | existing publication/table | same table | preserved |
-| Post/event generation | legacy direct triggers | v2 RPC/outbox | disjoint |
-| Chat generation | legacy direct triggers | `send_message_v2`/outbox | disjoint |
-| Mention generation | legacy trigger | explicit v2 audience | disjoint |
+| Post/event generation | database triggers | v2 RPC/database triggers | same path |
+| Chat generation | database triggers | `send_message_v2`/database triggers | same path |
+| Mention generation | database trigger | database trigger | same path |
 | Push-token registration | `push_devices` | same table | preserved |
 
-For 100,000 followers, the initiating request changes from 100,000 synchronous
-notification inserts plus 100,000 `pg_net` jobs to one durable enqueue. At the
-default size, expansion is approximately 400 bounded recipient batches; push is
-then independently bounded by claimed device batches. No runtime estimate is
-asserted.
-
-Legacy direct writes still have O(audience) synchronous fan-out for post, event,
-group/club messages, and affected club activity. That debt is intentionally
-retained for released-client compatibility.
+For 100,000 followers, the initiating request still performs O(audience)
+notification inserts and queues one `pg_net` request per notification. This is
+the intentional trade-off for immediate, trigger-based delivery and avoids a
+per-second or per-minute scheduler.

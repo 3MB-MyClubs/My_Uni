@@ -15,6 +15,7 @@ import '../models/chat_v2.dart';
 import '../models/notification.dart';
 import '../models/user.dart';
 import 'account_switcher_service.dart';
+import 'app_strings.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'chat_attachment_staging.dart';
@@ -201,8 +202,14 @@ class ChatStore extends ChangeNotifier {
     _messages.removeWhere((candidate) => candidate.id == message.id);
     await _deleteRemoteAttachment(message);
     await chatAttachmentStagingService.deleteIfStaged(message.attachmentPath);
-    _permanentUploadFailureMessage =
-        'This attachment could not be sent. Check its type, size, and your access, then choose it again.';
+    final hasAttachment =
+        message.kind == ChatMessageKind.photo ||
+        message.kind == ChatMessageKind.file ||
+        (message.attachmentPath?.trim().isNotEmpty ?? false) ||
+        (message.attachmentName?.trim().isNotEmpty ?? false);
+    _permanentUploadFailureMessage = hasAttachment
+        ? S.attachmentCouldNotSend
+        : S.messageCouldNotSend;
     debugPrint('Permanent chat upload failure for ${message.id}: $error');
     scheduleSave();
     notifyListeners();
@@ -335,12 +342,15 @@ class ChatStore extends ChangeNotifier {
   /// their personal account or the linked club account. Keep that choice in
   /// the local optimistic message so the remote flush cannot change the
   /// sender if the account switcher changes before the network request runs.
-  bool _sendsClubInboxAsClub(String clubId, String actorId) {
+  bool _sendsAsClub(String clubId, String actorId) {
     if (clubId.isEmpty || actorId.isEmpty) return false;
     if (managedClubForAdmin(actorId)?.id == clubId) return true;
     return authService.currentUser?.id == actorId &&
         accountSwitcherService.activeClub?.id == clubId;
   }
+
+  bool _sendsClubInboxAsClub(String clubId, String actorId) =>
+      _sendsAsClub(clubId, actorId);
 
   List<String> groupParticipants(String threadId) =>
       groupForThread(threadId)?.memberIds ?? const [];
@@ -3742,7 +3752,12 @@ class ChatStore extends ChangeNotifier {
     if (isDirectThread(threadId)) _directThreadIds.add(threadId);
 
     String? localSenderClubId;
-    if (isClubInboxThread(threadId)) {
+    if (isClubThread(threadId)) {
+      final clubId = clubIdOf(threadId);
+      if (clubId != null && _sendsAsClub(clubId, senderId)) {
+        localSenderClubId = clubId;
+      }
+    } else if (isClubInboxThread(threadId)) {
       final conversation = clubInboxForThread(threadId);
       final club = conversation == null ? null : clubForId(conversation.clubId);
       if (club != null && _sendsClubInboxAsClub(club.id, senderId)) {

@@ -8,6 +8,12 @@ import 'supabase_config.dart';
 /// Delivery copies only. [original] always resolves to the canonical object.
 enum MediaRendition { thumbnail, feed, screen, original }
 
+/// All avatar surfaces share one thumbnail cache identity, regardless of the
+/// widget's rendered size. The client still lays the cached bitmap out at the
+/// requested size, while the bounded source is large enough for profile rows
+/// and chat avatars on high-density screens.
+const double avatarCacheLogicalSize = 128;
+
 @immutable
 class MediaDimensions {
   const MediaDimensions({this.width, this.height});

@@ -152,21 +152,27 @@ class UserState extends ChangeNotifier {
   }) {
     final value = url.trim();
     final previousRemote = remotePhotoUrls[userId];
-    if (previousRemote != null && previousRemote != value) {
-      _evictNetworkPhoto(previousRemote);
-    }
     final localPath = preserveLocal ? null : profilePhotoPaths.remove(userId);
     if (!preserveLocal && localPath != null) {
       PaintingBinding.instance.imageCache.evict(FileImage(File(localPath)));
       photoFileCache.invalidate(localPath);
     }
+
+    // Profile hydration runs from several surfaces (chat participants,
+    // followers, feed items). Re-applying the same URL must not evict the
+    // cached bytes or bump the revision, otherwise every surface makes its
+    // avatars appear to reload when it is opened.
+    if (previousRemote == value) {
+      if (localPath != null) notifyListeners();
+      return;
+    }
+
+    if (previousRemote != null) {
+      _evictNetworkPhoto(previousRemote);
+    }
     if (value.isEmpty) {
       remotePhotoUrls.remove(userId);
     } else {
-      // The URL is a stable storage path reused on every re-upload, so a
-      // changed photo needs its old disk-cached bytes evicted too or every
-      // avatar would keep showing the previous photo until reinstall.
-      _evictNetworkPhoto(value);
       remotePhotoUrls[userId] = value;
     }
     _bumpProfilePhotoRevision(userId);

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(23);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password) values
 ('00000000-0000-0000-0000-000000000000','81000000-0000-4000-8000-000000000001','authenticated','authenticated','tx-manager@example.test',''),
@@ -12,6 +12,8 @@ insert into public.clubs(id,name) values
 ('82000000-0000-4000-8000-000000000001','Transactional Club');
 insert into public.club_auth_accounts(auth_user_id,club_id) values
 ('81000000-0000-4000-8000-000000000001','82000000-0000-4000-8000-000000000001');
+insert into public.club_followers(club_id,profile_id) values
+('82000000-0000-4000-8000-000000000001','81000000-0000-4000-8000-000000000002');
 insert into public.majors(id,name,sort_order,is_active) values
 ('83000000-0000-4000-8000-000000000001','Transactional Major',9001,true),
 ('83000000-0000-4000-8000-000000000002','Transactional Minor',9002,true);
@@ -53,8 +55,11 @@ select is((public.create_club_post_transactional_v2(
 select is((select count(*) from public.polls where post_id='86000000-0000-4000-8000-000000000001'),1::bigint,
   'post and poll commit together');
 reset role;
-select is((select count(*) from public.notification_outbox_v2 where event_key='club_post:86000000-0000-4000-8000-000000000001'),1::bigint,
-  'notification enqueue commits once');
+select is((select count(*) from public.notification_outbox_v2 where event_key='club_post:86000000-0000-4000-8000-000000000001'),0::bigint,
+  'trigger-based v2 post does not enqueue outbox work');
+select is((select count(*) from public.notifications
+  where type='club_post' and target_id='86000000-0000-4000-8000-000000000001'),1::bigint,
+  'trigger-based v2 post creates the canonical notification');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','81000000-0000-4000-8000-000000000001',true);
 select lives_ok($$select public.create_club_post_transactional_v2(
@@ -63,8 +68,11 @@ select lives_ok($$select public.create_club_post_transactional_v2(
 select is((select count(*) from public.club_posts where id='86000000-0000-4000-8000-000000000001'),1::bigint,
   'retry does not duplicate post');
 reset role;
-select is((select count(*) from public.notification_outbox_v2 where event_key='club_post:86000000-0000-4000-8000-000000000001'),1::bigint,
-  'retry does not duplicate notification');
+select is((select count(*) from public.notification_outbox_v2 where event_key='club_post:86000000-0000-4000-8000-000000000001'),0::bigint,
+  'retry does not create outbox work');
+select is((select count(*) from public.notifications
+  where type='club_post' and target_id='86000000-0000-4000-8000-000000000001'),1::bigint,
+  'retry does not duplicate the trigger notification');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','81000000-0000-4000-8000-000000000001',true);
 select throws_ok($$select public.create_club_post_transactional_v2(
