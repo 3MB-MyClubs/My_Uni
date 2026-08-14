@@ -114,6 +114,7 @@ String academicYearLabel(DateTime date) {
 /// check-in store. Pure read — safe to call from `build`.
 class StudentActivityService extends ChangeNotifier {
   final Map<String, StudentEventHistorySnapshot> _remoteHistoryByUser = {};
+  final Map<String, Map<String, bool>> _localRsvpOverridesByUser = {};
   final Set<String> _hydratedUserIds = {};
   final Set<String> _hydratingUserIds = {};
   int _historyGeneration = 0;
@@ -136,7 +137,10 @@ class StudentActivityService extends ChangeNotifier {
         normalizedUserId,
       );
       if (requestGeneration != _historyGeneration) return;
-      _remoteHistoryByUser[normalizedUserId] = snapshot;
+      _remoteHistoryByUser[normalizedUserId] = _applyLocalRsvpOverrides(
+        normalizedUserId,
+        snapshot,
+      );
       _hydratedUserIds.add(normalizedUserId);
       notifyListeners();
     } finally {
@@ -146,10 +150,41 @@ class StudentActivityService extends ChangeNotifier {
 
   void clearRemoteHistory() {
     _historyGeneration++;
-    if (_remoteHistoryByUser.isEmpty && _hydratedUserIds.isEmpty) return;
+    if (_remoteHistoryByUser.isEmpty &&
+        _hydratedUserIds.isEmpty &&
+        _localRsvpOverridesByUser.isEmpty) {
+      return;
+    }
     _remoteHistoryByUser.clear();
+    _localRsvpOverridesByUser.clear();
     _hydratedUserIds.clear();
     _hydratingUserIds.clear();
+    notifyListeners();
+  }
+
+  /// Applies the result of the canonical RSVP mutation to the profile's
+  /// already-loaded activity snapshot. The remote history read is intentionally
+  /// cached for the lifetime of the screen, so relying on it alone would leave
+  /// the profile showing an RSVP that was just removed elsewhere.
+  void applyLocalRsvpUpdate({
+    required String userId,
+    required String eventId,
+    required bool attending,
+  }) {
+    final normalizedUserId = userId.trim();
+    final normalizedEventId = eventId.trim();
+    if (normalizedUserId.isEmpty || normalizedEventId.isEmpty) return;
+
+    (_localRsvpOverridesByUser[normalizedUserId] ??= {})[normalizedEventId] =
+        attending;
+
+    final snapshot = _remoteHistoryByUser[normalizedUserId];
+    if (snapshot != null) {
+      _remoteHistoryByUser[normalizedUserId] = _applyLocalRsvpOverrides(
+        normalizedUserId,
+        snapshot,
+      );
+    }
     notifyListeners();
   }
 
@@ -186,9 +221,11 @@ class StudentActivityService extends ChangeNotifier {
     final past = <StudentActivityEntry>[];
 
     for (final event in eventById.values) {
+      final localRsvpOverride = _localRsvpOverridesByUser[userId]?[event.id];
       final rsvped =
-          event.attendeeUserIds.contains(userId) ||
-          (remoteHistory?.rsvpEventIds.contains(event.id) ?? false);
+          localRsvpOverride ??
+          (event.attendeeUserIds.contains(userId) ||
+              (remoteHistory?.rsvpEventIds.contains(event.id) ?? false));
       final checkedIn =
           checkinStore.isCheckedIn(event.id, userId) ||
           (remoteHistory?.checkinEventIds.contains(event.id) ?? false);
@@ -242,6 +279,28 @@ class StudentActivityService extends ChangeNotifier {
         .toList();
     if (ids.isEmpty) return;
     await Future.wait(ids.map((id) => checkinStore.hydrate(id)));
+  }
+
+  StudentEventHistorySnapshot _applyLocalRsvpOverrides(
+    String userId,
+    StudentEventHistorySnapshot snapshot,
+  ) {
+    final overrides = _localRsvpOverridesByUser[userId];
+    if (overrides == null || overrides.isEmpty) return snapshot;
+
+    final rsvpEventIds = {...snapshot.rsvpEventIds};
+    for (final entry in overrides.entries) {
+      if (entry.value) {
+        rsvpEventIds.add(entry.key);
+      } else {
+        rsvpEventIds.remove(entry.key);
+      }
+    }
+    return StudentEventHistorySnapshot(
+      events: snapshot.events,
+      rsvpEventIds: rsvpEventIds,
+      checkinEventIds: snapshot.checkinEventIds,
+    );
   }
 }
 

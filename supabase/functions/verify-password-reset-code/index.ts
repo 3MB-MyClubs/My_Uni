@@ -1,5 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+
+// TEMPORARY LEGACY COMPATIBILITY — remove after minimum supported app version advances.
+
+import {
+  getServiceRoleKey,
+  isValidEmail,
+  legacyChallengeCodeHash,
+  normalizeEmail,
+} from "../_shared/auth_challenge.ts";
+import {
+  enforceEdgeRateLimit,
+  RateLimitUnavailableError,
+} from "../_shared/rate_limit.ts";
 
 interface ReqPayload {
   email: string;
@@ -24,28 +37,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-async function sha256Hex(value: string) {
-  const data = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function getServiceRoleKey() {
-  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw)["default"] ?? null;
-  } catch {
-    return null;
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -56,7 +47,7 @@ Deno.serve(async (req) => {
 
   try {
     const { email, code }: ReqPayload = await req.json();
-    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const normalizedCode = code?.trim();
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
       return json({ error: "Enter a valid email address." }, 400);
@@ -72,31 +63,50 @@ Deno.serve(async (req) => {
       return json({ error: "Server configuration is missing." }, 500);
     }
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { data: pending, error: pendingError } = await supabase
-      .from("pending_password_resets")
-      .select("code_hash, expires_at")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-    if (pendingError) return json({ error: "Could not verify code." }, 500);
-    if (!pending) return json({ error: "No reset code found. Please request a new code." }, 404);
-    if (new Date(pending.expires_at).getTime() < Date.now()) {
-      return json({ error: "Reset code expired. Please request a new code." }, 410);
-    }
-
-    const expectedHash = await sha256Hex(
-      `${normalizedEmail}:${normalizedCode}:${pepper}`,
+    const limited = await enforceEdgeRateLimit(
+      supabase,
+      req,
+      "auth_password_reset_verify",
+      normalizedEmail,
     );
-    if (expectedHash !== pending.code_hash) {
+    // TEMPORARY V1 COMPATIBILITY: preserve the released invalid-code shape.
+    if (limited) return json({ error: "Invalid reset code." }, 400);
+
+    const expectedHash = await legacyChallengeCodeHash(
+      normalizedEmail,
+      normalizedCode,
+      pepper,
+    );
+    const { data: status, error: verifyError } = await supabase.rpc(
+      "verify_password_reset_challenge_legacy",
+      {
+        p_email: normalizedEmail,
+        p_code_hash: expectedHash,
+      },
+    );
+    if (verifyError) return json({ error: "Could not verify code." }, 500);
+    if (status === "missing") {
+      return json(
+        { error: "No reset code found. Please request a new code." },
+        404,
+      );
+    }
+    if (status === "expired") {
+      return json(
+        { error: "Reset code expired. Please request a new code." },
+        410,
+      );
+    }
+    if (status === "locked") {
       return json({ error: "Invalid reset code." }, 400);
     }
+    if (status !== "ok") return json({ error: "Invalid reset code." }, 400);
 
-    const { error: updateError } = await supabase
-      .from("pending_password_resets")
-      .update({ verified: true })
-      .eq("email", normalizedEmail);
-    if (updateError) return json({ error: "Could not mark reset code as verified." }, 500);
     return json({ success: true, message: "Reset code verified." });
   } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return json({ error: "Service temporarily unavailable." }, 503);
+    }
     console.error("verify-password-reset-code failed", error);
     return json({ error: "Invalid request." }, 400);
   }

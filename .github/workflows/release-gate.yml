@@ -1,0 +1,84 @@
+name: Release gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  flutter:
+    name: Flutter analyze, contracts, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Analyze maintained sources
+        run: flutter analyze --no-fatal-infos lib test
+      - name: Release-gate contract tests
+        run: >-
+          flutter test
+          test/auth_protocol_contract_test.dart
+          test/f2_f3_protocol_contract_test.dart
+          test/rate_limit_error_test.dart
+          test/feed_v2_controller_test.dart
+          test/chat_v2_auth_boundary_test.dart
+          test/chat_v2_controller_test.dart
+          test/chat_attachment_staging_test.dart
+          test/chat_notification_navigation_test.dart
+          test/transactional_writes_contract_test.dart
+          test/upload_failure_classifier_test.dart
+          test/media_delivery_contract_test.dart
+          test/media_delivery_service_test.dart
+      - name: Compile web release
+        run: flutter build web --release --no-pub
+
+  database:
+    name: Clean Supabase reset, lint, RLS and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.113.0
+      - name: Check deterministic migration versions
+        run: bash scripts/check-migration-versions.sh
+      - name: Start clean local stack
+        run: supabase start
+      - name: Recreate database from zero
+        run: supabase db reset --local
+      - name: Static database lint
+        run: bash scripts/check-database-lint.sh
+      - name: Run all pgTAP suites
+        run: supabase test db supabase/tests/*.test.sql --local
+      - name: Verify generated TypeScript database types
+        run: |
+          generated="$(mktemp)"
+          supabase gen types typescript --local | perl -0pe 's/\n\n\z/\n/' > "$generated"
+          diff -u supabase/live_database.types.ts "$generated"
+
+  edge-functions:
+    name: Edge Functions type-check and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.6
+          cache: true
+      - name: Frozen dependency and type check
+        working-directory: supabase/functions
+        run: deno task --frozen check
+      - name: Edge Function unit tests
+        working-directory: supabase/functions
+        run: deno task --frozen test

@@ -103,6 +103,13 @@ class ChatMessage {
 
   /// voter id → chosen option index.
   final Map<String, int> pollVotes;
+
+  /// V2 poll pages carry aggregate counts instead of every voter identity.
+  /// Legacy messages continue using [pollVotes].
+  final List<int> pollVoteCounts;
+
+  /// The authenticated viewer's current choice, when supplied by Chat v2.
+  final int? pollViewerOption;
   final DateTime? pollClosesAt;
 
   /// Event this message links to (for the inline event card).
@@ -161,10 +168,15 @@ class ChatMessage {
   bool mentionsUser(String userId) =>
       userId.isNotEmpty && mentions.contains(userId);
 
-  int votesForOption(int optionIndex) =>
-      pollVotes.values.where((choice) => choice == optionIndex).length;
+  int votesForOption(int optionIndex) => pollVoteCounts.isNotEmpty
+      ? (optionIndex >= 0 && optionIndex < pollVoteCounts.length
+            ? pollVoteCounts[optionIndex]
+            : 0)
+      : pollVotes.values.where((choice) => choice == optionIndex).length;
 
-  int get totalPollVotes => pollVotes.length;
+  int get totalPollVotes => pollVoteCounts.isNotEmpty
+      ? pollVoteCounts.fold(0, (sum, count) => sum + count)
+      : pollVotes.length;
 
   bool get pollIsClosed =>
       pollClosesAt != null && DateTime.now().isAfter(pollClosesAt!);
@@ -195,6 +207,8 @@ class ChatMessage {
     this.attachmentSize,
     List<String>? pollOptions,
     Map<String, int>? pollVotes,
+    List<int>? pollVoteCounts,
+    this.pollViewerOption,
     this.pollClosesAt,
     this.eventId,
     this.sharedPostId,
@@ -209,7 +223,8 @@ class ChatMessage {
              entry.key: List<String>.unmodifiable(entry.value),
        }),
        pollOptions = List.unmodifiable(pollOptions ?? const []),
-       pollVotes = Map.unmodifiable(pollVotes ?? const {});
+       pollVotes = Map.unmodifiable(pollVotes ?? const {}),
+       pollVoteCounts = List.unmodifiable(pollVoteCounts ?? const []);
 
   ChatMessage copyWith({
     String? id,
@@ -234,6 +249,8 @@ class ChatMessage {
     int? attachmentSize,
     List<String>? pollOptions,
     Map<String, int>? pollVotes,
+    List<int>? pollVoteCounts,
+    int? pollViewerOption,
     DateTime? pollClosesAt,
     String? eventId,
     String? sharedPostId,
@@ -261,6 +278,8 @@ class ChatMessage {
     attachmentSize: attachmentSize ?? this.attachmentSize,
     pollOptions: pollOptions ?? this.pollOptions,
     pollVotes: pollVotes ?? this.pollVotes,
+    pollVoteCounts: pollVoteCounts ?? this.pollVoteCounts,
+    pollViewerOption: pollViewerOption ?? this.pollViewerOption,
     pollClosesAt: pollClosesAt ?? this.pollClosesAt,
     eventId: eventId ?? this.eventId,
     sharedPostId: sharedPostId ?? this.sharedPostId,
@@ -294,6 +313,8 @@ class ChatMessage {
     if (attachmentSize != null) 'attachmentSize': attachmentSize,
     if (pollOptions.isNotEmpty) 'pollOptions': pollOptions,
     if (pollVotes.isNotEmpty) 'pollVotes': pollVotes,
+    if (pollVoteCounts.isNotEmpty) 'pollVoteCounts': pollVoteCounts,
+    if (pollViewerOption != null) 'pollViewerOption': pollViewerOption,
     if (pollClosesAt != null) 'pollClosesAt': pollClosesAt!.toIso8601String(),
     if (eventId != null) 'eventId': eventId,
     if (sharedPostId != null) 'sharedPostId': sharedPostId,
@@ -343,6 +364,11 @@ class ChatMessage {
       for (final entry in (m['pollVotes'] as Map? ?? const {}).entries)
         entry.key.toString(): entry.value as int,
     },
+    pollVoteCounts: (m['pollVoteCounts'] as List? ?? const [])
+        .whereType<num>()
+        .map((value) => value.toInt())
+        .toList(growable: false),
+    pollViewerOption: (m['pollViewerOption'] as num?)?.toInt(),
     pollClosesAt: m['pollClosesAt'] == null
         ? null
         : DateTime.tryParse(m['pollClosesAt'].toString()),

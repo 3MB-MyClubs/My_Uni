@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/student_activity_service.dart';
+import 'rsvp_button.dart';
 import 'student_campus_profile.dart';
 
 /// Shared building blocks for the "Events & activities" area on a student
@@ -174,12 +175,14 @@ class StudentActivityRow extends StatelessWidget {
   final StudentActivityEntry entry;
   final VoidCallback? onTap;
   final bool showDivider;
+  final bool showRsvpControl;
 
   const StudentActivityRow({
     super.key,
     required this.entry,
     this.onTap,
     this.showDivider = true,
+    this.showRsvpControl = false,
   });
 
   @override
@@ -249,6 +252,15 @@ class StudentActivityRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       StudentActivityBadge(entry: entry),
+                      if (showRsvpControl && entry.isUpcoming) ...[
+                        const SizedBox(height: 8),
+                        RsvpButton(
+                          eventId: entry.eventId,
+                          color: entry.color,
+                          compact: true,
+                          event: entry.event,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -276,6 +288,7 @@ class StudentActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: StudentCampusPalette.card,
@@ -478,7 +491,8 @@ class StudentActivityPreview extends StatelessWidget {
                             onTap: onEntryTap == null
                                 ? null
                                 : () => onEntryTap!(upcoming[i]),
-                            showDivider: i < upcoming.length - 1 || past.isNotEmpty,
+                            showDivider:
+                                i < upcoming.length - 1 || past.isNotEmpty,
                           ),
                       ],
                       if (past.isNotEmpty) ...[

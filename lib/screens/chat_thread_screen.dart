@@ -25,6 +25,7 @@ import '../services/notification_service.dart';
 import '../services/people_service.dart';
 import '../services/photo_orientation.dart';
 import '../services/image_cache_service.dart';
+import '../services/media_delivery_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
@@ -148,6 +149,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.addListener(_onEnvChanged);
     localeService.addListener(_onEnvChanged);
     chatStore.addListener(_onStoreChanged);
+    _scrollController.addListener(_onMessageScroll);
     notificationInboxService.addListener(_onNotificationInboxChanged);
     // Post-frame: both can notifyListeners, which is illegal while this
     // route is still mounting mid-build.
@@ -157,12 +159,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_communityInfo?.start());
       }
       if (!canAccess) return;
-      if (_isDirect || _isGroup) {
-        unawaited(chatStore.startDirectMessageSync(_myId));
-      }
-      if (_isClub || _isClubInbox) {
-        unawaited(chatStore.startClubMessageSync(_myId));
-      }
+      unawaited(chatStore.startChatV2Sync(_myId));
+      unawaited(chatStore.loadInitialMessagesV2(widget.threadId));
       if (_isDirect) {
         final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
         if (peerId != null) {
@@ -183,6 +181,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.removeListener(_onEnvChanged);
     localeService.removeListener(_onEnvChanged);
     chatStore.removeListener(_onStoreChanged);
+    _scrollController.removeListener(_onMessageScroll);
     notificationInboxService.removeListener(_onNotificationInboxChanged);
     _communityInfo?.dispose();
     _inputController.dispose();
@@ -194,6 +193,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(chatStore.reconcileThreadV2(widget.threadId));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isDirect) {
           final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
@@ -208,6 +208,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
         _markVisibleMessagesSeen();
       });
+    }
+  }
+
+  void _onMessageScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // reverse:true: the oldest loaded item is at maxScrollExtent. One guarded
+    // request is issued only when the viewport approaches that boundary.
+    if (position.maxScrollExtent - position.pixels <=
+        position.viewportDimension * 0.75) {
+      unawaited(chatStore.loadOlderMessagesV2(widget.threadId));
     }
   }
 
@@ -297,7 +308,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
-    if (chatStore.takeAttachmentUploadFailure()) {
+    final rateLimitMessage = chatStore.takeRateLimitFailureMessage();
+    final permanentFailure = chatStore.takePermanentUploadFailureMessage();
+    final attachmentFailed = chatStore.takeAttachmentUploadFailure();
+    if (permanentFailure != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(permanentFailure)));
+    } else if (rateLimitMessage != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(rateLimitMessage)));
+    }
+    if (permanentFailure == null &&
+        rateLimitMessage == null &&
+        attachmentFailed) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -2042,10 +2067,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Widget _photoAttachment(ChatMessage message) {
     final path = message.attachmentPath!;
-    final isRemote = path.startsWith('http://') || path.startsWith('https://');
+    final isPrivateReference = path.startsWith('chat-attachment://');
+    final isRemote =
+        isPrivateReference ||
+        path.startsWith('http://') ||
+        path.startsWith('https://');
     final file = isRemote ? null : File(path);
     final exists = isRemote || file!.existsSync();
-    final ImageProvider imageProvider = isRemote
+    final ImageProvider? imageProvider = isPrivateReference
+        ? null
+        : isRemote
         ? CachedNetworkImageProvider(
             path,
             cacheKey: stableSupabaseSignedUrlCacheKey(path),
@@ -2054,18 +2085,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return GestureDetector(
       key: ValueKey('chat-photo-${message.id}'),
       onTap: exists
-          ? () => showDialog<void>(
-              context: context,
-              barrierColor: Colors.black.withValues(alpha: 0.92),
-              builder: (dialogContext) => GestureDetector(
-                onTap: () => Navigator.pop(dialogContext),
-                child: InteractiveViewer(
-                  maxScale: 4,
-                  child: Center(
-                    child: Image(image: imageProvider, fit: BoxFit.contain),
-                  ),
-                ),
-              ),
+          ? () => _showChatPhoto(
+              path: path,
+              fallbackProvider: imageProvider,
+              isRemote: isRemote,
             )
           : null,
       child: ClipRRect(
@@ -2076,6 +2099,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             aspectRatio: 4 / 3,
             child: !exists
                 ? _missingPhotoPlaceholder()
+                : isPrivateReference
+                ? PrivateMediaNetworkImage(
+                    key: ValueKey('chat-photo-image-${message.id}'),
+                    reference: path,
+                    rendition: MediaRendition.thumbnail,
+                    cacheWidth: 320,
+                    fit: BoxFit.cover,
+                    placeholderBuilder: (_) => _photoLoadingPlaceholder(),
+                    errorBuilder: (_) => _missingPhotoPlaceholder(),
+                  )
                 : isRemote
                 ? AppNetworkImage(
                     key: ValueKey('chat-photo-image-${message.id}'),
@@ -2100,6 +2133,78 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         : _photoLoadingPlaceholder(),
                     errorBuilder: (_, _, _) => _missingPhotoPlaceholder(),
                   ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showChatPhoto({
+    required String path,
+    required ImageProvider? fallbackProvider,
+    required bool isRemote,
+  }) async {
+    if (path.startsWith('chat-attachment://')) {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.92),
+        builder: (dialogContext) {
+          final size = MediaQuery.sizeOf(dialogContext);
+          return GestureDetector(
+            onTap: () => Navigator.pop(dialogContext),
+            child: InteractiveViewer(
+              maxScale: 4,
+              child: Center(
+                child: PrivateMediaNetworkImage(
+                  reference: path,
+                  rendition: MediaRendition.screen,
+                  cacheWidth: size.width,
+                  cacheHeight: size.height,
+                  fit: BoxFit.contain,
+                  placeholderBuilder: (_) => _photoLoadingPlaceholder(),
+                  errorBuilder: (_) => _missingPhotoPlaceholder(),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      return;
+    }
+    var provider = fallbackProvider;
+    if (isRemote) {
+      try {
+        final size = MediaQuery.sizeOf(context);
+        final media = await mediaDeliveryService
+            .resolvePrivateForCurrentAccount(
+              value: path,
+              rendition: MediaRendition.screen,
+              dimensions: mediaDimensionsFor(
+                rendition: MediaRendition.screen,
+                logicalWidth: size.width,
+                logicalHeight: size.height,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+              ),
+            );
+        provider = CachedNetworkImageProvider(
+          media.url,
+          cacheKey: media.cacheKey,
+        );
+      } catch (_) {
+        // The already-authorized thumbnail remains a safe visual fallback.
+      }
+    }
+    if (!mounted || provider == null) return;
+    final resolvedProvider = provider;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      builder: (dialogContext) => GestureDetector(
+        onTap: () => Navigator.pop(dialogContext),
+        child: InteractiveViewer(
+          maxScale: 4,
+          child: Center(
+            child: Image(image: resolvedProvider, fit: BoxFit.contain),
           ),
         ),
       ),
@@ -2131,7 +2236,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     child: SizedBox(
       width: 220,
       height: 220,
-      child: ChatVideoPlayer(path: path),
+      // Do not open a network video merely to render a conversation row.
+      // Playback initialization (and its range requests) begins on tap.
+      child: ChatVideoPlayer(path: path, active: false),
     ),
   );
 

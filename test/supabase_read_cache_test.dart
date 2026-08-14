@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flutter_application_1/services/supabase_read_cache.dart';
+import 'package:flutter_application_1/services/chat_v2_service.dart';
 
 void main() {
   test(
@@ -72,4 +73,25 @@ void main() {
       'value-2',
     );
   });
+
+  test(
+    'chat v2 summary cache is account scoped across logout and switch',
+    () async {
+      final cache = SupabaseReadCache();
+      var calls = 0;
+      Future<String> read(String actor) => cache.getOrFetch<String>(
+        key: chatV2SummaryCacheKey(actor, 40),
+        ttl: const Duration(minutes: 1),
+        fetch: () async {
+          calls++;
+          return actor;
+        },
+      );
+
+      expect(await read('user-a'), 'user-a');
+      cache.invalidateWhere((key) => key.startsWith('chat-v2:'));
+      expect(await read('user-b'), 'user-b');
+      expect(calls, 2);
+    },
+  );
 }

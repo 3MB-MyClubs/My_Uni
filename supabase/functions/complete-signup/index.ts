@@ -1,6 +1,18 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+
+// TEMPORARY LEGACY COMPATIBILITY — remove after minimum supported app version advances.
+
+import {
+  getServiceRoleKey,
+  isKuEmail,
+  normalizeEmail,
+} from "../_shared/auth_challenge.ts";
+import {
+  enforceEdgeRateLimit,
+  RateLimitUnavailableError,
+} from "../_shared/rate_limit.ts";
 
 interface ReqPayload {
   email: string;
@@ -31,24 +43,8 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function isKuEmail(email: string) {
-  return /^[a-zA-Z0-9._%+-]+@ku\.edu\.tr$/.test(email);
-}
-
 function isValidPassword(password: string) {
   return /^\d{6,}$/.test(password);
-}
-
-function getServiceRoleKey() {
-  const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
-  if (!secretKeysRaw) return null;
-
-  try {
-    const secretKeys = JSON.parse(secretKeysRaw);
-    return secretKeys["default"] ?? null;
-  } catch (_error) {
-    return null;
-  }
 }
 
 Deno.serve(async (req) => {
@@ -65,7 +61,7 @@ Deno.serve(async (req) => {
   try {
     const payload: ReqPayload = await req.json();
 
-    const email = payload.email?.trim().toLowerCase();
+    const email = normalizeEmail(payload.email);
     const password = payload.password?.trim();
     const fullName = payload.full_name?.trim();
     const majorId = payload.major_id?.trim();
@@ -123,35 +119,14 @@ Deno.serve(async (req) => {
         persistSession: false,
       },
     });
-
-    const { data: pending, error: pendingError } = await supabase
-      .from("pending_signups")
-      .select("email, verified, expires_at")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (pendingError) {
-      console.error("pending signup lookup failed", pendingError);
-      return json(
-        {
-          error: "Could not check verification status.",
-          details: pendingError.message,
-          code: pendingError.code,
-        },
-        500,
-      );
-    }
-
-    if (!pending || !pending.verified) {
-      return json({ error: "Email has not been verified." }, 403);
-    }
-
-    if (new Date(pending.expires_at).getTime() < Date.now()) {
-      return json(
-        { error: "Verification expired. Please request a new code." },
-        410,
-      );
-    }
+    const limited = await enforceEdgeRateLimit(
+      supabase,
+      req,
+      "auth_signup_complete",
+      email,
+    );
+    // TEMPORARY V1 COMPATIBILITY: preserve the existing unverified response.
+    if (limited) return json({ error: "Email has not been verified." }, 403);
 
     const { data: existingProfile, error: existingProfileError } =
       await supabase
@@ -232,6 +207,24 @@ Deno.serve(async (req) => {
           400,
         );
       }
+    }
+
+    const { data: consumeStatus, error: consumeError } = await supabase.rpc(
+      "consume_signup_verification_legacy",
+      { p_email: email },
+    );
+    if (consumeError) {
+      console.error("legacy signup verification consumption failed", consumeError);
+      return json({ error: "Could not validate email verification." }, 500);
+    }
+    if (consumeStatus === "expired") {
+      return json(
+        { error: "Verification expired. Please request a new code." },
+        410,
+      );
+    }
+    if (consumeStatus !== "ok") {
+      return json({ error: "Email has not been verified." }, 403);
     }
 
     const { data: createdUser, error: createUserError } =
@@ -349,6 +342,9 @@ Deno.serve(async (req) => {
       terms_accepted_at: termsAcceptance.accepted_at,
     });
   } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return json({ error: "Service temporarily unavailable." }, 503);
+    }
     console.error("complete-signup failed", error);
     return json({ error: "Invalid request." }, 400);
   }

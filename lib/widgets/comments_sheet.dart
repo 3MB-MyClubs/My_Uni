@@ -128,7 +128,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
     } on CommentNotDeliveredException catch (error) {
       // In a debug build show why, so a failing backend is diagnosable from
       // the device instead of only from the attached console.
-      message = kDebugMode ? error.reason : S.commentFailed;
+      message =
+          error.userMessage ?? (kDebugMode ? error.reason : S.commentFailed);
     } catch (error) {
       debugPrint('[comments] send failed: $error');
       message = S.commentFailed;

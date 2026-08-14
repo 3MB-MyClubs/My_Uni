@@ -6,6 +6,7 @@ import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/supabase_interaction_service.dart';
 import '../services/user_state.dart';
 import '../widgets/user_avatar.dart';
 import 'user_profile_screen.dart';
@@ -30,6 +31,7 @@ class EventAttendeeListScreen extends StatefulWidget {
 
 class _EventAttendeeListScreenState extends State<EventAttendeeListScreen> {
   bool _loading = true;
+  List<User>? _remoteAttendees;
 
   @override
   void initState() {
@@ -39,7 +41,15 @@ class _EventAttendeeListScreenState extends State<EventAttendeeListScreen> {
 
   Future<void> _hydrateAttendees() async {
     try {
-      await peopleService.hydrateProfilesByIds(widget.event.attendeeUserIds);
+      final attendees = await supabaseInteractionService.fetchEventAttendees(
+        widget.event.id,
+      );
+      _remoteAttendees = attendees;
+      await peopleService.hydrateProfilesByIds(
+        attendees.isEmpty
+            ? widget.event.attendeeUserIds
+            : attendees.map((user) => user.id),
+      );
     } catch (_) {
       // The list remains useful with locally known profiles and initials.
     }
@@ -49,6 +59,7 @@ class _EventAttendeeListScreenState extends State<EventAttendeeListScreen> {
   Map<String, User> get _knownPeople => {
     for (final user in users) user.id: user,
     for (final user in peopleService.cachedPeople) user.id: user,
+    for (final user in _remoteAttendees ?? const <User>[]) user.id: user,
   };
 
   User _userFor(String id, String fallbackName) {
@@ -66,7 +77,11 @@ class _EventAttendeeListScreenState extends State<EventAttendeeListScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final attendeeIds = widget.event.attendeeUserIds.toSet().toList();
+    final attendeeIds =
+        (_remoteAttendees?.map((user) => user.id) ??
+                widget.event.attendeeUserIds)
+            .toSet()
+            .toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,

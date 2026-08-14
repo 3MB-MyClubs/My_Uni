@@ -7,6 +7,7 @@ import 'academic_year_options.dart';
 import '../l10n/app_localizations.dart';
 import 'auth_service.dart';
 import 'locale_service.dart';
+import 'rate_limit_error.dart';
 import 'student_profile_service.dart';
 import 'supabase_config.dart';
 import 'supabase_read_cache.dart';
@@ -15,9 +16,10 @@ import 'terms_acceptance_service.dart';
 class SignupResult {
   final bool success;
   final String? error;
+  final String? capability;
 
-  const SignupResult.success() : success = true, error = null;
-  const SignupResult.failure(this.error) : success = false;
+  const SignupResult.success({this.capability}) : success = true, error = null;
+  const SignupResult.failure(this.error) : success = false, capability = null;
 }
 
 class SignupLookupItem {
@@ -90,19 +92,20 @@ class SignupService {
   }
 
   Future<SignupResult> sendCode(String email) async {
-    return _invoke('send-signup-code', {'email': email});
+    return _invoke('send-signup-code-v2', {'email': email});
   }
 
   Future<SignupResult> verifyCode({
     required String email,
     required String code,
   }) async {
-    return _invoke('verify-signup-code', {'email': email, 'code': code});
+    return _invoke('verify-signup-code-v2', {'email': email, 'code': code});
   }
 
   Future<SignupResult> completeSignup({
     required String email,
     required String password,
+    required String capability,
     required String fullName,
     required String majorId,
     required String academicYearId,
@@ -118,9 +121,10 @@ class SignupService {
       return SignupResult.failure(_l10n.studentPasswordRule);
     }
 
-    final result = await _invoke('complete-signup', {
+    final result = await _invoke('complete-signup-v2', {
       'email': email,
       'password': password,
+      'capability': capability,
       'full_name': fullName,
       'major_id': majorId,
       'academic_year_id': academicYearId,
@@ -184,10 +188,18 @@ class SignupService {
       final response = await client.functions.invoke(functionName, body: body);
       final data = response.data;
       if (data is Map && data['error'] != null) {
-        return SignupResult.failure(data['error'].toString());
+        final limited = RateLimitInfo.from(data);
+        return SignupResult.failure(
+          limited?.displayMessage ?? data['error'].toString(),
+        );
       }
-      return const SignupResult.success();
+      final capability = data is Map && data['capability'] is String
+          ? data['capability'] as String
+          : null;
+      return SignupResult.success(capability: capability);
     } on FunctionException catch (error) {
+      final limited = RateLimitInfo.from(error);
+      if (limited != null) return SignupResult.failure(limited.displayMessage);
       final details = error.details;
       if (details is Map && details['error'] != null) {
         return SignupResult.failure(details['error'].toString());

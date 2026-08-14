@@ -225,17 +225,27 @@ create trigger post_comment_notification after insert on public.post_comments
 create trigger event_rsvp_notification after insert on public.event_rsvps
   for each row execute function private.notify_club_activity();
 
--- The legacy anon JWT is a public client credential. It authorizes the
--- database webhook at the Edge gateway; the function only processes a stored,
--- unclaimed notification row and never accepts notification text from callers.
+-- Runtime endpoint/key configuration is stored in Vault. Fresh/local projects
+-- safely skip delivery until operators provide notification_push_url and
+-- notification_push_anon_key; no production project identifiers live here.
 create or replace function private.dispatch_notification_push()
 returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  v_url text;
+  v_anon_key text;
 begin
+  select decrypted_secret into v_url
+  from vault.decrypted_secrets where name = 'notification_push_url';
+  select decrypted_secret into v_anon_key
+  from vault.decrypted_secrets where name = 'notification_push_anon_key';
+  if v_url is null or v_anon_key is null then
+    return new;
+  end if;
   perform net.http_post(
-    url := 'https://bfntlbisipxgzxdmwxkz.supabase.co/functions/v1/send-push',
+    url := v_url,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmbnRsYmlzaXB4Z3p4ZG13eGt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2Njk0MzcsImV4cCI6MjA5NDI0NTQzN30.aGQPcb8jCr4BcyzyOtV19U-T5rlnT_CPCgARGY5zRck'
+      'Authorization', 'Bearer ' || v_anon_key
     ),
     body := jsonb_build_object(
       'type', 'INSERT',

@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/event.dart';
 import 'lazy_content_loader.dart';
+import 'original_media_bytes.dart';
 import 'supabase_config.dart';
 
 class SupabaseEventService {
@@ -15,43 +16,62 @@ class SupabaseEventService {
     return Supabase.instance.client;
   }
 
+  bool get isAvailable => _client != null;
+
   Future<Event> createEvent(Event event) async {
     final client = _client;
     if (client == null) return event;
 
+    final eventId = _looksLikeUuid(event.id) ? event.id : const Uuid().v4();
     final uploadedImage = event.imagePath == null
         ? null
-        : await _uploadImage(clubId: event.clubId, imagePath: event.imagePath!);
+        : await _uploadImage(
+            clubId: event.clubId,
+            eventId: eventId,
+            imagePath: event.imagePath!,
+            revision: 'cover',
+          );
 
-    final payload = <String, dynamic>{
-      'club_id': event.clubId,
-      'title': event.title,
-      'description': event.description,
-      'location': event.location,
-      'event_date': _dateOnly(event.dateTime),
-      'starts_at': event.dateTime.toUtc().toIso8601String(),
-      'ends_at': event.endTime.toUtc().toIso8601String(),
-      'is_public': true,
-      'created_by_user_id': event.createdByUserId,
-      'tags': event.tags,
-      'registration_url': event.registrationUrl,
-      'schedule': event.schedule?.map((slot) => slot.toMap()).toList(),
-      'speakers': event.speakers.map((speaker) => speaker.toMap()).toList(),
-    };
-    if (uploadedImage != null) {
-      payload['image_path'] = uploadedImage.path;
-      payload['image_url'] = uploadedImage.publicUrl;
+    dynamic response;
+    try {
+      response = await client
+          .rpc(
+            'create_club_event_transactional_v2',
+            params: {
+              'p_event_id': eventId,
+              'p_club_id': event.clubId,
+              'p_title': event.title,
+              'p_description': event.description,
+              'p_location': event.location,
+              'p_event_date': _dateOnly(event.dateTime),
+              'p_starts_at': event.dateTime.toUtc().toIso8601String(),
+              'p_ends_at': event.endTime.toUtc().toIso8601String(),
+              'p_image_path': uploadedImage?.path,
+              'p_image_url': uploadedImage?.publicUrl,
+              'p_tags': event.tags,
+              'p_registration_url': event.registrationUrl,
+              'p_schedule': event.schedule
+                  ?.map((slot) => slot.toMap())
+                  .toList(),
+              'p_speakers': event.speakers
+                  .map((speaker) => speaker.toMap())
+                  .toList(),
+            },
+          )
+          .single();
+    } catch (error, stackTrace) {
+      if (uploadedImage != null) {
+        await _registerAbandonedUpload(
+          clubId: event.clubId,
+          eventId: eventId,
+          objectPath: uploadedImage.path,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
+    final row = Map<String, dynamic>.from(response);
 
-    final row = await client
-        .from('events')
-        .insert(payload)
-        .select(
-          'id, club_id, title, description, location, event_date, starts_at, ends_at, image_path, image_url, created_by_user_id, tags, registration_url, schedule, speakers',
-        )
-        .single();
-
-    final data = Map<String, dynamic>.from(row);
+    final data = row;
     lazyContentLoader.invalidateContent();
     return _eventFromRow(data, fallback: event, uploadedImage: uploadedImage);
   }
@@ -64,42 +84,61 @@ class SupabaseEventService {
         ? null
         : _isRemoteImageValue(event.imagePath!)
         ? null
-        : await _uploadImage(clubId: event.clubId, imagePath: event.imagePath!);
+        : await _uploadImage(
+            clubId: event.clubId,
+            eventId: event.id,
+            imagePath: event.imagePath!,
+            revision: 'replacement-${const Uuid().v4()}',
+          );
 
-    final payload = <String, dynamic>{
-      'title': event.title,
-      'description': event.description,
-      'location': event.location,
-      'event_date': _dateOnly(event.dateTime),
-      'starts_at': event.dateTime.toUtc().toIso8601String(),
-      'ends_at': event.endTime.toUtc().toIso8601String(),
-      'tags': event.tags,
-      'registration_url': event.registrationUrl,
-      'schedule': event.schedule?.map((slot) => slot.toMap()).toList(),
-      'speakers': event.speakers.map((speaker) => speaker.toMap()).toList(),
-    };
-    if (uploadedImage != null) {
-      payload['image_path'] = uploadedImage.path;
-      payload['image_url'] = uploadedImage.publicUrl;
-    } else if (event.imagePath == null || event.imagePath!.trim().isEmpty) {
-      payload['image_path'] = null;
-      payload['image_url'] = null;
+    final retainedPath =
+        uploadedImage?.path ??
+        ((event.imagePath == null || event.imagePath!.trim().isEmpty)
+            ? null
+            : _objectPathFromImageValue(event.imagePath));
+    final retainedUrl =
+        uploadedImage?.publicUrl ??
+        ((event.imagePath == null || event.imagePath!.trim().isEmpty)
+            ? null
+            : event.imagePath);
+    dynamic raw;
+    try {
+      raw = await client.rpc<Map<String, dynamic>>(
+        'update_club_event_transactional_v2',
+        params: {
+          'p_event_id': event.id,
+          'p_title': event.title,
+          'p_description': event.description,
+          'p_location': event.location,
+          'p_event_date': _dateOnly(event.dateTime),
+          'p_starts_at': event.dateTime.toUtc().toIso8601String(),
+          'p_ends_at': event.endTime.toUtc().toIso8601String(),
+          'p_image_path': retainedPath,
+          'p_image_url': retainedUrl,
+          'p_tags': event.tags,
+          'p_registration_url': event.registrationUrl,
+          'p_schedule': event.schedule?.map((slot) => slot.toMap()).toList(),
+          'p_speakers': event.speakers
+              .map((speaker) => speaker.toMap())
+              .toList(),
+        },
+      );
+    } catch (error, stackTrace) {
+      if (uploadedImage != null) {
+        await _registerAbandonedUpload(
+          clubId: event.clubId,
+          eventId: event.id,
+          objectPath: uploadedImage.path,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
-
-    final row = await client
-        .from('events')
-        .update(payload)
-        .eq('id', event.id)
-        .select(
-          'id, club_id, title, description, location, event_date, starts_at, ends_at, image_path, image_url, created_by_user_id, tags, registration_url, schedule, speakers',
-        )
-        .single();
-
-    if (uploadedImage != null && previousImagePath != uploadedImage.publicUrl) {
-      await _deleteStoredImage(previousImagePath);
-    }
-
-    final data = Map<String, dynamic>.from(row);
+    final result = Map<String, dynamic>.from(raw as Map);
+    final data = Map<String, dynamic>.from(result['entity'] as Map);
+    await _finishQueuedCleanup(
+      cleanupId: result['cleanup_id']?.toString(),
+      objectPath: result['cleanup_path']?.toString(),
+    );
     lazyContentLoader.invalidateContent();
     return _eventFromRow(data, fallback: event, uploadedImage: uploadedImage);
   }
@@ -108,15 +147,19 @@ class SupabaseEventService {
     final client = _client;
     if (client == null || !_looksLikeUuid(event.id)) return;
 
-    final deletedRows = await client
-        .from('events')
-        .delete()
-        .eq('id', event.id)
-        .select('id');
-    if (deletedRows.isEmpty) {
+    final result = Map<String, dynamic>.from(
+      await client.rpc<Map<String, dynamic>>(
+        'delete_club_event_transactional_v2',
+        params: {'p_event_id': event.id, 'p_club_id': event.clubId},
+      ),
+    );
+    if (result['deleted'] != true) {
       throw StateError('Event was not deleted.');
     }
-    await _deleteStoredImage(event.imagePath);
+    await _finishQueuedCleanup(
+      cleanupId: result['cleanup_id']?.toString(),
+      objectPath: result['cleanup_path']?.toString(),
+    );
     lazyContentLoader.invalidateContent();
   }
 
@@ -151,15 +194,17 @@ class SupabaseEventService {
 
   Future<_UploadedEventImage> _uploadImage({
     required String clubId,
+    required String eventId,
     required String imagePath,
+    required String revision,
   }) async {
     final client = _client;
     if (client == null) {
       return _UploadedEventImage(path: imagePath, publicUrl: imagePath);
     }
 
-    final bytes = await File(imagePath).readAsBytes();
-    final objectPath = 'events/$clubId/${const Uuid().v4()}.jpg';
+    final bytes = await readCanonicalMediaBytes(File(imagePath));
+    final objectPath = 'events/$clubId/$eventId/$revision.jpg';
 
     await client.storage
         .from(_imageBucket)
@@ -177,6 +222,42 @@ class SupabaseEventService {
       path: objectPath,
       publicUrl: client.storage.from(_imageBucket).getPublicUrl(objectPath),
     );
+  }
+
+  Future<void> _registerAbandonedUpload({
+    required String clubId,
+    required String eventId,
+    required String objectPath,
+  }) async {
+    try {
+      await _client?.rpc(
+        'register_abandoned_content_upload_v2',
+        params: {
+          'p_bucket_id': _imageBucket,
+          'p_object_path': objectPath,
+          'p_entity_type': 'event',
+          'p_entity_id': eventId,
+          'p_club_id': clubId,
+        },
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _finishQueuedCleanup({
+    required String? cleanupId,
+    required String? objectPath,
+  }) async {
+    final client = _client;
+    if (client == null || cleanupId == null || objectPath == null) return;
+    try {
+      await client.storage.from(_imageBucket).remove([objectPath]);
+      await client.rpc(
+        'complete_storage_cleanup_v2',
+        params: {'p_cleanup_id': cleanupId},
+      );
+    } catch (_) {
+      // The DB already points at the new object/is deleted; queue retries later.
+    }
   }
 
   String _dateOnly(DateTime value) {
@@ -218,18 +299,6 @@ class SupabaseEventService {
 
   bool _isRemoteImageValue(String value) =>
       value.startsWith('http://') || value.startsWith('https://');
-
-  Future<void> _deleteStoredImage(String? imagePath) async {
-    final client = _client;
-    final objectPath = _objectPathFromImageValue(imagePath);
-    if (client == null || objectPath == null) return;
-
-    try {
-      await client.storage.from(_imageBucket).remove([objectPath]);
-    } catch (_) {
-      // Non-critical: the database row no longer points at this image.
-    }
-  }
 
   String? _objectPathFromImageValue(String? value) {
     final text = value?.trim() ?? '';

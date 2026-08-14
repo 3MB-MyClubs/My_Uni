@@ -216,10 +216,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       unawaited(_startInitialExperience());
       unawaited(
         appBootstrap.ready.then((_) {
-          if (!mounted) return;
-          if (authService.isStudentSession) {
-            unawaited(chatStore.startDirectMessageSync(_currentUserId));
-          }
+          if (!mounted || !appBootstrap.localDataReady) return;
+          unawaited(chatStore.startChatV2Sync(_currentUserId));
         }),
       );
     });
@@ -391,6 +389,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
     accountSwitcherService.removeListener(_onAccountChanged);
+    unawaited(chatStore.stopChatV2Sync());
     _chatsController.dispose();
     _feedController.dispose();
     _tabTransitionController.dispose();

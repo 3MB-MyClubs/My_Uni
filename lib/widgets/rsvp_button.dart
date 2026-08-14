@@ -42,6 +42,16 @@ class _RsvpButtonState extends State<RsvpButton>
   @override
   void initState() {
     super.initState();
+    final userId = _userId;
+    if (widget.event != null && userId.isNotEmpty) {
+      // Profile history can resolve an event that was not part of the global
+      // feed snapshot. Seed the shared store from that same event so the
+      // control renders the correct state before the first tap.
+      rsvpStore.seed(
+        widget.eventId,
+        widget.event!.attendeeUserIds.contains(userId),
+      );
+    }
     _confirmationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 440),
@@ -131,6 +141,7 @@ class _RsvpButtonState extends State<RsvpButton>
 
   Widget _build(BuildContext context, bool attending, bool pending) {
     void onToggle() {
+      if (pending) return;
       final wasAttending = rsvpStore.isAttending(widget.eventId);
       if (!wasAttending) {
         HapticFeedback.lightImpact();
@@ -138,7 +149,7 @@ class _RsvpButtonState extends State<RsvpButton>
       } else {
         HapticFeedback.selectionClick();
       }
-      unawaited(rsvpStore.toggle(widget.eventId, _userId));
+      unawaited(rsvpStore.toggle(widget.eventId, _userId, event: widget.event));
       if (!wasAttending && widget.event != null) {
         _syncCalendar(context);
       }

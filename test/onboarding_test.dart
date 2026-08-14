@@ -11,6 +11,7 @@ import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/onboarding/onboarding_steps.dart';
 import 'package:flutter_application_1/onboarding/starter_checklist_service.dart';
 import 'package:flutter_application_1/onboarding/widgets/onboarding_guide_card.dart';
+import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
@@ -371,6 +372,22 @@ void main() {
       await service.initialize();
 
       // 'c1' is pre-seeded — it must NOT count as "followed a club".
+      // Earlier widget tests can clear the global mock state, so restore this
+      // test's stated baseline explicitly instead of relying on file order.
+      if (!userState.followedClubIds.contains('c1')) {
+        userState.toggleFollow('c1');
+      }
+      final checklistEvent = Event(
+        id: 'starter-checklist-event',
+        clubId: 'c1',
+        title: 'Starter checklist event',
+        description: '',
+        dateTime: DateTime(2030),
+        endTime: DateTime(2030, 1, 1, 1),
+        location: 'Campus',
+        attendeeUserIds: [],
+      );
+      events.add(checklistEvent);
       expect(userState.followedClubIds, contains('c1'));
       await service.startFor('u1');
       expect(service.isActiveFor('u1'), isTrue);
@@ -386,10 +403,10 @@ void main() {
       expect(service.followDone, isTrue);
 
       // A new RSVP checks the item off (seed + any store notification).
-      rsvpStore.seed(events.first.id, true);
+      rsvpStore.seed(checklistEvent.id, true);
       userState.toggleFollowUser('test-peer');
       expect(service.rsvpDone, isTrue);
-      rsvpStore.seed(events.first.id, false);
+      rsvpStore.seed(checklistEvent.id, false);
       userState.toggleFollowUser('test-peer');
 
       // Sending a message after the tour checks the last item off.
@@ -404,6 +421,7 @@ void main() {
       expect(service.chatDone, isTrue);
       expect(service.allDone, isTrue);
       expect(service.isActiveFor('u1'), isFalse);
+      events.remove(checklistEvent);
     });
 
     test('dismissal and progress survive a service restart', () async {

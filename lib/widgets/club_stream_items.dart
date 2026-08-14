@@ -642,7 +642,7 @@ class ClubPollMessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myVote = message.pollVotes[myId];
+    final myVote = message.pollViewerOption ?? message.pollVotes[myId];
     final total = message.totalPollVotes;
     final counts = [
       for (var i = 0; i < message.pollOptions.length; i++)
@@ -1566,7 +1566,7 @@ class ClubVideoAttachment extends StatelessWidget {
           height: 230,
           width: double.infinity,
           decoration: BoxDecoration(border: Border.all(color: t.border)),
-          child: ChatVideoPlayer(path: path),
+          child: ChatVideoPlayer(path: path, active: false),
         ),
       ),
     );

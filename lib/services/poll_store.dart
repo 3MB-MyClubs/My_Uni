@@ -16,6 +16,10 @@ class PollStore extends ChangeNotifier {
 
   /// postId → (voterId → optionIndex). Remote voters merge in on hydrate.
   final Map<String, Map<String, int>> _votes = {};
+
+  /// Aggregate-only option totals supplied by Feed v2. No voter identities are
+  /// retained for these posts; the current viewer remains in [_votes].
+  final Map<String, List<int>> _feedOptionCounts = {};
   final Set<String> _hydratedPostIds = {};
   Box<dynamic>? _box;
 
@@ -53,10 +57,39 @@ class PollStore extends ChangeNotifier {
 
   int? myVote(String postId, String userId) => _votes[postId]?[userId];
 
-  int totalVotes(String postId) => _votes[postId]?.length ?? 0;
+  int totalVotes(String postId) =>
+      _feedOptionCounts[postId]?.fold<int>(0, (sum, value) => sum + value) ??
+      _votes[postId]?.length ??
+      0;
 
   int votesForOption(String postId, int optionIndex) =>
-      _votes[postId]?.values.where((v) => v == optionIndex).length ?? 0;
+      optionIndex >= 0 && optionIndex < (_feedOptionCounts[postId]?.length ?? 0)
+      ? _feedOptionCounts[postId]![optionIndex]
+      : _votes[postId]?.values.where((v) => v == optionIndex).length ?? 0;
+
+  /// Seeds aggregate poll results and only the authenticated viewer's vote.
+  /// This replaces the legacy feed's download of every voter identity.
+  void seedFeedSummaries({
+    required Map<String, List<int>> optionCountsByPostId,
+    required Map<String, int?> viewerVotesByPostId,
+    required String userId,
+  }) {
+    if (optionCountsByPostId.isEmpty) return;
+    for (final entry in optionCountsByPostId.entries) {
+      _feedOptionCounts[entry.key] = List<int>.from(entry.value);
+      _hydratedPostIds.add(entry.key);
+      if (userId.isEmpty) continue;
+      final voters = _votes.putIfAbsent(entry.key, () => {});
+      final viewerVote = viewerVotesByPostId[entry.key];
+      if (viewerVote == null) {
+        voters.remove(userId);
+      } else {
+        voters[userId] = viewerVote;
+      }
+    }
+    _save();
+    notifyListeners();
+  }
 
   /// Seeds remote votes for many posts at once (from the batched poll_votes
   /// query at content load) and marks them hydrated, so [hydrate] becomes a
@@ -119,6 +152,13 @@ class PollStore extends ChangeNotifier {
     final voters = _votes.putIfAbsent(post.id, () => {});
     final previous = voters[userId];
     if (previous == optionIndex) return;
+    final feedCounts = _feedOptionCounts[post.id];
+    if (feedCounts != null) {
+      if (previous != null && previous >= 0 && previous < feedCounts.length) {
+        feedCounts[previous] = (feedCounts[previous] - 1).clamp(0, 1 << 31);
+      }
+      feedCounts[optionIndex] = feedCounts[optionIndex] + 1;
+    }
     voters[userId] = optionIndex;
     _save();
     notifyListeners();
@@ -127,12 +167,20 @@ class PollStore extends ChangeNotifier {
     try {
       await supabaseInteractionService.upsertPollVote(
         postId: post.id,
-        profileId: userId,
         optionIndex: optionIndex,
         pollId: post.poll?.pollId,
       );
     } catch (error) {
       debugPrint('Poll vote supabase write failed: $error');
+      if (feedCounts != null) {
+        feedCounts[optionIndex] = (feedCounts[optionIndex] - 1).clamp(
+          0,
+          1 << 31,
+        );
+        if (previous != null && previous >= 0 && previous < feedCounts.length) {
+          feedCounts[previous] = feedCounts[previous] + 1;
+        }
+      }
       if (previous == null) {
         voters.remove(userId);
       } else {

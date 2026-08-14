@@ -1,12 +1,13 @@
 import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/mock_data.dart';
 import '../services/photo_file_cache.dart';
+import '../services/media_delivery_service.dart';
 import '../services/user_state.dart';
 import 'loading_skeleton.dart';
 import 'profile_photo_viewer.dart';
+import 'app_network_image.dart';
 
 /// Shows a club's profile photo if one has been set, otherwise falls back to
 /// the first letter of the club name on a colored background.
@@ -67,11 +68,11 @@ class ClubAvatar extends ConsumerWidget {
     final isCircle = shape == 'circle';
 
     if (logoUrl != null && _isNetworkImage(logoUrl)) {
-      return _photo(context, CachedNetworkImageProvider(logoUrl), isCircle);
+      return _remotePhoto(context, logoUrl, isCircle);
     }
 
     if (photoPath != null && _isNetworkImage(photoPath)) {
-      return _photo(context, CachedNetworkImageProvider(photoPath), isCircle);
+      return _remotePhoto(context, photoPath, isCircle);
     }
 
     final file = photoPath != null ? File(photoPath) : null;
@@ -80,7 +81,7 @@ class ClubAvatar extends ConsumerWidget {
     }
 
     if (fallbackUrl != null) {
-      return _photo(context, CachedNetworkImageProvider(fallbackUrl), isCircle);
+      return _remotePhoto(context, fallbackUrl, isCircle);
     }
     return _initial(isCircle);
   }
@@ -115,8 +116,9 @@ class ClubAvatar extends ConsumerWidget {
   Widget _photo(
     BuildContext context,
     ImageProvider imageProvider,
-    bool isCircle,
-  ) {
+    bool isCircle, {
+    ImageProvider? viewerProvider,
+  }) {
     // Decode at the actual rendered size (accounting for screen density)
     // instead of the full uploaded resolution (up to 3840px for a ~48px
     // avatar slot). The full-resolution provider is kept for the tap-to-view
@@ -126,7 +128,7 @@ class ClubAvatar extends ConsumerWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () => showProfilePhotoViewer(
         context: context,
-        imageProvider: imageProvider,
+        imageProvider: viewerProvider ?? imageProvider,
       ),
       child: ClipRRect(
         borderRadius: isCircle
@@ -144,6 +146,29 @@ class ClubAvatar extends ConsumerWidget {
           errorBuilder: (ctx, e, st) => _initial(isCircle),
           loadingBuilder: (ctx, child, progress) =>
               progress == null ? child : _skeleton(isCircle),
+        ),
+      ),
+    );
+  }
+
+  Widget _remotePhoto(BuildContext context, String url, bool isCircle) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => showProfilePhotoViewer(context: context, networkUrl: url),
+      child: ClipRRect(
+        borderRadius: isCircle
+            ? BorderRadius.all(Radius.circular(size / 2))
+            : BorderRadius.all(Radius.circular(borderRadius)),
+        child: AppNetworkImage(
+          url: url,
+          rendition: MediaRendition.thumbnail,
+          width: size,
+          height: size,
+          cacheWidth: size,
+          cacheHeight: size,
+          fit: BoxFit.cover,
+          placeholderBuilder: (_) => _skeleton(isCircle),
+          errorBuilder: (_) => _initial(isCircle),
         ),
       ),
     );

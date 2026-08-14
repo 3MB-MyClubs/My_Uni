@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'event_cleanup_service.dart';
 import 'supabase_content_service.dart';
 import 'supabase_config.dart';
+import 'supabase_interaction_service.dart';
 import 'supabase_read_cache.dart';
 import 'people_service.dart';
 import 'student_activity_service.dart';
@@ -114,6 +115,7 @@ class LazyContentLoader {
     _contentLoad = null;
     _countLoad = null;
     supabaseReadCache.clear();
+    supabaseInteractionService.clearPostLikerPreviewCaches();
     peopleService.clearRemoteCaches();
     studentActivityService.clearRemoteHistory();
     if (clearRemoteContent) {
@@ -148,6 +150,7 @@ class LazyContentLoader {
       _contentLoad = null;
       _countLoad = null;
       supabaseReadCache.clear();
+      supabaseInteractionService.clearPostLikerPreviewCaches();
       peopleService.clearRemoteCaches();
       studentActivityService.clearRemoteHistory();
       supabaseContentService.clearSessionContent();

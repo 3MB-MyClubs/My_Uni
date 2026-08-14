@@ -50,6 +50,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   String _query = '';
   _ChatInboxFilter _filter = _ChatInboxFilter.students;
   final Set<String> _requestedProfileIds = {};
+  final ScrollController _summaryScrollController = ScrollController();
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -77,13 +78,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
     localeService.addListener(_onEnvChanged);
     themeService.addListener(_onEnvChanged);
     chatStore.addListener(_onChatStoreChanged);
+    _summaryScrollController.addListener(_onSummaryScroll);
     widget.controller?.addListener(_showStudentChats);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (authService.isStudentSession) {
-        unawaited(chatStore.startDirectMessageSync(_myId));
-        unawaited(_hydratePeopleDirectory());
-      }
-      unawaited(chatStore.startClubMessageSync(_myId));
+      unawaited(chatStore.startChatV2Sync(_myId));
       // Club inbox rows are visible to the club admin as well as the student.
       // Hydrate the student profile for both sessions so the private thread
       // has an identity and the private label, not an empty title.
@@ -96,6 +94,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
     localeService.removeListener(_onEnvChanged);
     themeService.removeListener(_onEnvChanged);
     chatStore.removeListener(_onChatStoreChanged);
+    _summaryScrollController.removeListener(_onSummaryScroll);
+    _summaryScrollController.dispose();
     widget.controller?.removeListener(_showStudentChats);
     super.dispose();
   }
@@ -107,6 +107,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _onChatStoreChanged() {
     if (!mounted) return;
     unawaited(_hydrateDmProfiles());
+  }
+
+  void _onSummaryScroll() {
+    if (!_summaryScrollController.hasClients || _query.isNotEmpty) return;
+    final position = _summaryScrollController.position;
+    if (position.maxScrollExtent - position.pixels <=
+        position.viewportDimension) {
+      unawaited(chatStore.loadMoreConversationSummariesV2());
+    }
   }
 
   void _showStudentChats() {
@@ -128,6 +137,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Future<void> _hydrateDmProfiles() async {
+    // Chat v2 summaries already carry exactly the participant metadata used by
+    // inbox rows. Avoid racing that one request with the legacy directory and
+    // profile hydrators; the guard keeps this helper available for fallback
+    // state loaded before v2 starts.
+    if (chatStore.isChatV2Active) return;
     final memberIds = <String>{};
     for (final thread in chatStore.threadsFor(_myId)) {
       if (thread.peerId case final peerId?) {
@@ -148,15 +162,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
       _requestedProfileIds.addAll(memberIds);
       await peopleService.hydrateProfilesByIds(memberIds);
       _requestedProfileIds.removeAll(memberIds);
-    }
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _hydratePeopleDirectory() async {
-    try {
-      await peopleService.fetchPeople(excludeId: _myId);
-    } catch (_) {
-      // Registered on-device profiles remain searchable while offline.
     }
     if (mounted) setState(() {});
   }
@@ -366,6 +371,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           : threads.isEmpty
                           ? _buildEmptyState()
                           : ListView.builder(
+                              controller: _summaryScrollController,
                               padding: const EdgeInsets.fromLTRB(
                                 12,
                                 0,
@@ -583,7 +589,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     filter: _ChatInboxFilter.students,
                     label: S.studentChats,
                     icon: Icons.person_outline_rounded,
-                    count: studentThreads.length,
                     unread: studentUnread,
                   ),
                 ),
@@ -593,7 +598,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     filter: _ChatInboxFilter.clubs,
                     label: S.clubChats,
                     icon: Icons.groups_outlined,
-                    count: clubThreads.length,
                     unread: clubUnread,
                   ),
                 ),
@@ -610,14 +614,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     required _ChatInboxFilter filter,
     required String label,
     required IconData icon,
-    required int count,
     required int unread,
   }) {
     final selected = _filter == filter;
     return Semantics(
       button: true,
       selected: selected,
-      label: label,
+      label: unread > 0 ? '$label, ${S.nNew(unread)}' : label,
       child: GestureDetector(
         key: key,
         behavior: HitTestBehavior.opaque,
@@ -662,35 +665,30 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 5),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-                constraints: const BoxConstraints(minWidth: 18),
-                height: 18,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: unread > 0
-                      ? AppColors.primaryRed
-                      : selected
-                      ? AppColors.lightRed
-                      : AppColors.background,
-                  borderRadius: const BorderRadius.all(Radius.circular(9)),
-                ),
-                child: Text(
-                  unread > 0 ? (unread > 9 ? '9+' : '$unread') : '$count',
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    color: unread > 0
-                        ? Colors.white
-                        : selected
-                        ? AppColors.primaryRed
-                        : AppColors.secondaryText,
+              if (unread > 0) ...[
+                const SizedBox(width: 5),
+                AnimatedContainer(
+                  key: ValueKey('chat-filter-${filter.name}-unread-badge'),
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                  constraints: const BoxConstraints(minWidth: 18),
+                  height: 18,
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: const BorderRadius.all(Radius.circular(9)),
+                  ),
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

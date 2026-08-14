@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:ui' show PointerDeviceKind;
+import 'dart:ui' show PlatformDispatcher, PointerDeviceKind;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,122 +51,240 @@ import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
 import 'services/onboarding_intro_service.dart';
 import 'services/app_update_service.dart';
+import 'services/startup_log.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  SupabaseConfig.validate();
-
-  if (PushNotificationService.isSupported) {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+void main() {
+  StartupLog.event('S00_PROCESS_START');
+  runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    StartupLog.event('S01_BINDING_READY');
+    FlutterError.onError = (details) {
+      StartupLog.uncaught('FLUTTER', details.exception);
+      if (!kReleaseMode) FlutterError.presentError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      StartupLog.uncaught('PLATFORM', error);
+      return true;
+    };
+    StartupLog.event('S10_RUN_APP');
+    runApp(
+      ProviderScope(
+        child: DevicePreview(
+          enabled: bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
+          child: const MyApp(startupInitializer: _initializeAfterFirstFrame),
+        ),
+      ),
     );
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }, (error, stack) => StartupLog.uncaught('ZONE', error));
+}
+
+const _pluginStartupTimeout = Duration(seconds: 5);
+const _localStartupTimeout = Duration(seconds: 3);
+bool _deferredLocalBootstrapStarted = false;
+bool _deferredLocalDataReady = false;
+bool _firebaseReady = false;
+
+Future<bool> _guardStartupStage(
+  String stage,
+  Future<void> Function() operation, {
+  Duration timeout = _pluginStartupTimeout,
+}) async {
+  StartupLog.begin(stage);
+  final outcome = await runBoundedStartupOperation(operation, timeout);
+  final result = switch (outcome.result) {
+    StartupOperationResult.completed => 'ok',
+    StartupOperationResult.timedOut => 'timeout',
+    StartupOperationResult.failed => 'error',
+  };
+  StartupLog.end(stage, result: result, error: outcome.error);
+  return outcome.result == StartupOperationResult.completed;
+}
+
+Future<void> _initializeAfterFirstFrame() async {
+  var supabaseConfigured = false;
+  try {
+    SupabaseConfig.validate();
+    supabaseConfigured = SupabaseConfig.isConfigured;
+  } catch (error) {
+    StartupLog.event(
+      'S04_SUPABASE_BEGIN',
+      result: 'config_error',
+      error: error,
+    );
   }
 
-  await Future.wait([
-    if (SupabaseConfig.isConfigured)
-      Supabase.initialize(
-        url: SupabaseConfig.url,
-        anonKey: SupabaseConfig.clientKey,
-        authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
-        debug: false,
-      ),
-    hiveBootstrap.initialize(),
-  ]);
-
-  // The branded launch screen needs only the theme + locale boxes before the
-  // first destination builds. The other boxes don't depend on each other and
-  // nothing before login reads them, so they open in the
-  // background; readers await appBootstrap.ready (the post-frame hydration
-  // below and the login/club-admin submit handlers — a login's network
-  // round-trip dwarfs that wait).
-  await Future.wait([
-    themeService.initialize(),
-    localeService.initialize(),
-    termsAcceptanceService.initialize(),
-    onboardingIntroService.initialize(),
-  ]);
-  appBootstrap.ready = Future.wait([
-    userPrefsService.initialize(),
-    peopleService.initialize(),
-    contentStore.initialize(),
-    chatStore.initialize(),
-    clubChatPrefs.initialize(),
-    checkinStore.initialize(),
-    pollStore.initialize(),
-    viewTracker.initialize(),
-    personalizationService.initialize(),
-    calendarSyncService.initialize(),
-    onboardingService.initialize(),
-    starterChecklistService.initialize(),
-    adminModerationService.initialize(),
-  ]).then((_) => userPrefsService.loadAllPhotos());
-
-  // Supabase restores its token pair from device storage. Reconstruct the
-  // matching app user/admin before the root router chooses its destination.
-  final restoredSession = await authService.restorePersistedSession();
-  if (restoredSession && termsAcceptanceService.hasAcceptedCurrentTerms) {
-    await _loadAccountPreferences();
-  }
-
-  runApp(
-    const ProviderScope(
-      child: DevicePreview(
-        enabled: bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
-        child: MyApp(),
-      ),
+  final results = await Future.wait<bool>([
+    if (PushNotificationService.isSupported)
+      _guardStartupStage('S02_FIREBASE_BEGIN', () async {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
+      })
+    else
+      Future.value(false),
+    if (supabaseConfigured)
+      _guardStartupStage('S04_SUPABASE_BEGIN', () async {
+        await Supabase.initialize(
+          url: SupabaseConfig.url,
+          anonKey: SupabaseConfig.clientKey,
+          authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
+          debug: false,
+        );
+      })
+    else
+      Future.value(false),
+    _guardStartupStage('S04_HIVE_BEGIN', hiveBootstrap.initialize),
+    _guardStartupStage(
+      'S01_BUILD_INFO',
+      StartupLog.loadBuildInfo,
+      timeout: _localStartupTimeout,
     ),
+  ]);
+  _firebaseReady = results[0];
+  StartupLog.event('S03_FIREBASE_END', result: results[0] ? 'ok' : 'fallback');
+  StartupLog.event('S05_SUPABASE_END', result: results[1] ? 'ok' : 'fallback');
+  final hiveReady = results[2];
+
+  if (hiveReady) {
+    await Future.wait([
+      _guardStartupStage(
+        'S05_THEME_LOCAL',
+        themeService.initialize,
+        timeout: _localStartupTimeout,
+      ),
+      _guardStartupStage(
+        'S05_LOCALE_LOCAL',
+        localeService.initialize,
+        timeout: _localStartupTimeout,
+      ),
+      _guardStartupStage(
+        'S05_TERMS_LOCAL',
+        termsAcceptanceService.initialize,
+        timeout: _localStartupTimeout,
+      ),
+      _guardStartupStage(
+        'S05_INTRO_LOCAL',
+        onboardingIntroService.initialize,
+        timeout: _localStartupTimeout,
+      ),
+    ]);
+    _startDeferredLocalBootstrap();
+  } else {
+    appBootstrap.ready = Future.value();
+  }
+
+  StartupLog.begin('S06_SESSION_RESTORE_BEGIN');
+  var restoredSession = false;
+  if (results[1]) {
+    restoredSession = await authService.restorePersistedSession();
+  }
+  StartupLog.end(
+    'S07_SESSION_RESTORE_END',
+    result: results[1]
+        ? authService.lastSessionRestorationResult.name
+        : 'supabase_unavailable',
   );
 
-  // The app opens on the lightweight launch screen, so none of this needs to
-  // finish before first paint: push listeners and local hydration are
-  // deferred to right after. Authenticated network work starts only after the
-  // root Terms gate grants access.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(
-      appBootstrap.ready.then((_) {
-        unawaited(pushNotificationService.initialize());
+  if (restoredSession && termsAcceptanceService.hasAcceptedCurrentTerms) {
+    StartupLog.begin('S08_ACCOUNT_PREFS_BEGIN');
+    try {
+      await _loadAccountPreferences();
+      StartupLog.end(
+        'S09_ACCOUNT_PREFS_END',
+        result: accountPreferencesService.status.name,
+        error: accountPreferencesService.lastError,
+      );
+    } catch (error) {
+      StartupLog.end('S09_ACCOUNT_PREFS_END', result: 'error', error: error);
+    }
+  } else {
+    StartupLog.event('S09_ACCOUNT_PREFS_END', result: 'not_applicable');
+  }
+}
 
-        contentStore.applyToLists();
-        contentStore.loadBoardMemberIds();
-        contentStore.loadBoardMemberTitles();
-        // Restore any dynamic notifications that were generated at runtime.
-        final dynNotifs = contentStore.loadDynamicNotifications();
-        final removedAdminDmNotificationIds = <String>{};
-        if (dynNotifs != null) {
-          final compatibleNotifications = dynNotifs.where((notification) {
-            final remove =
-                notification.targetType == 'message' &&
-                ChatStore.isAdminAccountId(notification.userId);
-            if (remove) removedAdminDmNotificationIds.add(notification.id);
-            return !remove;
-          }).toList();
-          userState.dynamicNotifications
-            ..clear()
-            ..addAll(compatibleNotifications);
-          if (removedAdminDmNotificationIds.isNotEmpty) {
-            unawaited(
-              contentStore.saveDynamicNotifications(compatibleNotifications),
-            );
-          }
-        }
-        final compatibleReadNotificationIds = contentStore
-            .loadReadNotificationIds()
-            .where((id) => !removedAdminDmNotificationIds.contains(id));
-        userState.replaceReadNotificationIds(compatibleReadNotificationIds);
+void _startDeferredLocalBootstrap() {
+  _deferredLocalBootstrapStarted = true;
+  Future<bool> guarded(Future<void> future) async {
+    try {
+      await future.timeout(_pluginStartupTimeout);
+      return true;
+    } catch (_) {
+      // Deferred caches are optional and must never surface an unhandled error.
+      return false;
+    }
+  }
+
+  appBootstrap.ready =
+      Future.wait([
+        guarded(userPrefsService.initialize()),
+        guarded(peopleService.initialize()),
+        guarded(contentStore.initialize()),
+        guarded(chatStore.initialize()),
+        guarded(clubChatPrefs.initialize()),
+        guarded(checkinStore.initialize()),
+        guarded(pollStore.initialize()),
+        guarded(viewTracker.initialize()),
+        guarded(personalizationService.initialize()),
+        guarded(calendarSyncService.initialize()),
+        guarded(onboardingService.initialize()),
+        guarded(starterChecklistService.initialize()),
+        guarded(adminModerationService.initialize()),
+      ]).then((results) {
+        _deferredLocalDataReady = results.every((ready) => ready);
+        appBootstrap.localDataReady = _deferredLocalDataReady;
+        if (_deferredLocalDataReady) userPrefsService.loadAllPhotos();
+      });
+}
+
+void _hydrateDeferredLocalData() {
+  if (!_deferredLocalBootstrapStarted) return;
+  unawaited(
+    appBootstrap.ready.then((_) {
+      if (!_deferredLocalDataReady) return;
+      if (_firebaseReady) {
+        unawaited(pushNotificationService.initialize());
+      }
+      contentStore.applyToLists();
+      contentStore.loadBoardMemberIds();
+      contentStore.loadBoardMemberTitles();
+      final dynNotifs = contentStore.loadDynamicNotifications();
+      final removedAdminDmNotificationIds = <String>{};
+      if (dynNotifs != null) {
+        final compatibleNotifications = dynNotifs.where((notification) {
+          final remove =
+              notification.targetType == 'message' &&
+              ChatStore.isAdminAccountId(notification.userId);
+          if (remove) removedAdminDmNotificationIds.add(notification.id);
+          return !remove;
+        }).toList();
+        userState.dynamicNotifications
+          ..clear()
+          ..addAll(compatibleNotifications);
         if (removedAdminDmNotificationIds.isNotEmpty) {
           unawaited(
-            contentStore.saveReadNotificationIds(userState.readNotificationIds),
+            contentStore.saveDynamicNotifications(compatibleNotifications),
           );
         }
-      }),
-    );
-  });
+      }
+      final compatibleReadNotificationIds = contentStore
+          .loadReadNotificationIds()
+          .where((id) => !removedAdminDmNotificationIds.contains(id));
+      userState.replaceReadNotificationIds(compatibleReadNotificationIds);
+      if (removedAdminDmNotificationIds.isNotEmpty) {
+        unawaited(
+          contentStore.saveReadNotificationIds(userState.readNotificationIds),
+        );
+      }
+    }),
+  );
 }
 
 Future<void> _loadAccountPreferences() async {
@@ -216,10 +334,12 @@ class MyApp extends StatefulWidget {
     super.key,
     this.minimumLaunchDuration = const Duration(milliseconds: 2000),
     this.updateService,
+    this.startupInitializer,
   });
 
   final Duration minimumLaunchDuration;
   final AppUpdateService? updateService;
+  final Future<void> Function()? startupInitializer;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -227,6 +347,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isLaunching = true;
+  bool _isBootstrapping = true;
   Timer? _launchTimer;
   bool _showSignUp = false;
   bool _loggedIn = false;
@@ -245,6 +366,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // rebuild: personalizationService.load ends with notifyListeners(), which
   // must not fire during build.
   String? _prefsLoadedForUserId;
+  bool _didLogInitialRoute = false;
 
   // _buildTheme reads only const palettes (DarkColors/LightColors), so both
   // ThemeData graphs are immutable for the process lifetime.
@@ -255,19 +377,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _showIntroThisLaunch = !onboardingIntroService.hasSeenOnceOnDevice;
-    if (_showIntroThisLaunch) {
-      // "Shown once" means the first rendered launch counts even if the user
-      // closes the app before pressing Skip or Get started.
-      unawaited(onboardingIntroService.markSeenOnDevice());
-    }
-    if (authService.currentUser != null || authService.currentAdmin != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _termsPermitAuthenticatedAccess) {
-          _activateAuthenticatedServices();
-        }
-      });
-    }
     if (widget.minimumLaunchDuration == Duration.zero) {
       _isLaunching = false;
     } else {
@@ -275,7 +384,32 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         if (mounted) setState(() => _isLaunching = false);
       });
     }
-    unawaited(_checkForRequiredUpdate(blockWhileChecking: true));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_completeStartup());
+    });
+  }
+
+  Future<void> _completeStartup() async {
+    try {
+      await (widget.startupInitializer?.call() ?? Future<void>.value());
+    } catch (error) {
+      StartupLog.uncaught('BOOTSTRAP', error);
+    } finally {
+      if (mounted) {
+        _showIntroThisLaunch = !onboardingIntroService.hasSeenOnceOnDevice;
+        if (_showIntroThisLaunch) {
+          unawaited(onboardingIntroService.markSeenOnDevice());
+        }
+        setState(() => _isBootstrapping = false);
+        unawaited(_checkForRequiredUpdate(blockWhileChecking: true));
+        _hydrateDeferredLocalData();
+        if ((authService.currentUser != null ||
+                authService.currentAdmin != null) &&
+            _termsPermitAuthenticatedAccess) {
+          _activateAuthenticatedServices();
+        }
+      }
+    }
   }
 
   @override
@@ -323,6 +457,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _savePrefs() {
+    // App lifecycle events can arrive while the deferred Hive boxes are still
+    // opening. In particular, ContentStore uses a late box and cannot be
+    // flushed until the whole deferred bootstrap succeeds.
+    if (!appBootstrap.localDataReady) return;
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (uid != null) {
       userPrefsService.save(uid);
@@ -387,12 +525,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _finishLogin(String? currentUserId) async {
-    if (currentUserId != null) {
-      await _loadAccountPreferences();
+    try {
+      if (currentUserId != null) {
+        await _loadAccountPreferences();
+      }
+      if (mounted) _activateAuthenticatedServices();
+    } finally {
+      // Every success, error, and timeout path must retire the launch spinner.
+      if (mounted) {
+        setState(() => _isPreparingAccountPreferences = false);
+      }
     }
-    if (!mounted) return;
-    setState(() => _isPreparingAccountPreferences = false);
-    _activateAuthenticatedServices();
   }
 
   void _activateAuthenticatedServices() {
@@ -401,13 +544,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (currentUserId != null) {
       authService.activateAcceptedSession();
-      unawaited(pushNotificationService.activateForCurrentUser());
+      if (_firebaseReady) {
+        unawaited(pushNotificationService.activateForCurrentUser());
+      }
       unawaited(moderationService.activateForUser(currentUserId));
       unawaited(eventCleanupService.cleanupExpiredEvents());
-      _prefsLoadedForUserId = currentUserId;
-      userPrefsService.load(currentUserId);
-      personalizationService.load(currentUserId);
-      unawaited(peopleService.hydrateFollowing(currentUserId));
+      if (appBootstrap.localDataReady) {
+        _prefsLoadedForUserId = currentUserId;
+        userPrefsService.load(currentUserId);
+        personalizationService.load(currentUserId);
+        unawaited(peopleService.hydrateFollowing(currentUserId));
+      }
     }
   }
 
@@ -598,7 +745,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         Widget homeWidget;
         Widget Function()? sessionGateBuilder;
         String destinationKey;
-        if (_isCheckingForUpdate) {
+        if (_isBootstrapping || _isCheckingForUpdate) {
           // Keep the branded launch screen up while the minimum-version check
           // is in flight. No authenticated or cached destination is exposed
           // before the check completes.
@@ -653,7 +800,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final isAdmin = isClubUpAdmin(authService.currentAdmin);
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
-          if (currentUserId != null && currentUserId != _prefsLoadedForUserId) {
+          if (appBootstrap.localDataReady &&
+              currentUserId != null &&
+              currentUserId != _prefsLoadedForUserId) {
             _prefsLoadedForUserId = currentUserId;
             userPrefsService.load(currentUserId);
             personalizationService.load(currentUserId);
@@ -727,6 +876,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 FadeTransition(opacity: animation, child: child),
           );
           destinationKey = 'login';
+        }
+        final isUsableDestination =
+            !_isBootstrapping &&
+            !_isCheckingForUpdate &&
+            !_isLaunching &&
+            destinationKey != 'terms-check' &&
+            destinationKey != 'account-preferences-loading';
+        if (isUsableDestination && !_didLogInitialRoute) {
+          _didLogInitialRoute = true;
+          StartupLog.event('S11_INITIAL_ROUTE', result: destinationKey);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            StartupLog.event('S12_FIRST_USABLE_FRAME', result: destinationKey);
+          });
         }
         final visibleHome = AnimatedSwitcher(
           duration:

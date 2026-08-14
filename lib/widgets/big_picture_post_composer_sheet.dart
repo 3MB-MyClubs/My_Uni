@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 import '../screens/create_post_screen.dart' show buildPostBanner;
 import '../services/app_colors.dart';
@@ -66,6 +67,7 @@ class _BigPicturePostComposerSheetState
 
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+  final String _reservedPostId = const Uuid().v4();
   String? _imagePath;
   bool _posting = false;
   bool _confirming = false;
@@ -191,6 +193,7 @@ class _BigPicturePostComposerSheetState
     setState(() => _posting = true);
     try {
       final post = await supabasePostService.createPost(
+        reservedPostId: _reservedPostId,
         clubId: club.id as String,
         authorId: accountSwitcherService.actorId,
         content: content,
@@ -202,7 +205,9 @@ class _BigPicturePostComposerSheetState
       newsPosts.insert(0, post);
       unawaited(contentStore.saveNewsPosts());
       contentStore.notifyContentChanged();
-      unawaited(clubNotificationService.notifyFollowersAboutPost(post));
+      if (!supabasePostService.isAvailable) {
+        unawaited(clubNotificationService.notifyFollowersAboutPost(post));
+      }
       widget.onPosted();
       Navigator.of(context).pop();
     } catch (error) {

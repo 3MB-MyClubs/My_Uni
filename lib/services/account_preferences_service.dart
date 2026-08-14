@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -53,21 +55,25 @@ class AccountPreferencesService extends ChangeNotifier {
     String? Function()? userIdProvider,
     AccountPreferencesRowLoader? rowLoader,
     AccountPreferencesRowWriter? rowWriter,
+    Duration requestTimeout = const Duration(seconds: 3),
   }) : _clientProvider = clientProvider,
        _userIdProvider = userIdProvider,
        _rowLoader = rowLoader,
-       _rowWriter = rowWriter;
+       _rowWriter = rowWriter,
+       _requestTimeout = requestTimeout;
 
   final SupabaseClient? Function()? _clientProvider;
   final String? Function()? _userIdProvider;
   final AccountPreferencesRowLoader? _rowLoader;
   final AccountPreferencesRowWriter? _rowWriter;
+  final Duration _requestTimeout;
 
   AccountPreferences _preferences = const AccountPreferences();
   AccountPreferencesStatus _status = AccountPreferencesStatus.signedOut;
   String? _loadedUserId;
   Object? _lastError;
   int _requestGeneration = 0;
+  final Map<String, AccountPreferences> _cacheByUser = {};
 
   AccountPreferences get preferences => _preferences;
   AccountPreferencesStatus get status => _status;
@@ -127,14 +133,16 @@ class AccountPreferencesService extends ChangeNotifier {
 
     _status = AccountPreferencesStatus.loading;
     _loadedUserId = userId;
-    _preferences = const AccountPreferences();
+    _preferences = _cacheByUser[userId] ?? const AccountPreferences();
     _lastError = null;
     notifyListeners();
 
     try {
-      final row = _rowLoader != null
-          ? await _rowLoader(userId)
-          : await _loadSupabaseRow(userId);
+      final row =
+          await (_rowLoader != null
+                  ? _rowLoader(userId)
+                  : _loadSupabaseRow(userId))
+              .timeout(_requestTimeout);
 
       // Do not let a late response from the previous account overwrite the
       // next account's state during a fast logout/login sequence.
@@ -143,8 +151,20 @@ class AccountPreferencesService extends ChangeNotifier {
       }
 
       _preferences = AccountPreferences.fromRow(row);
+      _cacheByUser[userId] = _preferences;
       _status = AccountPreferencesStatus.loaded;
       notifyListeners();
+      return _preferences;
+    } on TimeoutException catch (error) {
+      if (_isCurrentRequest(userId, generation)) {
+        // Keep an account-scoped value from an earlier successful fetch when
+        // available. Otherwise neutral values avoid both a security bypass and
+        // a false first-time preference prompt while offline.
+        _preferences = _cacheByUser[userId] ?? const AccountPreferences();
+        _lastError = error;
+        _status = AccountPreferencesStatus.error;
+        notifyListeners();
+      }
       return _preferences;
     } catch (error) {
       if (_isCurrentRequest(userId, generation)) {
@@ -156,6 +176,9 @@ class AccountPreferencesService extends ChangeNotifier {
     }
   }
 
+  /// Explicit retry hook for login/router UI and connectivity recovery.
+  Future<AccountPreferences> retry() => loadForCurrentUser();
+
   Future<void> saveLanguage(String code) async {
     if (code != 'en' && code != 'tr') return;
     final userId = _currentUserId;
@@ -163,6 +186,7 @@ class AccountPreferencesService extends ChangeNotifier {
     await _save(userId, {'language_code': code});
     if (_currentUserId != userId) return;
     _preferences = _preferences.copyWith(languageCode: code);
+    _cacheByUser[userId] = _preferences;
     _lastError = null;
     notifyListeners();
   }
@@ -173,6 +197,7 @@ class AccountPreferencesService extends ChangeNotifier {
     await _save(userId, {'theme_mode': isDark ? 'dark' : 'light'});
     if (_currentUserId != userId) return;
     _preferences = _preferences.copyWith(isDark: isDark);
+    _cacheByUser[userId] = _preferences;
     _lastError = null;
     notifyListeners();
   }
@@ -211,7 +236,7 @@ class AccountPreferencesService extends ChangeNotifier {
 
   Future<void> _save(String userId, Map<String, dynamic> values) async {
     if (_rowWriter != null) {
-      await _rowWriter(userId, values);
+      await _rowWriter(userId, values).timeout(_requestTimeout);
     } else {
       final client = _client;
       if (client == null || client.auth.currentUser?.id != userId) {
@@ -219,11 +244,14 @@ class AccountPreferencesService extends ChangeNotifier {
           'An authenticated Supabase user is required to save preferences.',
         );
       }
-      await client.from('user_preferences').upsert({
-        'user_id': userId,
-        ...values,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id');
+      await client
+          .from('user_preferences')
+          .upsert({
+            'user_id': userId,
+            ...values,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }, onConflict: 'user_id')
+          .timeout(_requestTimeout);
     }
   }
 }

@@ -32,6 +32,10 @@ class StudentEventHistorySnapshot {
 }
 
 class SupabaseContentService {
+  static final _uuidPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   static const _eventSelectColumns =
       'id, club_id, title, description, location, image_url, starts_at, '
       'ends_at, image_path, created_by_user_id, tags, registration_url, '
@@ -376,6 +380,39 @@ class SupabaseContentService {
     return result;
   }
 
+  /// Fetches counts only for posts in the current in-memory content snapshot.
+  ///
+  /// The aggregate view can contain historical rows far beyond the feed. Keep
+  /// the request bounded to visible content and split large IN filters into
+  /// URL-safe chunks.
+  Future<List<dynamic>> _fetchPostLikeCounts(SupabaseClient client) async {
+    final postIds = newsPosts
+        .map((post) => post.id)
+        .where((id) => _uuidPattern.hasMatch(id))
+        .toSet()
+        .toList();
+    if (postIds.isEmpty) return const [];
+
+    final batches = <List<String>>[];
+    for (var start = 0; start < postIds.length; start += 200) {
+      batches.add(
+        postIds.sublist(start, (start + 200).clamp(0, postIds.length)),
+      );
+    }
+
+    final rowsByBatch = await Future.wait(
+      batches.map(
+        (postIdBatch) async => List<dynamic>.from(
+          await client
+              .from('post_like_counts')
+              .select('post_id, like_count')
+              .inFilter('post_id', postIdBatch),
+        ),
+      ),
+    );
+    return rowsByBatch.expand((rows) => rows).toList();
+  }
+
   Future<bool> refreshEngagementCounts({bool Function()? shouldApply}) async {
     final client = _client;
     if (client == null) return true;
@@ -394,11 +431,9 @@ class SupabaseContentService {
           .select('club_id, member_count')
           .then<List<dynamic>?>((rows) => rows)
           .catchError((_) => null),
-      client
-          .from('post_like_counts')
-          .select('post_id, like_count')
-          .then<List<dynamic>?>((rows) => rows)
-          .catchError((_) => null),
+      _fetchPostLikeCounts(
+        client,
+      ).then<List<dynamic>?>((rows) => rows).catchError((_) => null),
       if (eventIds.isEmpty)
         Future<List<dynamic>?>.value(const [])
       else

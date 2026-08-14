@@ -4,23 +4,31 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:hive/hive.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:uuid/uuid.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/chat_group.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
+import '../models/chat_v2.dart';
 import '../models/notification.dart';
+import '../models/user.dart';
 import 'account_switcher_service.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
+import 'chat_attachment_staging.dart';
+import 'chat_v2_controller.dart';
+import 'chat_v2_service.dart';
 import 'image_cache_service.dart';
 import 'locale_service.dart';
+import 'media_delivery_service.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
+import 'rate_limit_error.dart';
 import 'supabase_config.dart';
 import 'user_state.dart';
+import 'upload_failure_classifier.dart';
 
 /// The two lanes of a club room, per the Club Board + Chat handoff: `board` is
 /// the official notice area, `chat` is the room where the conversation lives.
@@ -36,6 +44,13 @@ enum ClubChatLane { board, chat }
 /// Like the other stores, every method no-ops / returns empty before
 /// [initialize] so screens render safely in widget tests without Hive.
 class ChatStore extends ChangeNotifier {
+  ChatStore({ChatV2Source? chatV2Source}) {
+    _chatV2Source = chatV2Source ?? supabaseChatV2Service;
+    _chatV2 = ChatV2Controller(source: _chatV2Source)
+      ..addListener(_applyChatV2State);
+    authService.registerChatAuthBoundary(clearChatV2AuthBoundary);
+  }
+
   // No BuildContext is available this deep in the service layer; these
   // generated in-app notification messages are resolved here via the
   // current locale.
@@ -45,7 +60,6 @@ class ChatStore extends ChangeNotifier {
   static const _boxName = 'chat_v1';
   static const _chatAttachmentBucket = 'chat-attachments';
   static const _chatAttachmentReferencePrefix = 'chat-attachment://';
-  static const _chatAttachmentSignedUrlLifetimeSeconds = 3600;
   static const _remoteMessageColumns = 'message_kind, payload, crypto_version';
 
   /// Removes the old scripted DMs, club messages, and empty demo threads from
@@ -57,10 +71,17 @@ class ChatStore extends ChangeNotifier {
   static const int _adminMessagingMigrationVersion = 1;
 
   Box<dynamic>? _box;
+  late final ChatV2Source _chatV2Source;
+  late final ChatV2Controller _chatV2;
+  RealtimeChannel? _chatV2Channel;
+  String? _chatV2ActorId;
+  bool _chatV2SubscribedOnce = false;
+  final Set<String> _chatV2ManagedMessageIds = {};
+  final Set<String> _chatV2InitializedThreads = {};
+  final Map<String, int> _chatV2UnreadCounts = {};
+  final Map<String, Map<ClubChatLane, int>> _chatV2ClubLaneUnreadCounts = {};
 
   final List<ChatMessage> _messages = [];
-  final Map<String, ({String url, DateTime expiresAt})>
-  _signedChatAttachmentUrls = {};
 
   /// Local-first outbox. IDs remain here until Supabase acknowledges storage.
   final Set<String> _pendingRemoteMessageIds = {};
@@ -77,8 +98,12 @@ class ChatStore extends ChangeNotifier {
   String? _syncedUserId;
   String? _clubSyncedActorId;
   Timer? _syncRetry;
+  DateTime? _syncRetryAt;
+  DateTime? _rateLimitRetryNotBefore;
   bool _flushingRemote = false;
   bool _flushRemoteAgain = false;
+  bool _flushingChatV2Outbox = false;
+  bool _flushChatV2OutboxAgain = false;
 
   /// Direct-message threads that have been opened, including conversations
   /// that do not have a first message yet.
@@ -95,6 +120,8 @@ class ChatStore extends ChangeNotifier {
   /// following message-row insert failed. The active chat screen consumes this
   /// to show the user that the photo is queued locally and will be retried.
   bool _attachmentUploadFailed = false;
+  String? _rateLimitFailureMessage;
+  String? _permanentUploadFailureMessage;
 
   /// Group id → user id for groups an admin deleted locally and still needs
   /// to delete from Supabase.
@@ -123,16 +150,97 @@ class ChatStore extends ChangeNotifier {
     return failed;
   }
 
+  String? takeRateLimitFailureMessage() {
+    final message = _rateLimitFailureMessage;
+    _rateLimitFailureMessage = null;
+    return message;
+  }
+
+  String? takePermanentUploadFailureMessage() {
+    final message = _permanentUploadFailureMessage;
+    _permanentUploadFailureMessage = null;
+    return message;
+  }
+
   void _recordAttachmentUploadFailure(
     ChatMessage message,
     Object error,
     StackTrace stackTrace,
   ) {
-    if (message.kind != ChatMessageKind.photo) return;
-    _attachmentUploadFailed = true;
-    debugPrint('Chat photo upload failed for ${message.id}: $error');
+    final limited = RateLimitInfo.from(error);
+    if (limited != null) {
+      final retryAfter = limited.retryAfter > const Duration(seconds: 5)
+          ? limited.retryAfter
+          : const Duration(seconds: 5);
+      final retryAt = DateTime.now().add(retryAfter);
+      if (_rateLimitRetryNotBefore == null ||
+          retryAt.isAfter(_rateLimitRetryNotBefore!)) {
+        _rateLimitRetryNotBefore = retryAt;
+      }
+      _rateLimitFailureMessage =
+          '${limited.displayMessage} Your message is saved and will be retried.';
+    }
+    if (message.kind == ChatMessageKind.photo) {
+      _attachmentUploadFailed = true;
+    } else if (limited == null) {
+      return;
+    }
+    debugPrint('Chat outbox upload failed for ${message.id}: $error');
     debugPrintStack(stackTrace: stackTrace);
     notifyListeners();
+  }
+
+  Future<void> _handlePermanentUploadFailure(
+    ChatMessage message,
+    Object error,
+  ) async {
+    _pendingRemoteMessageIds.remove(message.id);
+    _pendingRemoteGroupMessageIds.remove(message.id);
+    _pendingRemoteClubMessageIds.remove(message.id);
+    _pendingRemoteClubInboxMessageIds.remove(message.id);
+    _messages.removeWhere((candidate) => candidate.id == message.id);
+    await _deleteRemoteAttachment(message);
+    await chatAttachmentStagingService.deleteIfStaged(message.attachmentPath);
+    _permanentUploadFailureMessage =
+        'This attachment could not be sent. Check its type, size, and your access, then choose it again.';
+    debugPrint('Permanent chat upload failure for ${message.id}: $error');
+    scheduleSave();
+    notifyListeners();
+  }
+
+  Future<void> _completeAttachmentUpload(
+    ChatMessage local,
+    ChatMessage remote,
+  ) async {
+    final index = _messages.indexWhere((message) => message.id == local.id);
+    if (index != -1) _messages[index] = remote;
+    if (remote.attachmentPath != local.attachmentPath) {
+      await chatAttachmentStagingService.deleteIfStaged(local.attachmentPath);
+    }
+  }
+
+  Future<void> _deleteRemoteAttachment(ChatMessage message) async {
+    final client = _client;
+    if (client == null) return;
+    final value = message.attachmentPath?.trim() ?? '';
+    String? objectPath;
+    if (value.startsWith(_chatAttachmentReferencePrefix)) {
+      objectPath = value.substring(_chatAttachmentReferencePrefix.length);
+    } else if (_isRemoteAttachmentUrl(value)) {
+      objectPath = _chatAttachmentObjectPathFromUrl(value);
+    } else {
+      final authId = client.auth.currentUser?.id;
+      if (authId != null && value.isNotEmpty) {
+        objectPath =
+            '$authId/${message.id}.${_attachmentExtension(message.attachmentName ?? value)}';
+      }
+    }
+    if (objectPath == null) return;
+    try {
+      await client.storage.from(_chatAttachmentBucket).remove([objectPath]);
+    } catch (_) {
+      // Message/outbox state is authoritative; cleanup must not restore it.
+    }
   }
 
   // ── Thread identity ──────────────────────────────────────────────────────────
@@ -253,6 +361,351 @@ class ChatStore extends ChangeNotifier {
     if (group == null) return 'Group';
     return group.displayName(viewerId: viewerId, nameForUser: _nameForUser);
   }
+
+  // ── Chat v2 bounded synchronization ────────────────────────────────────────
+
+  bool get isChatV2Active => _chatV2ActorId != null;
+
+  ChatHistoryStateV2 chatV2HistoryFor(String threadId) =>
+      _chatV2.historyFor(threadId);
+
+  bool hasMoreMessagesV2(String threadId) =>
+      _chatV2.historyFor(threadId).hasMore;
+
+  bool isLoadingOlderMessagesV2(String threadId) =>
+      _chatV2.historyFor(threadId).isOlderLoading;
+
+  Object? olderMessagesErrorV2(String threadId) =>
+      _chatV2.historyFor(threadId).olderError;
+
+  Future<void> loadInitialMessagesV2(String threadId) => _chatV2ActorId == null
+      ? Future.value()
+      : _chatV2.loadInitialMessages(threadId);
+
+  Future<void> loadOlderMessagesV2(String threadId) => _chatV2ActorId == null
+      ? Future.value()
+      : _chatV2.loadOlderMessages(threadId);
+
+  Future<void> reconcileThreadV2(String threadId) =>
+      _chatV2ActorId == null ? Future.value() : _chatV2.reconcile(threadId);
+
+  Future<void> loadMoreConversationSummariesV2() =>
+      _chatV2ActorId == null ? Future.value() : _chatV2.loadMoreSummaries();
+
+  Future<void> startChatV2Sync(String actorId) async {
+    if (actorId.isEmpty) return;
+    final client = _client;
+    final authId = client?.auth.currentUser?.id ?? '';
+    if (client == null || authId.isEmpty) return;
+
+    if (_chatV2ActorId == actorId && _chatV2Channel != null) {
+      await _chatV2.loadFirstSummaries();
+      return;
+    }
+    if (_chatV2ActorId != null && _chatV2ActorId != actorId) {
+      await stopChatV2Sync();
+      _clearAccountScopedChatCache();
+    }
+
+    final oldChannel = _chatV2Channel;
+    if (oldChannel != null) await client.removeChannel(oldChannel);
+    _chatV2ActorId = actorId;
+    _chatV2SubscribedOnce = false;
+    // Existing group-management and attachment outboxes still use these actor
+    // guards. Message rows themselves are sent through send_message_v2.
+    _syncedUserId = authService.isStudentSession ? authId : null;
+    _clubSyncedActorId = actorId;
+
+    final channel = client.channel('chat-v2:$authId');
+    channel
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'chat_v2_change_log',
+        callback: (payload) =>
+            unawaited(_handleChatV2JournalChange(payload, actorId)),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'group_chats',
+        callback: (_) => unawaited(_refreshChatV2Summaries()),
+      )
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'group_chat_members',
+        callback: (_) => unawaited(_refreshChatV2Summaries()),
+      );
+    _chatV2Channel = channel;
+    channel.subscribe((status, error) {
+      if (!identical(_chatV2Channel, channel)) return;
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        if (_chatV2SubscribedOnce) {
+          unawaited(_reconcileLoadedChatV2Threads());
+        }
+        _chatV2SubscribedOnce = true;
+        unawaited(_flushChatV2Outbox());
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut ||
+          status == RealtimeSubscribeStatus.closed) {
+        if (identical(_chatV2Channel, channel)) _chatV2Channel = null;
+        _scheduleSyncRetry();
+      }
+    });
+
+    await _chatV2.loadFirstSummaries();
+    await _flushChatV2Outbox();
+  }
+
+  Future<void> stopChatV2Sync() async {
+    final client = _client;
+    final channel = _chatV2Channel;
+    clearChatV2AuthBoundary(removeChannel: false);
+    if (client != null && channel != null) await client.removeChannel(channel);
+  }
+
+  /// Synchronous half of the auth boundary. AuthService calls this before it
+  /// replaces the current account, so no v2 cache or in-memory message state
+  /// can be rendered by the next account while channel teardown is pending.
+  void clearChatV2AuthBoundary({bool removeChannel = true}) {
+    final client = _client;
+    final channel = _chatV2Channel;
+    _chatV2Channel = null;
+    _chatV2ActorId = null;
+    _chatV2SubscribedOnce = false;
+    _syncRetry?.cancel();
+    _syncRetry = null;
+    _syncRetryAt = null;
+    _chatV2ManagedMessageIds.clear();
+    _chatV2InitializedThreads.clear();
+    _chatV2UnreadCounts.clear();
+    _chatV2ClubLaneUnreadCounts.clear();
+    _chatV2.reset();
+    if (_chatV2Source is SupabaseChatV2Service) {
+      _chatV2Source.clearAccountCache();
+    }
+
+    // Hive is shared by accounts. Clear every chat row at the auth boundary,
+    // including public-club rows, so message/participant/read metadata cannot
+    // flash from the previous session during a rapid account switch.
+    final accountId = client?.auth.currentUser?.id;
+    _messages.clear();
+    _directThreadIds.clear();
+    _groups.clear();
+    _clubInboxes.clear();
+    _pendingRemoteMessageIds.clear();
+    _pendingSeenThreadIds.clear();
+    _pendingRemoteGroupIds.clear();
+    _pendingRemoteGroupMessageIds.clear();
+    _pendingRemoteClubMessageIds.clear();
+    _pendingRemoteClubInboxMessageIds.clear();
+    _pendingRemoteGroupDeleteActorIds.clear();
+    _pendingRemoteGroupLeaveUserIds.clear();
+    _pendingRemoteDeleteThreadIds.clear();
+    _lastRead.clear();
+    _lastReadLanes.clear();
+    mediaDeliveryService.clearAllPrivate();
+    if (accountId != null) {
+      unawaited(chatAttachmentStagingService.cleanupAccount(accountId));
+    }
+    if (_box != null) {
+      // Persist the empty snapshot immediately. A debounce timer here leaks
+      // past widget teardown and, more importantly, leaves the previous
+      // account's shared Hive rows on disk for another second.
+      unawaited(saveAll());
+      notifyListeners();
+    }
+    if (removeChannel && client != null && channel != null) {
+      unawaited(client.removeChannel(channel));
+    }
+  }
+
+  Future<void> _refreshChatV2Summaries() async {
+    if (_chatV2ActorId == null) return;
+    if (_chatV2Source is SupabaseChatV2Service) {
+      _chatV2Source.invalidateSummaries();
+    }
+    await _chatV2.loadFirstSummaries(force: true);
+  }
+
+  Future<void> _reconcileLoadedChatV2Threads() async {
+    await Future.wait([
+      for (final threadId in _chatV2.loadedThreadIds)
+        _chatV2.reconcile(threadId),
+    ]);
+    await _refreshChatV2Summaries();
+  }
+
+  Future<void> _handleChatV2JournalChange(
+    PostgresChangePayload payload,
+    String actorId,
+  ) async {
+    final row = payload.newRecord;
+    if (row.isEmpty) return;
+    final change = ChatChangeV2.fromJson(Map<String, dynamic>.from(row));
+    final threadId = row['thread_id']?.toString() ?? '';
+    if (threadId.isEmpty) return;
+    if (change.recordType != 'message') {
+      _chatV2.applyRealtimeChange(threadId, change);
+      return;
+    }
+    if (change.operation == 'DELETE') {
+      final wasLatest = _chatV2.summaries.any(
+        (summary) => summary.latestMessage?.id == change.messageId,
+      );
+      _chatV2.applyRealtimeChange(threadId, change);
+      if (wasLatest) unawaited(_refreshChatV2Summaries());
+      return;
+    }
+    final service = _chatV2Source is SupabaseChatV2Service
+        ? _chatV2Source
+        : supabaseChatV2Service;
+    final parsed = ChatWireMessageV2(change.record).toChatMessage();
+    if (parsed == null) return;
+    final message = await service.resolveRealtimeAttachment(parsed);
+    final isOwn =
+        message.senderId == actorId ||
+        message.senderAuthId == actorId ||
+        change.record['sender_auth_id']?.toString() ==
+            _client?.auth.currentUser?.id;
+    _chatV2.applyRealtimeChange(threadId, change.copyWith(message: message));
+    _chatV2.mergeRealtimeMessage(
+      message,
+      isOwn: isOwn,
+      incrementUnread: change.operation == 'INSERT',
+    );
+    if (!_chatV2.summaries.any(
+      (summary) => summary.threadId == message.threadId,
+    )) {
+      unawaited(_refreshChatV2Summaries());
+    }
+  }
+
+  void _applyChatV2State() {
+    final participants = <User>[];
+    _chatV2UnreadCounts
+      ..clear()
+      ..addEntries(
+        _chatV2.summaries.map(
+          (summary) => MapEntry(summary.threadId, summary.unreadCount),
+        ),
+      );
+    _chatV2ClubLaneUnreadCounts
+      ..clear()
+      ..addEntries(
+        _chatV2.summaries
+            .where((summary) => summary.threadType == 'club')
+            .map(
+              (summary) => MapEntry(summary.threadId, {
+                ClubChatLane.board: summary.unreadBoardCount ?? 0,
+                ClubChatLane.chat: summary.unreadChatCount ?? 0,
+              }),
+            ),
+      );
+
+    for (final summary in _chatV2.summaries) {
+      final peer = summary.peer;
+      if (peer != null) participants.add(_chatUser(peer));
+      final inboxProfile = summary.inboxProfile;
+      if (inboxProfile != null) participants.add(_chatUser(inboxProfile));
+      final group = summary.group;
+      if (group != null) {
+        participants.addAll(group.members.map(_chatUser));
+        _groups[group.id] = ChatGroup(
+          id: group.id,
+          creatorId: group.creatorId,
+          memberIds: group.members.map((member) => member.id).toList(),
+          adminIds: group.adminIds,
+          customName: group.customName,
+          photoUrl: group.photoUrl,
+          createdAt: group.createdAt,
+        );
+      }
+      if (isDirectThread(summary.threadId)) {
+        _directThreadIds.add(summary.threadId);
+      }
+      if (isClubInboxThread(summary.threadId)) {
+        final inboxId = clubInboxIdOf(summary.threadId);
+        final clubId = summary.club?.id;
+        final profileId = summary.inboxProfile?.id;
+        if (inboxId != null && clubId != null && profileId != null) {
+          _clubInboxes[inboxId] = ClubInboxConversation(
+            id: inboxId,
+            clubId: clubId,
+            profileId: profileId,
+            createdAt: summary.activityAt,
+            updatedAt: summary.activityAt,
+          );
+        }
+      }
+      final latest = summary.latestMessage;
+      if (latest != null &&
+          !_chatV2.historyFor(summary.threadId).hasLoadedInitial) {
+        _upsertChatV2Message(latest);
+      }
+    }
+    if (participants.isNotEmpty) {
+      peopleService.seedChatParticipants(participants);
+    }
+
+    for (final threadId in _chatV2.loadedThreadIds) {
+      final history = _chatV2.historyFor(threadId);
+      final incomingIds = history.messages.map((message) => message.id).toSet();
+      if (_chatV2InitializedThreads.add(threadId)) {
+        _messages.removeWhere(
+          (message) =>
+              message.threadId == threadId && !_isPendingMessage(message.id),
+        );
+      } else {
+        _messages.removeWhere(
+          (message) =>
+              message.threadId == threadId &&
+              _chatV2ManagedMessageIds.contains(message.id) &&
+              !incomingIds.contains(message.id) &&
+              !_isPendingMessage(message.id),
+        );
+      }
+      for (final message in history.messages) {
+        _upsertChatV2Message(message);
+      }
+    }
+    if (_chatV2.summaries.isNotEmpty || _chatV2.loadedThreadIds.isNotEmpty) {
+      scheduleSave();
+    }
+    notifyListeners();
+  }
+
+  User _chatUser(ChatProfileSummaryV2 profile) {
+    final avatar = profile.avatarUrl;
+    if (avatar != null) userState.setProfilePhotoUrl(profile.id, avatar);
+    return User(
+      id: profile.id,
+      name: profile.name,
+      email: '',
+      password: '',
+      role: 'student',
+      subscribedClubIds: const [],
+    );
+  }
+
+  void _upsertChatV2Message(ChatMessage message) {
+    final index = _messages.indexWhere(
+      (candidate) => candidate.id == message.id,
+    );
+    if (index == -1) {
+      _messages.add(message);
+    } else if (!_isPendingMessage(message.id)) {
+      _messages[index] = message;
+    }
+    _chatV2ManagedMessageIds.add(message.id);
+  }
+
+  bool _isPendingMessage(String messageId) =>
+      _pendingRemoteMessageIds.contains(messageId) ||
+      _pendingRemoteGroupMessageIds.contains(messageId) ||
+      _pendingRemoteClubMessageIds.contains(messageId) ||
+      _pendingRemoteClubInboxMessageIds.contains(messageId);
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -398,9 +851,25 @@ class ChatStore extends ChangeNotifier {
       ]);
     }
 
+    _trimLoadedMessageCache();
     _box = box;
+    final activeAttachmentPaths = _messages
+        .where((message) => _isPendingMessage(message.id))
+        .map((message) => message.attachmentPath)
+        .whereType<String>()
+        .toSet();
+    unawaited(_sweepStagedAttachments(activeAttachmentPaths));
     if (removedMockChats || migratedAdminMessaging) {
       unawaited(saveAll());
+    }
+  }
+
+  Future<void> _sweepStagedAttachments(Set<String> activePaths) async {
+    try {
+      await chatAttachmentStagingService.sweep(activePaths: activePaths);
+    } catch (_) {
+      // Unit tests and unsupported platforms may not expose path_provider.
+      // Staging cleanup is maintenance and must never prevent chat startup.
     }
   }
 
@@ -449,6 +918,53 @@ class ChatStore extends ChangeNotifier {
         _messages[i] = message.copyWith(seenAt: lastRead);
       }
     }
+  }
+
+  static const int _cachedMessagesPerThread = 80;
+
+  void _trimLoadedMessageCache() {
+    final byThread = <String, List<ChatMessage>>{};
+    for (final message in _messages) {
+      (byThread[message.threadId] ??= []).add(message);
+    }
+    final retainedIds = <String>{};
+    for (final messages in byThread.values) {
+      messages.sort((a, b) {
+        final time = b.createdAt.compareTo(a.createdAt);
+        return time != 0 ? time : b.id.compareTo(a.id);
+      });
+      retainedIds.addAll(
+        messages.take(_cachedMessagesPerThread).map((message) => message.id),
+      );
+    }
+    retainedIds.addAll({
+      ..._pendingRemoteMessageIds,
+      ..._pendingRemoteGroupMessageIds,
+      ..._pendingRemoteClubMessageIds,
+      ..._pendingRemoteClubInboxMessageIds,
+    });
+    _messages.removeWhere((message) => !retainedIds.contains(message.id));
+  }
+
+  List<Map<String, dynamic>> _messagesForCache() {
+    final byThread = <String, List<ChatMessage>>{};
+    for (final message in _messages) {
+      (byThread[message.threadId] ??= []).add(message);
+    }
+    final retained = <ChatMessage>[];
+    for (final messages in byThread.values) {
+      messages.sort((a, b) {
+        final time = b.createdAt.compareTo(a.createdAt);
+        return time != 0 ? time : b.id.compareTo(a.id);
+      });
+      retained.addAll(messages.take(_cachedMessagesPerThread));
+      retained.addAll(
+        messages
+            .skip(_cachedMessagesPerThread)
+            .where((message) => _isPendingMessage(message.id)),
+      );
+    }
+    return retained.map((message) => message.toMap()).toList(growable: false);
   }
 
   SupabaseClient? get _client {
@@ -536,7 +1052,6 @@ class ChatStore extends ChangeNotifier {
             isClubInboxThread(threadId),
       );
     }
-    _signedChatAttachmentUrls.clear();
     scheduleSave();
     notifyListeners();
   }
@@ -567,7 +1082,7 @@ class ChatStore extends ChangeNotifier {
     final oldGroupChannel = _groupMessageChannel;
     if (oldGroupChannel != null) await client.removeChannel(oldGroupChannel);
     _syncRetry?.cancel();
-    if (_syncedUserId != userId) _signedChatAttachmentUrls.clear();
+    _syncRetryAt = null;
     _syncedUserId = userId;
 
     final channel = client
@@ -941,7 +1456,11 @@ class ChatStore extends ChangeNotifier {
       final conversation = ClubInboxConversation.fromRemoteRow(row);
       _clubInboxes[conversation.id] = conversation;
       notifyListeners();
-      await startClubMessageSync(profileId);
+      if (_chatV2ActorId != null) {
+        await _refreshChatV2Summaries();
+      } else {
+        await startClubMessageSync(profileId);
+      }
       return conversation.threadId;
     } catch (_) {
       return null;
@@ -1620,22 +2139,17 @@ class ChatStore extends ChangeNotifier {
   Future<String> _signedChatAttachmentUrl(String objectPath) async {
     final client = _client;
     if (client == null) return objectPath;
-    final now = DateTime.now();
-    final cached = _signedChatAttachmentUrls[objectPath];
-    if (cached != null &&
-        cached.expiresAt.isAfter(now.add(const Duration(minutes: 1)))) {
-      return cached.url;
-    }
-    final url = await client.storage
-        .from(_chatAttachmentBucket)
-        .createSignedUrl(objectPath, _chatAttachmentSignedUrlLifetimeSeconds);
-    _signedChatAttachmentUrls[objectPath] = (
-      url: url,
-      expiresAt: now.add(
-        const Duration(seconds: _chatAttachmentSignedUrlLifetimeSeconds),
+    final media = await mediaDeliveryService.resolvePrivate(
+      value: '$_chatAttachmentReferencePrefix$objectPath',
+      actorId: client.auth.currentUser?.id ?? '',
+      rendition: MediaRendition.thumbnail,
+      dimensions: mediaDimensionsFor(
+        rendition: MediaRendition.thumbnail,
+        logicalWidth: 320,
+        devicePixelRatio: 2,
       ),
     );
-    return url;
+    return media.url;
   }
 
   void _removeRemoteMessageLocally(String messageId) {
@@ -1691,9 +2205,7 @@ class ChatStore extends ChangeNotifier {
         .toList(growable: false);
     _directThreadIds.removeAll(emptyDirectThreads);
     for (final reads in _lastRead.values) {
-      reads.removeWhere(
-        (threadId, _) => emptyDirectThreads.contains(threadId),
-      );
+      reads.removeWhere((threadId, _) => emptyDirectThreads.contains(threadId));
     }
     return true;
   }
@@ -1873,6 +2385,65 @@ class ChatStore extends ChangeNotifier {
     _ => 'image/jpeg',
   };
 
+  Future<void> _flushChatV2Outbox() async {
+    if (_chatV2ActorId == null) return;
+    if (_flushingChatV2Outbox) {
+      _flushChatV2OutboxAgain = true;
+      return;
+    }
+    final client = _client;
+    if (client == null || client.auth.currentUser == null) return;
+    _flushingChatV2Outbox = true;
+    var failed = false;
+    try {
+      final pendingIds = <String>{
+        ..._pendingRemoteMessageIds,
+        ..._pendingRemoteGroupMessageIds,
+        ..._pendingRemoteClubMessageIds,
+        ..._pendingRemoteClubInboxMessageIds,
+      };
+      final pending = _messages
+          .where((message) => pendingIds.contains(message.id))
+          .toList(growable: false);
+      for (final message in pending) {
+        try {
+          final remoteMessage = await _prepareMessageForRemote(client, message);
+          if (remoteMessage == null) {
+            throw StateError('The local chat attachment is unavailable.');
+          }
+          await _chatV2Source.sendMessage(
+            message: remoteMessage,
+            payload: _remotePayload(remoteMessage),
+            sendAsClub: remoteMessage.senderClubId != null,
+          );
+          await _completeAttachmentUpload(message, remoteMessage);
+          _pendingRemoteMessageIds.remove(message.id);
+          _pendingRemoteGroupMessageIds.remove(message.id);
+          _pendingRemoteClubMessageIds.remove(message.id);
+          _pendingRemoteClubInboxMessageIds.remove(message.id);
+        } catch (error, stackTrace) {
+          if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+            await _handlePermanentUploadFailure(message, error);
+          } else {
+            _recordAttachmentUploadFailure(message, error, stackTrace);
+            failed = true;
+          }
+        }
+      }
+      scheduleSave();
+      notifyListeners();
+    } finally {
+      _flushingChatV2Outbox = false;
+    }
+    final flushAgain = _flushChatV2OutboxAgain;
+    _flushChatV2OutboxAgain = false;
+    if (failed) {
+      _scheduleSyncRetry();
+    } else if (flushAgain) {
+      unawaited(_flushChatV2Outbox());
+    }
+  }
+
   Future<void> _flushRemoteChanges() async {
     if (_flushingRemote) {
       // A receipt can advance from delivered to seen while the earlier value
@@ -2005,7 +2576,8 @@ class ChatStore extends ChangeNotifier {
       }
 
       final pendingGroupMessages = _messages.where((message) {
-        return _pendingRemoteGroupMessageIds.contains(message.id) &&
+        return _chatV2ActorId == null &&
+            _pendingRemoteGroupMessageIds.contains(message.id) &&
             message.senderId == userId &&
             isGroupThread(message.threadId);
       }).toList();
@@ -2015,12 +2587,12 @@ class ChatStore extends ChangeNotifier {
         try {
           final remoteMessage = await _prepareMessageForRemote(client, message);
           if (remoteMessage == null) {
-            _recordAttachmentUploadFailure(
+            await _handlePermanentUploadFailure(
               message,
-              StateError('The local chat photo is no longer available.'),
-              StackTrace.current,
+              StateError(
+                'The local chat attachment is unavailable or invalid.',
+              ),
             );
-            failed = true;
             continue;
           }
           await client.from('group_messages').insert({
@@ -2032,22 +2604,32 @@ class ChatStore extends ChangeNotifier {
             'payload': _remotePayload(remoteMessage),
             'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
           });
+          await _completeAttachmentUpload(message, remoteMessage);
           _pendingRemoteGroupMessageIds.remove(remoteMessage.id);
         } on PostgrestException catch (error, stackTrace) {
           if (error.code == '23505') {
             _pendingRemoteGroupMessageIds.remove(message.id);
           } else {
+            if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+              await _handlePermanentUploadFailure(message, error);
+            } else {
+              _recordAttachmentUploadFailure(message, error, stackTrace);
+              failed = true;
+            }
+          }
+        } catch (error, stackTrace) {
+          if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+            await _handlePermanentUploadFailure(message, error);
+          } else {
             _recordAttachmentUploadFailure(message, error, stackTrace);
             failed = true;
           }
-        } catch (error, stackTrace) {
-          _recordAttachmentUploadFailure(message, error, stackTrace);
-          failed = true;
         }
       }
 
       final pendingMessages = _messages.where((message) {
-        return _pendingRemoteMessageIds.contains(message.id) &&
+        return _chatV2ActorId == null &&
+            _pendingRemoteMessageIds.contains(message.id) &&
             message.senderId == userId &&
             isDirectThread(message.threadId);
       }).toList();
@@ -2057,12 +2639,12 @@ class ChatStore extends ChangeNotifier {
         try {
           final remoteMessage = await _prepareMessageForRemote(client, message);
           if (remoteMessage == null) {
-            _recordAttachmentUploadFailure(
+            await _handlePermanentUploadFailure(
               message,
-              StateError('The local chat photo is no longer available.'),
-              StackTrace.current,
+              StateError(
+                'The local chat attachment is unavailable or invalid.',
+              ),
             );
-            failed = true;
             continue;
           }
           await client.from('direct_messages').insert({
@@ -2075,17 +2657,26 @@ class ChatStore extends ChangeNotifier {
             'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
             'delivered_at': remoteMessage.deliveredAt.toUtc().toIso8601String(),
           });
+          await _completeAttachmentUpload(message, remoteMessage);
           _pendingRemoteMessageIds.remove(remoteMessage.id);
         } on PostgrestException catch (error, stackTrace) {
           if (error.code == '23505') {
             _pendingRemoteMessageIds.remove(message.id);
           } else {
+            if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+              await _handlePermanentUploadFailure(message, error);
+            } else {
+              _recordAttachmentUploadFailure(message, error, stackTrace);
+              failed = true;
+            }
+          }
+        } catch (error, stackTrace) {
+          if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+            await _handlePermanentUploadFailure(message, error);
+          } else {
             _recordAttachmentUploadFailure(message, error, stackTrace);
             failed = true;
           }
-        } catch (error, stackTrace) {
-          _recordAttachmentUploadFailure(message, error, stackTrace);
-          failed = true;
         }
       }
 
@@ -2184,6 +2775,11 @@ class ChatStore extends ChangeNotifier {
   }
 
   Future<void> _flushClubMessages() async {
+    if (_chatV2ActorId != null) {
+      await _flushChatV2Outbox();
+      await _flushRemoteDeletes();
+      return;
+    }
     final client = _client;
     final authId = client?.auth.currentUser?.id ?? '';
     final actorId =
@@ -2205,12 +2801,10 @@ class ChatStore extends ChangeNotifier {
       try {
         final remoteMessage = await _prepareMessageForRemote(client, message);
         if (remoteMessage == null) {
-          _recordAttachmentUploadFailure(
+          await _handlePermanentUploadFailure(
             message,
-            StateError('The local chat photo is no longer available.'),
-            StackTrace.current,
+            StateError('The local chat attachment is unavailable or invalid.'),
           );
-          failed = true;
           continue;
         }
         await client.from('club_channel_messages').insert({
@@ -2224,18 +2818,26 @@ class ChatStore extends ChangeNotifier {
           'payload': _remotePayload(remoteMessage),
           'created_at': remoteMessage.createdAt.toUtc().toIso8601String(),
         });
+        await _completeAttachmentUpload(message, remoteMessage);
         _pendingRemoteClubMessageIds.remove(remoteMessage.id);
       } on PostgrestException catch (error, stackTrace) {
         if (error.code == '23505') {
           _pendingRemoteClubMessageIds.remove(message.id);
         } else {
+          if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+            await _handlePermanentUploadFailure(message, error);
+          } else {
+            _recordAttachmentUploadFailure(message, error, stackTrace);
+            failed = true;
+          }
+        }
+      } catch (error, stackTrace) {
+        if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+          await _handlePermanentUploadFailure(message, error);
+        } else {
           _recordAttachmentUploadFailure(message, error, stackTrace);
           failed = true;
         }
-      } catch (error, stackTrace) {
-        _recordAttachmentUploadFailure(message, error, stackTrace);
-        failed = true;
-        // The local outbox retains the message and retries on the next sync.
       }
     }
     await _flushRemoteDeletes();
@@ -2244,6 +2846,11 @@ class ChatStore extends ChangeNotifier {
   }
 
   Future<void> _flushClubInboxMessages() async {
+    if (_chatV2ActorId != null) {
+      await _flushChatV2Outbox();
+      await _flushRemoteDeletes();
+      return;
+    }
     final client = _client;
     final authId = client?.auth.currentUser?.id ?? '';
     final actorId =
@@ -2265,12 +2872,10 @@ class ChatStore extends ChangeNotifier {
       try {
         final remoteMessage = await _prepareMessageForRemote(client, message);
         if (remoteMessage == null) {
-          _recordAttachmentUploadFailure(
+          await _handlePermanentUploadFailure(
             message,
-            StateError('The local chat photo is no longer available.'),
-            StackTrace.current,
+            StateError('The local chat attachment is unavailable or invalid.'),
           );
-          failed = true;
           continue;
         }
         // Preserve the identity chosen when the message was created. A board
@@ -2294,18 +2899,26 @@ class ChatStore extends ChangeNotifier {
             .from('club_inbox_threads')
             .update({'updated_at': DateTime.now().toUtc().toIso8601String()})
             .eq('id', conversation.id);
+        await _completeAttachmentUpload(message, remoteMessage);
         _pendingRemoteClubInboxMessageIds.remove(remoteMessage.id);
       } on PostgrestException catch (error, stackTrace) {
         if (error.code == '23505') {
           _pendingRemoteClubInboxMessageIds.remove(message.id);
         } else {
+          if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+            await _handlePermanentUploadFailure(message, error);
+          } else {
+            _recordAttachmentUploadFailure(message, error, stackTrace);
+            failed = true;
+          }
+        }
+      } catch (error, stackTrace) {
+        if (classifyUploadFailure(error) == UploadFailureKind.permanent) {
+          await _handlePermanentUploadFailure(message, error);
+        } else {
           _recordAttachmentUploadFailure(message, error, stackTrace);
           failed = true;
         }
-      } catch (error, stackTrace) {
-        _recordAttachmentUploadFailure(message, error, stackTrace);
-        failed = true;
-        // Retained for retry.
       }
     }
     await _flushRemoteDeletes();
@@ -2334,8 +2947,27 @@ class ChatStore extends ChangeNotifier {
   }
 
   void _scheduleSyncRetry() {
-    if (_syncRetry?.isActive ?? false) return;
-    _syncRetry = Timer(const Duration(seconds: 5), () {
+    var delay = const Duration(seconds: 5);
+    final notBefore = _rateLimitRetryNotBefore;
+    if (notBefore != null) {
+      final remaining = notBefore.difference(DateTime.now());
+      if (remaining > delay) delay = remaining;
+      if (remaining <= Duration.zero) _rateLimitRetryNotBefore = null;
+    }
+    final retryAt = DateTime.now().add(delay);
+    if (_syncRetry?.isActive ?? false) {
+      final scheduledAt = _syncRetryAt;
+      if (scheduledAt != null && !scheduledAt.isBefore(retryAt)) return;
+      _syncRetry?.cancel();
+    }
+    _syncRetryAt = retryAt;
+    _syncRetry = Timer(delay, () {
+      _syncRetryAt = null;
+      final chatV2ActorId = _chatV2ActorId;
+      if (chatV2ActorId != null) {
+        unawaited(startChatV2Sync(chatV2ActorId));
+        return;
+      }
       final userId = _syncedUserId;
       if (userId != null) unawaited(startDirectMessageSync(userId));
       final clubActorId = _clubSyncedActorId;
@@ -2576,7 +3208,9 @@ class ChatStore extends ChangeNotifier {
       final aLast = a.lastMessage;
       final bLast = b.lastMessage;
       if (aLast != null && bLast != null) {
-        return bLast.createdAt.compareTo(aLast.createdAt);
+        final time = bLast.createdAt.compareTo(aLast.createdAt);
+        if (time != 0) return time;
+        return b.threadId.compareTo(a.threadId);
       }
       if (aLast != null) return -1;
       if (bLast != null) return 1;
@@ -2600,7 +3234,11 @@ class ChatStore extends ChangeNotifier {
   }) {
     ChatMessage? last;
     for (final m in messages) {
-      if (last == null || m.createdAt.isAfter(last.createdAt)) last = m;
+      if (last == null ||
+          m.createdAt.isAfter(last.createdAt) ||
+          (m.createdAt == last.createdAt && m.id.compareTo(last.id) > 0)) {
+        last = m;
+      }
     }
     return ChatThreadSummary(
       threadId: threadId,
@@ -2612,7 +3250,9 @@ class ChatStore extends ChangeNotifier {
       // [messages] is already this thread's bucket, so hand it over instead of
       // letting unreadCountFor rescan every message in the store again — that
       // rescan made threadsFor (and the nav badge behind it) quadratic.
-      unread: unreadCountFor(threadId, userId, within: messages),
+      unread:
+          _chatV2UnreadCounts[threadId] ??
+          unreadCountFor(threadId, userId, within: messages),
     );
   }
 
@@ -2623,7 +3263,10 @@ class ChatStore extends ChangeNotifier {
       return const [];
     }
     final list = _messages.where((m) => m.threadId == threadId).toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      ..sort((a, b) {
+        final time = a.createdAt.compareTo(b.createdAt);
+        return time != 0 ? time : a.id.compareTo(b.id);
+      });
     return List.unmodifiable(list);
   }
 
@@ -2674,6 +3317,8 @@ class ChatStore extends ChangeNotifier {
   int unreadInClubLane(String threadId, String userId, ClubChatLane lane) {
     if (_box == null || userId.isEmpty || !isClubThread(threadId)) return 0;
     if (!canAccessThread(threadId, userId)) return 0;
+    final serverCount = _chatV2ClubLaneUnreadCounts[threadId]?[lane];
+    if (_chatV2ActorId != null && serverCount != null) return serverCount;
     return _unreadInLane(threadId, userId, lane);
   }
 
@@ -2764,7 +3409,10 @@ class ChatStore extends ChangeNotifier {
     for (final message in _messages) {
       if (message.threadId != threadId) continue;
       if (laneOf(message) != ClubChatLane.chat) continue;
-      if (last == null || message.createdAt.isAfter(last.createdAt)) {
+      if (last == null ||
+          message.createdAt.isAfter(last.createdAt) ||
+          (message.createdAt == last.createdAt &&
+              message.id.compareTo(last.id) > 0)) {
         last = message;
       }
     }
@@ -2776,12 +3424,54 @@ class ChatStore extends ChangeNotifier {
   void markClubLaneRead(String threadId, String userId, ClubChatLane lane) {
     if (_box == null || userId.isEmpty || !isClubThread(threadId)) return;
     if (!canAccessThread(threadId, userId)) return;
-    if (_unreadInLane(threadId, userId, lane) == 0) return;
+    if (unreadInClubLane(threadId, userId, lane) == 0) return;
     (_lastReadLanes[userId] ??= {})[_laneKey(threadId, lane)] = DateTime.now();
+    if (_chatV2ActorId != null) {
+      _chatV2.markSummaryRead(
+        threadId,
+        scope: lane == ClubChatLane.board ? 'board' : 'chat',
+      );
+    }
     // Written straight through: a debounced save can be lost when the app is
     // closed right after the room is opened, which would resurrect the badge.
     unawaited(saveAll());
     notifyListeners();
+    if (_chatV2ActorId != null) {
+      final summary = _chatV2.summaryFor(threadId);
+      final boundary = lane == ClubChatLane.board
+          ? summary?.latestBoardBoundary
+          : summary?.latestChatBoundary;
+      if (boundary != null) {
+        unawaited(
+          _markReadBoundaryValuesV2(
+            threadId,
+            boundary.createdAt,
+            boundary.messageId,
+            scope: lane == ClubChatLane.board ? 'board' : 'chat',
+          ),
+        );
+      } else {
+        ChatMessage? through;
+        for (final message in _messages) {
+          if (message.threadId != threadId || laneOf(message) != lane) continue;
+          if (through == null ||
+              message.createdAt.isAfter(through.createdAt) ||
+              (message.createdAt == through.createdAt &&
+                  message.id.compareTo(through.id) > 0)) {
+            through = message;
+          }
+        }
+        if (through != null) {
+          unawaited(
+            _markReadBoundaryV2(
+              threadId,
+              through,
+              scope: lane == ClubChatLane.board ? 'board' : 'chat',
+            ),
+          );
+        }
+      }
+    }
   }
 
   int totalUnreadFor(String userId) {
@@ -3099,18 +3789,13 @@ class ChatStore extends ChangeNotifier {
     } else if (isClubInboxThread(threadId)) {
       _pendingRemoteClubInboxMessageIds.add(message.id);
     }
+    _chatV2.mergeOptimistic(message);
     scheduleSave();
     notifyListeners();
-    if (isDirectThread(threadId) || isGroupThread(threadId)) {
-      // The composer can be used before the route's post-frame sync startup
-      // has completed. Starting sync here guarantees the outbox gets a real
-      // authenticated client instead of returning early with no upload.
-      unawaited(startDirectMessageSync(senderId));
-    } else if (isClubThread(threadId)) {
-      unawaited(startClubMessageSync(senderId));
-    } else if (isClubInboxThread(threadId)) {
-      unawaited(startClubMessageSync(senderId));
-    }
+    // The composer can run before the route's post-frame startup. Starting the
+    // v2 scope here guarantees the durable outbox uses the versioned,
+    // idempotent mutation rather than waiting for a navigation rebuild.
+    unawaited(startChatV2Sync(senderId).then((_) => _flushChatV2Outbox()));
     if (isGroupThread(threadId)) _createGroupMessageNotifications(message);
     return message;
   }
@@ -3171,6 +3856,9 @@ class ChatStore extends ChangeNotifier {
     _pendingRemoteGroupMessageIds.remove(message.id);
     _pendingRemoteClubMessageIds.remove(message.id);
     _pendingRemoteClubInboxMessageIds.remove(message.id);
+    unawaited(
+      chatAttachmentStagingService.deleteIfStaged(message.attachmentPath),
+    );
     scheduleSave();
     notifyListeners();
 
@@ -3420,7 +4108,9 @@ class ChatStore extends ChangeNotifier {
         _messages[i] = message.copyWith(seenAt: now);
         markedSeen = true;
       }
-      if (markedSeen) _pendingSeenThreadIds.add(threadId);
+      if (markedSeen && _chatV2ActorId == null) {
+        _pendingSeenThreadIds.add(threadId);
+      }
     } else if (isGroupThread(threadId)) {
       for (var i = 0; i < _messages.length; i++) {
         final message = _messages[i];
@@ -3439,7 +4129,9 @@ class ChatStore extends ChangeNotifier {
         );
         markedSeen = true;
       }
-      if (markedSeen) _pendingSeenThreadIds.add(threadId);
+      if (markedSeen && _chatV2ActorId == null) {
+        _pendingSeenThreadIds.add(threadId);
+      }
     }
     if (unread == 0 && !markedSeen) return;
     (_lastRead[userId] ??= {})[threadId] = now;
@@ -3448,7 +4140,44 @@ class ChatStore extends ChangeNotifier {
     // this same chat appear unread on the next launch.
     unawaited(saveAll());
     notifyListeners();
-    if (markedSeen) unawaited(_flushRemoteChanges());
+    if (_chatV2ActorId != null) {
+      _chatV2.markSummaryRead(threadId);
+      final messages = messagesFor(threadId, viewerId: userId);
+      if (messages.isNotEmpty) {
+        unawaited(_markReadBoundaryV2(threadId, messages.last));
+      }
+    } else if (markedSeen) {
+      unawaited(_flushRemoteChanges());
+    }
+  }
+
+  Future<void> _markReadBoundaryV2(
+    String threadId,
+    ChatMessage through, {
+    String scope = 'all',
+  }) => _markReadBoundaryValuesV2(
+    threadId,
+    through.createdAt,
+    through.id,
+    scope: scope,
+  );
+
+  Future<void> _markReadBoundaryValuesV2(
+    String threadId,
+    DateTime throughCreatedAt,
+    String throughMessageId, {
+    String scope = 'all',
+  }) async {
+    try {
+      await _chatV2Source.markRead(
+        threadId: threadId,
+        throughCreatedAt: throughCreatedAt,
+        throughMessageId: throughMessageId,
+        scope: scope,
+      );
+    } catch (_) {
+      _scheduleSyncRetry();
+    }
   }
 
   void _createGroupMessageNotifications(ChatMessage message) {
@@ -3493,7 +4222,7 @@ class ChatStore extends ChangeNotifier {
     final box = _box;
     if (box == null) return;
     await Future.wait([
-      box.put('messages', _messages.map((m) => m.toMap()).toList()),
+      box.put('messages', _messagesForCache()),
       box.put('lastRead', {
         for (final entry in _lastRead.entries)
           entry.key: {

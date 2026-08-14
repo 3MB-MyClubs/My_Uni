@@ -22,29 +22,49 @@ import 'people_service.dart';
 import 'terms_acceptance_service.dart';
 import 'admin_moderation_service.dart';
 import 'platform_admin_auth_service.dart';
+import 'session_restoration.dart';
 
 enum AuthLoginFailure { none, invalidCredentials, banned }
 
 class AuthService {
-  AuthService({AdminModerationService? moderationService})
-    : _moderationService = moderationService ?? adminModerationService;
+  AuthService({
+    AdminModerationService? moderationService,
+    Duration sessionRestorationTimeout = const Duration(seconds: 8),
+  }) : _moderationService = moderationService ?? adminModerationService,
+       _sessionRestorationTimeout = sessionRestorationTimeout;
 
   final AdminModerationService _moderationService;
+  final Duration _sessionRestorationTimeout;
   User? _currentUser;
   AppAdmin? _currentAdmin;
   Map<String, dynamic>? _pendingStudentProfileRow;
   String? _activatedStudentUserId;
+  int _sessionRestorationGeneration = 0;
+  void Function()? _chatAuthBoundaryHandler;
 
   User? get currentUser => _currentUser;
   AppAdmin? get currentAdmin => _currentAdmin;
   AuthLoginFailure lastLoginFailure = AuthLoginFailure.none;
+  SessionRestorationResult lastSessionRestorationResult =
+      SessionRestorationResult.noSavedSession;
 
   bool get isStudentSession =>
       _currentAdmin == null &&
       _currentUser != null &&
       _currentUser!.role == 'student';
 
+  /// ChatStore registers a synchronous auth-boundary hook so cached v2
+  /// summaries/messages are cleared before another account can render.
+  void registerChatAuthBoundary(void Function() handler) {
+    _chatAuthBoundaryHandler = handler;
+  }
+
+  void _invalidateChatAuthBoundary() {
+    _chatAuthBoundaryHandler?.call();
+  }
+
   void setClubAdmin(AppAdmin admin, {bool checkTerms = true}) {
+    _invalidateChatAuthBoundary();
     lazyContentLoader.invalidate();
     if (isClubUpMockAdmin(admin)) ensureClubUpMockProfile();
     if (admin.isPlatformAdmin) appAdmin = admin;
@@ -111,6 +131,7 @@ class AuthService {
     if (appAdmin.id.isNotEmpty &&
         normalizedEmail == appAdmin.email.toLowerCase() &&
         appAdmin.password == password) {
+      _invalidateChatAuthBoundary();
       _currentAdmin = appAdmin;
       _currentUser = null;
       _pendingStudentProfileRow = null;
@@ -129,6 +150,7 @@ class AuthService {
         lastLoginFailure = AuthLoginFailure.banned;
         return false;
       }
+      _invalidateChatAuthBoundary();
       _currentAdmin = clubAdmin;
       _currentUser = null;
       _pendingStudentProfileRow = null;
@@ -154,6 +176,7 @@ class AuthService {
         lastLoginFailure = AuthLoginFailure.banned;
         return false;
       }
+      _invalidateChatAuthBoundary();
       _currentUser = user;
       _currentAdmin = null;
       _pendingStudentProfileRow = null;
@@ -209,6 +232,7 @@ class AuthService {
           lastLoginFailure = AuthLoginFailure.banned;
           return false;
         }
+        _invalidateChatAuthBoundary();
         await authSessionStore.startNewSession();
         lazyContentLoader.invalidate();
 
@@ -274,122 +298,143 @@ class AuthService {
   /// or [_currentAdmin], otherwise the root router incorrectly shows Login.
   Future<bool> restorePersistedSession() async {
     if (!SupabaseConfig.isConfigured) return false;
-
-    try {
-      final client = Supabase.instance.client;
-      var session = client.auth.currentSession;
-      if (session == null) return false;
-
-      if (!await authSessionStore.isSessionActive()) {
-        await client.auth.signOut();
-        return false;
-      }
-
-      // Supabase.initialize starts recovery in the background. Explicitly
-      // finish the refresh here when the cached access token is already stale,
-      // so the account lookup below never races an expired JWT.
-      if (session.isExpired) {
-        session = (await client.auth.refreshSession()).session;
-      }
-      final authUser = session?.user;
-      if (authUser == null) {
-        await _clearPersistedSession(client);
-        return false;
-      }
-
-      // Platform administration is a distinct identity, independent of club
-      // ownership. RLS only exposes this singleton assignment to its owner.
-      final platformAdminRows = await client
-          .from('app_admins')
-          .select('auth_user_id, email')
-          .eq('auth_user_id', authUser.id)
-          .limit(1);
-      final platformAssignments = platformAdminRows as List;
-      if (platformAssignments.isNotEmpty) {
-        final assignment = Map<String, dynamic>.from(
-          platformAssignments.first as Map,
-        );
-        if (assignment['email']?.toString().trim().toLowerCase() !=
-                platformAdminEmail ||
-            authUser.email?.trim().toLowerCase() != platformAdminEmail) {
-          await _clearPersistedSession(client);
-          return false;
-        }
-        setClubAdmin(
-          AppAdmin(
-            id: authUser.id,
-            name: 'ClubUp Admin',
-            email: platformAdminEmail,
-            password: '',
-            isPlatformAdmin: true,
-          ),
-          checkTerms: false,
-        );
-        await termsAcceptanceService.loadForCurrentUser();
-        return true;
-      }
-
-      final accountRows = await client
-          .from('club_auth_accounts')
-          .select('club_id')
-          .eq('auth_user_id', authUser.id)
-          .limit(1);
-      final accounts = accountRows as List;
-      if (accounts.isNotEmpty) {
-        final clubId = (accounts.first as Map)['club_id']?.toString() ?? '';
-        final clubRows = await client
-            .from('clubs')
-            .select('id, name, email')
-            .eq('id', clubId)
-            .limit(1);
-        final linkedClubs = clubRows as List;
-        if (clubId.isEmpty || linkedClubs.isEmpty) {
-          await _clearPersistedSession(client);
-          return false;
-        }
-
-        final club = Map<String, dynamic>.from(linkedClubs.first as Map);
-        final clubEmail = club['email']?.toString() ?? authUser.email ?? '';
-        if (await _moderationService.isClubBanned(
-          clubId: clubId,
-          email: clubEmail,
-        )) {
-          await _clearPersistedSession(client);
-          return false;
-        }
-        setClubAdmin(
-          AppAdmin(
+    final restorationGeneration = ++_sessionRestorationGeneration;
+    bool isCurrentRestoration() =>
+        restorationGeneration == _sessionRestorationGeneration;
+    final client = Supabase.instance.client;
+    final runner = SessionRestorationRunner(
+      timeout: _sessionRestorationTimeout,
+      operations: SessionRestorationOperations(
+        cachedSession: () async => _cachedIdentity(client.auth.currentSession),
+        isDeviceSessionActive: authSessionStore.isSessionActive,
+        refreshSession: () async {
+          try {
+            final response = await client.auth.refreshSession();
+            return _cachedIdentity(response.session);
+          } on AuthRetryableFetchException {
+            rethrow;
+          } on AuthException {
+            throw const InvalidPersistedSession();
+          }
+        },
+        loadPlatformAdminEmail: (userId) async {
+          final rows =
+              await client
+                      .from('app_admins')
+                      .select('auth_user_id, email')
+                      .eq('auth_user_id', userId)
+                      .limit(1)
+                  as List;
+          if (rows.isEmpty) return null;
+          final email = (rows.first as Map)['email']?.toString().trim() ?? '';
+          if (email.toLowerCase() != platformAdminEmail) {
+            throw const InvalidPersistedSession();
+          }
+          return email;
+        },
+        loadClubId: (userId) async {
+          final rows =
+              await client
+                      .from('club_auth_accounts')
+                      .select('club_id')
+                      .eq('auth_user_id', userId)
+                      .limit(1)
+                  as List;
+          if (rows.isEmpty) return null;
+          final id = (rows.first as Map)['club_id']?.toString() ?? '';
+          if (id.isEmpty) throw const InvalidPersistedSession();
+          return id;
+        },
+        loadClub: (clubId) async {
+          final rows =
+              await client
+                      .from('clubs')
+                      .select('id, name, email')
+                      .eq('id', clubId)
+                      .limit(1)
+                  as List;
+          if (rows.isEmpty) return null;
+          final row = rows.first as Map;
+          return RestoredClubIdentity(
             id: clubId,
-            name: club['name']?.toString() ?? '',
-            email: clubEmail,
-            password: '',
-          ),
-          checkTerms: false,
-        );
-        await termsAcceptanceService.loadForCurrentUser();
-        return true;
-      }
-
-      if (await _moderationService.isUserBanned(
-        userId: authUser.id,
-        email: authUser.email,
-      )) {
-        await _clearPersistedSession(client);
-        return false;
-      }
-      await _setStudentFromAuthUser(authUser);
-      return true;
-    } on AuthException {
-      await _clearPersistedSession();
-      return false;
-    } catch (_) {
-      // A temporary profile/network failure should not destroy a refresh token
-      // that may still be valid. Supabase will retry token refresh on resume.
-      return false;
-    }
+            name: row['name']?.toString() ?? '',
+            email: row['email']?.toString() ?? '',
+          );
+        },
+        isClubBanned: (club) =>
+            _moderationService.isClubBanned(clubId: club.id, email: club.email),
+        isUserBanned: (identity) => _moderationService.isUserBanned(
+          userId: identity.userId,
+          email: identity.email,
+        ),
+        restorePlatformAdmin: (identity) async {
+          if (!isCurrentRestoration()) return;
+          setClubAdmin(
+            AppAdmin(
+              id: identity.userId,
+              name: 'ClubUp Admin',
+              email: platformAdminEmail,
+              password: '',
+              isPlatformAdmin: true,
+            ),
+            checkTerms: false,
+          );
+          await termsAcceptanceService.loadForCurrentUser();
+        },
+        restoreClubAdmin: (club) async {
+          if (!isCurrentRestoration()) return;
+          setClubAdmin(
+            AppAdmin(
+              id: club.id,
+              name: club.name,
+              email: club.email,
+              password: '',
+            ),
+            checkTerms: false,
+          );
+          await termsAcceptanceService.loadForCurrentUser();
+        },
+        restoreStudent: (identity) => _setStudentFromIdentity(
+          identity,
+          isCurrentRestoration: isCurrentRestoration,
+        ),
+        clearInvalidSession: () => _clearPersistedSession(client),
+      ),
+    );
+    lastSessionRestorationResult = await runner.restore();
+    if (isCurrentRestoration()) _sessionRestorationGeneration++;
+    return lastSessionRestorationResult == SessionRestorationResult.restored;
   }
 
-  Future<void> _setStudentFromAuthUser(supabase_auth.User authUser) async {
+  CachedSessionIdentity? _cachedIdentity(Session? session) {
+    final user = session?.user;
+    if (session == null || user == null) return null;
+    return CachedSessionIdentity(
+      userId: user.id,
+      email: user.email,
+      isExpired: session.isExpired,
+    );
+  }
+
+  Future<void> _setStudentFromIdentity(
+    CachedSessionIdentity identity, {
+    required bool Function() isCurrentRestoration,
+  }) async {
+    final clientUser = Supabase.instance.client.auth.currentUser;
+    if (clientUser == null || clientUser.id != identity.userId) {
+      throw const InvalidPersistedSession();
+    }
+    await _setStudentFromAuthUser(
+      clientUser,
+      isCurrentRestoration: isCurrentRestoration,
+    );
+  }
+
+  Future<void> _setStudentFromAuthUser(
+    supabase_auth.User authUser, {
+    bool Function()? isCurrentRestoration,
+  }) async {
+    _invalidateChatAuthBoundary();
     lazyContentLoader.invalidate();
     Map<String, dynamic>? profileRow;
     try {
@@ -397,6 +442,7 @@ class AuthService {
     } catch (_) {
       profileRow = null;
     }
+    if (isCurrentRestoration != null && !isCurrentRestoration()) return;
 
     String? rowString(String key) {
       final text = profileRow?[key]?.toString().trim() ?? '';
@@ -444,6 +490,7 @@ class AuthService {
   }
 
   Future<void> _clearPersistedSession([SupabaseClient? client]) async {
+    _invalidateChatAuthBoundary();
     _currentUser = null;
     _currentAdmin = null;
     _pendingStudentProfileRow = null;
@@ -607,6 +654,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    _invalidateChatAuthBoundary();
     final wasClubUpMockSession = isClubUpMockAdmin(_currentAdmin);
     lazyContentLoader.invalidate();
     _currentUser = null;

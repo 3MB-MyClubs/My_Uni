@@ -1,5 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+
+// TEMPORARY LEGACY COMPATIBILITY — remove after minimum supported app version advances.
+
+import {
+  challengeLifetimeMs,
+  generateSixDigitCode,
+  getServiceRoleKey,
+  isValidEmail,
+  legacyChallengeCodeHash,
+  normalizeEmail,
+} from "../_shared/auth_challenge.ts";
+import {
+  enforceEdgeRateLimit,
+  RateLimitUnavailableError,
+} from "../_shared/rate_limit.ts";
 
 interface ReqPayload {
   email: string;
@@ -23,31 +38,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-async function sha256Hex(value: string) {
-  const data = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function getServiceRoleKey() {
-  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw)["default"] ?? null;
-  } catch {
-    return null;
-  }
-}
+const legacySuccessResponse = {
+  success: true,
+  message: "Password reset code sent.",
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -59,7 +53,7 @@ Deno.serve(async (req) => {
 
   try {
     const { email }: ReqPayload = await req.json();
-    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
       return json({ error: "Enter a valid email address." }, 400);
     }
@@ -73,6 +67,16 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const limited = await enforceEdgeRateLimit(
+      supabase,
+      req,
+      "auth_password_reset_request",
+      normalizedEmail,
+    );
+    // TEMPORARY V1 COMPATIBILITY: suppress delivery but keep the released
+    // success-shaped response instead of requiring HTTP 429 handling.
+    if (limited) return json(legacySuccessResponse);
+
     const [{ data: profile, error: profileError }, { data: appAdmin, error: adminError }] =
       await Promise.all([
         supabase.from("profiles").select("id").eq("email", normalizedEmail).maybeSingle(),
@@ -90,22 +94,26 @@ Deno.serve(async (req) => {
       return json({ error: "No account found for this email." }, 404);
     }
 
-    const code = generateCode();
-    const codeHash = await sha256Hex(`${normalizedEmail}:${code}:${pepper}`);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const { error: resetError } = await supabase
-      .from("pending_password_resets")
-      .upsert({
-        email: normalizedEmail,
-        code_hash: codeHash,
-        verified: false,
-        expires_at: expiresAt,
-        created_at: new Date().toISOString(),
-      });
+    const code = generateSixDigitCode();
+    const codeHash = await legacyChallengeCodeHash(
+      normalizedEmail,
+      code,
+      pepper,
+    );
+    const expiresAt = new Date(Date.now() + challengeLifetimeMs).toISOString();
+    const { data: issueStatus, error: resetError } = await supabase.rpc(
+      "issue_password_reset_challenge_legacy",
+      {
+        p_email: normalizedEmail,
+        p_code_hash: codeHash,
+        p_expires_at: expiresAt,
+      },
+    );
     if (resetError) {
       console.error("password reset upsert failed", resetError);
       return json({ error: "Could not create reset code." }, 500);
     }
+    if (issueStatus !== "issued") return json(legacySuccessResponse);
 
     const emailResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -129,11 +137,19 @@ Deno.serve(async (req) => {
     });
     if (!emailResponse.ok) {
       console.error("resend failed", await emailResponse.text());
+      await supabase
+        .from("pending_password_resets")
+        .delete()
+        .eq("email", normalizedEmail)
+        .eq("code_hash", codeHash);
       return json({ error: "Could not send reset email." }, 500);
     }
 
-    return json({ success: true, message: "Password reset code sent." });
+    return json(legacySuccessResponse);
   } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return json({ error: "Service temporarily unavailable." }, 503);
+    }
     console.error("send-password-reset-code failed", error);
     return json({ error: "Invalid request." }, 400);
   }

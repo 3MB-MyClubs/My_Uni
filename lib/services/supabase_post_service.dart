@@ -5,8 +5,8 @@ import 'package:uuid/uuid.dart';
 
 import '../models/news_post.dart';
 import 'content_safety_service.dart';
-import 'auth_service.dart';
 import 'lazy_content_loader.dart';
+import 'original_media_bytes.dart';
 import 'supabase_config.dart';
 import 'supabase_interaction_service.dart';
 
@@ -24,20 +24,25 @@ class SupabasePostService {
     final client = _client;
     if (client == null || !_looksLikeUuid(post.id)) return;
 
-    final deletedRows = await client
-        .from('club_posts')
-        .delete()
-        .eq('id', post.id)
-        .select('id');
-    if (deletedRows.isEmpty) {
+    final result = Map<String, dynamic>.from(
+      await client.rpc<Map<String, dynamic>>(
+        'delete_club_post_transactional_v2',
+        params: {'p_post_id': post.id, 'p_club_id': post.clubId},
+      ),
+    );
+    if (result['deleted'] != true) {
       throw StateError('Post was not deleted.');
     }
-    await _deleteStoredImage(post.imagePath);
+    await _finishQueuedCleanup(
+      cleanupId: result['cleanup_id']?.toString(),
+      objectPath: result['cleanup_path']?.toString(),
+    );
     lazyContentLoader.invalidateContent();
     supabaseInteractionService.invalidatePostCaches(post.id);
   }
 
   Future<NewsPost> createPost({
+    String? reservedPostId,
     required String clubId,
     required String authorId,
     required String content,
@@ -68,51 +73,53 @@ class SupabasePostService {
       );
     }
 
+    final postId = reservedPostId != null && _looksLikeUuid(reservedPostId)
+        ? reservedPostId
+        : const Uuid().v4();
     final uploadedImage = imagePath == null
         ? null
-        : await _uploadImage(clubId: clubId, imagePath: imagePath);
-    final payload = <String, dynamic>{'club_id': clubId, 'content': content};
-    if (uploadedImage != null) {
-      payload['image_path'] = uploadedImage.path;
-      payload['image_url'] = uploadedImage.publicUrl;
-    }
-    // Linked club accounts are still authenticated student profiles, so their
-    // actor can be recorded in `author_id`. Dedicated club-auth sessions use
-    // an auth.users UUID that has no matching public.profiles row; attaching
-    // that value would violate the nullable foreign key and reject the post.
-    if (authService.isStudentSession && _looksLikeUuid(authorId)) {
-      payload['author_id'] = authorId;
-    }
-    if (isAnnouncement) payload['is_announcement'] = true;
-
-    final row = await client
-        .from('club_posts')
-        .insert(payload)
-        .select(
-          'id, club_id, author_id, content, image_path, image_url, created_at',
-        )
-        .single();
-
-    final data = Map<String, dynamic>.from(row);
-    final postId = data['id']?.toString() ?? '';
-
-    if (poll != null && postId.isNotEmpty) {
-      try {
-        await client.from('polls').insert({
-          'post_id': postId,
-          'question': poll.question,
-          'options': poll.options,
-        });
-      } catch (_) {
-        // Poll table missing or offline — the poll still lives on the local
-        // NewsPost and votes stay local.
+        : await _uploadImage(
+            clubId: clubId,
+            postId: postId,
+            imagePath: imagePath,
+          );
+    dynamic response;
+    try {
+      response = await client
+          .rpc(
+            'create_club_post_transactional_v2',
+            params: {
+              'p_post_id': postId,
+              'p_club_id': clubId,
+              'p_content': content,
+              'p_image_path': uploadedImage?.path,
+              'p_image_url': uploadedImage?.publicUrl,
+              'p_is_announcement': isAnnouncement,
+              'p_mentioned_user_ids': taggedUserIds,
+              'p_poll_question': poll?.question,
+              'p_poll_options': poll?.options,
+            },
+          )
+          .single();
+    } catch (error, stackTrace) {
+      if (uploadedImage != null) {
+        await _registerAbandonedUpload(
+          clubId: clubId,
+          postId: postId,
+          objectPath: uploadedImage.path,
+        );
       }
+      Error.throwWithStackTrace(error, stackTrace);
     }
+    final row = Map<String, dynamic>.from(response);
+
+    final data = row;
+    final savedPostId = data['id']?.toString() ?? postId;
 
     lazyContentLoader.invalidateContent();
 
     return NewsPost(
-      id: postId,
+      id: savedPostId,
       clubId: data['club_id']?.toString() ?? clubId,
       authorId: data['author_id']?.toString() ?? authorId,
       content: data['content']?.toString() ?? content,
@@ -132,6 +139,7 @@ class SupabasePostService {
 
   Future<_UploadedPostImage> _uploadImage({
     required String clubId,
+    required String postId,
     required String imagePath,
   }) async {
     final client = _client;
@@ -140,8 +148,8 @@ class SupabasePostService {
     }
 
     final file = File(imagePath);
-    final bytes = await file.readAsBytes();
-    final objectPath = 'club_posts/$clubId/${const Uuid().v4()}.jpg';
+    final bytes = await readCanonicalMediaBytes(file);
+    final objectPath = 'club_posts/$clubId/$postId/cover.jpg';
 
     await client.storage
         .from(_imageBucket)
@@ -149,7 +157,7 @@ class SupabasePostService {
           objectPath,
           bytes,
           fileOptions: const FileOptions(
-            upsert: false,
+            upsert: true,
             contentType: 'image/jpeg',
             cacheControl: '31536000',
           ),
@@ -159,6 +167,45 @@ class SupabasePostService {
       path: objectPath,
       publicUrl: client.storage.from(_imageBucket).getPublicUrl(objectPath),
     );
+  }
+
+  Future<void> _registerAbandonedUpload({
+    required String clubId,
+    required String postId,
+    required String objectPath,
+  }) async {
+    try {
+      await _client?.rpc(
+        'register_abandoned_content_upload_v2',
+        params: {
+          'p_bucket_id': _imageBucket,
+          'p_object_path': objectPath,
+          'p_entity_type': 'post',
+          'p_entity_id': postId,
+          'p_club_id': clubId,
+        },
+      );
+    } catch (_) {
+      // The stable path makes a later retry reuse the same object. The orphan
+      // sweeper can also rediscover it without creating another object.
+    }
+  }
+
+  Future<void> _finishQueuedCleanup({
+    required String? cleanupId,
+    required String? objectPath,
+  }) async {
+    final client = _client;
+    if (client == null || cleanupId == null || objectPath == null) return;
+    try {
+      await client.storage.from(_imageBucket).remove([objectPath]);
+      await client.rpc(
+        'complete_storage_cleanup_v2',
+        params: {'p_cleanup_id': cleanupId},
+      );
+    } catch (_) {
+      // Database deletion is authoritative; the durable queue retries Storage.
+    }
   }
 
   NewsPost _localPost({
@@ -183,38 +230,6 @@ class SupabasePostService {
       poll: poll,
       isAnnouncement: isAnnouncement,
     );
-  }
-
-  Future<void> _deleteStoredImage(String? imagePath) async {
-    final client = _client;
-    final objectPath = _objectPathFromImageValue(imagePath);
-    if (client == null || objectPath == null) return;
-
-    try {
-      await client.storage.from(_imageBucket).remove([objectPath]);
-    } catch (_) {
-      // Non-critical: the database row no longer points at this image.
-    }
-  }
-
-  String? _objectPathFromImageValue(String? value) {
-    final text = value?.trim() ?? '';
-    if (text.isEmpty) return null;
-
-    final bucketPrefix = '$_imageBucket/';
-    if (text.startsWith(bucketPrefix)) {
-      return text.substring(bucketPrefix.length);
-    }
-    if (!text.startsWith('http://') && !text.startsWith('https://')) {
-      return text;
-    }
-
-    final uri = Uri.tryParse(text);
-    if (uri == null) return null;
-    final segments = uri.pathSegments;
-    final bucketIndex = segments.indexOf(_imageBucket);
-    if (bucketIndex < 0 || bucketIndex + 1 >= segments.length) return null;
-    return segments.skip(bucketIndex + 1).map(Uri.decodeComponent).join('/');
   }
 
   bool _looksLikeUuid(String value) {

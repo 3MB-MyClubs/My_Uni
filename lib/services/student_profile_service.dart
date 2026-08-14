@@ -105,6 +105,32 @@ class StudentProfileService {
     return fetchProfile(userId);
   }
 
+  /// Explicit private-account lookup for moderation. The database returns
+  /// other users' emails only to the platform admin; ordinary callers can
+  /// receive at most their own row.
+  Future<Map<String, String>> fetchPrivateEmails(
+    Iterable<String> profileIds,
+  ) async {
+    final client = _client;
+    final ids = profileIds
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .take(200)
+        .toList();
+    if (client == null || ids.isEmpty) return const {};
+
+    final rows = await client.rpc<List<dynamic>>(
+      'get_private_profile_emails',
+      params: {'p_profile_ids': ids},
+    );
+    return {
+      for (final row in rows.whereType<Map>())
+        if ((row['profile_id']?.toString() ?? '').isNotEmpty &&
+            (row['email']?.toString() ?? '').isNotEmpty)
+          row['profile_id'].toString(): row['email'].toString(),
+    };
+  }
+
   Future<StudentProfileData?> fetchProfile(
     String userId, {
     bool force = false,
@@ -133,13 +159,17 @@ class StudentProfileService {
         final profile = await client
             .from('profiles')
             .select(
-              'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+              'id, full_name, role, avatar_url, bio, major_id, academic_year_id',
             )
             .eq('id', userId)
             .maybeSingle();
 
         if (profile == null) return null;
-        return Map<String, dynamic>.from(profile);
+        final result = Map<String, dynamic>.from(profile);
+        if (userId == client.auth.currentUser?.id) {
+          result['email'] = client.auth.currentUser?.email ?? '';
+        }
+        return result;
       },
     );
   }
@@ -318,46 +348,52 @@ class StudentProfileService {
 
     invalidateProfile(input.userId);
 
-    await client
-        .from('profiles')
-        .update({
-          'full_name': input.fullName,
-          'bio': input.bio.trim().isEmpty ? null : input.bio.trim(),
-          'major_id': input.majorId,
-          'academic_year_id': input.academicYearId,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', input.userId);
-
-    await Future.wait([
-      _replaceJoinRows(
-        tableName: 'student_interests',
-        userColumn: 'user_id',
-        userId: input.userId,
-        targetColumn: 'interest_id',
-        targetIds: input.interestIds,
-      ),
-      _replaceJoinRows(
-        tableName: 'profile_double_majors',
-        userColumn: 'profile_id',
-        userId: input.userId,
-        targetColumn: 'major_id',
-        targetIds: input.doubleMajorIds,
-        optional: true,
-      ),
-      _replaceJoinRows(
-        tableName: 'profile_minors',
-        userColumn: 'profile_id',
-        userId: input.userId,
-        targetColumn: 'major_id',
-        targetIds: input.minorIds,
-        optional: true,
-      ),
-    ]);
-
-    final profile = await fetchProfile(input.userId);
+    final actorId = client.auth.currentUser?.id;
+    if (actorId == null || actorId != input.userId) {
+      throw StateError('Profile saves may only update the signed-in profile.');
+    }
+    final raw = await client.rpc<Map<String, dynamic>>(
+      'update_profile_v2',
+      params: {
+        'p_full_name': input.fullName,
+        'p_bio': input.bio,
+        'p_major_id': input.majorId,
+        'p_academic_year_id': input.academicYearId,
+        'p_interest_ids': input.interestIds.toSet().toList(),
+        'p_double_major_ids': input.doubleMajorIds.toSet().toList(),
+        'p_minor_ids': input.minorIds.toSet().toList(),
+      },
+    );
+    final profile = _profileFromV2(Map<String, dynamic>.from(raw));
     if (profile != null) applyToUserState(profile);
     return profile;
+  }
+
+  StudentProfileData? _profileFromV2(Map<String, dynamic> row) {
+    final id = _nullableString(row['id']);
+    if (id == null) return null;
+    List<String> strings(String key) => (row[key] as List? ?? const [])
+        .map((value) => value.toString())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    return StudentProfileData(
+      id: id,
+      email: _nullableString(row['email']) ?? '',
+      fullName: _nullableString(row['full_name']) ?? '',
+      role: _nullableString(row['role']) ?? 'student',
+      avatarUrl: _nullableString(row['avatar_url']),
+      bio: _nullableString(row['bio']),
+      majorId: _nullableString(row['major_id']),
+      majorName: _nullableString(row['major_name']),
+      academicYearId: _nullableString(row['academic_year_id']),
+      academicYearName: _nullableString(row['academic_year_name']),
+      interestIds: strings('interest_ids'),
+      interestNames: strings('interest_names'),
+      doubleMajorIds: strings('double_major_ids'),
+      doubleMajorNames: strings('double_major_names'),
+      minorIds: strings('minor_ids'),
+      minorNames: strings('minor_names'),
+    );
   }
 
   Future<StudentProfileData?> updateFullName({
@@ -500,32 +536,6 @@ class StudentProfileService {
         }
       },
     );
-  }
-
-  Future<void> _replaceJoinRows({
-    required String tableName,
-    required String userColumn,
-    required String userId,
-    required String targetColumn,
-    required List<String> targetIds,
-    bool optional = false,
-  }) async {
-    final client = _client;
-    if (client == null) return;
-
-    try {
-      await client.from(tableName).delete().eq(userColumn, userId);
-
-      final rows = targetIds
-          .toSet()
-          .map((id) => {userColumn: userId, targetColumn: id})
-          .toList();
-      if (rows.isEmpty) return;
-
-      await client.from(tableName).insert(rows);
-    } catch (_) {
-      if (!optional) rethrow;
-    }
   }
 
   String? _nullableString(dynamic value) {

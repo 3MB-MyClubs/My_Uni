@@ -184,7 +184,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     // Post-frame: the community controller and the read receipt both notify
     // listeners, which is illegal while this route is still mounting.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(chatStore.startClubMessageSync(_myId));
+      unawaited(chatStore.startChatV2Sync(_myId));
+      unawaited(chatStore.loadInitialMessagesV2(widget.threadId));
       final canAccess = chatStore.canAccessThread(widget.threadId, _myId);
       if (canAccess || authService.isStudentSession) {
         unawaited(_communityInfo?.start());
@@ -217,6 +218,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(chatStore.reconcileThreadV2(widget.threadId));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _requestedParticipantProfileIds.removeWhere(
           (id) => !_hasResolvedProfile(id),
@@ -239,7 +241,21 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (!mounted) return;
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
-    if (chatStore.takeAttachmentUploadFailure()) {
+    final rateLimitMessage = chatStore.takeRateLimitFailureMessage();
+    final permanentFailure = chatStore.takePermanentUploadFailureMessage();
+    final attachmentFailed = chatStore.takeAttachmentUploadFailure();
+    if (permanentFailure != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(permanentFailure)));
+    } else if (rateLimitMessage != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(rateLimitMessage)));
+    }
+    if (permanentFailure == null &&
+        rateLimitMessage == null &&
+        attachmentFailed) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -252,6 +268,11 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (!_scrollController.hasClients) return;
     // reverse:true — offset 0 is the newest message, at the bottom.
     final shouldShow = _scrollController.offset > 80;
+    final position = _scrollController.position;
+    if (position.maxScrollExtent - position.pixels <=
+        position.viewportDimension * 0.75) {
+      unawaited(chatStore.loadOlderMessagesV2(widget.threadId));
+    }
     if (shouldShow != _showJumpButton) {
       setState(() => _showJumpButton = shouldShow);
     }

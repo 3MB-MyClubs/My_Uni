@@ -393,8 +393,9 @@ class PushNotificationService extends ChangeNotifier {
   /// the previous account's notification content.
   Future<void> deactivateCurrentUser() async {
     _pendingTarget = null;
-    if (!isSupported) return;
-    await initialize();
+    // Logging out is valid before the post-frame Firebase bootstrap completes.
+    // Do not turn a cleanup call into the first Firebase API access.
+    if (!isSupported || !_initialized) return;
     await unregisterCurrentDevice();
     await notificationService.cancelAllNotifications();
   }

@@ -55,7 +55,6 @@ void main() {
       await checkinStore.toggle(
         eventId: clubEvent.id,
         userId: clubEvent.attendeeUserIds.first,
-        actorId: club.id,
       );
     }
 

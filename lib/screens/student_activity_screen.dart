@@ -156,6 +156,7 @@ class _StudentActivityScreenState extends State<StudentActivityScreen> {
                         : _ActivityGroupedList(
                             entries: entries,
                             onEntryTap: _openEvent,
+                            isOwnProfile: widget.isOwnProfile,
                           ),
                   ),
                 ),
@@ -494,8 +495,13 @@ class _ActivityFilterBar extends StatelessWidget {
 class _ActivityGroupedList extends StatelessWidget {
   final List<StudentActivityEntry> entries;
   final ValueChanged<StudentActivityEntry> onEntryTap;
+  final bool isOwnProfile;
 
-  const _ActivityGroupedList({required this.entries, required this.onEntryTap});
+  const _ActivityGroupedList({
+    required this.entries,
+    required this.onEntryTap,
+    required this.isOwnProfile,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -540,6 +546,7 @@ class _ActivityGroupedList extends StatelessWidget {
                   StudentActivityRow(
                     entry: groups[labels[g]]![i],
                     onTap: () => onEntryTap(groups[labels[g]]![i]),
+                    showRsvpControl: isOwnProfile,
                     showDivider: i < groups[labels[g]]!.length - 1,
                   ),
               ],

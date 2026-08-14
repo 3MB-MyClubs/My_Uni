@@ -7,6 +7,46 @@ import 'package:flutter_application_1/services/locale_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 
 void main() {
+  test('never-completing preference request uses neutral fallback', () async {
+    final service = AccountPreferencesService(
+      userIdProvider: () => 'student-auth-id',
+      rowLoader: (_) => Completer<Map<String, dynamic>?>().future,
+      rowWriter: (_, _) async {},
+      requestTimeout: const Duration(milliseconds: 10),
+    );
+
+    final loaded = await service.loadForCurrentUser();
+
+    expect(loaded.languageCode, isNull);
+    expect(loaded.isDark, isNull);
+    expect(service.status, AccountPreferencesStatus.error);
+    expect(service.nextRequiredPreference, AccountPreferencePrompt.none);
+    expect(service.lastError, isA<TimeoutException>());
+  });
+
+  test(
+    'preference timeout reuses the same account cache and can retry',
+    () async {
+      var shouldHang = false;
+      final service = AccountPreferencesService(
+        userIdProvider: () => 'student-auth-id',
+        rowLoader: (_) => shouldHang
+            ? Completer<Map<String, dynamic>?>().future
+            : Future.value({'language_code': 'en', 'theme_mode': 'dark'}),
+        rowWriter: (_, _) async {},
+        requestTimeout: const Duration(milliseconds: 10),
+      );
+      await service.loadForCurrentUser();
+      shouldHang = true;
+
+      final cached = await service.retry();
+
+      expect(cached.languageCode, 'en');
+      expect(cached.isDark, isTrue);
+      expect(service.status, AccountPreferencesStatus.error);
+    },
+  );
+
   test('loads saved account choices on another service instance', () async {
     const userId = '82d32a55-f211-47aa-89e6-3649eced7691';
     final rows = <String, Map<String, dynamic>>{};

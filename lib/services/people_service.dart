@@ -104,6 +104,37 @@ class PeopleService {
   Set<String> clubIdsFor(String userId) => _clubIdsByUserId[userId] ?? const {};
   int get mutualFollowersRevision => _mutualFollowersRevision;
 
+  /// Merges the small Feed v2 recommendation set into the shared directory
+  /// cache. It deliberately does not mark the full people directory hydrated.
+  void seedFeedSuggestions(
+    Iterable<User> suggestions, {
+    Iterable<String> followerIds = const [],
+  }) {
+    final byId = <String, User>{
+      for (final user in _cachedPeople) user.id: user,
+    };
+    for (final user in suggestions) {
+      byId[user.id] = user;
+    }
+    _cachedPeople = byId.values.toList();
+    _cachedFollowerIds = {..._cachedFollowerIds, ...followerIds};
+  }
+
+  /// Merges the deliberately small participant projection returned by Chat v2
+  /// without triggering a second profile-directory request.
+  void seedChatParticipants(Iterable<User> participants) {
+    final byId = <String, User>{
+      for (final user in _cachedPeople) user.id: user,
+    };
+    final fetchedAt = DateTime.now();
+    for (final user in participants) {
+      if (user.id.isEmpty) continue;
+      byId[user.id] = user;
+      _profileRowsFetchedAt[user.id] = fetchedAt;
+    }
+    _cachedPeople = byId.values.toList();
+  }
+
   /// People the current user follows who also follow [suggestedUserId].
   ///
   /// The direction matters: for `me -> mutual -> suggestion`, the mutual
@@ -184,7 +215,7 @@ class PeopleService {
       final rows = await _client!
           .from('profiles')
           .select(
-            'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+            'id, full_name, role, avatar_url, bio, major_id, academic_year_id',
           )
           .eq('role', 'student')
           .order('full_name', ascending: true)
@@ -223,10 +254,7 @@ class PeopleService {
       if (excludeId != null && id == excludeId) continue;
 
       final name = _string(row['full_name']);
-      final email = _string(row['email']);
-      if (q.isNotEmpty &&
-          !name.toLowerCase().contains(q) &&
-          !email.toLowerCase().contains(q)) {
+      if (q.isNotEmpty && !name.toLowerCase().contains(q)) {
         continue;
       }
 
@@ -245,8 +273,8 @@ class PeopleService {
       people.add(
         User(
           id: id,
-          name: name.isEmpty ? email : name,
-          email: email,
+          name: name.isEmpty ? _l10n.studentProfile : name,
+          email: '',
           password: '',
           role: _string(row['role'], fallback: 'student'),
           subscribedClubIds: const [],
@@ -475,7 +503,7 @@ class PeopleService {
         client
             .from('profiles')
             .select(
-              'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+              'id, full_name, role, avatar_url, bio, major_id, academic_year_id',
             )
             .eq('id', userId)
             .maybeSingle()
@@ -630,7 +658,7 @@ class PeopleService {
     final rows = await client
         .from('profiles')
         .select(
-          'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+          'id, full_name, role, avatar_url, bio, major_id, academic_year_id',
         )
         .inFilter('id', profileIds);
 
@@ -899,7 +927,7 @@ class PeopleService {
       fetch: () => client
           .from('profiles')
           .select(
-            'id, email, full_name, role, avatar_url, bio, major_id, academic_year_id',
+            'id, full_name, role, avatar_url, bio, major_id, academic_year_id',
           )
           .inFilter('id', missingIds),
     );
@@ -964,10 +992,11 @@ class PeopleService {
     if (yearName != null) userState.setYear(id, yearName);
 
     final name = _string(row['full_name']);
-    final email = _string(row['email']);
+    final isCurrentUser = id == _client?.auth.currentUser?.id;
+    final email = isCurrentUser ? _client?.auth.currentUser?.email ?? '' : '';
     return User(
       id: id,
-      name: name.isEmpty ? email : name,
+      name: name.isEmpty ? _l10n.studentProfile : name,
       email: email,
       password: '',
       role: _string(row['role'], fallback: 'student'),

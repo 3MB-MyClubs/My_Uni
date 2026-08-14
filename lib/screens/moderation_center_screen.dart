@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/student_profile_service.dart';
 
 class ModerationCenterScreen extends StatefulWidget {
   const ModerationCenterScreen({super.key});
@@ -19,7 +20,16 @@ class ModerationCenterScreen extends StatefulWidget {
 }
 
 class _ModerationCenterScreenState extends State<ModerationCenterScreen> {
-  late final Future<void> _loadFuture = adminModerationService.initialize();
+  late final Future<void> _loadFuture = _initialize();
+  Map<String, String> _privateProfileEmails = const {};
+
+  Future<void> _initialize() async {
+    await adminModerationService.initialize();
+    if (!_isAuthorized) return;
+    _privateProfileEmails = await studentProfileService.fetchPrivateEmails(
+      _profileTargets.map((profile) => profile.id),
+    );
+  }
 
   bool get _isAuthorized => isClubUpAdmin(authService.currentAdmin);
 
@@ -33,7 +43,7 @@ class _ModerationCenterScreenState extends State<ModerationCenterScreen> {
       byId[user.id] = _ProfileTarget(
         id: user.id,
         name: user.name.isEmpty ? user.email : user.name,
-        email: user.email,
+        email: _privateProfileEmails[user.id] ?? user.email,
       );
     }
 

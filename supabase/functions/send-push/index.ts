@@ -1,6 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { importPKCS8, SignJWT } from "npm:jose@6";
+import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+import { importPKCS8, SignJWT } from "npm:jose@6.2.8";
+
+import {
+  enforceEdgeRateLimit,
+  rateLimitResponse,
+  RateLimitUnavailableError,
+} from "../_shared/rate_limit.ts";
 
 type WebhookPayload = {
   type?: string;
@@ -188,6 +194,22 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  try {
+    const limited = await enforceEdgeRateLimit(
+      admin,
+      request,
+      "push_dispatch",
+      notificationId,
+      "resource",
+    );
+    if (limited) return rateLimitResponse(limited, {});
+  } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return json({ error: "Service temporarily unavailable" }, 503);
+    }
+    throw error;
+  }
+
   const startedAt = new Date().toISOString();
   const { data: notification, error: claimError } = await admin
     .from("notifications")

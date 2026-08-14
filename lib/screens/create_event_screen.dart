@@ -10,6 +10,7 @@ import 'package:flutter/cupertino.dart'
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 import '../models/event.dart';
 import '../services/app_colors.dart';
 import '../services/account_switcher_service.dart';
@@ -19,6 +20,7 @@ import '../services/club_notification_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/photo_upload_quality.dart';
+import '../services/rate_limit_error.dart';
 import '../services/supabase_event_service.dart';
 import '../services/user_state.dart';
 import '../widgets/app_network_image.dart';
@@ -50,12 +52,18 @@ List<String> _monthLabels(BuildContext context) {
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
+  final SupabaseEventService? eventService;
 
   /// When provided, the form opens in edit mode pre-filled with this event and
   /// saves changes in place instead of creating a new event.
   final Event? existing;
 
-  const CreateEventScreen({super.key, this.onCreated, this.existing});
+  const CreateEventScreen({
+    super.key,
+    this.onCreated,
+    this.existing,
+    this.eventService,
+  });
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -92,6 +100,7 @@ class _SpeakerEntry {
 }
 
 class _CreateEventScreenState extends State<CreateEventScreen> {
+  final String _reservedEventId = const Uuid().v4();
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _locationController = TextEditingController();
@@ -130,6 +139,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   bool get _isEditing => widget.existing != null;
+
+  SupabaseEventService get _eventService =>
+      widget.eventService ?? supabaseEventService;
 
   @override
   void initState() {
@@ -527,7 +539,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
       Event saved;
       try {
-        saved = await supabaseEventService.updateEvent(
+        saved = await _eventService.updateEvent(
           updated,
           previousImagePath: ev.imagePath,
         );
@@ -546,10 +558,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         return;
       }
 
-      final ok = contentStore.updateEvent(
-        saved,
-        accountSwitcherService.actorId,
-      );
+      final ok = contentStore.updateEventForCurrentAccount(saved);
       if (!mounted) return;
       if (ok) {
         widget.onCreated?.call();
@@ -568,7 +577,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     final draftEvent = Event(
-      id: 'ev_${DateTime.now().millisecondsSinceEpoch}',
+      id: _reservedEventId,
       clubId: clubId,
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
@@ -586,12 +595,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     setState(() => _isPosting = true);
     try {
-      final newEvent = await supabaseEventService.createEvent(draftEvent);
+      final newEvent = await _eventService.createEvent(draftEvent);
       if (!mounted) return;
       events.add(newEvent);
       unawaited(contentStore.saveEvents());
       contentStore.notifyContentChanged();
-      unawaited(clubNotificationService.notifyFollowersAboutEvent(newEvent));
+      if (!supabaseEventService.isAvailable) {
+        unawaited(clubNotificationService.notifyFollowersAboutEvent(newEvent));
+      }
       widget.onCreated?.call();
       Navigator.pop(context);
     } catch (error, stackTrace) {
@@ -612,6 +623,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   String _publishErrorMessage(Object error) {
     final l10n = AppLocalizations.of(context)!;
+    final limited = RateLimitInfo.from(error);
+    if (limited != null) return limited.displayMessage;
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||

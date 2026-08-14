@@ -1,0 +1,2 @@
+-- Intentionally empty. Schema creation belongs to migrations and each test
+-- suite owns its fixtures.
