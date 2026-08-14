@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(50);
+select plan(51);
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password)
 values
@@ -274,6 +274,12 @@ select is(
   'an idempotent retry leaves one canonical row'
 );
 reset role;
+select is(
+  (select count(*) from public.notifications
+   where dedupe_key = 'group_message:87000000-0000-0000-0000-000000000001:81000000-0000-0000-0000-000000000002'),
+  1::bigint,
+  'the v2 chat insert fires the database notification trigger'
+);
 select is(
   (select sum(allowed_count) from private.rate_limit_buckets
    where action in ('message_send:actor', 'message_send:resource')),

@@ -27,6 +27,27 @@ void main() {
     expect(parameters['v'], 'new-photo');
   });
 
+  test(
+    're-hydrating the same remote avatar preserves its cache and revision',
+    () {
+      final state = UserState();
+      const url =
+          'https://example.supabase.co/storage/v1/object/public/avatars/u1/avatar.jpg?v=1';
+      var notifications = 0;
+      state.addListener(() => notifications++);
+
+      state.setProfilePhotoUrl('u1', url);
+      final revision = state.profilePhotoRevisionFor('u1');
+      final firstNotificationCount = notifications;
+
+      state.setProfilePhotoUrl('u1', url);
+
+      expect(state.profilePhotoRevisionFor('u1'), revision);
+      expect(notifications, firstNotificationCount);
+      expect(state.remotePhotoUrls['u1'], url);
+    },
+  );
+
   testWidgets(
     'writing new bytes to the same local avatar path bumps revision',
     (tester) async {
