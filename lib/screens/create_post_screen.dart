@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:uuid/uuid.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
 import '../services/account_switcher_service.dart';
@@ -12,6 +13,8 @@ import '../services/club_notification_service.dart';
 import '../services/content_safety_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
+import '../services/media_delivery_service.dart';
+import '../services/rate_limit_error.dart';
 import '../services/user_state.dart';
 import '../services/supabase_post_service.dart';
 import '../widgets/app_network_image.dart';
@@ -87,6 +90,7 @@ Widget buildPostBanner({
   required Color fallbackColor,
   required String fallbackLetter,
   double height = 200,
+  MediaRendition rendition = MediaRendition.feed,
 }) {
   // Network image (Supabase / Picsum / any remote URL)
   if (imagePath != null &&
@@ -101,7 +105,8 @@ Widget buildPostBanner({
         // Banners span device width but rarely need more than this to look
         // sharp, even on high-density screens — avoids decoding the full
         // up-to-3840px upload for what's usually a ~200-400dp-tall card.
-        cacheWidth: 500,
+        cacheWidth: rendition == MediaRendition.screen ? 800 : 500,
+        rendition: rendition,
         placeholderBuilder: (_) => SkeletonBox(
           width: double.infinity,
           height: height,
@@ -207,6 +212,7 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   final _contentController = TextEditingController();
+  final String _reservedPostId = const Uuid().v4();
 
   // Poll composer state (2 options minimum, up to 4).
   bool _pollEnabled = false;
@@ -334,6 +340,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     try {
       final post = await supabasePostService.createPost(
+        reservedPostId: _reservedPostId,
         clubId: _selectedClub!.id,
         authorId: accountSwitcherService.actorId,
         content: content,
@@ -347,8 +354,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       newsPosts.insert(0, post);
       unawaited(contentStore.saveNewsPosts());
       contentStore.notifyContentChanged();
-      unawaited(clubNotificationService.notifyFollowersAboutPost(post));
-      clubNotificationService.notifyMentionedUsers(post);
+      if (!supabasePostService.isAvailable) {
+        unawaited(clubNotificationService.notifyFollowersAboutPost(post));
+        clubNotificationService.notifyMentionedUsers(post);
+      }
       widget.onPosted?.call();
       Navigator.of(context).pop();
     } catch (error, stackTrace) {
@@ -370,6 +379,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String _publishErrorMessage(BuildContext context, Object error) {
     final l10n = AppLocalizations.of(context)!;
     if (error is ContentSafetyException) return error.message;
+    final limited = RateLimitInfo.from(error);
+    if (limited != null) return limited.displayMessage;
     final text = error.toString();
     if (text.contains('row-level security') ||
         text.contains('permission denied') ||

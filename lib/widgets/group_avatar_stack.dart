@@ -1,10 +1,11 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../services/app_colors.dart';
 import '../services/photo_file_cache.dart';
+import '../services/media_delivery_service.dart';
+import 'app_network_image.dart';
 import 'user_avatar.dart';
 
 class GroupAvatarStack extends StatelessWidget {
@@ -28,9 +29,20 @@ class GroupAvatarStack extends StatelessWidget {
         photo.startsWith('http://') || photo.startsWith('https://');
     if (photo.isNotEmpty &&
         (isNetworkPhoto || photoFileCache.existsSync(photo))) {
-      final provider = isNetworkPhoto
-          ? CachedNetworkImageProvider(photo) as ImageProvider
-          : FileImage(File(photo));
+      if (isNetworkPhoto) {
+        return ClipOval(
+          child: AppNetworkImage(
+            url: photo,
+            rendition: MediaRendition.thumbnail,
+            width: size,
+            height: size,
+            cacheWidth: size,
+            cacheHeight: size,
+            fit: BoxFit.cover,
+          ),
+        );
+      }
+      final provider = FileImage(File(photo));
       final decodeSize = (size * MediaQuery.devicePixelRatioOf(context))
           .round();
       return Container(

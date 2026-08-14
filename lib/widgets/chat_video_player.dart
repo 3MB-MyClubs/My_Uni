@@ -30,19 +30,23 @@ class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
   Object? _error;
   int _initializationGeneration = 0;
   Future<void>? _pendingDisposal;
+  bool _userActivated = false;
+
+  bool get _shouldInitialize => widget.active || _userActivated;
 
   @override
   void initState() {
     super.initState();
-    if (widget.active) unawaited(_initialize());
+    if (_shouldInitialize) unawaited(_initialize());
   }
 
   @override
   void didUpdateWidget(covariant ChatVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.path != widget.path) {
+      _userActivated = false;
       _queueControllerDisposal();
-      if (widget.active) unawaited(_initialize());
+      if (_shouldInitialize) unawaited(_initialize());
       return;
     }
     if (!oldWidget.active && widget.active) {
@@ -55,7 +59,7 @@ class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
   Future<void> _initialize() async {
     final pendingDisposal = _pendingDisposal;
     if (pendingDisposal != null) await pendingDisposal;
-    if (!mounted || _controller != null || !widget.active) return;
+    if (!mounted || _controller != null || !_shouldInitialize) return;
     final generation = ++_initializationGeneration;
     final isRemote =
         widget.path.startsWith('http://') || widget.path.startsWith('https://');
@@ -111,6 +115,7 @@ class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
   Future<void> _togglePlayback() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {
+      _userActivated = true;
       await _initialize();
       return;
     }
@@ -150,7 +155,7 @@ class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
             )
           else
             Center(
-              child: _error == null && widget.active
+              child: _error == null && _shouldInitialize
                   ? const CircularProgressIndicator(color: Colors.white)
                   : Icon(
                       Icons.videocam_outlined,

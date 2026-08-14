@@ -1,5 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+
+// TEMPORARY LEGACY COMPATIBILITY — remove after minimum supported app version advances.
+
+import {
+  getServiceRoleKey,
+  isValidEmail,
+  normalizeEmail,
+} from "../_shared/auth_challenge.ts";
+import {
+  enforceEdgeRateLimit,
+  RateLimitUnavailableError,
+} from "../_shared/rate_limit.ts";
 
 interface ReqPayload {
   email: string;
@@ -24,20 +36,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function getServiceRoleKey() {
-  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw)["default"] ?? null;
-  } catch {
-    return null;
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -48,7 +46,7 @@ Deno.serve(async (req) => {
 
   try {
     const { email, password }: ReqPayload = await req.json();
-    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const normalizedPassword = password?.trim();
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
       return json({ error: "Enter a valid email address." }, 400);
@@ -56,7 +54,6 @@ Deno.serve(async (req) => {
     if (!normalizedPassword || !/^\d{6,}$/.test(normalizedPassword)) {
       return json({ error: "Password must be at least 6 numbers." }, 400);
     }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = getServiceRoleKey();
     if (!supabaseUrl || !serviceRoleKey) {
@@ -65,15 +62,15 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { data: pending, error: pendingError } = await supabase
-      .from("pending_password_resets")
-      .select("verified, expires_at")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-    if (pendingError) return json({ error: "Could not check reset status." }, 500);
-    if (!pending?.verified) return json({ error: "Reset code has not been verified." }, 403);
-    if (new Date(pending.expires_at).getTime() < Date.now()) {
-      return json({ error: "Reset code expired. Please request a new code." }, 410);
+    const limited = await enforceEdgeRateLimit(
+      supabase,
+      req,
+      "auth_password_reset_complete",
+      normalizedEmail,
+    );
+    // TEMPORARY V1 COMPATIBILITY: preserve the released unverified response.
+    if (limited) {
+      return json({ error: "Reset code has not been verified." }, 403);
     }
 
     const [{ data: profile, error: profileError }, { data: appAdmin, error: adminError }] =
@@ -89,6 +86,34 @@ Deno.serve(async (req) => {
     const userId = profile?.id ?? appAdmin?.auth_user_id;
     if (!userId) return json({ error: "No account found for this email." }, 404);
 
+    const { data: consumeStatus, error: consumeError } = await supabase.rpc(
+      "consume_password_reset_verification_legacy",
+      {
+        p_email: normalizedEmail,
+      },
+    );
+    if (consumeError) {
+      console.error("legacy password reset verification consumption failed", consumeError);
+      return json({ error: "Could not validate reset verification." }, 500);
+    }
+    if (consumeStatus === "expired") {
+      return json(
+        { error: "Reset code expired. Please request a new code." },
+        410,
+      );
+    }
+    if (consumeStatus !== "ok") {
+      return json({ error: "Reset code has not been verified." }, 403);
+    }
+
+    const { error: revokeError } = await supabase.rpc("revoke_user_sessions", {
+      p_user_id: userId,
+    });
+    if (revokeError) {
+      console.error("password reset session revocation failed", revokeError);
+      return json({ error: "Could not revoke existing sessions." }, 500);
+    }
+
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       userId,
       { password: normalizedPassword },
@@ -102,6 +127,9 @@ Deno.serve(async (req) => {
     if (cleanupError) console.error("password reset cleanup failed", cleanupError);
     return json({ success: true, message: "Password updated." });
   } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return json({ error: "Service temporarily unavailable." }, 503);
+    }
     console.error("complete-password-reset failed", error);
     return json({ error: "Invalid request." }, 400);
   }

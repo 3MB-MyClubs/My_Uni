@@ -83,11 +83,17 @@ class RsvpStore extends ChangeNotifier {
 
     final event = _mutableEventAt(idx);
     final previousTimestamp = event.rsvpTimestamps[userId];
+    final previousRemoteCount = supabaseEventRsvpCounts[eventId];
     _log(
       'RSVP toggle local start: eventId=$eventId userId=$userId '
       'wasAttending=$wasAttending next=${!wasAttending}',
     );
 
+    if (previousRemoteCount != null) {
+      supabaseEventRsvpCounts[eventId] = wasAttending
+          ? (previousRemoteCount - 1).clamp(0, previousRemoteCount)
+          : previousRemoteCount + 1;
+    }
     _setLocalRsvp(event: event, userId: userId, attending: !wasAttending);
     contentStore.scheduleSave('events');
 
@@ -133,6 +139,9 @@ class RsvpStore extends ChangeNotifier {
         'error=$error',
       );
       if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
+      if (previousRemoteCount != null) {
+        supabaseEventRsvpCounts[eventId] = previousRemoteCount;
+      }
       _setLocalRsvp(
         event: event,
         userId: userId,

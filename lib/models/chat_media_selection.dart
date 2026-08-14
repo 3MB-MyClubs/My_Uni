@@ -40,7 +40,8 @@ class MediaPreviewResult {
 /// being read or uploaded indefinitely on a mobile connection. Uploads are
 /// streamed from disk after confirmation, so accepted files are not buffered
 /// in memory.
-const int maxChatMediaFileBytes = 100 * 1024 * 1024;
+// Matches the private `chat-attachments` bucket contract for images and video.
+const int maxChatMediaFileBytes = 10 * 1024 * 1024;
 
 const Set<String> _imageExtensions = {
   'jpg',

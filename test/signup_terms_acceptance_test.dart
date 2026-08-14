@@ -92,6 +92,7 @@ void main() {
     final result = await SignupService().completeSignup(
       email: 'alice@ku.edu.tr',
       password: 'unused',
+      capability: 'unused',
       fullName: 'Alice Yılmaz',
       majorId: 'major-1',
       academicYearId: 'year-1',

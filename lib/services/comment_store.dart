@@ -10,6 +10,7 @@ import 'content_safety_service.dart';
 import 'content_store.dart';
 import 'mock_data.dart';
 import 'moderation_service.dart';
+import 'rate_limit_error.dart';
 import 'supabase_interaction_service.dart';
 
 /// Central comment state store.
@@ -155,6 +156,16 @@ class CommentStore extends ChangeNotifier {
     return future;
   }
 
+  /// Seeds aggregate-only counts returned with a Feed v2 page. This does not
+  /// mark comment threads hydrated: opening a thread still performs its own
+  /// detail read and Realtime subscription.
+  void seedFeedCounts(Map<String, int> counts) {
+    if (counts.isEmpty) return;
+    _remoteCounts.addAll(counts);
+    _lastCountHydrate = DateTime.now();
+    notifyListeners();
+  }
+
   Future<void> _hydrateCounts(
     Iterable<String> postIds, {
     bool force = false,
@@ -213,6 +224,7 @@ class CommentStore extends ChangeNotifier {
 
     Comment? saved;
     var reason = 'supabase client unavailable';
+    String? userMessage;
     try {
       saved = await supabaseInteractionService.addComment(
         postId: post.id,
@@ -221,6 +233,7 @@ class CommentStore extends ChangeNotifier {
       );
     } catch (error) {
       reason = '$error';
+      userMessage = RateLimitInfo.from(error)?.displayMessage;
     }
 
     if (saved == null) {
@@ -228,7 +241,7 @@ class CommentStore extends ChangeNotifier {
       notifyListeners();
       // Tagged so it is greppable in a running app's console.
       debugPrint('[comments] insert failed for post ${post.id}: $reason');
-      throw CommentNotDeliveredException(reason);
+      throw CommentNotDeliveredException(reason, userMessage);
     }
 
     final index = comments.indexWhere((c) => c.id == local.id);
@@ -277,8 +290,12 @@ class CommentStore extends ChangeNotifier {
 /// showing to the user verbatim.
 class CommentNotDeliveredException implements Exception {
   final String reason;
+  final String? userMessage;
 
-  const CommentNotDeliveredException([this.reason = 'unknown']);
+  const CommentNotDeliveredException([
+    this.reason = 'unknown',
+    this.userMessage,
+  ]);
 
   @override
   String toString() => 'Comment was not delivered to the server: $reason';

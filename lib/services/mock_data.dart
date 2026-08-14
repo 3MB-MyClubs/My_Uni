@@ -32,18 +32,21 @@ var appAdmin = AppAdmin(id: '', name: '', email: '', password: '');
 final List<AppAdmin> clubAdmins = [];
 
 double postScore(String postId) {
-  final uniqueLikers = likes
-      .where((like) => like.postId == postId)
-      .map((like) => like.userId)
-      .toSet()
-      .length;
+  final uniqueLikers =
+      supabasePostLikeCounts[postId] ??
+      likes
+          .where((like) => like.postId == postId)
+          .map((like) => like.userId)
+          .toSet()
+          .length;
   final shareCount = shares.where((share) => share.targetId == postId).length;
   return uniqueLikers + (shareCount * 2.0);
 }
 
 double eventScore(String eventId) {
   final event = events.firstWhere((event) => event.id == eventId);
-  final uniqueAttendees = event.attendeeUserIds.toSet().length;
+  final uniqueAttendees =
+      supabaseEventRsvpCounts[eventId] ?? event.attendeeUserIds.toSet().length;
   final shareCount = shares.where((share) => share.targetId == eventId).length;
   final upcomingBonus = event.dateTime.isAfter(DateTime.now()) ? 3.0 : 0.0;
   return (uniqueAttendees * 1.5) + (shareCount * 2.0) + upcomingBonus;
@@ -51,6 +54,7 @@ double eventScore(String eventId) {
 
 final Map<String, int> supabaseClubMemberCounts = {};
 final Map<String, int> supabasePostLikeCounts = {};
+final Map<String, int> supabaseEventRsvpCounts = {};
 
 List<User> clubMembers(String clubId) {
   final memberIds = <String>{

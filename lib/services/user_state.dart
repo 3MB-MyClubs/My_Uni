@@ -473,6 +473,20 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Merges per-card viewer state returned by Feed v2 without replacing like
+  /// state for posts loaded by another surface.
+  void seedFeedLikeStates(Map<String, bool> states) {
+    var changed = false;
+    for (final entry in states.entries) {
+      if (entry.value) {
+        changed = likedPostIds.add(entry.key) || changed;
+      } else {
+        changed = likedPostIds.remove(entry.key) || changed;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
   void toggleLike(String postId) {
     if (likedPostIds.contains(postId)) {
       likedPostIds.remove(postId);

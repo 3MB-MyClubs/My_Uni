@@ -14,7 +14,8 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
-import '../services/lazy_content_loader.dart';
+import '../services/feed_v2_controller.dart';
+import '../services/feed_v2_service.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
@@ -33,6 +34,7 @@ import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../models/club.dart';
+import '../models/feed_v2.dart';
 import '../models/notification.dart';
 import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
@@ -44,6 +46,7 @@ import '../services/comment_store.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/mutual_followers_badge.dart';
 import '../services/rsvp_store.dart';
+import '../services/poll_store.dart';
 import '../widgets/rsvp_button.dart';
 import '../widgets/expandable_post_caption.dart';
 import '../widgets/poll_card.dart';
@@ -158,6 +161,14 @@ class _FeedScreenState extends State<FeedScreen> {
   int _refreshCycle = 0;
   Future<void>? _refreshTask;
   final ScrollController _scrollController = ScrollController();
+  late final FeedV2Controller _pagingController;
+  final Map<String, NewsPost> _feedV2PostsById = {};
+  final Map<String, Event> _feedV2EventsById = {};
+  final Map<String, User> _feedV2PeopleById = {};
+  final Map<String, Club> _feedV2ClubsById = {};
+  int _appliedFeedV2Revision = -1;
+  int _appliedFirstPageRevision = -1;
+  final Set<String> _appliedFeedV2ItemIds = {};
 
   _FeedCache? _feedCache;
 
@@ -192,9 +203,13 @@ class _FeedScreenState extends State<FeedScreen> {
       identityHashCode(peopleService.cachedFollowerIds),
       peopleService.mutualFollowersRevision,
       Object.hashAllUnordered(personalizationService.interests),
-      supabaseClubMemberCounts.length,
-      supabasePostLikeCounts.length,
-      DateTime.now().millisecondsSinceEpoch ~/ 60000,
+      Object.hash(
+        supabaseClubMemberCounts.length,
+        supabasePostLikeCounts.length,
+        _pagingController.items.length,
+        _pagingController.items.isEmpty ? '' : _pagingController.items.last.id,
+        DateTime.now().millisecondsSinceEpoch ~/ 60000,
+      ),
     );
   }
 
@@ -217,8 +232,13 @@ class _FeedScreenState extends State<FeedScreen> {
   List<Event> _computeRailShown() {
     final now = DateTime.now();
     final weekEnd = now.add(const Duration(days: 7));
+    final eventSource = _pagingController.hasLoadedFirstPage
+        ? _pagingController.upcomingEvents
+              .map((event) => _feedV2EventsById[event.id])
+              .whereType<Event>()
+        : events;
     final weekEvents =
-        events
+        eventSource
             .where(
               (e) =>
                   !moderationService.isClubBlocked(e.clubId) &&
@@ -232,6 +252,14 @@ class _FeedScreenState extends State<FeedScreen> {
 
   bool get _followedOnly => authService.isStudentSession && _feedTab == 0;
 
+  void _selectFeedTab(int tab) {
+    if (_feedTab == tab) return;
+    _feedTab = tab;
+    _feedCache = null;
+    _pagingController.reset(followedOnly: _followedOnly);
+    unawaited(_pagingController.loadFirstPage(followedOnly: _followedOnly));
+  }
+
   Set<String> get _followedIds => userState.followedClubIds;
 
   bool _clubVisible(String clubId) =>
@@ -239,7 +267,33 @@ class _FeedScreenState extends State<FeedScreen> {
       (!_followedOnly || _followedIds.contains(clubId));
 
   List<_FeedItem> _buildFeed() {
-    final items = newsPosts
+    final Iterable<NewsPost> postSource;
+    if (_pagingController.hasLoadedFirstPage) {
+      final loaded = _pagingController.items
+          .map((item) => _feedV2PostsById[item.id])
+          .whereType<NewsPost>()
+          .toList();
+      final loadedIds = loaded.map((post) => post.id).toSet();
+      final newestLoaded = loaded.isEmpty ? null : loaded.first;
+      // Existing post creation stays optimistic. Only a newly-created row
+      // newer than this cursor chain is overlaid; historical rows loaded by a
+      // legacy screen cannot inflate the v2 page.
+      if (newestLoaded != null) {
+        loaded.addAll(
+          newsPosts.where(
+            (post) =>
+                !loadedIds.contains(post.id) &&
+                (post.createdAt.isAfter(newestLoaded.createdAt) ||
+                    (post.createdAt.isAtSameMomentAs(newestLoaded.createdAt) &&
+                        post.id.compareTo(newestLoaded.id) > 0)),
+          ),
+        );
+      }
+      postSource = loaded;
+    } else {
+      postSource = newsPosts;
+    }
+    final items = postSource
         .where((post) => _clubById(post.clubId) != null)
         .where((post) => _clubVisible(post.clubId))
         .where((post) => !moderationService.isPostHidden(post))
@@ -253,12 +307,12 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         )
         .toList();
-    items.sort((a, b) => b.postedAt.compareTo(a.postedAt));
+    items.sort((a, b) {
+      final byTime = b.postedAt.compareTo(a.postedAt);
+      return byTime != 0 ? byTime : b.id.compareTo(a.id);
+    });
     return items;
   }
-
-  bool _loadingPeopleDirectory = false;
-  bool _loadingFeedContent = false;
 
   // Profile users to suggest in the feed. Prefer people who follow me but I do
   // not follow back, then other unfollowed profiles. If no eligible profiles
@@ -269,7 +323,12 @@ class _FeedScreenState extends State<FeedScreen> {
         authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
     final myFollowing = userState.followedUserIds;
     final myFollowers = peopleService.cachedFollowerIds;
-    final profiles = peopleService.cachedPeople
+    final profileSource = _pagingController.hasLoadedFirstPage
+        ? _pagingController.suggestedPeople
+              .map((person) => _feedV2PeopleById[person.id])
+              .whereType<User>()
+        : peopleService.cachedPeople;
+    final profiles = profileSource
         .where(
           (user) =>
               user.id != myId && !moderationService.isUserBlocked(user.id),
@@ -325,7 +384,12 @@ class _FeedScreenState extends State<FeedScreen> {
   // user's interests, then by popularity — "which club should I follow next".
   List<dynamic> _suggestedClubs() {
     if (!authService.isStudentSession) return const [];
-    return clubs
+    final clubSource = _pagingController.hasLoadedFirstPage
+        ? _pagingController.suggestedClubs
+              .map((club) => _feedV2ClubsById[club.id])
+              .whereType<Club>()
+        : clubs;
+    return clubSource
         .where((c) => !userState.followedClubIds.contains(c.id))
         .toList()
       ..sort((a, b) {
@@ -342,7 +406,12 @@ class _FeedScreenState extends State<FeedScreen> {
     if (!authService.isStudentSession) return null;
     final now = DateTime.now();
     final cutoff = now.subtract(const Duration(days: 14));
-    final eligible = events
+    final eventSource = _pagingController.hasLoadedFirstPage
+        ? _pagingController.upcomingEvents
+              .map((event) => _feedV2EventsById[event.id])
+              .whereType<Event>()
+        : events;
+    final eligible = eventSource
         .where((e) => e.dateTime.isAfter(cutoff) && e.endTime.isAfter(now))
         .toList();
     if (eligible.isEmpty) return null;
@@ -389,6 +458,9 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    _pagingController = FeedV2Controller(source: supabaseFeedV2Service)
+      ..addListener(_onFeedV2Changed);
+    _scrollController.addListener(_onFeedScroll);
     widget.controller?.addListener(_scrollToTop);
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
@@ -398,13 +470,15 @@ class _FeedScreenState extends State<FeedScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(notificationInboxService.startForCurrentUser());
     });
-    _loadFeedContent();
-    _loadPeopleDirectory();
+    unawaited(_pagingController.loadFirstPage(followedOnly: _followedOnly));
   }
 
   @override
   void dispose() {
     widget.controller?.removeListener(_scrollToTop);
+    _scrollController.removeListener(_onFeedScroll);
+    _pagingController.removeListener(_onFeedV2Changed);
+    _pagingController.dispose();
     _scrollController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
@@ -430,7 +504,16 @@ class _FeedScreenState extends State<FeedScreen> {
   void _onAccountChanged() {
     if (!mounted) return;
     _feedCache = null;
-    setState(() {});
+    _feedV2PostsById.clear();
+    _feedV2EventsById.clear();
+    _feedV2PeopleById.clear();
+    _feedV2ClubsById.clear();
+    _appliedFeedV2ItemIds.clear();
+    supabaseFeedV2Service.invalidateFirstPages();
+    _pagingController.reset(followedOnly: _followedOnly);
+    unawaited(
+      _pagingController.loadFirstPage(followedOnly: _followedOnly, force: true),
+    );
   }
 
   void _onContentChanged() {
@@ -439,15 +522,255 @@ class _FeedScreenState extends State<FeedScreen> {
     // the Event in the global list, so a rebuild alone is not enough: discard
     // the cached instances before rebuilding the Home visuals.
     _feedCache = null;
+    if (_pagingController.hasLoadedFirstPage) {
+      final globalIds = newsPosts.map((post) => post.id).toSet();
+      final removedIds = _pagingController.items
+          .map((item) => item.id)
+          .where((id) => !globalIds.contains(id))
+          .toList();
+      if (removedIds.isNotEmpty) {
+        _feedV2PostsById.removeWhere((id, _) => removedIds.contains(id));
+        _pagingController.removeItems(removedIds);
+        return;
+      }
+    }
     setState(() {});
   }
 
-  void _hydrateVisiblePostViews({bool force = false}) {
-    final postIds = newsPosts.map((post) => post.id).toList();
-    viewTracker.hydratePostViewCounts(postIds, force: force);
-    // One bulk query for every card's comment badge, so opening a post is not
-    // the only way its count becomes correct.
-    unawaited(commentStore.hydrateCounts(postIds, force: force));
+  void _onFeedScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.extentAfter < 900) {
+      unawaited(_pagingController.loadNextPage());
+    }
+  }
+
+  void _onFeedV2Changed() {
+    if (!mounted) return;
+    if (_pagingController.hasLoadedFirstPage &&
+        _appliedFeedV2Revision != _pagingController.dataRevision) {
+      final replacedFirstPage =
+          _appliedFirstPageRevision != _pagingController.firstPageRevision;
+      _applyFeedV2Snapshot(replace: replacedFirstPage);
+      _appliedFirstPageRevision = _pagingController.firstPageRevision;
+      _appliedFeedV2Revision = _pagingController.dataRevision;
+    }
+    _feedCache = null;
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onFeedScroll();
+    });
+  }
+
+  void _applyFeedV2Snapshot({required bool replace}) {
+    final viewerId = authService.currentUser?.id ?? '';
+    final likeStates = <String, bool>{};
+    final commentCounts = <String, int>{};
+    final viewCounts = <String, int>{};
+    final likerPreviews = <String, User?>{};
+    final pollCounts = <String, List<int>>{};
+    final pollVotes = <String, int?>{};
+
+    if (replace) _appliedFeedV2ItemIds.clear();
+    final itemsToApply = replace
+        ? _pagingController.items
+        : _pagingController.items
+              .where((item) => !_appliedFeedV2ItemIds.contains(item.id))
+              .toList(growable: false);
+
+    for (final item in itemsToApply) {
+      final club = _upsertFeedClub(item.club);
+      final author = item.author == null
+          ? null
+          : _upsertFeedPerson(item.author!);
+      final post = NewsPost(
+        id: item.id,
+        clubId: club.id,
+        authorId: author?.id ?? '',
+        content: item.content,
+        createdAt: item.createdAt,
+        imagePath: item.mediaUrl,
+        poll: item.poll == null
+            ? null
+            : PollData(
+                pollId: item.poll!.id,
+                question: item.poll!.question,
+                options: item.poll!.options,
+              ),
+        isAnnouncement: item.isAnnouncement,
+      );
+      _feedV2PostsById[item.id] = post;
+      _upsertGlobalPost(post);
+
+      likeStates[item.id] = item.engagement.viewerHasLiked;
+      supabasePostLikeCounts[item.id] = item.engagement.likeCount;
+      commentCounts[item.id] = item.engagement.commentCount;
+      viewCounts[item.id] = item.engagement.viewCount;
+      likerPreviews[item.id] = item.engagement.firstLiker == null
+          ? null
+          : _upsertFeedPerson(item.engagement.firstLiker!);
+      final poll = item.poll;
+      if (poll != null) {
+        pollCounts[item.id] = poll.optionCounts;
+        pollVotes[item.id] = poll.viewerOptionIndex;
+      }
+      _appliedFeedV2ItemIds.add(item.id);
+    }
+
+    if (!replace) {
+      userState.seedFeedLikeStates(likeStates);
+      commentStore.seedFeedCounts(commentCounts);
+      viewTracker.seedFeedViewCounts(viewCounts);
+      supabaseInteractionService.seedFeedLikerPreviews(likerPreviews);
+      pollStore.seedFeedSummaries(
+        optionCountsByPostId: pollCounts,
+        viewerVotesByPostId: pollVotes,
+        userId: viewerId,
+      );
+      return;
+    }
+
+    final suggestedUsers = <User>[];
+    final followerIds = <String>[];
+    for (final person in _pagingController.suggestedPeople) {
+      final user = _upsertFeedPerson(person);
+      suggestedUsers.add(user);
+      if (person.followsViewer) followerIds.add(person.id);
+    }
+    peopleService.seedFeedSuggestions(suggestedUsers, followerIds: followerIds);
+
+    for (final club in _pagingController.suggestedClubs) {
+      _upsertFeedClub(club);
+      supabaseClubMemberCounts[club.id] = club.memberCount;
+    }
+
+    for (final item in _pagingController.upcomingEvents) {
+      final club = _upsertFeedClub(item.club);
+      final attendeeIds = item.viewerIsAttending && viewerId.isNotEmpty
+          ? <String>[viewerId]
+          : <String>[];
+      final event = Event(
+        id: item.id,
+        clubId: club.id,
+        title: item.title,
+        description: item.description,
+        dateTime: item.startsAt,
+        endTime: item.endsAt,
+        location: item.location,
+        attendeeUserIds: attendeeIds,
+        imagePath: item.mediaUrl,
+        createdByUserId: item.createdByUserId,
+        tags: item.tags,
+        registrationUrl: item.registrationUrl,
+        schedule: _feedEventSchedule(item.schedule),
+        speakers: _feedEventSpeakers(item.speakers),
+      );
+      _feedV2EventsById[item.id] = event;
+      _upsertGlobalEvent(event);
+      supabaseEventRsvpCounts[item.id] = item.rsvpCount;
+      rsvpStore.seed(item.id, item.viewerIsAttending);
+    }
+
+    userState.seedFeedLikeStates(likeStates);
+    commentStore.seedFeedCounts(commentCounts);
+    viewTracker.seedFeedViewCounts(viewCounts);
+    supabaseInteractionService.seedFeedLikerPreviews(likerPreviews);
+    pollStore.seedFeedSummaries(
+      optionCountsByPostId: pollCounts,
+      viewerVotesByPostId: pollVotes,
+      userId: viewerId,
+    );
+  }
+
+  Club _upsertFeedClub(FeedClubV2 item) {
+    final existing = clubForId(item.id);
+    final club =
+        existing ??
+        Club(
+          id: item.id,
+          name: item.name,
+          shortName: item.shortName,
+          description: item.description,
+          logoUrl: item.logoUrl,
+          categoryId: item.categoryId,
+          adminUserIds: const [],
+          createdAt: item.createdAt,
+        );
+    if (existing == null) clubs.add(club);
+    _feedV2ClubsById[item.id] = club;
+    if (item.logoUrl != null) {
+      userState.remoteClubPhotoUrls[item.id] = item.logoUrl!;
+    }
+    return club;
+  }
+
+  User _upsertFeedPerson(FeedPersonV2 item) {
+    User? existing;
+    for (final candidate in users) {
+      if (candidate.id == item.id) {
+        existing = candidate;
+        break;
+      }
+    }
+    final user =
+        existing ??
+        User(
+          id: item.id,
+          name: item.name,
+          email: '',
+          password: '',
+          role: item.role,
+          subscribedClubIds: const [],
+        );
+    if (existing == null) users.add(user);
+    _feedV2PeopleById[item.id] = user;
+    final avatarUrl = item.avatarUrl;
+    if (avatarUrl != null) userState.remotePhotoUrls[item.id] = avatarUrl;
+    final bio = item.bio;
+    if (bio != null) userState.bios[item.id] = bio;
+    return user;
+  }
+
+  List<EventSlot>? _feedEventSchedule(List<Map<String, dynamic>> rows) {
+    if (rows.isEmpty) return null;
+    final result = <EventSlot>[];
+    for (final row in rows) {
+      try {
+        result.add(EventSlot.fromMap(row));
+      } catch (_) {
+        // Ignore a malformed optional schedule row; the event card remains.
+      }
+    }
+    return result.isEmpty ? null : result;
+  }
+
+  List<EventSpeaker> _feedEventSpeakers(List<Map<String, dynamic>> rows) {
+    final result = <EventSpeaker>[];
+    for (final row in rows) {
+      try {
+        result.add(EventSpeaker.fromMap(row));
+      } catch (_) {
+        // Ignore malformed optional speaker metadata.
+      }
+    }
+    return result;
+  }
+
+  void _upsertGlobalPost(NewsPost post) {
+    final index = newsPosts.indexWhere((item) => item.id == post.id);
+    if (index < 0) {
+      newsPosts.add(post);
+    } else {
+      newsPosts[index] = post;
+    }
+  }
+
+  void _upsertGlobalEvent(Event event) {
+    final index = events.indexWhere((item) => item.id == event.id);
+    if (index < 0) {
+      events.add(event);
+    } else {
+      events[index] = event;
+    }
   }
 
   Future<void> _onRefresh() async {
@@ -473,12 +796,11 @@ class _FeedScreenState extends State<FeedScreen> {
     if (mounted) setState(() => _isRefreshing = true);
     try {
       try {
-        await lazyContentLoader.refreshContent();
+        supabaseFeedV2Service.invalidateFirstPages();
+        await _pagingController.refresh();
       } catch (_) {
         // Keep currently loaded content if the network request fails.
       }
-      await _loadPeopleDirectory(force: true);
-      _hydrateVisiblePostViews(force: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -494,37 +816,11 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  Future<void> _loadFeedContent() async {
-    if (mounted) setState(() => _loadingFeedContent = true);
-    try {
-      await lazyContentLoader.ensureContentLoaded();
-      _hydrateVisiblePostViews();
-    } catch (_) {
-      // Keep currently visible data if Supabase is temporarily unreachable.
-    } finally {
-      if (mounted) setState(() => _loadingFeedContent = false);
-    }
-  }
-
-  Future<void> _loadPeopleDirectory({bool force = false}) async {
-    if (_loadingPeopleDirectory) return;
-    _loadingPeopleDirectory = true;
-    final myId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    try {
-      await peopleService.refreshPeopleDirectory(excludeId: myId, force: force);
-      if (mounted) setState(() {});
-    } catch (_) {
-      // Keep the feed usable; the card simply won't render until profiles load.
-    } finally {
-      _loadingPeopleDirectory = false;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final mixed = _mixedFeed();
-    final showFeedSkeleton = _loadingFeedContent && mixed.isEmpty;
+    final showFeedSkeleton =
+        _pagingController.isInitialLoading && mixed.isEmpty;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: NotificationListener<ScrollNotification>(
@@ -564,7 +860,38 @@ class _FeedScreenState extends State<FeedScreen> {
             _buildComposer(),
             if (showFeedSkeleton) ...[
               ..._buildFeedSkeletonSlivers(),
-            ] else if (mixed.isEmpty)
+            ] else if (_pagingController.initialError != null && mixed.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.cloud_off_rounded,
+                          size: 36,
+                          color: AppColors.secondaryText,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          AppLocalizations.of(context)!.couldNotLoadPeople,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.secondaryText),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          key: const ValueKey('feed-v2-initial-retry'),
+                          onPressed: () => unawaited(_pagingController.retry()),
+                          child: Text(AppLocalizations.of(context)!.retry),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (mixed.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -595,7 +922,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
-                          onPressed: () => setState(() => _feedTab = 1),
+                          onPressed: () => _selectFeedTab(1),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
                             foregroundColor: Colors.white,
@@ -673,37 +1000,60 @@ class _FeedScreenState extends State<FeedScreen> {
                   );
                 }, childCount: mixed.length),
               ),
-              SliverToBoxAdapter(
-                child: Semantics(
-                  key: const ValueKey('home-feed-end'),
-                  container: true,
+              if (_pagingController.isNextPageLoading)
+                const SliverToBoxAdapter(
                   child: SizedBox(
-                    height: 56,
+                    key: ValueKey('feed-v2-next-loading'),
+                    height: 64,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                )
+              else if (_pagingController.pageError != null)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 72,
                     child: Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            size: 18,
-                            color: AppColors.primaryRed,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            AppLocalizations.of(context)!.endOfFeed,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.secondaryText,
+                      child: TextButton.icon(
+                        key: const ValueKey('feed-v2-page-retry'),
+                        onPressed: () => unawaited(_pagingController.retry()),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: Text(AppLocalizations.of(context)!.retry),
+                      ),
+                    ),
+                  ),
+                )
+              else if (!_pagingController.hasMore)
+                SliverToBoxAdapter(
+                  child: Semantics(
+                    key: const ValueKey('home-feed-end'),
+                    container: true,
+                    child: SizedBox(
+                      height: 56,
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: AppColors.primaryRed,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Text(
+                              AppLocalizations.of(context)!.endOfFeed,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondaryText,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ],
         ),
@@ -1126,7 +1476,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       child: GestureDetector(
                         key: ValueKey('home-feed-tab-$i'),
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => setState(() => _feedTab = i),
+                        onTap: () => _selectFeedTab(i),
                         child: Center(
                           child: AnimatedDefaultTextStyle(
                             duration: const Duration(milliseconds: 250),
@@ -2608,7 +2958,7 @@ class _LikedByRowState extends State<_LikedByRow> {
 
   Future<void> _loadRemotePreview() async {
     try {
-      final remote = await supabaseInteractionService.fetchPostLikers(
+      final remote = await supabaseInteractionService.fetchPostLikerPreview(
         widget.postId,
       );
       if (mounted && remote.isNotEmpty) setState(() => _likers = remote);

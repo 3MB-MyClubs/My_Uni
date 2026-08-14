@@ -3,14 +3,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/app_localizations.dart';
 import 'locale_service.dart';
+import 'rate_limit_error.dart';
 import 'supabase_config.dart';
 
 class PasswordResetResult {
   final bool success;
   final String? error;
+  final String? capability;
 
-  const PasswordResetResult.success() : success = true, error = null;
-  const PasswordResetResult.failure(this.error) : success = false;
+  const PasswordResetResult.success({this.capability})
+    : success = true,
+      error = null;
+  const PasswordResetResult.failure(this.error)
+    : success = false,
+      capability = null;
 }
 
 class PasswordResetService {
@@ -26,14 +32,14 @@ class PasswordResetService {
   }
 
   Future<PasswordResetResult> sendCode(String email) {
-    return _invoke('send-password-reset-code', {'email': email});
+    return _invoke('send-password-reset-code-v2', {'email': email});
   }
 
   Future<PasswordResetResult> verifyCode({
     required String email,
     required String code,
   }) {
-    return _invoke('verify-password-reset-code', {
+    return _invoke('verify-password-reset-code-v2', {
       'email': email,
       'code': code,
     });
@@ -42,10 +48,12 @@ class PasswordResetService {
   Future<PasswordResetResult> updatePassword({
     required String email,
     required String password,
+    required String capability,
   }) {
-    return _invoke('complete-password-reset', {
+    return _invoke('complete-password-reset-v2', {
       'email': email,
       'password': password,
+      'capability': capability,
     });
   }
 
@@ -62,10 +70,20 @@ class PasswordResetService {
       final response = await client.functions.invoke(functionName, body: body);
       final data = response.data;
       if (data is Map && data['error'] != null) {
-        return PasswordResetResult.failure(data['error'].toString());
+        final limited = RateLimitInfo.from(data);
+        return PasswordResetResult.failure(
+          limited?.displayMessage ?? data['error'].toString(),
+        );
       }
-      return const PasswordResetResult.success();
+      final capability = data is Map && data['capability'] is String
+          ? data['capability'] as String
+          : null;
+      return PasswordResetResult.success(capability: capability);
     } on FunctionException catch (error) {
+      final limited = RateLimitInfo.from(error);
+      if (limited != null) {
+        return PasswordResetResult.failure(limited.displayMessage);
+      }
       final details = error.details;
       if (details is Map && details['error'] != null) {
         return PasswordResetResult.failure(details['error'].toString());

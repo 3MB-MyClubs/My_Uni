@@ -13,6 +13,7 @@ import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/content_store.dart';
 import '../services/locale_service.dart';
+import '../services/media_delivery_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/rsvp_store.dart';
@@ -54,6 +55,7 @@ Widget _eventHeroImage({required String path, required Color accent}) {
       // Full-bleed hero — wider than a feed banner but still bounded well
       // under typical upload resolutions (up to 3840px).
       cacheWidth: 800,
+      rendition: MediaRendition.screen,
       placeholderBuilder: (_) => const SkeletonBox(),
       errorBuilder: (_) => _GradientHero(color: accent),
     );
@@ -82,6 +84,8 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   final Set<String> _invitedFriendIds = {};
+  List<User> _remoteAttendees = const [];
+  bool _remoteAttendeesLoaded = false;
 
   Event get _event => events.firstWhere(
     (event) => event.id == widget.event.id,
@@ -135,7 +139,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _loadPeople() async {
     try {
-      await peopleService.hydrateProfilesByIds(widget.event.attendeeUserIds);
+      final attendees = await supabaseInteractionService.fetchEventAttendees(
+        widget.event.id,
+      );
+      _remoteAttendees = attendees;
+      _remoteAttendeesLoaded = true;
+      supabaseEventRsvpCounts[widget.event.id] = attendees.length;
+      await peopleService.hydrateProfilesByIds(
+        attendees.isEmpty
+            ? widget.event.attendeeUserIds
+            : attendees.map((user) => user.id),
+      );
       if (peopleService.cachedPeople.isEmpty) {
         await peopleService.fetchPeople(excludeId: _currentSessionId);
       }
@@ -148,13 +162,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Map<String, User> get _knownPeopleById => {
     for (final user in users) user.id: user,
     for (final user in peopleService.cachedPeople) user.id: user,
+    for (final user in _remoteAttendees) user.id: user,
     if (authService.currentUser != null)
       authService.currentUser!.id: authService.currentUser!,
   };
 
   List<User> get _attendees {
     final known = _knownPeopleById;
-    return _event.attendeeUserIds
+    final attendeeIds = _remoteAttendeesLoaded
+        ? _remoteAttendees.map((user) => user.id).toSet()
+        : _event.attendeeUserIds.toSet();
+    if (rsvpStore.isAttending(_event.id) && _currentSessionId.isNotEmpty) {
+      attendeeIds.add(_currentSessionId);
+    } else {
+      attendeeIds.remove(_currentSessionId);
+    }
+    return attendeeIds
         .map(
           (id) =>
               known[id] ??
@@ -172,8 +195,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .toList(growable: false);
   }
 
+  int get _rsvpCount => supabaseEventRsvpCounts[_event.id] ?? _attendees.length;
+
   List<User> get _suggestedFriends {
-    final excludedIds = {_currentSessionId, ..._event.attendeeUserIds};
+    final excludedIds = {
+      _currentSessionId,
+      ..._attendees.map((user) => user.id),
+    };
     final realPeople = <String, User>{
       for (final person in peopleService.randomProfiles(
         excludeId: _currentSessionId,
@@ -466,14 +494,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           accent: accent,
                           countdown: _countdownLabel(),
                           showCapacity: hasCapacity,
-                          takenSeats:
-                              event.attendeeUserIds.length +
-                              (rsvpStore.isAttending(event.id) &&
-                                      !event.attendeeUserIds.contains(
-                                        _currentSessionId,
-                                      )
-                                  ? 1
-                                  : 0),
+                          takenSeats: _rsvpCount,
                         ),
                       ),
                     ),
@@ -573,12 +594,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     child: ListenableBuilder(
                       listenable: rsvpStore,
                       builder: (_, _) {
-                        final liveEvent = _event;
                         return _AttendingCard(
                           attendees: _attendees,
-                          totalCount: liveEvent.attendeeUserIds.length,
-                          followedCount: liveEvent.attendeeUserIds
-                              .where(userState.isFollowingUser)
+                          totalCount: _rsvpCount,
+                          followedCount: _attendees
+                              .where(
+                                (user) => userState.isFollowingUser(user.id),
+                              )
                               .length,
                           onTap: _openAttendees,
                         );
@@ -640,6 +662,7 @@ class ClubEventAdminScreen extends StatefulWidget {
 class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
   late Event _event = widget.event;
   List<User> _remoteAttendees = const [];
+  bool _remoteAttendeesLoaded = false;
 
   String get _adminId => authService.currentAdmin?.id ?? '';
 
@@ -668,9 +691,16 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
     final attendees = await supabaseInteractionService.fetchEventAttendees(
       _event.id,
     );
-    if (!mounted || attendees.isEmpty) return;
-    setState(() => _remoteAttendees = attendees);
+    if (!mounted) return;
+    setState(() {
+      _remoteAttendees = attendees;
+      _remoteAttendeesLoaded = true;
+      supabaseEventRsvpCounts[_event.id] = attendees.length;
+    });
   }
+
+  int get _rsvpCount =>
+      supabaseEventRsvpCounts[_event.id] ?? _event.attendeeUserIds.length;
 
   String _countdownLabel() {
     if (_isLive) return AppLocalizations.of(context)!.happeningNow;
@@ -764,10 +794,12 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
       for (final user in peopleService.cachedPeople) user.id: user,
       for (final user in _remoteAttendees) user.id: user,
     };
-    final attendees = _event.attendeeUserIds
-        .map((id) => knownPeople[id])
-        .whereType<User>()
-        .toList();
+    final attendees = _remoteAttendeesLoaded
+        ? _remoteAttendees
+        : _event.attendeeUserIds
+              .map((id) => knownPeople[id])
+              .whereType<User>()
+              .toList();
     final hasReg = (_event.registrationUrl?.trim().isNotEmpty) ?? false;
     final hasProgramme = _event.schedule != null && _event.schedule!.isNotEmpty;
     final hasSpeakers = _event.speakers.isNotEmpty;
@@ -812,7 +844,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${_event.attendeeUserIds.length}',
+                            '$_rsvpCount',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
@@ -845,7 +877,7 @@ class _ClubEventAdminScreenState extends State<ClubEventAdminScreen> {
                       accent: accent,
                       countdown: _countdownLabel(),
                       showCapacity: hasCapacity,
-                      takenSeats: _event.attendeeUserIds.length,
+                      takenSeats: _rsvpCount,
                     ),
                   ),
 

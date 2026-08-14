@@ -54,6 +54,15 @@ class ViewTracker extends ChangeNotifier {
   int viewCount(String contentId) =>
       _remotePostViewCounts[contentId] ?? _viewerIds(contentId).length;
 
+  /// Seeds aggregate-only counts returned with a Feed v2 page. Viewer
+  /// identities remain a separate, explicit organizer detail flow.
+  void seedFeedViewCounts(Map<String, int> counts) {
+    if (counts.isEmpty) return;
+    _remotePostViewCounts.addAll(counts);
+    _lastPostViewHydrate = DateTime.now();
+    notifyListeners();
+  }
+
   // A view, not a copy: callers read this per item inside feed filters, so
   // copying here would put back the per-call allocation _viewerCache removes.
   Set<String> viewerIds(String contentId) =>

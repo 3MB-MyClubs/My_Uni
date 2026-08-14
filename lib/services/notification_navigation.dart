@@ -151,11 +151,6 @@ Future<bool> openNotificationTarget(
         }
         await peopleService.hydrateProfilesByIds([peerId]);
         recipient = _knownUser(peerId);
-      } else if (ChatStore.isGroupThread(threadId)) {
-        await chatStore.startDirectMessageSync(currentUserId);
-      } else if (ChatStore.isClubThread(threadId) ||
-          ChatStore.isClubInboxThread(threadId)) {
-        await chatStore.startClubMessageSync(currentUserId);
       }
       if (!context.mounted ||
           !chatStore.canAccessThread(threadId, currentUserId)) {

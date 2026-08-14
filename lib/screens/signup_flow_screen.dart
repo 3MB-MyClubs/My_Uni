@@ -31,6 +31,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   String _year = '';
   String? _profileImagePath;
   String _password = '';
+  String? _verificationCapability;
 
   static const int _totalSteps = 4; // email, verify, password, profile
 
@@ -55,6 +56,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     final result = await signupService.sendCode(email);
     if (!result.success) return result.error;
     _email = email;
+    _verificationCapability = null;
     _goTo(1);
     return null;
   }
@@ -62,6 +64,11 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   Future<String?> _onVerifyNext(String code) async {
     final result = await signupService.verifyCode(email: _email, code: code);
     if (!result.success) return result.error;
+    if (!mounted) return null;
+    if (result.capability == null || result.capability!.isEmpty) {
+      return AppLocalizations.of(context)!.signupRequestFailed;
+    }
+    _verificationCapability = result.capability;
     _goTo(2);
     return null;
   }
@@ -69,6 +76,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
   Future<String?> _onResendCode() async {
     final result = await signupService.sendCode(_email);
     if (!result.success) return result.error;
+    _verificationCapability = null;
     return null;
   }
 
@@ -100,6 +108,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
     final result = await signupService.completeSignup(
       email: _email,
       password: _password,
+      capability: _verificationCapability ?? '',
       fullName: _name,
       majorId: _majorId,
       academicYearId: _academicYearId,

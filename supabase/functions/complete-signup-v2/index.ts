@@ -1,0 +1,356 @@
+// Setup type definitions for built-in Supabase Runtime APIs
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+
+import {
+  capabilityHash,
+  getServiceRoleKey,
+  isKuEmail,
+  normalizeEmail,
+} from "../_shared/auth_challenge.ts";
+import {
+  enforceEdgeRateLimit,
+  rateLimitResponse,
+  RateLimitUnavailableError,
+} from "../_shared/rate_limit.ts";
+
+interface ReqPayload {
+  email: string;
+  password: string;
+  full_name: string;
+  major_id: string;
+  academic_year_id: string;
+  interest_ids: string[];
+  terms_accepted: boolean;
+  terms_version: string;
+  capability: string;
+}
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+function isValidPassword(password: string) {
+  return /^\d{6,}$/.test(password);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      headers: { ...corsHeaders, "Cache-Control": "no-store" },
+    });
+  }
+
+  if (req.method !== "POST") {
+    return json({ error: "Method not allowed." }, 405);
+  }
+
+  try {
+    const payload: ReqPayload = await req.json();
+
+    const email = normalizeEmail(payload.email);
+    const password = payload.password?.trim();
+    const capability = payload.capability?.trim();
+    const fullName = payload.full_name?.trim();
+    const majorId = payload.major_id?.trim();
+    const academicYearId = payload.academic_year_id?.trim();
+    const termsVersion = payload.terms_version?.trim();
+    const interestIds = Array.isArray(payload.interest_ids)
+      ? [
+          ...new Set(
+            payload.interest_ids
+              .filter((id): id is string => typeof id === "string")
+              .map((id) => id.trim())
+              .filter((id) => id.length > 0),
+          ),
+        ]
+      : [];
+
+    if (!email || !isKuEmail(email)) {
+      return json({ error: "Only @ku.edu.tr emails are allowed." }, 400);
+    }
+
+    if (!password || !isValidPassword(password)) {
+      return json({ error: "Password must be at least 6 numbers." }, 400);
+    }
+
+    if (!capability) {
+      return json({ error: "Email verification is required." }, 403);
+    }
+
+    if (!fullName) {
+      return json({ error: "Full name is required." }, 400);
+    }
+
+    if (!majorId) {
+      return json({ error: "Major is required." }, 400);
+    }
+
+    if (!academicYearId) {
+      return json({ error: "Academic year is required." }, 400);
+    }
+
+    if (payload.terms_accepted !== true) {
+      return json({ error: "Terms acceptance is required." }, 400);
+    }
+
+    if (!termsVersion || termsVersion.length > 64) {
+      return json({ error: "A valid Terms version is required." }, 400);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = getServiceRoleKey();
+    const pepper = Deno.env.get("SIGNUP_CODE_PEPPER");
+
+    if (!supabaseUrl || !serviceRoleKey || !pepper) {
+      return json({ error: "Server configuration is missing." }, 500);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+    const limited = await enforceEdgeRateLimit(
+      supabase,
+      req,
+      "auth_signup_complete",
+      email,
+    );
+    if (limited) return rateLimitResponse(limited, corsHeaders);
+
+    const { data: existingProfile, error: existingProfileError } =
+      await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+
+    if (existingProfileError) {
+      console.error("profile lookup failed", existingProfileError);
+      return json(
+        {
+          error: "Could not check account status.",
+          details: existingProfileError.message,
+          code: existingProfileError.code,
+        },
+        500,
+      );
+    }
+
+    if (existingProfile) {
+      // Keep account existence indistinguishable from an unusable completion
+      // capability to callers that probe this pre-authentication endpoint.
+      return json(
+        { error: "Email verification is invalid or already used." },
+        403,
+      );
+    }
+
+    const { data: major, error: majorError } = await supabase
+      .from("majors")
+      .select("id, name")
+      .eq("id", majorId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (majorError) {
+      console.error("major lookup failed", majorError);
+      return json({ error: "Could not validate major." }, 500);
+    }
+
+    if (!major) {
+      return json({ error: "Selected major is invalid." }, 400);
+    }
+
+    const { data: academicYear, error: academicYearError } = await supabase
+      .from("academic_years")
+      .select("id, name")
+      .eq("id", academicYearId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (academicYearError) {
+      console.error("academic year lookup failed", academicYearError);
+      return json({ error: "Could not validate academic year." }, 500);
+    }
+
+    if (!academicYear) {
+      return json({ error: "Selected academic year is invalid." }, 400);
+    }
+
+    if (interestIds.length > 0) {
+      const { data: validInterests, error: interestsError } = await supabase
+        .from("interests")
+        .select("id")
+        .in("id", interestIds);
+
+      if (interestsError) {
+        console.error("interests lookup failed", interestsError);
+        return json(
+          {
+            error: "Could not validate interests.",
+            details: interestsError.message,
+            code: interestsError.code,
+          },
+          500,
+        );
+      }
+
+      if (!validInterests || validInterests.length !== interestIds.length) {
+        return json(
+          { error: "One or more selected interests are invalid." },
+          400,
+        );
+      }
+    }
+
+    const storedCapabilityHash = await capabilityHash(
+      "signup",
+      email,
+      capability,
+      pepper,
+    );
+    const { data: consumeStatus, error: consumeError } = await supabase.rpc(
+      "consume_signup_capability_v2",
+      { p_email: email, p_capability_hash: storedCapabilityHash },
+    );
+    if (consumeError) {
+      console.error("signup capability consumption failed", consumeError);
+      return json({ error: "Could not validate email verification." }, 500);
+    }
+    if (consumeStatus === "expired") {
+      return json({ error: "Email verification expired. Request a new code." }, 410);
+    }
+    if (consumeStatus !== "ok") {
+      return json({ error: "Email verification is invalid or already used." }, 403);
+    }
+
+    const { data: createdUser, error: createUserError } =
+      await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName,
+          major_id: majorId,
+          academic_year_id: academicYearId,
+          role: "student",
+        },
+      });
+
+    if (createUserError || !createdUser.user) {
+      console.error("auth user creation failed", createUserError);
+      return json(
+        {
+          error: "Could not create user.",
+          details: createUserError?.message,
+        },
+        500,
+      );
+    }
+
+    const userId = createdUser.user.id;
+
+    const { error: profileInsertError } = await supabase
+      .from("profiles")
+      .insert({
+        id: userId,
+        email,
+        full_name: fullName,
+        major_id: majorId,
+        academic_year_id: academicYearId,
+        role: "student",
+      });
+
+    if (profileInsertError) {
+      console.error("profile insert failed", profileInsertError);
+
+      await supabase.auth.admin.deleteUser(userId);
+
+      return json(
+        {
+          error: "Could not create profile.",
+          details: profileInsertError.message,
+          code: profileInsertError.code,
+        },
+        500,
+      );
+    }
+
+    if (interestIds.length > 0) {
+      const interestRows = interestIds.map((interestId) => ({
+        user_id: userId,
+        interest_id: interestId,
+      }));
+
+      const { error: interestsInsertError } = await supabase
+        .from("student_interests")
+        .insert(interestRows);
+
+      if (interestsInsertError) {
+        console.error("student interests insert failed", interestsInsertError);
+        await supabase.auth.admin.deleteUser(userId);
+        return json(
+          {
+            error: "Could not save interests.",
+            details: interestsInsertError.message,
+            code: interestsInsertError.code,
+          },
+          500,
+        );
+      }
+    }
+
+    // Acceptance is part of the account-creation boundary. The database owns
+    // accepted_at, and a failure rolls the new auth user/profile back through
+    // the existing ON DELETE CASCADE relationships before success is exposed.
+    const { data: termsAcceptance, error: termsAcceptanceError } =
+      await supabase
+        .from("terms_acceptances")
+        .insert({ user_id: userId, terms_version: termsVersion })
+        .select("terms_version, accepted_at")
+        .single();
+
+    if (termsAcceptanceError || !termsAcceptance) {
+      console.error("Terms acceptance insert failed", termsAcceptanceError);
+      await supabase.auth.admin.deleteUser(userId);
+      return json(
+        {
+          error: "Could not save Terms acceptance.",
+          details: termsAcceptanceError?.message,
+          code: termsAcceptanceError?.code,
+        },
+        500,
+      );
+    }
+
+    return json({
+      success: true,
+      message: "Signup completed.",
+      accepted_terms_version: termsAcceptance.terms_version,
+      terms_accepted_at: termsAcceptance.accepted_at,
+    });
+  } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return json({ error: "Service temporarily unavailable." }, 503);
+    }
+    console.error("complete-signup failed", error);
+    return json({ error: "Invalid request." }, 400);
+  }
+});

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'loading_skeleton.dart';
+import 'app_network_image.dart';
+import '../services/media_delivery_service.dart';
 
 void showProfilePhotoViewer({
   required BuildContext context,
-  required ImageProvider imageProvider,
+  ImageProvider? imageProvider,
+  String? networkUrl,
 }) {
+  assert(imageProvider != null || networkUrl != null);
   Navigator.of(context).push(
     PageRouteBuilder<void>(
       opaque: false,
@@ -13,7 +17,10 @@ void showProfilePhotoViewer({
       pageBuilder: (context, animation, secondaryAnimation) {
         return FadeTransition(
           opacity: animation,
-          child: _ProfilePhotoViewer(imageProvider: imageProvider),
+          child: _ProfilePhotoViewer(
+            imageProvider: imageProvider,
+            networkUrl: networkUrl,
+          ),
         );
       },
     ),
@@ -21,9 +28,10 @@ void showProfilePhotoViewer({
 }
 
 class _ProfilePhotoViewer extends StatelessWidget {
-  final ImageProvider imageProvider;
+  final ImageProvider? imageProvider;
+  final String? networkUrl;
 
-  const _ProfilePhotoViewer({required this.imageProvider});
+  const _ProfilePhotoViewer({this.imageProvider, this.networkUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -45,20 +53,33 @@ class _ProfilePhotoViewer extends StatelessWidget {
                 minScale: 0.7,
                 maxScale: 5,
                 child: ClipOval(
-                  child: Image(
-                    image: imageProvider,
-                    width: imageSize,
-                    height: imageSize,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (_, child, progress) => progress == null
-                        ? child
-                        : ClipOval(
-                            child: SkeletonBox(
-                              width: imageSize,
-                              height: imageSize,
-                            ),
-                          ),
-                  ),
+                  child: networkUrl != null
+                      ? AppNetworkImage(
+                          url: networkUrl!,
+                          rendition: MediaRendition.screen,
+                          width: imageSize,
+                          height: imageSize,
+                          cacheWidth: imageSize,
+                          cacheHeight: imageSize,
+                          fit: BoxFit.cover,
+                          placeholderBuilder: (_) =>
+                              SkeletonBox(width: imageSize, height: imageSize),
+                        )
+                      : Image(
+                          image: imageProvider!,
+                          width: imageSize,
+                          height: imageSize,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, progress) =>
+                              progress == null
+                              ? child
+                              : ClipOval(
+                                  child: SkeletonBox(
+                                    width: imageSize,
+                                    height: imageSize,
+                                  ),
+                                ),
+                        ),
                 ),
               ),
             ),

@@ -7,6 +7,7 @@ import 'club_follow_service.dart';
 import 'locale_service.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
+import 'rate_limit_error.dart';
 import 'user_prefs_service.dart';
 import 'user_state.dart';
 
@@ -65,7 +66,7 @@ Future<void> handleFollowTap(
     // A request that was already in flight when the user tapped may have
     // completed with the pre-change rows. Invalidate once more after commit.
     peopleService.invalidateClubMembers(clubId);
-  } catch (_) {
+  } catch (error) {
     userState.toggleFollow(clubId);
     if (previousMemberCount != null) {
       supabaseClubMemberCounts[clubId] = previousMemberCount;
@@ -75,9 +76,14 @@ Future<void> handleFollowTap(
     peopleService.invalidateClubMembers(clubId);
     onChanged();
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_l10n.couldNotUpdateClubFollow)));
+      final limited = RateLimitInfo.from(error);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            limited?.displayMessage ?? _l10n.couldNotUpdateClubFollow,
+          ),
+        ),
+      );
     }
   }
 }

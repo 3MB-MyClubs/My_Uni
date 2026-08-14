@@ -87,7 +87,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _refreshClubMemberCounts() async {
     try {
-      await lazyContentLoader.ensureCountsLoaded(force: true);
+      // Profile visits should reuse the shared 30-second engagement snapshot.
+      // Pull-to-refresh remains the explicit force-refresh path.
+      await lazyContentLoader.ensureCountsLoaded();
       if (mounted) setState(() {});
     } catch (_) {
       // Keep the last successful aggregate snapshot while offline.

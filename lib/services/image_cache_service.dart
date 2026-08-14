@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 /// Returns a cache key that identifies the Supabase Storage object behind a
 /// signed URL, without including its expiring token.
 ///
@@ -8,13 +10,31 @@ String? stableSupabaseSignedUrlCacheKey(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null) return null;
 
-  const marker = '/storage/v1/object/sign/';
+  const markers = [
+    '/storage/v1/object/sign/',
+    '/storage/v1/render/image/sign/',
+  ];
+  final marker = markers.firstWhere(uri.path.contains, orElse: () => '');
+  if (marker.isEmpty) return null;
   final markerIndex = uri.path.indexOf(marker);
   if (markerIndex == -1) return null;
 
   final objectPath = uri.path.substring(markerIndex + marker.length);
   if (objectPath.isEmpty) return null;
-  return '${uri.host}/$objectPath';
+  String actorId = 'signed-out';
+  try {
+    actorId = Supabase.instance.client.auth.currentUser?.id ?? actorId;
+  } catch (_) {}
+  final renditionQuery = Map<String, String>.from(uri.queryParameters)
+    ..remove('token');
+  final query = renditionQuery.entries.toList()
+    ..sort((a, b) => a.key.compareTo(b.key));
+  return [
+    actorId,
+    uri.host,
+    objectPath,
+    for (final entry in query) '${entry.key}=${entry.value}',
+  ].join('/');
 }
 
 /// Adds a new URL identity for an object whose bytes have been replaced.

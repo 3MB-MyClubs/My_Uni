@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../models/comment.dart';
@@ -15,6 +17,15 @@ class SupabaseInteractionService {
   static const _identityTtl = Duration(seconds: 60);
   static const _engagementTtl = Duration(seconds: 30);
   static const _threadTtl = Duration(seconds: 10);
+  static const _postLikerPreviewTtl = Duration(seconds: 30);
+
+  final Map<String, List<User>> _postLikerPreviewCache = {};
+  final Map<String, DateTime> _postLikerPreviewFetchedAt = {};
+  final Map<String, Future<List<User>>> _postLikerPreviewInFlight = {};
+  final Map<String, Completer<List<User>>> _postLikerPreviewWaiters = {};
+  final Set<String> _pendingPostLikerPreviewIds = {};
+  bool _postLikerPreviewFlushScheduled = false;
+  int _postLikerPreviewGeneration = 0;
 
   String _key(String type, String id) => '$type:$id';
 
@@ -37,12 +48,44 @@ class SupabaseInteractionService {
   /// profile and may still contain the removed post id.
   void invalidatePostCaches(String postId) {
     if (postId.isEmpty) return;
+    _invalidatePostLikerPreview(postId);
     supabaseReadCache.invalidateWhere((key) {
       if (key.startsWith('liked-posts:')) return true;
       return key.endsWith(':$postId') ||
           (key.contains(':') &&
               key.split(':').last.split(',').contains(postId));
     });
+  }
+
+  void _invalidatePostLikerPreview(String postId) {
+    _postLikerPreviewCache.remove(postId);
+    _postLikerPreviewFetchedAt.remove(postId);
+  }
+
+  /// Clears preview state at an authentication boundary so one account's
+  /// RLS-visible liker names cannot appear for another account.
+  void clearPostLikerPreviewCaches() {
+    _postLikerPreviewGeneration++;
+    _postLikerPreviewCache.clear();
+    _postLikerPreviewFetchedAt.clear();
+    _pendingPostLikerPreviewIds.clear();
+    for (final waiter in _postLikerPreviewWaiters.values) {
+      if (!waiter.isCompleted) waiter.complete(const []);
+    }
+    _postLikerPreviewWaiters.clear();
+    _postLikerPreviewInFlight.clear();
+  }
+
+  /// Seeds the one-profile preview already composed into Feed v2 cards. A
+  /// mounted card can then render without issuing a follow-up liker query.
+  void seedFeedLikerPreviews(Map<String, User?> previews) {
+    final now = DateTime.now();
+    for (final entry in previews.entries) {
+      _postLikerPreviewCache[entry.key] = entry.value == null
+          ? const []
+          : [entry.value!];
+      _postLikerPreviewFetchedAt[entry.key] = now;
+    }
   }
 
   Future<Set<String>> fetchLikedPostIds(
@@ -80,6 +123,7 @@ class SupabaseInteractionService {
 
     supabaseReadCache.invalidate(_key('liked-posts', profileId));
     supabaseReadCache.invalidate(_key('post-likers', postId));
+    _invalidatePostLikerPreview(postId);
     _invalidateBatch('post-like-counts', postId);
 
     if (liked) {
@@ -94,6 +138,114 @@ class SupabaseInteractionService {
           .eq('profile_id', profileId)
           .eq('post_id', postId);
     }
+  }
+
+  /// Returns the first liker used by a feed preview.
+  ///
+  /// Feed cards request this independently during mounting, so requests that
+  /// arrive in the same frame are collected into one query. The result is
+  /// deliberately capped because the feed needs at most one profile per post;
+  /// the full list remains available from [fetchPostLikers] when tapped.
+  Future<List<User>> fetchPostLikerPreview(
+    String postId, {
+    bool force = false,
+  }) async {
+    final client = _client;
+    if (client == null || postId.isEmpty) return const [];
+
+    final fetchedAt = _postLikerPreviewFetchedAt[postId];
+    final cached = _postLikerPreviewCache[postId];
+    if (!force &&
+        cached != null &&
+        fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _postLikerPreviewTtl) {
+      return cached;
+    }
+
+    final inFlight = _postLikerPreviewInFlight[postId];
+    if (inFlight != null) return inFlight;
+
+    final waiter = Completer<List<User>>();
+    _postLikerPreviewWaiters[postId] = waiter;
+    _postLikerPreviewInFlight[postId] = waiter.future;
+    _pendingPostLikerPreviewIds.add(postId);
+    _schedulePostLikerPreviewFlush();
+    return waiter.future;
+  }
+
+  void _schedulePostLikerPreviewFlush() {
+    if (_postLikerPreviewFlushScheduled) return;
+    _postLikerPreviewFlushScheduled = true;
+    scheduleMicrotask(() {
+      _postLikerPreviewFlushScheduled = false;
+      unawaited(_flushPostLikerPreviews());
+    });
+  }
+
+  Future<void> _flushPostLikerPreviews() async {
+    final client = _client;
+    final generation = _postLikerPreviewGeneration;
+    final postIds = _pendingPostLikerPreviewIds.toList();
+    _pendingPostLikerPreviewIds.clear();
+    if (client == null || postIds.isEmpty) {
+      for (final postId in postIds) {
+        _completePostLikerPreview(postId, const []);
+      }
+      return;
+    }
+
+    try {
+      final rows = await client
+          .from('post_likes')
+          .select(
+            'post_id, profiles(id, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+          )
+          .inFilter('post_id', postIds)
+          .order('created_at', ascending: true)
+          .limit(200);
+
+      // A logout/account switch may have happened while the request was in
+      // flight. Do not let that response satisfy the next account's waiters.
+      if (generation != _postLikerPreviewGeneration) return;
+
+      final firstProfileByPostId = <String, Map<dynamic, dynamic>>{};
+      for (final row in rows) {
+        final map = row as Map;
+        final postId = map['post_id']?.toString() ?? '';
+        final profile = map['profiles'];
+        if (postId.isEmpty || profile is! Map) continue;
+        firstProfileByPostId.putIfAbsent(
+          postId,
+          () => Map<dynamic, dynamic>.from(profile),
+        );
+      }
+
+      final users = await peopleService.usersFromProfileMaps(
+        firstProfileByPostId.values.toList(),
+      );
+      final usersById = {for (final user in users) user.id: user};
+
+      for (final postId in postIds) {
+        final profile = firstProfileByPostId[postId];
+        final userId = profile?['id']?.toString() ?? '';
+        final preview = usersById[userId];
+        final result = preview == null ? const <User>[] : [preview];
+        _postLikerPreviewCache[postId] = result;
+        _postLikerPreviewFetchedAt[postId] = DateTime.now();
+        _completePostLikerPreview(postId, result);
+      }
+    } catch (_) {
+      if (generation != _postLikerPreviewGeneration) return;
+      for (final postId in postIds) {
+        _completePostLikerPreview(postId, const []);
+      }
+    }
+  }
+
+  void _completePostLikerPreview(String postId, List<User> result) {
+    final waiter = _postLikerPreviewWaiters.remove(postId);
+    _postLikerPreviewInFlight.remove(postId);
+    if (waiter != null && !waiter.isCompleted) waiter.complete(result);
   }
 
   Future<List<User>> fetchPostLikers(
@@ -111,7 +263,7 @@ class SupabaseInteractionService {
         final rows = await client
             .from('post_likes')
             .select(
-              'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+              'profiles(id, full_name, role, avatar_url, bio, major_id, academic_year_id)',
             )
             .eq('post_id', postId);
 
@@ -143,7 +295,7 @@ class SupabaseInteractionService {
         final rows = await client
             .from('post_views')
             .select(
-              'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+              'profiles(id, full_name, role, avatar_url, bio, major_id, academic_year_id)',
             )
             .eq('post_id', postId);
 
@@ -200,7 +352,7 @@ class SupabaseInteractionService {
         final rows = await client
             .from('event_rsvps')
             .select(
-              'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+              'profiles(id, full_name, role, avatar_url, bio, major_id, academic_year_id)',
             )
             .eq('event_id', eventId);
 
@@ -302,7 +454,6 @@ class SupabaseInteractionService {
     required String eventId,
     required String profileId,
     required bool checkedIn,
-    String? checkedInBy,
     String method = 'manual',
   }) async {
     final client = _client;
@@ -312,18 +463,19 @@ class SupabaseInteractionService {
     _invalidateBatch('event-checkin-counts', eventId);
 
     if (checkedIn) {
-      await _insertIgnoringDuplicate(client, 'event_checkins', {
-        'event_id': eventId,
-        'profile_id': profileId,
-        'checked_in_by': checkedInBy,
-        'method': method,
-      });
+      await client.rpc(
+        'check_in_event_v2',
+        params: {
+          'p_event_id': eventId,
+          'p_profile_id': profileId,
+          'p_method': method,
+        },
+      );
     } else {
-      await client
-          .from('event_checkins')
-          .delete()
-          .eq('event_id', eventId)
-          .eq('profile_id', profileId);
+      await client.rpc(
+        'remove_event_checkin_v2',
+        params: {'p_event_id': eventId, 'p_profile_id': profileId},
+      );
     }
   }
 
@@ -378,11 +530,11 @@ class SupabaseInteractionService {
   /// Records (or changes) a vote on the poll attached to [postId].
   Future<void> upsertPollVote({
     required String postId,
-    required String profileId,
     required int optionIndex,
     String? pollId,
   }) async {
     final client = _client;
+    final profileId = client?.auth.currentUser?.id ?? '';
     if (client == null || postId.isEmpty || profileId.isEmpty) return;
 
     supabaseReadCache.invalidate(_key('poll-votes', postId));
@@ -390,11 +542,24 @@ class SupabaseInteractionService {
     pollId ??= await _pollIdForPost(client, postId);
     if (pollId == null) return;
 
-    await client.from('poll_votes').upsert({
-      'poll_id': pollId,
-      'profile_id': profileId,
-      'option_index': optionIndex,
-    }, onConflict: 'poll_id,profile_id');
+    await client.rpc(
+      'vote_poll_v2',
+      params: {'p_poll_id': pollId, 'p_option_index': optionIndex},
+    );
+  }
+
+  /// Removes the authenticated caller's vote. The current product UI does not
+  /// expose this yet, but keeping the v2 operation here avoids any future need
+  /// to reintroduce a caller-supplied voter id.
+  Future<void> removePollVote({required String postId, String? pollId}) async {
+    final client = _client;
+    if (client == null || postId.isEmpty) return;
+
+    supabaseReadCache.invalidate(_key('poll-votes', postId));
+    pollId ??= await _pollIdForPost(client, postId);
+    if (pollId == null) return;
+
+    await client.rpc('remove_poll_vote_v2', params: {'p_poll_id': pollId});
   }
 
   // ── Comments ────────────────────────────────────────────────────────────────
@@ -433,7 +598,7 @@ class SupabaseInteractionService {
             .from('post_comments')
             .select(
               'id, post_id, profile_id, content, created_at, '
-              'profiles(id, email, full_name, role, avatar_url, bio, major_id, academic_year_id)',
+              'profiles(id, full_name, role, avatar_url, bio, major_id, academic_year_id)',
             )
             .eq('post_id', postId)
             .order('created_at', ascending: true);

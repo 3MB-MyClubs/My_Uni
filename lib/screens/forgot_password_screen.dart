@@ -38,6 +38,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _confirmPasswordController = TextEditingController();
   _ResetStep _step = _ResetStep.email;
   String _email = '';
+  String? _verificationCapability;
   String? _error;
   String? _message;
   bool _isSubmitting = false;
@@ -89,6 +90,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
     setState(() {
       _email = email;
+      _verificationCapability = null;
       _error = null;
       _message = null;
       _isSubmitting = true;
@@ -128,6 +130,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
     _codeController.clear();
     setState(() {
+      _verificationCapability = null;
       _message = AppLocalizations.of(context)!.newCodeSent;
       _isSubmitting = false;
     });
@@ -160,7 +163,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       });
       return;
     }
+    if (result.capability == null || result.capability!.isEmpty) {
+      setState(() {
+        _error = AppLocalizations.of(context)!.passwordResetRequestFailed;
+        _isSubmitting = false;
+      });
+      return;
+    }
     setState(() {
+      _verificationCapability = result.capability;
       _error = null;
       _message = null;
       _step = _ResetStep.password;
@@ -205,6 +216,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final result = await passwordResetService.updatePassword(
       email: _email,
       password: password,
+      capability: _verificationCapability ?? '',
     );
     if (!mounted) return;
     if (!result.success) {

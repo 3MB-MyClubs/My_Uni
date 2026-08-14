@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "strict": true
+  },
+  "tasks": {
+    "check": "deno check --config deno.json */index.ts _shared/*_test.ts */*_test.ts",
+    "test": "deno test --config deno.json --allow-env _shared/*_test.ts */*_test.ts"
+  }
+}

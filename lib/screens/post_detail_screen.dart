@@ -8,6 +8,7 @@ import '../services/locale_service.dart';
 import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
+import '../services/media_delivery_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/supabase_post_service.dart';
 import '../services/user_state.dart';
@@ -244,6 +245,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       fallbackColor: widget.clubColor,
                       fallbackLetter: club.name[0],
                       height: 220,
+                      rendition: MediaRendition.screen,
                     ),
 
                   // ── Like count ──

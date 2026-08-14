@@ -1,12 +1,13 @@
 import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/photo_file_cache.dart';
+import '../services/media_delivery_service.dart';
 import '../services/user_state.dart';
 import '../services/app_colors.dart';
 import 'loading_skeleton.dart';
 import 'profile_photo_viewer.dart';
+import 'app_network_image.dart';
 
 /// Shows a user's profile photo if they have one, otherwise their initial.
 /// Used everywhere a user avatar appears so photo changes are visible app-wide.
@@ -89,28 +90,22 @@ class UserAvatar extends ConsumerWidget {
     }
 
     if (remoteUrl != null) {
-      final imageProvider = CachedNetworkImageProvider(remoteUrl);
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => showProfilePhotoViewer(
-          context: context,
-          imageProvider: imageProvider,
-        ),
+        onTap: () =>
+            showProfilePhotoViewer(context: context, networkUrl: remoteUrl),
         child: ClipRRect(
           borderRadius: clip,
-          child: Image(
-            image: ResizeImage(
-              imageProvider,
-              width: decodeSize,
-              height: decodeSize,
-            ),
+          child: AppNetworkImage(
+            url: remoteUrl,
+            rendition: MediaRendition.thumbnail,
             width: size,
             height: size,
+            cacheWidth: size,
+            cacheHeight: size,
             fit: BoxFit.cover,
-            errorBuilder: (ctx, e, st) =>
-                _initial(bg, fg, isCircle, displayName),
-            loadingBuilder: (ctx, child, progress) =>
-                progress == null ? child : _skeleton(isCircle),
+            errorBuilder: (_) => _initial(bg, fg, isCircle, displayName),
+            placeholderBuilder: (_) => _skeleton(isCircle),
           ),
         ),
       );
