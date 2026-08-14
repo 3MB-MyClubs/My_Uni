@@ -2144,6 +2144,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required ImageProvider? fallbackProvider,
     required bool isRemote,
   }) async {
+    if (path.startsWith('chat-attachment://')) {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.92),
+        builder: (dialogContext) {
+          final size = MediaQuery.sizeOf(dialogContext);
+          return GestureDetector(
+            onTap: () => Navigator.pop(dialogContext),
+            child: InteractiveViewer(
+              maxScale: 4,
+              child: Center(
+                child: PrivateMediaNetworkImage(
+                  reference: path,
+                  rendition: MediaRendition.screen,
+                  cacheWidth: size.width,
+                  cacheHeight: size.height,
+                  fit: BoxFit.contain,
+                  placeholderBuilder: (_) => _photoLoadingPlaceholder(),
+                  errorBuilder: (_) => _missingPhotoPlaceholder(),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      return;
+    }
     var provider = fallbackProvider;
     if (isRemote) {
       try {

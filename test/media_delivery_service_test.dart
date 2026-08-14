@@ -206,6 +206,40 @@ void main() {
 
   group('private signed URL cache', () {
     test(
+      'sender and recipient resolve the same canonical private object',
+      () async {
+        final signed = <String>[];
+        final service = MediaDeliveryService(
+          privateSigner: (reference, rendition, dimensions, lifetime) async {
+            signed.add('${reference.bucket}/${reference.objectPath}');
+            return 'https://signed.test/${reference.objectPath}?token=${signed.length}';
+          },
+        );
+        const value = 'chat-attachment://sender/message.jpg';
+        const dimensions = MediaDimensions(width: 384);
+
+        final sent = await service.resolvePrivate(
+          value: value,
+          actorId: 'sender',
+          rendition: MediaRendition.thumbnail,
+          dimensions: dimensions,
+        );
+        final received = await service.resolvePrivate(
+          value: value,
+          actorId: 'recipient',
+          rendition: MediaRendition.thumbnail,
+          dimensions: dimensions,
+        );
+
+        expect(signed, [
+          'chat-attachments/sender/message.jpg',
+          'chat-attachments/sender/message.jpg',
+        ]);
+        expect(sent.cacheKey, isNot(received.cacheKey));
+      },
+    );
+
+    test(
       'deduplicates concurrent signing and reuses the same rendition',
       () async {
         var calls = 0;
