@@ -712,4 +712,57 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the ClubUp header stays active over the scrolling feed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: FeedScreen(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final scrollable = find.descendant(
+      of: find.byType(CustomScrollView),
+      matching: find.byType(Scrollable),
+    );
+    final logoTop = tester.getTopLeft(logo).dy;
+    final gesture = await tester.startGesture(tester.getCenter(logo));
+    await gesture.moveBy(const Offset(0, -180));
+    await tester.pump();
+
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.pixels, greaterThan(1));
+    expect(tester.getTopLeft(logo).dy, moreOrLessEquals(logoTop, epsilon: 0.1));
+    expect(
+      tester
+          .widget<SliverAppBar>(
+            find.byKey(const ValueKey('home-active-feed-header')),
+          )
+          .forceMaterialTransparency,
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-feed-header-glass')),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsOneWidget,
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

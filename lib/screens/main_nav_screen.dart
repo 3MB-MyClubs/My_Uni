@@ -807,7 +807,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       key: const ValueKey<String>('mobile-bottom-navigation'),
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
         child: ClipRRect(
           borderRadius: BorderRadius.all(Radius.circular(30)),
           child: BackdropFilter.grouped(
@@ -1149,6 +1149,7 @@ class _DesktopNavItem extends StatelessWidget {
                   if (badge > 0) ...[
                     const SizedBox(width: 8),
                     Container(
+                      key: ValueKey<String>('nav-unread-badge-$badge'),
                       constraints: const BoxConstraints(minWidth: 22),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
@@ -1159,7 +1160,7 @@ class _DesktopNavItem extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        badge > 99 ? '99+' : '$badge',
+                        '$badge',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
@@ -1376,17 +1377,21 @@ class _NavItem extends StatelessWidget {
                           top: -4,
                           right: -6,
                           child: Container(
-                            padding: const EdgeInsets.all(2),
+                            key: ValueKey<String>('nav-unread-badge-$badge'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
                             constraints: const BoxConstraints(
                               minWidth: 15,
                               minHeight: 15,
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.primaryRed,
-                              shape: BoxShape.circle,
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
-                              badge > 9 ? '9+' : '$badge',
+                              '$badge',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 8,

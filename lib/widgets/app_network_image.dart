@@ -42,6 +42,11 @@ class AppNetworkImage extends StatelessWidget {
   final MediaRendition rendition;
   final BoxFit fit;
   final bool useOldImageOnUrlChange;
+
+  /// Requests a width-only rendition so Storage and the decoder retain the
+  /// source ratio even when this widget currently has a provisional height.
+  final bool preserveSourceAspectRatio;
+  final ValueChanged<double>? onAspectRatio;
   final WidgetBuilder? placeholderBuilder;
   final WidgetBuilder? errorBuilder;
 
@@ -56,6 +61,8 @@ class AppNetworkImage extends StatelessWidget {
     this.rendition = MediaRendition.feed,
     this.fit = BoxFit.cover,
     this.useOldImageOnUrlChange = false,
+    this.preserveSourceAspectRatio = false,
+    this.onAspectRatio,
     this.placeholderBuilder,
     this.errorBuilder,
   });
@@ -65,7 +72,10 @@ class AppNetworkImage extends StatelessWidget {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final w = cacheWidth ?? (width != null && width!.isFinite ? width : null);
     final h =
-        cacheHeight ?? (height != null && height!.isFinite ? height : null);
+        cacheHeight ??
+        (!preserveSourceAspectRatio && height != null && height!.isFinite
+            ? height
+            : null);
 
     final dimensions = mediaDimensionsFor(
       rendition: rendition,
@@ -90,6 +100,15 @@ class AppNetworkImage extends StatelessWidget {
       useOldImageOnUrlChange: useOldImageOnUrlChange,
       fadeInDuration: const Duration(milliseconds: 120),
       fadeOutDuration: Duration.zero,
+      imageBuilder: onAspectRatio == null
+          ? null
+          : (context, provider) => _AspectRatioReportingImage(
+              provider: provider,
+              width: width,
+              height: height,
+              fit: fit,
+              onAspectRatio: onAspectRatio!,
+            ),
       placeholder: placeholderBuilder == null
           ? null
           : (ctx, _) => placeholderBuilder!(ctx),
@@ -104,6 +123,15 @@ class AppNetworkImage extends StatelessWidget {
             memCacheWidth: dimensions.width,
             memCacheHeight: dimensions.height,
             cacheKey: '${media.cacheKey}:original-fallback',
+            imageBuilder: onAspectRatio == null
+                ? null
+                : (context, provider) => _AspectRatioReportingImage(
+                    provider: provider,
+                    width: width,
+                    height: height,
+                    fit: fit,
+                    onAspectRatio: onAspectRatio!,
+                  ),
             errorWidget: (context, url, error) =>
                 errorBuilder?.call(context) ?? const SizedBox.shrink(),
           );
@@ -112,6 +140,91 @@ class AppNetworkImage extends StatelessWidget {
       },
     );
   }
+}
+
+/// Reports intrinsic dimensions from the same provider that paints the image,
+/// so callers can adapt their layout without issuing a second network request.
+class _AspectRatioReportingImage extends StatefulWidget {
+  const _AspectRatioReportingImage({
+    required this.provider,
+    required this.width,
+    required this.height,
+    required this.fit,
+    required this.onAspectRatio,
+  });
+
+  final ImageProvider<Object> provider;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final ValueChanged<double> onAspectRatio;
+
+  @override
+  State<_AspectRatioReportingImage> createState() =>
+      _AspectRatioReportingImageState();
+}
+
+class _AspectRatioReportingImageState
+    extends State<_AspectRatioReportingImage> {
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _listenForDimensions();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AspectRatioReportingImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.provider != widget.provider) _listenForDimensions();
+  }
+
+  void _listenForDimensions() {
+    _detach();
+    final stream = widget.provider.resolve(
+      createLocalImageConfiguration(context),
+    );
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener((info, _) {
+      stream.removeListener(listener);
+      if (identical(_stream, stream)) {
+        _stream = null;
+        _listener = null;
+      }
+      if (info.image.height <= 0) return;
+      final ratio = info.image.width / info.image.height;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onAspectRatio(ratio);
+      });
+    });
+    _stream = stream;
+    _listener = listener;
+    stream.addListener(listener);
+  }
+
+  void _detach() {
+    final stream = _stream;
+    final listener = _listener;
+    if (stream != null && listener != null) stream.removeListener(listener);
+    _stream = null;
+    _listener = null;
+  }
+
+  @override
+  void dispose() {
+    _detach();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Image(
+    image: widget.provider,
+    width: widget.width,
+    height: widget.height,
+    fit: widget.fit,
+  );
 }
 
 /// Lazily signs private Storage media only when the widget is built. Chat v2

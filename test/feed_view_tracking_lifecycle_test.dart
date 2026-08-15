@@ -1,7 +1,10 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
+import 'package:flutter_application_1/models/app_admin.dart';
+import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/news_post.dart';
 import 'package:flutter_application_1/screens/feed_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -12,6 +15,26 @@ import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+
+Future<String> _writeTestPhoto(
+  Directory directory,
+  String name, {
+  required int width,
+  required int height,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawRect(
+    ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    ui.Paint()..color = const ui.Color(0xFF8B1538),
+  );
+  final image = await recorder.endRecording().toImage(width, height);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  final path = '${directory.path}/$name.png';
+  await File(path).writeAsBytes(data!.buffer.asUint8List(), flush: true);
+  return path;
+}
 
 void main() {
   late Directory tempDir;
@@ -34,6 +57,20 @@ void main() {
   ) async {
     final originalPosts = List<NewsPost>.from(newsPosts);
     final originalEvents = [...events];
+    final admin = AppAdmin(
+      id: 'vertical-feed-admin',
+      name: 'Vertical Feed Club',
+      email: 'vertical.feed.club@ku.edu.tr',
+      password: '11111111',
+    );
+    final club = Club(
+      id: 'vertical-feed-club',
+      name: 'Vertical Feed Club',
+      description: 'Vertical photo-feed regression fixture',
+      adminUserIds: [admin.id],
+    );
+    clubAdmins.add(admin);
+    clubs.add(club);
     addTearDown(() async {
       newsPosts
         ..clear()
@@ -41,17 +78,32 @@ void main() {
       events
         ..clear()
         ..addAll(originalEvents);
+      clubAdmins.removeWhere((candidate) => candidate.id == admin.id);
+      clubs.removeWhere((candidate) => candidate.id == club.id);
       await authService.logout();
       await tester.binding.setSurfaceSize(null);
     });
 
-    final admin = clubAdmins.firstWhere(
-      (candidate) => managedClubForAdmin(candidate.id)?.id == 'c1',
-    );
-    final club = managedClubForAdmin(admin.id)!;
+    expect(managedClubForAdmin(admin.id)?.id, club.id);
     expect(authService.login(admin.email, admin.password), isTrue);
 
     final now = DateTime.now();
+    final portraitPhoto = (await tester.runAsync(
+      () => _writeTestPhoto(
+        tempDir,
+        'portrait-feed-photo',
+        width: 80,
+        height: 160,
+      ),
+    ))!;
+    final landscapePhoto = (await tester.runAsync(
+      () => _writeTestPhoto(
+        tempDir,
+        'landscape-feed-photo',
+        width: 160,
+        height: 80,
+      ),
+    ))!;
     newsPosts
       ..clear()
       ..addAll([
@@ -61,7 +113,7 @@ void main() {
           authorId: admin.id,
           content: 'First lifecycle regression post',
           createdAt: now,
-          imagePath: 'tpl:0',
+          imagePath: portraitPhoto,
         ),
         NewsPost(
           id: 'feed-view-lifecycle-2',
@@ -69,10 +121,14 @@ void main() {
           authorId: admin.id,
           content: 'Second lifecycle regression post',
           createdAt: now.subtract(const Duration(minutes: 1)),
+          imagePath: landscapePhoto,
         ),
       ]);
     events.clear();
-    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
 
     await tester.pumpWidget(
       const ProviderScope(
@@ -84,7 +140,6 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('First lifecycle regression post'), findsOneWidget);
     expect(find.text('Second lifecycle regression post'), findsOneWidget);
@@ -92,6 +147,21 @@ void main() {
       find.byKey(const ValueKey('home-feed-photo-feed-view-lifecycle-1')),
       findsOneWidget,
     );
+    final firstPhoto = find.byKey(
+      const ValueKey('home-feed-photo-feed-view-lifecycle-1'),
+    );
+    final secondPhoto = find.byKey(
+      const ValueKey('home-feed-photo-feed-view-lifecycle-2'),
+    );
+    expect(secondPhoto, findsOneWidget);
+
+    final firstPhotoRect = tester.getRect(firstPhoto);
+    final secondPhotoRect = tester.getRect(secondPhoto);
+    expect(firstPhotoRect.left, secondPhotoRect.left);
+    expect(firstPhotoRect.width, secondPhotoRect.width);
+    expect(firstPhotoRect.height, greaterThan(firstPhotoRect.width));
+    expect(secondPhotoRect.height, lessThan(secondPhotoRect.width));
+    expect(secondPhotoRect.top, greaterThan(firstPhotoRect.bottom));
     expect(viewTracker.viewCount('feed-view-lifecycle-1'), 1);
     expect(viewTracker.viewCount('feed-view-lifecycle-2'), 1);
     expect(tester.takeException(), isNull);
