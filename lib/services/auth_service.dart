@@ -23,6 +23,7 @@ import 'terms_acceptance_service.dart';
 import 'admin_moderation_service.dart';
 import 'platform_admin_auth_service.dart';
 import 'session_restoration.dart';
+import 'supabase_content_service.dart';
 
 enum AuthLoginFailure { none, invalidCredentials, banned }
 
@@ -66,7 +67,11 @@ class AuthService {
   void setClubAdmin(AppAdmin admin, {bool checkTerms = true}) {
     _invalidateChatAuthBoundary();
     lazyContentLoader.invalidate();
-    if (isClubUpMockAdmin(admin)) ensureClubUpMockProfile();
+    if (isClubUpMockAdmin(admin)) {
+      ensureClubUpMockProfile();
+    } else {
+      ensureClubForAdmin(admin);
+    }
     if (admin.isPlatformAdmin) appAdmin = admin;
     _currentAdmin = admin;
     _currentUser = null;
@@ -392,6 +397,12 @@ class AuthService {
             ),
             checkTerms: false,
           );
+          try {
+            await supabaseContentService.fetchClubById(club.id);
+          } catch (_) {
+            // The authenticated club stub created by setClubAdmin is enough
+            // to keep routing safe if the detail hydration is unavailable.
+          }
           await termsAcceptanceService.loadForCurrentUser();
         },
         restoreStudent: (identity) => _setStudentFromIdentity(

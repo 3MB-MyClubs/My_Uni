@@ -1016,7 +1016,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // keep their personal profile and are handled above.
     if (admin != null && admin.id != 'admin1') {
       final adminId = admin.id;
-      final managed = managedClubForAdmin(adminId) ?? clubs.first;
+      final managed = managedClubForAdmin(adminId);
+      if (managed == null) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Center(
+            child: Text(AppLocalizations.of(context)!.clubLoginNotReady),
+          ),
+        );
+      }
       return ClubProfileScreen(
         club: managed,
         color: _clubColor(clubOrdinal(managed.id)),
