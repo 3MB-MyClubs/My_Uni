@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/feed_v2_controller.dart';
 import '../services/feed_v2_service.dart';
+import '../services/image_aspect_ratio.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
@@ -92,6 +94,15 @@ class _ClubSuggestion {
 }
 
 Club? _clubById(String id) => clubForId(id);
+
+const double _portraitFeedAspectRatio = 4 / 5;
+const double _landscapeFeedAspectRatio = 1.91;
+
+double _homeFeedPhotoHeight(double viewportWidth, {double aspectRatio = 1}) {
+  final safeRatio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1;
+  return viewportWidth /
+      safeRatio.clamp(_portraitFeedAspectRatio, _landscapeFeedAspectRatio);
+}
 
 /// Memoized output of the feed pipeline. The pipeline (filter + sort of all
 /// posts, three suggestion rankers, the events-rail window) used to rerun on
@@ -843,6 +854,7 @@ class _FeedScreenState extends State<FeedScreen> {
           return false;
         },
         child: CustomScrollView(
+          scrollDirection: Axis.vertical,
           controller: _scrollController,
           physics: const _FeedBouncePhysics(
             parent: AlwaysScrollableScrollPhysics(),
@@ -1110,28 +1122,38 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── ClubUp top bar ────────────────────────────────────────────────────────
   SliverAppBar _buildTopBar() {
+    final glassColor = AppColors.card.withValues(
+      // Once feed content reaches the pinned bar, keep enough tint for the
+      // logo and bell to remain legible while letting the moving feed stay
+      // visibly present underneath it.
+      alpha: _scrolledUnder ? 0.56 : 0.82,
+    );
     return SliverAppBar(
+      key: const ValueKey('home-active-feed-header'),
       pinned: true,
       floating: false,
+      forceMaterialTransparency: true,
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
       elevation: 0,
       toolbarHeight: 56,
       leading: const SizedBox.shrink(),
       leadingWidth: 0,
       titleSpacing: 0,
-      // Blurred glass bar: the translucent fill lives inside the blur layer so
-      // scrolled content stays readable through it. The blur only renders once
-      // content is under the bar (identical fill either way — same pixels at
-      // rest, no per-frame backdrop readback while idle), and .grouped shares
-      // one backdrop snapshot with the bottom nav's blur while scrolling.
+      // This remains part of the CustomScrollView, so a drag that begins on
+      // the logo/background controls the same feed. The translucent pinned
+      // layer makes posts visibly continue behind it as they scroll upward.
+      // Blur only renders once content is under the bar, and .grouped shares
+      // one backdrop snapshot with the bottom nav while scrolling.
       flexibleSpace: ClipRect(
+        key: const ValueKey('home-feed-header-glass'),
         child: _scrolledUnder
             ? BackdropFilter.grouped(
                 filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                child: Container(color: AppColors.card.withValues(alpha: 0.72)),
+                child: Container(color: glassColor),
               )
-            : Container(color: AppColors.card.withValues(alpha: 0.72)),
+            : Container(color: glassColor),
       ),
       title: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1826,9 +1848,7 @@ class _FeedPostSkeleton extends StatelessWidget {
           const SizedBox(height: 12),
           SkeletonBox(
             width: double.infinity,
-            height: (MediaQuery.sizeOf(context).width * 0.78)
-                .clamp(280.0, 340.0)
-                .toDouble(),
+            height: _homeFeedPhotoHeight(MediaQuery.sizeOf(context).width),
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           const SizedBox(height: 10),
@@ -3243,6 +3263,8 @@ class _PostCardState extends State<_PostCard>
   late AnimationController _heartController;
   late Animation<double> _likeButtonScale;
   bool _showHeart = false;
+  double _photoAspectRatio = 1;
+  String? _aspectProbeKey;
 
   @override
   void initState() {
@@ -3274,6 +3296,50 @@ class _PostCardState extends State<_PostCard>
           authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
       viewTracker.recordView(widget.post.id, userId, syncRemote: true);
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _probePhotoAspectRatio();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.imagePath != widget.post.imagePath) {
+      _aspectProbeKey = null;
+      _photoAspectRatio = 1;
+      _probePhotoAspectRatio();
+    }
+  }
+
+  void _probePhotoAspectRatio() {
+    final path = widget.post.imagePath?.trim() ?? '';
+    if (_aspectProbeKey == path) return;
+    _aspectProbeKey = path;
+
+    if (path.isEmpty) {
+      _photoAspectRatio = 1;
+      return;
+    }
+    if (path.startsWith('tpl:')) {
+      _photoAspectRatio = _portraitFeedAspectRatio;
+      return;
+    }
+
+    if (path.startsWith('https://') || path.startsWith('http://')) {
+      _photoAspectRatio = 1;
+      return;
+    }
+
+    _photoAspectRatio = imageAspectRatioFromFile(File(path)) ?? 1;
+  }
+
+  void _onPhotoAspectRatio(double aspectRatio) {
+    if (!mounted || !aspectRatio.isFinite || aspectRatio <= 0) return;
+    if ((_photoAspectRatio - aspectRatio).abs() <= 0.001) return;
+    setState(() => _photoAspectRatio = aspectRatio);
   }
 
   @override
@@ -3534,9 +3600,10 @@ class _PostCardState extends State<_PostCard>
     final ownContent = _isOwnerOfClub(widget.post.clubId);
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
-    final mediaHeight = (MediaQuery.sizeOf(context).width * 0.78)
-        .clamp(280.0, 340.0)
-        .toDouble();
+    final mediaHeight = _homeFeedPhotoHeight(
+      MediaQuery.sizeOf(context).width,
+      aspectRatio: _photoAspectRatio,
+    );
     final caption = ExpandablePostCaption(
       key: ValueKey('home-feed-caption-${widget.post.id}'),
       authorName: '',
@@ -3556,6 +3623,7 @@ class _PostCardState extends State<_PostCard>
     // Keep the identity in a compact header so Home-feed media can use the
     // full card width. Captions for photo posts deliberately follow the media.
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(
@@ -3704,6 +3772,7 @@ class _PostCardState extends State<_PostCard>
                           fallbackColor: clubColor,
                           fallbackLetter: club.name[0],
                           height: mediaHeight,
+                          onAspectRatio: _onPhotoAspectRatio,
                         ),
                         if (_showHeart)
                           ScaleTransition(

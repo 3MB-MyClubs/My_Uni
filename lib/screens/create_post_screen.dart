@@ -91,6 +91,7 @@ Widget buildPostBanner({
   required String fallbackLetter,
   double height = 200,
   MediaRendition rendition = MediaRendition.feed,
+  ValueChanged<double>? onAspectRatio,
 }) {
   // Network image (Supabase / Picsum / any remote URL)
   if (imagePath != null &&
@@ -107,6 +108,8 @@ Widget buildPostBanner({
         // up-to-3840px upload for what's usually a ~200-400dp-tall card.
         cacheWidth: rendition == MediaRendition.screen ? 800 : 500,
         rendition: rendition,
+        preserveSourceAspectRatio: onAspectRatio != null,
+        onAspectRatio: onAspectRatio,
         placeholderBuilder: (_) => SkeletonBox(
           width: double.infinity,
           height: height,
