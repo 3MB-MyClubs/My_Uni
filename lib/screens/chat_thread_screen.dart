@@ -25,6 +25,7 @@ import '../services/notification_service.dart';
 import '../services/people_service.dart';
 import '../services/photo_orientation.dart';
 import '../services/image_cache_service.dart';
+import '../services/image_aspect_ratio.dart';
 import '../services/media_delivery_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
@@ -45,6 +46,10 @@ import 'media_preview_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
 enum _ChatAttachment { photo, camera }
+
+const double _chatPortraitPhotoAspectRatio = 3 / 4;
+const double _chatLandscapePhotoAspectRatio = 16 / 9;
+const double _chatPhotoWidth = 200;
 
 /// A single direct message, student-created group, or club community thread.
 class ChatThreadScreen extends StatefulWidget {
@@ -69,6 +74,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
   final Set<String> _requestedParticipantProfileIds = {};
+  final Map<String, double> _photoAspectRatios = {};
   ClubCommunityInfoController? _communityInfo;
   String? _animatingSentMessageId;
   ChatMessage? _replyingTo;
@@ -2082,6 +2088,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             cacheKey: stableSupabaseSignedUrlCacheKey(path),
           )
         : FileImage(file!);
+    final sourceAspectRatio = _photoAspectRatioFor(message.id, file);
+    final displayAspectRatio = sourceAspectRatio
+        .clamp(_chatPortraitPhotoAspectRatio, _chatLandscapePhotoAspectRatio)
+        .toDouble();
     return GestureDetector(
       key: ValueKey('chat-photo-${message.id}'),
       onTap: exists
@@ -2094,9 +2104,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(15),
         child: SizedBox(
-          width: 200,
+          width: _chatPhotoWidth,
           child: AspectRatio(
-            aspectRatio: 4 / 3,
+            aspectRatio: displayAspectRatio,
             child: !exists
                 ? _missingPhotoPlaceholder()
                 : isPrivateReference
@@ -2106,6 +2116,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     rendition: MediaRendition.thumbnail,
                     cacheWidth: 320,
                     fit: BoxFit.cover,
+                    onAspectRatio: (ratio) =>
+                        _rememberRemotePhotoAspectRatio(message.id, ratio),
                     placeholderBuilder: (_) => _photoLoadingPlaceholder(),
                     errorBuilder: (_) => _missingPhotoPlaceholder(),
                   )
@@ -2118,6 +2130,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         'chat-photo-${message.id}',
                     cacheWidth: 320,
                     fit: BoxFit.cover,
+                    preserveSourceAspectRatio: true,
+                    onAspectRatio: (ratio) =>
+                        _rememberRemotePhotoAspectRatio(message.id, ratio),
                     useOldImageOnUrlChange: true,
                     placeholderBuilder: (_) => _photoLoadingPlaceholder(),
                     errorBuilder: (_) => _missingPhotoPlaceholder(),
@@ -2137,6 +2152,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
     );
+  }
+
+  double _photoAspectRatioFor(String messageId, File? file) {
+    final cached = _photoAspectRatios[messageId];
+    if (cached != null) return cached;
+    final local = file == null ? null : imageAspectRatioFromFile(file);
+    if (local == null) return 4 / 3;
+    _photoAspectRatios[messageId] = local;
+    return local;
+  }
+
+  void _rememberRemotePhotoAspectRatio(String messageId, double aspectRatio) {
+    if (!mounted || !aspectRatio.isFinite || aspectRatio <= 0) return;
+    final previous = _photoAspectRatios[messageId];
+    if (previous != null && (previous - aspectRatio).abs() <= 0.001) return;
+    setState(() => _photoAspectRatios[messageId] = aspectRatio);
   }
 
   Future<void> _showChatPhoto({

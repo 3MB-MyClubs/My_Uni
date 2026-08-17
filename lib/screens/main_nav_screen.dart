@@ -161,10 +161,17 @@ class MainNavScreen extends ConsumerStatefulWidget {
 }
 
 class _MainNavScreenState extends ConsumerState<MainNavScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _desktopNavigationBreakpoint = 960;
   static const double _desktopSidebarWidth = 248;
   static const double _desktopContentMaxWidth = 1040;
+
+  // Scroll-driven nav bar shrink (Instagram-style): scrolling down compacts the
+  // bar down to a floor and leaves it there, any upward scroll restores it.
+  static const double _navBarHeight = 72;
+  static const double _navBarShrinkAmount = 20;
+  static const double _navShrinkDistance = 80;
+  static const double _navExpandThreshold = 8;
 
   int _selectedIndex = 0;
   TutorialLaunchSource? _tutorialLaunchSource;
@@ -174,6 +181,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   final ChatsController _chatsController = ChatsController();
   final FeedController _feedController = FeedController();
   late final AnimationController _tabTransitionController;
+  late final AnimationController _navShrinkController;
+  bool _navExpanding = false;
+  double _navUpwardDelta = 0;
 
   // Built once and never replaced by nav taps or content-creation callbacks,
   // so IndexedStack sees the same widget instances and Flutter's element-
@@ -205,6 +215,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       vsync: this,
       duration: const Duration(milliseconds: 340),
       value: 1,
+    );
+    // Driven directly from scroll deltas, so its own duration only applies to
+    // the settle/restore animations below.
+    _navShrinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 0,
     );
     onboardingService.replayRequests.addListener(_onOnboardingReplayRequested);
     onboardingService.tabRequests.addListener(_onTabRequested);
@@ -321,6 +338,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   void _startOnboarding(TutorialLaunchSource source) {
     if (_tutorialLaunchSource != null) return;
+    // The tour spotlights individual nav items, so it always gets the full bar.
+    _resetNavShrink();
     setState(() {
       _selectedIndex = 0;
       _tutorialLaunchSource = source;
@@ -350,6 +369,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   void _onOnboardingStepChanged(OnboardingStep step) {
     if (_selectedIndex == step.tabIndex) return;
+    _resetNavShrink();
     _tabTransitionController.forward(from: 0);
     setState(() => _selectedIndex = step.tabIndex);
     if (step.tabIndex == 3 && !_isPlatformModerator) {
@@ -393,6 +413,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     _chatsController.dispose();
     _feedController.dispose();
     _tabTransitionController.dispose();
+    _navShrinkController.dispose();
     super.dispose();
   }
 
@@ -402,16 +423,84 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // index is Moderation, so it must not touch chat state.
   void _selectNavIndex(int index) {
     if (index == 0 && _selectedIndex == 0) {
+      _resetNavShrink();
       _feedController.scrollToTop();
       return;
     }
     if (index == 3 && !_isPlatformModerator) _chatsController.showStudents();
     if (_selectedIndex != index) {
+      // The incoming tab has its own scroll position, so the bar starts over
+      // in its full form rather than inheriting the previous tab's shrink.
+      _resetNavShrink();
       if (_tutorialLaunchSource != null) {
         _tabTransitionController.forward(from: 0);
       }
       setState(() => _selectedIndex = index);
     }
+  }
+
+  // Compacts the bar as the user scrolls down and restores it once they move
+  // back up, matching Instagram's floating tab bar. The shrink follows the
+  // finger rather than snapping, so the bar never jumps mid-drag.
+  bool _handleContentScroll(ScrollNotification notification) {
+    // Horizontal rails (events, media carousels) and the tour must not move it.
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (_tutorialLaunchSource != null) return false;
+
+    if (notification is ScrollUpdateNotification) {
+      // At rest against the top — including pull-to-refresh overscroll — the
+      // bar always belongs in its full form.
+      if (notification.metrics.extentBefore <= 0) {
+        _navUpwardDelta = 0;
+        _expandNav();
+        return false;
+      }
+      final delta = notification.scrollDelta ?? 0;
+      if (delta > 0) {
+        _navUpwardDelta = 0;
+        _navShrinkController.stop();
+        _navExpanding = false;
+        _navShrinkController.value = (_navShrinkController.value +
+                delta / _navShrinkDistance)
+            .clamp(0.0, 1.0);
+      } else if (delta < 0) {
+        // A deliberate upward move restores the bar; the sub-pixel jitter of a
+        // settling fling or a bounce does not.
+        _navUpwardDelta -= delta;
+        if (_navUpwardDelta >= _navExpandThreshold) _expandNav();
+      }
+    } else if (notification is ScrollEndNotification) {
+      _settleNav();
+    }
+    return false;
+  }
+
+  void _expandNav() {
+    if (_navShrinkController.value == 0 || _navExpanding) return;
+    _navExpanding = true;
+    _navShrinkController
+        .animateTo(0, curve: Curves.easeOutCubic)
+        .whenCompleteOrCancel(() => _navExpanding = false);
+  }
+
+  /// A downward scroll that ends before the bar is fully compact would
+  /// otherwise leave it at an arbitrary in-between size. Downward scrolling
+  /// only ever settles compact — only an upward move brings the bar back.
+  void _settleNav() {
+    final value = _navShrinkController.value;
+    if (value <= 0 || value >= 1 || _navExpanding) return;
+    _navShrinkController.animateTo(
+      1,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _resetNavShrink() {
+    _navShrinkController.stop();
+    _navExpanding = false;
+    _navUpwardDelta = 0;
+    _navShrinkController.value = 0;
   }
 
   void _handleNavDragPosition(
@@ -577,10 +666,19 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
                     return Scaffold(
                       extendBody: true,
-                      body: tabContent,
-                      bottomNavigationBar: _buildBottomNav(
-                        context,
-                        unreadChats,
+                      body: NotificationListener<ScrollNotification>(
+                        onNotification: _handleContentScroll,
+                        child: tabContent,
+                      ),
+                      // Only the bar itself listens to the shrink animation, so
+                      // the mounted tab content is never rebuilt while scrolling.
+                      bottomNavigationBar: AnimatedBuilder(
+                        animation: _navShrinkController,
+                        builder: (context, _) => _buildBottomNav(
+                          context,
+                          unreadChats,
+                          _navShrinkController.value,
+                        ),
                       ),
                     );
                   },
@@ -793,7 +891,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
   }
 
-  Widget _buildBottomNav(BuildContext context, int unreadChats) {
+  /// [shrink] runs 0 (full size) to 1 (the compact scrolled form).
+  Widget _buildBottomNav(BuildContext context, int unreadChats, double shrink) {
     final isDark = themeService.isDark;
 
     // Ordered slots so the sliding highlight can be positioned purely from
@@ -802,18 +901,26 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
     final slotCount = slots.length;
     final selectedSlot = slots.indexWhere((s) => s.index == _selectedIndex);
+    final barHeight = _navBarHeight - (_navBarShrinkAmount * shrink);
 
     return SafeArea(
       key: const ValueKey<String>('mobile-bottom-navigation'),
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+        // The pill also narrows as it shrinks, so it reads as one object
+        // pulling in rather than just losing height.
+        padding: EdgeInsets.fromLTRB(
+          16 + (22 * shrink),
+          0,
+          16 + (22 * shrink),
+          4,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.all(Radius.circular(30)),
           child: BackdropFilter.grouped(
             filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
-              height: 72,
+              height: barHeight,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.all(Radius.circular(30)),
                 gradient: LinearGradient(
@@ -911,9 +1018,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                 : const Duration(milliseconds: 260),
                             curve: Curves.easeOutCubic,
                             left: capsuleLeft,
-                            top: 8,
+                            top: 8 - (3 * shrink),
                             width: capsuleWidth,
-                            height: 72 - 16,
+                            height: barHeight - 16 + (6 * shrink),
                             child: IgnorePointer(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
@@ -951,7 +1058,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                 : const Duration(milliseconds: 260),
                             curve: Curves.easeOutCubic,
                             left: underlineLeft,
-                            bottom: 6,
+                            bottom: 6 - (2 * shrink),
                             width: slotWidth,
                             height: 3,
                             child: IgnorePointer(
@@ -988,6 +1095,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                         key: onboardingAnchors.keyFor(
                                           OnboardingAnchors.clubCreateButton,
                                         ),
+                                        shrink: shrink,
                                         onTap: _onAddTap,
                                       )
                                     : _NavItem(
@@ -1002,6 +1110,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                         label: slot.label!,
                                         selected: _selectedIndex == slot.index,
                                         badge: slot.badge,
+                                        shrink: shrink,
                                         onTap: () =>
                                             _selectNavIndex(slot.index!),
                                         onLongPress: slot.index == 4
@@ -1324,6 +1433,9 @@ class _NavItem extends StatelessWidget {
   final String label;
   final bool selected;
   final int badge;
+
+  /// 0 = full bar with labels, 1 = compact scrolled bar (icons only).
+  final double shrink;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -1336,20 +1448,23 @@ class _NavItem extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.badge = 0,
+    this.shrink = 0,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Labels fade out over the first half of the shrink so they are gone well
+    // before the row runs out of room for them.
+    final labelOpacity = (1 - (shrink * 2)).clamp(0.0, 1.0);
+
     return Expanded(
       child: AppPressable(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         onLongPress: onLongPress,
         pressedScale: 0.94,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8 - (4 * shrink)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1370,7 +1485,7 @@ class _NavItem extends StatelessWidget {
                         color: selected
                             ? AppColors.primaryRed
                             : AppColors.secondaryText,
-                        size: 24,
+                        size: 24 - (2 * shrink),
                       ),
                       if (badge > 0)
                         Positioned(
@@ -1405,17 +1520,35 @@ class _NavItem extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 3),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: selected
-                      ? AppColors.primaryRed
-                      : AppColors.secondaryText,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+              // Collapsed rather than hidden, so the row's height shrinks with
+              // the bar instead of overflowing it.
+              ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: (1 - shrink).clamp(0.0, 1.0),
+                  child: Opacity(
+                    opacity: labelOpacity,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 3),
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: selected
+                                ? AppColors.primaryRed
+                                : AppColors.secondaryText,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.normal,
+                          ),
+                          child: Text(label),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Text(label),
               ),
             ],
           ),
@@ -1508,7 +1641,10 @@ class _CreateSheetAction extends StatelessWidget {
 
 class _CenterAddButton extends StatefulWidget {
   final VoidCallback onTap;
-  const _CenterAddButton({super.key, required this.onTap});
+
+  /// 0 = full bar, 1 = compact scrolled bar.
+  final double shrink;
+  const _CenterAddButton({super.key, required this.onTap, this.shrink = 0});
 
   @override
   State<_CenterAddButton> createState() => _CenterAddButtonState();
@@ -1550,8 +1686,8 @@ class _CenterAddButtonState extends State<_CenterAddButton>
           onTap: _handleTap,
           pressedScale: 0.92,
           child: Container(
-            width: 52,
-            height: 52,
+            width: 52 - (14 * widget.shrink),
+            height: 52 - (14 * widget.shrink),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [AppColors.primaryRed, AppColors.darkRed],
@@ -1571,10 +1707,10 @@ class _CenterAddButtonState extends State<_CenterAddButton>
             child: RotationTransition(
               key: const ValueKey('center-add-icon-motion'),
               turns: _turns,
-              child: const Icon(
+              child: Icon(
                 Icons.add_rounded,
                 color: Colors.white,
-                size: 28,
+                size: 28 - (7 * widget.shrink),
               ),
             ),
           ),

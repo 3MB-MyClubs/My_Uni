@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,26 @@ import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
 import 'package:flutter_application_1/widgets/loading_skeleton.dart';
 import 'package:flutter_application_1/widgets/user_avatar.dart';
 import 'package:hive/hive.dart';
+
+Future<String> _writeChatTestPhoto(
+  Directory directory,
+  String name, {
+  required int width,
+  required int height,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawRect(
+    ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    ui.Paint()..color = const ui.Color(0xFF8B1538),
+  );
+  final image = await recorder.endRecording().toImage(width, height);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  final path = '${directory.path}/$name.png';
+  await File(path).writeAsBytes(data!.buffer.asUint8List(), flush: true);
+  return path;
+}
 
 void expectNoVisibleFocusedBorder(TextField field) {
   final border = field.decoration?.focusedBorder;
@@ -244,6 +265,88 @@ void main() {
       expect((decoration.border! as Border).top.width, 0.5);
       expect(decoration.boxShadow, isNull);
     }
+  });
+
+  testWidgets('camera photos keep portrait and landscape chat proportions', (
+    tester,
+  ) async {
+    const currentEmail = 'adaptive-chat-photo-sender@ku.edu.tr';
+    expect(
+      authService.signUp('Adaptive Photo Sender', currentEmail, '135790'),
+      isTrue,
+    );
+    final currentId = authService.currentUser!.id;
+    final recipient = User(
+      id: 'adaptive-chat-photo-recipient',
+      name: 'Adaptive Photo Recipient',
+      email: 'adaptive-chat-photo-recipient@ku.edu.tr',
+      password: '246802',
+      role: 'student',
+      subscribedClubIds: const [],
+    );
+    users.add(recipient);
+    addTearDown(
+      () => users.removeWhere(
+        (user) => user.email == currentEmail || user.id == recipient.id,
+      ),
+    );
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final portraitPath = (await tester.runAsync(
+      () => _writeChatTestPhoto(
+        tempDir,
+        'portrait-camera-chat-photo',
+        width: 90,
+        height: 120,
+      ),
+    ))!;
+    final landscapePath = (await tester.runAsync(
+      () => _writeChatTestPhoto(
+        tempDir,
+        'landscape-camera-chat-photo',
+        width: 160,
+        height: 90,
+      ),
+    ))!;
+    final threadId = ChatStore.dmThreadId(currentId, recipient.id);
+    final portrait = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: currentId,
+      content: '',
+      kind: ChatMessageKind.photo,
+      attachmentPath: portraitPath,
+    )!;
+    final landscape = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: currentId,
+      content: '',
+      kind: ChatMessageKind.photo,
+      attachmentPath: landscapePath,
+    )!;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: ChatThreadScreen(threadId: threadId, recipient: recipient),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final portraitRect = tester.getRect(
+      find.byKey(ValueKey('chat-photo-${portrait.id}')),
+    );
+    final landscapeRect = tester.getRect(
+      find.byKey(ValueKey('chat-photo-${landscape.id}')),
+    );
+    expect(portraitRect.width, landscapeRect.width);
+    expect(portraitRect.height, greaterThan(portraitRect.width));
+    expect(landscapeRect.height, lessThan(landscapeRect.width));
+    await tester.runAsync(chatStore.saveAll);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('DM header resolves the participant profile name', (

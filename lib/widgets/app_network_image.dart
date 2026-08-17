@@ -240,6 +240,7 @@ class PrivateMediaNetworkImage extends StatefulWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.onAspectRatio,
     this.placeholderBuilder,
     this.errorBuilder,
     this.resolver,
@@ -253,6 +254,7 @@ class PrivateMediaNetworkImage extends StatefulWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final ValueChanged<double>? onAspectRatio;
   final WidgetBuilder? placeholderBuilder;
   final WidgetBuilder? errorBuilder;
   final PrivateMediaResolver? resolver;
@@ -365,6 +367,8 @@ class _PrivateMediaNetworkImageState extends State<PrivateMediaNetworkImage> {
           cacheWidth: widget.cacheWidth,
           cacheHeight: widget.cacheHeight,
           fit: widget.fit,
+          preserveSourceAspectRatio: widget.onAspectRatio != null,
+          onAspectRatio: widget.onAspectRatio,
           useOldImageOnUrlChange: true,
           placeholderBuilder: widget.placeholderBuilder,
           errorBuilder: _primaryError,
