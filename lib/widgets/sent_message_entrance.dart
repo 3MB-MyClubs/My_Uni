@@ -104,7 +104,7 @@ class _SentMessageEntranceState extends State<SentMessageEntrance>
     // no rebuild of the bubble underneath it.
     return SizeTransition(
       sizeFactor: _reveal,
-      axisAlignment: -1,
+      alignment: AlignmentDirectional.topStart,
       child: FadeTransition(
         opacity: _fade,
         // The alignment inside SizeTransition hands the row loose constraints;

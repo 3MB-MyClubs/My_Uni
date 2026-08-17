@@ -765,7 +765,7 @@ class _ExploreScreenState extends State<ExploreScreen>
                       opacity: animation,
                       child: SizeTransition(
                         sizeFactor: animation,
-                        axisAlignment: -1,
+                        alignment: AlignmentDirectional.topStart,
                         child: child,
                       ),
                     );

@@ -92,7 +92,7 @@ class CalendarService {
   Future<CalendarResult> addEvent(CalendarEventModel model) async {
     try {
       if (Platform.isIOS) {
-        return _addEventToAppleCalendar(model);
+        return await _addEventToAppleCalendar(model);
       }
 
       _initTz();
