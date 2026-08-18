@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -841,7 +840,11 @@ class _FeedScreenState extends State<FeedScreen> {
           // pulling, the negative overscroll also drives the title-row refresh
           // indicator. Post-_FeedCache, either rebuild is just a hash compare.
           if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
-          final under = n.metrics.pixels > 1.0;
+          // Any downward travel at all counts as scrolled-under: the flat
+          // header is only correct while the feed is pinned at pixel 0. The
+          // 180ms crossfade below absorbs the jitter this would otherwise
+          // cause on flicks right at the boundary.
+          final under = n.metrics.pixels > 0.0;
           final refreshProgress = n.metrics.pixels < 0
               ? (-n.metrics.pixels / 82).clamp(0.0, 1.0)
               : 0.0;
@@ -1122,12 +1125,10 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── ClubUp top bar ────────────────────────────────────────────────────────
   SliverAppBar _buildTopBar() {
-    final glassColor = AppColors.card.withValues(
-      // Once feed content reaches the pinned bar, keep enough tint for the
-      // logo and bell to remain legible while letting the moving feed stay
-      // visibly present underneath it.
-      alpha: _scrolledUnder ? 0.56 : 0.82,
-    );
+    // At rest, the app bar blends into the screen background. Once content
+    // scrolls underneath, that full-width fill fades away completely so only
+    // the ClubUp wordmark and the bell's own floating button remain visible.
+    final flatColor = AppColors.background;
     return SliverAppBar(
       key: const ValueKey('home-active-feed-header'),
       pinned: true,
@@ -1142,18 +1143,20 @@ class _FeedScreenState extends State<FeedScreen> {
       leadingWidth: 0,
       titleSpacing: 0,
       // This remains part of the CustomScrollView, so a drag that begins on
-      // the logo/background controls the same feed. The translucent pinned
-      // layer makes posts visibly continue behind it as they scroll upward.
-      // Blur only renders once content is under the bar, and .grouped shares
-      // one backdrop snapshot with the bottom nav while scrolling.
+      // the logo/background controls the same feed. The fill becomes fully
+      // transparent while pinned, leaving no panel between the two controls.
       flexibleSpace: ClipRect(
-        key: const ValueKey('home-feed-header-glass'),
-        child: _scrolledUnder
-            ? BackdropFilter.grouped(
-                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                child: Container(color: glassColor),
-              )
-            : Container(color: glassColor),
+        key: const ValueKey('home-feed-header-background'),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: _scrolledUnder ? 1.0 : 0.0),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          builder: (context, t, _) {
+            return IgnorePointer(
+              child: Container(color: flatColor.withValues(alpha: 1 - t)),
+            );
+          },
+        ),
       ),
       title: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1281,13 +1284,6 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
           ],
-        ),
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: AppColors.divider.withValues(alpha: 0.6),
         ),
       ),
     );
