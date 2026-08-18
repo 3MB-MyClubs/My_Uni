@@ -171,6 +171,69 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('bottom navigation compacts after three seconds of inactivity', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MainNavScreen(isAdmin: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final nav = find.byKey(const ValueKey('mobile-bottom-navigation'));
+    final bar = find
+        .descendant(of: nav, matching: find.byType(ClipRRect))
+        .first;
+    final expandedHeight = tester.getSize(bar).height;
+
+    await tester.pump(const Duration(milliseconds: 2999));
+    expect(tester.getSize(bar).height, expandedHeight);
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 160));
+    final transitioningHeight = tester.getSize(bar).height;
+    expect(transitioningHeight, lessThan(expandedHeight));
+    expect(transitioningHeight, greaterThan(52));
+    await tester.pump(const Duration(milliseconds: 300));
+    final inactiveHeight = tester.getSize(bar).height;
+    expect(inactiveHeight, lessThan(expandedHeight));
+
+    // Touching a destination expands the shared bar immediately. Because the
+    // timer belongs to MainNavScreen, it starts again on the newly selected tab.
+    final events = find.descendant(
+      of: nav,
+      matching: find.byIcon(Icons.calendar_today_outlined),
+    );
+    await tester.tap(events);
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(tester.getSize(bar).height, expandedHeight);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(tester.getSize(bar).height, transitioningHeight);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getSize(bar).height, inactiveHeight);
+
+    // Tapping the selected destination also reveals the full-size controls.
+    final selectedEvents = find.descendant(
+      of: nav,
+      matching: find.byIcon(Icons.calendar_today_rounded),
+    );
+    await tester.tap(selectedEvents);
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(tester.getSize(bar).height, expandedHeight);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('club admin create action offers a post composer', (
     tester,
   ) async {

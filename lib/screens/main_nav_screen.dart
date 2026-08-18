@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
@@ -166,12 +166,15 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   static const double _desktopSidebarWidth = 248;
   static const double _desktopContentMaxWidth = 1040;
 
-  // Scroll-driven nav bar shrink (Instagram-style): scrolling down compacts the
-  // bar down to a floor and leaves it there, any upward scroll restores it.
+  // Instagram-style nav sizing: scrolling down compacts the bar, upward scroll
+  // restores it, and three seconds without interaction gently compacts it too.
   static const double _navBarHeight = 72;
   static const double _navBarShrinkAmount = 20;
   static const double _navShrinkDistance = 80;
   static const double _navExpandThreshold = 8;
+  static const Duration _navInactivityDelay = Duration(seconds: 3);
+  static const Duration _navIdleShrinkDuration = Duration(milliseconds: 420);
+  static const Duration _navSettleShrinkDuration = Duration(milliseconds: 280);
 
   int _selectedIndex = 0;
   TutorialLaunchSource? _tutorialLaunchSource;
@@ -182,6 +185,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   final FeedController _feedController = FeedController();
   late final AnimationController _tabTransitionController;
   late final AnimationController _navShrinkController;
+  Timer? _navInactivityTimer;
+  bool _navInteractionActive = false;
   bool _navExpanding = false;
   double _navUpwardDelta = 0;
 
@@ -241,6 +246,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _onPushNotificationOpened(),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scheduleNavInactivity();
+    });
   }
 
   void _onPushNotificationOpened() {
@@ -339,6 +347,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   void _startOnboarding(TutorialLaunchSource source) {
     if (_tutorialLaunchSource != null) return;
     // The tour spotlights individual nav items, so it always gets the full bar.
+    _navInactivityTimer?.cancel();
     _resetNavShrink();
     setState(() {
       _selectedIndex = 0;
@@ -353,6 +362,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (source == null) return;
     final profileId = _currentUserId;
     setState(() => _tutorialLaunchSource = null);
+    _scheduleNavInactivity();
     try {
       await onboardingService.finish(profileId, source: source);
     } catch (error) {
@@ -409,6 +419,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     themeService.removeListener(_onThemeOrLocaleChanged);
     localeService.removeListener(_onThemeOrLocaleChanged);
     accountSwitcherService.removeListener(_onAccountChanged);
+    _navInactivityTimer?.cancel();
     unawaited(chatStore.stopChatV2Sync());
     _chatsController.dispose();
     _feedController.dispose();
@@ -422,8 +433,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // mark read when the Chats tab itself is selected. ClubUp's tab at this
   // index is Moderation, so it must not touch chat state.
   void _selectNavIndex(int index) {
+    // Any destination tap reveals the full bar, including tapping the already
+    // selected tab. Inactivity can compact it again after the shared delay.
+    _resetNavShrink();
     if (index == 0 && _selectedIndex == 0) {
-      _resetNavShrink();
       _feedController.scrollToTop();
       return;
     }
@@ -431,7 +444,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (_selectedIndex != index) {
       // The incoming tab has its own scroll position, so the bar starts over
       // in its full form rather than inheriting the previous tab's shrink.
-      _resetNavShrink();
       if (_tutorialLaunchSource != null) {
         _tabTransitionController.forward(from: 0);
       }
@@ -448,6 +460,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (_tutorialLaunchSource != null) return false;
 
     if (notification is ScrollUpdateNotification) {
+      _scheduleNavInactivity();
       // At rest against the top — including pull-to-refresh overscroll — the
       // bar always belongs in its full form.
       if (notification.metrics.extentBefore <= 0) {
@@ -471,11 +484,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       }
     } else if (notification is ScrollEndNotification) {
       _settleNav();
+      _scheduleNavInactivity();
     }
     return false;
   }
 
   void _expandNav() {
+    _scheduleNavInactivity();
     if (_navShrinkController.value == 0 || _navExpanding) return;
     _navExpanding = true;
     _navShrinkController
@@ -491,8 +506,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (value <= 0 || value >= 1 || _navExpanding) return;
     _navShrinkController.animateTo(
       1,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
+      duration: _navSettleShrinkDuration,
+      curve: Curves.easeInOutCubic,
     );
   }
 
@@ -501,6 +516,48 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     _navExpanding = false;
     _navUpwardDelta = 0;
     _navShrinkController.value = 0;
+    _scheduleNavInactivity();
+  }
+
+  void _scheduleNavInactivity() {
+    _navInactivityTimer?.cancel();
+    if (!mounted ||
+        _navInteractionActive ||
+        _tutorialLaunchSource != null ||
+        _accountSwitcherOpening) {
+      return;
+    }
+    _navInactivityTimer = Timer(_navInactivityDelay, _shrinkNavAfterInactivity);
+  }
+
+  void _shrinkNavAfterInactivity() {
+    _navInactivityTimer = null;
+    if (!mounted ||
+        _navInteractionActive ||
+        _tutorialLaunchSource != null ||
+        _accountSwitcherOpening ||
+        MediaQuery.sizeOf(context).width >= _desktopNavigationBreakpoint ||
+        _navShrinkController.value >= 1) {
+      return;
+    }
+    _navExpanding = false;
+    _navUpwardDelta = 0;
+    _navShrinkController.animateTo(
+      1,
+      duration: _navIdleShrinkDuration,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  void _onNavPointerDown(PointerDownEvent event) {
+    _navInteractionActive = true;
+    _navInactivityTimer?.cancel();
+    _expandNav();
+  }
+
+  void _onNavPointerFinished(PointerEvent event) {
+    _navInteractionActive = false;
+    _scheduleNavInactivity();
   }
 
   void _handleNavDragPosition(
@@ -535,6 +592,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     List<_NavSlot> slots,
   ) {
     if (_accountSwitcherOpening || slots.isEmpty || barWidth <= 0) return;
+    _resetNavShrink();
     final slotWidth = barWidth / slots.length;
     final slotIndex = (localPosition.dx / slotWidth).floor().clamp(
       0,
@@ -551,11 +609,13 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   Future<void> _openAccountSwitcher() async {
     if (_accountSwitcherOpening || !mounted) return;
     _accountSwitcherOpening = true;
+    _resetNavShrink();
     HapticFeedback.mediumImpact();
     try {
       await showAccountSwitcherSheet(context);
     } finally {
       _accountSwitcherOpening = false;
+      _scheduleNavInactivity();
     }
   }
 
@@ -597,6 +657,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // posts. Keep the center action useful for events as well, but make posting
   // available from the same obvious entry point.
   void _onAddTap() {
+    _resetNavShrink();
     unawaited(
       showClubCreateSheet(
         context,
@@ -672,12 +733,18 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                       ),
                       // Only the bar itself listens to the shrink animation, so
                       // the mounted tab content is never rebuilt while scrolling.
-                      bottomNavigationBar: AnimatedBuilder(
-                        animation: _navShrinkController,
-                        builder: (context, _) => _buildBottomNav(
-                          context,
-                          unreadChats,
-                          _navShrinkController.value,
+                      bottomNavigationBar: Listener(
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: _onNavPointerDown,
+                        onPointerUp: _onNavPointerFinished,
+                        onPointerCancel: _onNavPointerFinished,
+                        child: AnimatedBuilder(
+                          animation: _navShrinkController,
+                          builder: (context, _) => _buildBottomNav(
+                            context,
+                            unreadChats,
+                            _navShrinkController.value,
+                          ),
                         ),
                       ),
                     );
