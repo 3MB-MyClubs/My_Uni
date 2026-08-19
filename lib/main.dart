@@ -75,8 +75,8 @@ void main() {
     runApp(
       ProviderScope(
         child: DevicePreview(
-          enabled: bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
-          child: const MyApp(startupInitializer: _initializeAfterFirstFrame),
+          enabled: const bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
+          child: MyApp(startupInitializer: () => _initializeAfterFirstFrame()),
         ),
       ),
     );
