@@ -125,6 +125,7 @@ class StudentCampusProfileView extends StatelessWidget {
   /// by the profile screens so this view stays free of event/RSVP wiring.
   final Widget? activitySection;
   final List<StudentCampusMembership> memberships;
+  final bool clubsLoading;
   final String clubsTitle;
   final String? clubsActionLabel;
   final VoidCallback? onClubsAction;
@@ -140,6 +141,7 @@ class StudentCampusProfileView extends StatelessWidget {
     required this.leading,
     required this.trailing,
     required this.memberships,
+    this.clubsLoading = false,
     required this.clubsTitle,
     this.primaryAction,
     this.supplementalContent,
@@ -216,7 +218,7 @@ class StudentCampusProfileView extends StatelessWidget {
                       child: _StudentBioCard(bio: profile.bio),
                     ),
                   ),
-                if (memberships.isNotEmpty) ...[
+                if (memberships.isNotEmpty || clubsLoading) ...[
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
@@ -234,25 +236,40 @@ class StudentCampusProfileView extends StatelessWidget {
                       ),
                     ),
                   ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverGrid.builder(
-                      itemCount: memberships.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                            mainAxisExtent: 112,
+                  if (clubsLoading)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: LinearProgressIndicator(
+                          minHeight: 3,
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(999),
                           ),
-                      itemBuilder: (context, index) => _MembershipCard(
-                        membership: memberships[index],
-                        onTap: onClubTap == null
-                            ? null
-                            : () => onClubTap!(memberships[index].club),
+                          color: StudentCampusPalette.burgundy,
+                          backgroundColor: StudentCampusPalette.border,
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverGrid.builder(
+                        itemCount: memberships.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              mainAxisExtent: 112,
+                            ),
+                        itemBuilder: (context, index) => _MembershipCard(
+                          membership: memberships[index],
+                          onTap: onClubTap == null
+                              ? null
+                              : () => onClubTap!(memberships[index].club),
+                        ),
                       ),
                     ),
-                  ),
                 ],
                 if (activitySection != null)
                   SliverToBoxAdapter(child: activitySection!),

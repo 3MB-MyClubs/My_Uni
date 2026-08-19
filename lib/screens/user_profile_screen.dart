@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
@@ -44,6 +46,9 @@ class UserProfileScreen extends StatefulWidget {
 class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _connectionsLoading = false;
   String? _connectionsError;
+  String? _clubContentScope;
+  int _clubContentRequest = 0;
+  bool _clubContentLoading = true;
   static const List<Color> _clubColors = [
     Color(0xFF8C1D40),
     Color(0xFF1565C0),
@@ -124,6 +129,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _ensureClubContentForScope();
     _hydrateProfile();
     _refreshClubMemberCounts();
   }
@@ -146,6 +152,32 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     } catch (_) {
       // Keep the last successful aggregate snapshot while offline.
     }
+  }
+
+  void _ensureClubContentForScope() {
+    final scope =
+        authService.currentUser?.id ??
+        authService.currentAdmin?.id ??
+        'anonymous';
+    if (_clubContentScope == scope) return;
+
+    _clubContentScope = scope;
+    if (clubs.isNotEmpty) {
+      _clubContentLoading = false;
+      return;
+    }
+
+    _clubContentLoading = true;
+    final request = ++_clubContentRequest;
+    unawaited(() async {
+      try {
+        await lazyContentLoader.ensureContentLoaded();
+      } catch (_) {
+        // Keep any previously loaded directory visible when offline.
+      }
+      if (!mounted || request != _clubContentRequest) return;
+      setState(() => _clubContentLoading = false);
+    }());
   }
 
   Future<void> _hydrateProfile() async {
@@ -173,6 +205,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   List<Club> get _subscribedClubs {
+    if (_clubContentLoading ||
+        (_isOwnProfile && userState.followedClubsLoading)) {
+      return const [];
+    }
+
     final liveIds = peopleService.clubIdsFor(widget.user.id);
     final ids = _isOwnProfile
         ? userState.followedClubIds
@@ -415,11 +452,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _ensureClubContentForScope();
     final user = widget.user;
     return ListenableBuilder(
       listenable: userState,
       builder: (context, _) {
         final subClubs = _subscribedClubs;
+        final clubsLoading =
+            _clubContentLoading ||
+            (_isOwnProfile && userState.followedClubsLoading);
         final followingList = _following;
         final followersList = _followers;
         final isFollowingUser = userState.isFollowingUser(user.id);
@@ -521,6 +562,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               : null,
           activitySection: _buildActivitySection(user),
           memberships: memberships,
+          clubsLoading: clubsLoading,
           clubsTitle: AppLocalizations.of(
             context,
           )!.clubsCountTitle(subClubs.length),
@@ -544,6 +586,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   void _openConnections(_ConnTab tab) {
+    final clubsLoading =
+        _clubContentLoading ||
+        (_isOwnProfile && userState.followedClubsLoading);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -559,6 +604,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           onOpenUser: _openUserProfile,
           peopleLoading: _connectionsLoading,
           peopleError: _connectionsError,
+          clubsLoading: clubsLoading,
         ),
       ),
     );
@@ -650,6 +696,7 @@ class _ConnectionsScreen extends StatefulWidget {
   final ValueChanged<User> onOpenUser;
   final bool peopleLoading;
   final String? peopleError;
+  final bool clubsLoading;
 
   const _ConnectionsScreen({
     required this.title,
@@ -663,6 +710,7 @@ class _ConnectionsScreen extends StatefulWidget {
     required this.onOpenUser,
     required this.peopleLoading,
     required this.peopleError,
+    required this.clubsLoading,
   });
 
   @override
@@ -724,7 +772,10 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
               _buildSearchBar(),
               Expanded(
                 child: switch (_tab) {
-                  _ConnTab.clubs => _buildClubsList(_matchClubs(clubs)),
+                  _ConnTab.clubs => _buildClubsList(
+                    _matchClubs(clubs),
+                    loading: widget.clubsLoading,
+                  ),
                   _ConnTab.followers => _buildPeopleList(
                     _matchPeople(followers),
                     AppLocalizations.of(context)!.noFollowersYet,
@@ -830,10 +881,12 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
     );
   }
 
-  Widget _buildClubsList(List<Club> clubs) {
+  Widget _buildClubsList(List<Club> clubs, {required bool loading}) {
     if (clubs.isEmpty) {
       return _emptyState(
-        _query.isEmpty
+        loading
+            ? AppLocalizations.of(context)!.loadingConnections
+            : _query.isEmpty
             ? AppLocalizations.of(context)!.noClubsYetShort
             : AppLocalizations.of(context)!.noClubsFound,
       );

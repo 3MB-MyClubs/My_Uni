@@ -71,6 +71,7 @@ class StudentProfileScreen extends StatelessWidget {
   final VoidCallback? onFollowingTap;
   final List<Club> followedClubs;
   final ValueChanged<Club>? onClubTap;
+  final bool clubsLoading;
   final StudentProfileData data;
 
   const StudentProfileScreen({
@@ -84,6 +85,7 @@ class StudentProfileScreen extends StatelessWidget {
     this.onFollowingTap,
     this.followedClubs = const [],
     this.onClubTap,
+    this.clubsLoading = false,
   });
 
   static const _clubColors = [
@@ -127,6 +129,7 @@ class StudentProfileScreen extends StatelessWidget {
       supplementalContent: const StarterChecklistCard(),
       activitySection: _buildActivitySection(context),
       memberships: memberships,
+      clubsLoading: clubsLoading,
       clubsTitle: AppLocalizations.of(context)!.myClubs,
       clubsActionLabel: onFindClubs == null
           ? AppLocalizations.of(context)!.seeAll
