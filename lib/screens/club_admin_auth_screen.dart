@@ -5,6 +5,7 @@ import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
 import '../services/app_strings.dart';
 import '../services/club_passcode_auth_service.dart';
+import '../services/supabase_content_service.dart';
 import '../l10n/app_localizations.dart';
 import 'forgot_password_screen.dart';
 
@@ -84,6 +85,11 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
 
     if (result.success && result.admin != null) {
       authService.setClubAdmin(result.admin!);
+      try {
+        await supabaseContentService.fetchClubById(result.admin!.id);
+      } catch (_) {
+        // setClubAdmin already registered a safe local club identity.
+      }
       widget.onAdminLogin();
     } else {
       setState(

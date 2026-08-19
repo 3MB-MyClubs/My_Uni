@@ -182,6 +182,31 @@ class SupabaseContentService {
     }
   }
 
+  /// Loads one club into the shared registry even when it is absent from the
+  /// bounded feed snapshot. Club-admin screens use this registry for routing,
+  /// so they must be able to hydrate their own club directly.
+  Future<Club?> fetchClubById(String clubId) async {
+    final normalizedClubId = clubId.trim();
+    if (normalizedClubId.isEmpty) return null;
+
+    final client = _client;
+    if (client == null) return clubForId(normalizedClubId);
+
+    final row = await client
+        .from('clubs')
+        .select(
+          'id, name, short_name, description, logo_url, category_id, email, created_at, club_categories(name)',
+        )
+        .eq('id', normalizedClubId)
+        .maybeSingle();
+    if (row == null) return null;
+
+    final club = _clubFromRow(Map<String, dynamic>.from(row));
+    await _hydrateBoardMembers(client, [club]);
+    upsertClub(club);
+    return club;
+  }
+
   /// Loads one club's completed events only when its Past filter is opened.
   ///
   /// This avoids expanding the app-wide feed snapshot with every historical

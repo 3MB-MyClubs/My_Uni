@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
@@ -96,8 +97,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _ensureClubContentForScope(String scope) {
+    if (_clubContentScope == scope) return;
+
+    _clubContentScope = scope;
+    if (clubs.isNotEmpty) {
+      _clubContentLoading = false;
+      return;
+    }
+
+    _clubContentLoading = true;
+    final request = ++_clubContentRequest;
+    unawaited(() async {
+      try {
+        await lazyContentLoader.ensureContentLoaded();
+      } catch (_) {
+        // Keep any previously loaded directory visible when offline.
+      }
+      if (!mounted || request != _clubContentRequest) return;
+      setState(() => _clubContentLoading = false);
+    }());
+  }
+
   int _contentTab = 0; // 0 = Posts, 1 = Events
   String? _hydratedConnectionsForUserId;
+  String? _clubContentScope;
+  int _clubContentRequest = 0;
+  bool _clubContentLoading = true;
   static const List<String> _yearOptions = fallbackAcademicYearNames;
 
   Widget _initialAvatar(String name) => Container(
@@ -926,17 +952,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         user?.name ?? admin?.name ?? AppLocalizations.of(context)!.guestName;
     final displayName = userState.displayNameFor(myId, realName);
     final isAdmin = admin != null;
+    _ensureClubContentForScope(myId.isEmpty ? 'anonymous' : myId);
 
     if (user != null && !isAdmin) {
       _hydrateMyConnections(user.id);
       return ListenableBuilder(
         listenable: userState,
         builder: (context, _) {
-          final followedClubs = studentClubRoleService.orderedProfileClubs(
-            userId: user.id,
-            followedClubIds: userState.followedClubIds,
-            allClubs: clubs,
-          );
+          final clubsLoading =
+              _clubContentLoading || userState.followedClubsLoading;
+          final followedClubs = clubsLoading
+              ? const <Club>[]
+              : studentClubRoleService.orderedProfileClubs(
+                  userId: user.id,
+                  followedClubIds: userState.followedClubIds,
+                  allClubs: clubs,
+                );
           final followers = _followersForUser(user.id);
           final following = _followingUsers();
           final personalName = userState.displayNameFor(user.id, user.name);
@@ -996,6 +1027,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onFollowersTap: () => _showFollowersSheet(followers),
             onFollowingTap: () => _showFollowingSheet(following),
             followedClubs: followedClubs,
+            clubsLoading: clubsLoading,
             onClubTap: (club) => Navigator.push(
               context,
               MaterialPageRoute(
@@ -1016,7 +1048,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // keep their personal profile and are handled above.
     if (admin != null && admin.id != 'admin1') {
       final adminId = admin.id;
-      final managed = managedClubForAdmin(adminId) ?? clubs.first;
+      final managed = managedClubForAdmin(adminId);
+      if (managed == null) {
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: Center(
+            child: Text(AppLocalizations.of(context)!.clubLoginNotReady),
+          ),
+        );
+      }
       return ClubProfileScreen(
         club: managed,
         color: _clubColor(clubOrdinal(managed.id)),

@@ -14,7 +14,11 @@
       "Bash(grep -vi \"// \")",
       "Bash(rm lib/services/app_strings.dart)",
       "Bash(node -e \"const a=require\\('./lib/l10n/app_en.arb'\\); console.log\\(Object.keys\\(a\\).filter\\(k=>!k.startsWith\\('@'\\)\\).join\\(', '\\)\\)\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "mcp__plugin_figma_figma__whoami",
+      "mcp__plugin_figma_figma__get_metadata",
+      "Bash(sips -g pixelWidth -g pixelHeight -g dpiWidth campus-buzz-home.png)",
+      "Bash(python3 -c \"import PIL; print\\('PIL', PIL.__version__\\)\")"
     ]
   }
 }

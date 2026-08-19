@@ -712,4 +712,140 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the ClubUp header stays active over the scrolling feed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: FeedScreen(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final scrollable = find.descendant(
+      of: find.byType(CustomScrollView),
+      matching: find.byType(Scrollable),
+    );
+    final logoTop = tester.getTopLeft(logo).dy;
+    final gesture = await tester.startGesture(tester.getCenter(logo));
+    await gesture.moveBy(const Offset(0, -180));
+    await tester.pump();
+
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.pixels, greaterThan(1));
+    expect(tester.getTopLeft(logo).dy, moreOrLessEquals(logoTop, epsilon: 0.1));
+    expect(
+      tester
+          .widget<SliverAppBar>(
+            find.byKey(const ValueKey('home-active-feed-header')),
+          )
+          .forceMaterialTransparency,
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-feed-header-background')),
+        matching: find.byType(BackdropFilter),
+      ),
+      findsNothing,
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the ClubUp header crossfades between flat and floating', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: FeedScreen(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    final background = find.byKey(
+      const ValueKey('home-feed-header-background'),
+    );
+    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final bell = find.byKey(const ValueKey('home-notifications-bell'));
+    final blur = find.descendant(
+      of: background,
+      matching: find.byType(BackdropFilter),
+    );
+
+    Container panel() => tester.widget<Container>(
+      find.descendant(of: background, matching: find.byType(Container)).first,
+    );
+
+    // State A — parked at the top: flat panel in the scaffold background,
+    // with no blur layer.
+    expect(blur, findsNothing);
+    expect(panel().color!.toARGB32(), AppColors.background.toARGB32());
+    final logoRect = tester.getRect(logo);
+    final bellRect = tester.getRect(bell);
+
+    // State B — scrolled into the posts: the full-width panel fades away over
+    // 180ms, leaving only the wordmark and floating bell above the feed.
+    final gesture = await tester.startGesture(tester.getCenter(logo));
+    await gesture.moveBy(const Offset(0, -200));
+    await tester.pump();
+    expect(blur, findsNothing);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(panel().color!.a, lessThan(1));
+    expect(panel().color!.a, greaterThan(0));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(panel().color!.a, 0);
+
+    // The logo and the bell are untouched by the background fade.
+    expect(tester.getRect(logo), logoRect);
+    expect(tester.getRect(bell), bellRect);
+
+    // Rapid flicks across the boundary stay on the animation, never throw.
+    for (var i = 0; i < 4; i++) {
+      await gesture.moveBy(const Offset(0, 220));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(0, -220));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(tester.takeException(), isNull);
+
+    // Scrolling back to the very top reverses to state A exactly.
+    await gesture.up();
+    await tester.pumpAndSettle();
+    tester
+        .state<ScrollableState>(
+          find.descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          ),
+        )
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(blur, findsNothing);
+    expect(panel().color!.toARGB32(), AppColors.background.toARGB32());
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -31,6 +31,27 @@ var appAdmin = AppAdmin(id: '', name: '', email: '', password: '');
 /// Authenticated club administrators are registered here at runtime.
 final List<AppAdmin> clubAdmins = [];
 
+/// Keeps the authenticated club visible even when the current feed snapshot
+/// does not contain it. Feed recommendations are intentionally partial, but
+/// club-admin routing must never depend on recommendation order.
+void ensureClubForAdmin(AppAdmin admin) {
+  if (admin.isPlatformAdmin ||
+      admin.id.isEmpty ||
+      clubForId(admin.id) != null) {
+    return;
+  }
+
+  clubs.add(
+    Club(
+      id: admin.id,
+      name: admin.name,
+      description: '',
+      email: admin.email,
+      adminUserIds: [admin.id],
+    ),
+  );
+}
+
 double postScore(String postId) {
   final uniqueLikers =
       supabasePostLikeCounts[postId] ??
@@ -104,6 +125,16 @@ void _ensureClubIndex() {
 Club? clubForId(String id) {
   _ensureClubIndex();
   return _clubById[id];
+}
+
+void upsertClub(Club club) {
+  final index = clubs.indexWhere((candidate) => candidate.id == club.id);
+  if (index == -1) {
+    clubs.add(club);
+  } else {
+    clubs[index] = club;
+  }
+  _clubIndexSignature = -1;
 }
 
 int clubOrdinal(String id) {

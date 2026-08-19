@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/models/chat_message.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/screens/chats_screen.dart';
+import 'package:flutter_application_1/screens/main_nav_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/content_store.dart';
@@ -69,6 +71,9 @@ void main() {
     );
     userState.followedClubIds.add(clubId);
     directThreadId = chatStore.ensureDirectThread(userId, peerId)!;
+    for (final thread in chatStore.threadsFor(userId)) {
+      chatStore.markThreadRead(thread.threadId, userId);
+    }
   });
 
   tearDown(() async {
@@ -182,4 +187,62 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('main nav badge counts unread messages, not conversations', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MainNavScreen(isAdmin: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final nav = find.byKey(const ValueKey('mobile-bottom-navigation'));
+    expect(nav, findsOneWidget);
+
+    Finder navUnreadBadges() => find.descendant(
+      of: nav,
+      matching: find.byWidgetPredicate((widget) {
+        final key = widget.key;
+        return key is ValueKey<String> &&
+            key.value.startsWith('nav-unread-badge-');
+      }),
+    );
+
+    // The fixture already has both a direct conversation and a club room.
+    // Their existence alone must not create a nav badge.
+    expect(navUnreadBadges(), findsNothing);
+
+    // Twelve unread messages in one conversation must show 12, not 1 for the
+    // number of conversations and not a shortened 9+ label.
+    for (var i = 0; i < 12; i++) {
+      chatStore.sendMessage(
+        threadId: directThreadId,
+        senderId: peerId,
+        content: 'Unread message ${i + 1}',
+      );
+    }
+    await tester.pump();
+    expect(chatStore.totalUnreadFor(userId), 12);
+    expect(
+      find.descendant(
+        of: nav,
+        matching: find.byKey(const ValueKey('nav-unread-badge-12')),
+      ),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: nav, matching: find.text('12')), findsOneWidget);
+    expect(find.descendant(of: nav, matching: find.text('9+')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

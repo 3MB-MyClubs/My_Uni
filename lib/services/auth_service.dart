@@ -23,6 +23,7 @@ import 'terms_acceptance_service.dart';
 import 'admin_moderation_service.dart';
 import 'platform_admin_auth_service.dart';
 import 'session_restoration.dart';
+import 'supabase_content_service.dart';
 
 enum AuthLoginFailure { none, invalidCredentials, banned }
 
@@ -39,6 +40,7 @@ class AuthService {
   AppAdmin? _currentAdmin;
   Map<String, dynamic>? _pendingStudentProfileRow;
   String? _activatedStudentUserId;
+  int _studentHydrationGeneration = 0;
   int _sessionRestorationGeneration = 0;
   void Function()? _chatAuthBoundaryHandler;
 
@@ -64,9 +66,15 @@ class AuthService {
   }
 
   void setClubAdmin(AppAdmin admin, {bool checkTerms = true}) {
+    _studentHydrationGeneration++;
+    userState.setFollowedClubsLoading(false);
     _invalidateChatAuthBoundary();
     lazyContentLoader.invalidate();
-    if (isClubUpMockAdmin(admin)) ensureClubUpMockProfile();
+    if (isClubUpMockAdmin(admin)) {
+      ensureClubUpMockProfile();
+    } else {
+      ensureClubForAdmin(admin);
+    }
     if (admin.isPlatformAdmin) appAdmin = admin;
     _currentAdmin = admin;
     _currentUser = null;
@@ -392,6 +400,12 @@ class AuthService {
             ),
             checkTerms: false,
           );
+          try {
+            await supabaseContentService.fetchClubById(club.id);
+          } catch (_) {
+            // The authenticated club stub created by setClubAdmin is enough
+            // to keep routing safe if the detail hydration is unavailable.
+          }
           await termsAcceptanceService.loadForCurrentUser();
         },
         restoreStudent: (identity) => _setStudentFromIdentity(
@@ -482,14 +496,18 @@ class AuthService {
     }
 
     _activatedStudentUserId = user.id;
+    final hydrationGeneration = ++_studentHydrationGeneration;
+    userState.setFollowedClubsLoading(true);
     final profileRow = _pendingStudentProfileRow;
     if (profileRow != null) {
       unawaited(studentProfileService.hydrateDetails(profileRow));
     }
-    unawaited(_hydrateStudentState(user.id));
+    unawaited(_hydrateStudentState(user.id, hydrationGeneration));
   }
 
   Future<void> _clearPersistedSession([SupabaseClient? client]) async {
+    _studentHydrationGeneration++;
+    userState.setFollowedClubsLoading(false);
     _invalidateChatAuthBoundary();
     _currentUser = null;
     _currentAdmin = null;
@@ -509,30 +527,89 @@ class AuthService {
     }
   }
 
-  Future<void> _hydrateStudentState(String userId) async {
+  Future<Set<String>?> _tryHydrateSet(Future<Set<String>> request) async {
+    if (!SupabaseConfig.isConfigured) return null;
     try {
-      final userStateResults = await Future.wait<Set<String>>([
-        clubFollowService
-            .fetchFollowedClubIds(userId)
-            .catchError((_) => <String>{}),
-        supabaseInteractionService
-            .fetchLikedPostIds(userId)
-            .catchError((_) => <String>{}),
-        supabaseInteractionService
-            .fetchRsvpEventIds(userId)
-            .catchError((_) => <String>{}),
-      ]);
-      final followedClubIds = userStateResults[0];
-      userState.replaceFollowedClubs(followedClubIds);
-      for (final clubId in followedClubIds) {
-        final current = supabaseClubMemberCounts[clubId] ?? 0;
-        if (current < 1) supabaseClubMemberCounts[clubId] = 1;
-      }
-      userState.replaceLikedPosts(userStateResults[1]);
-      rsvpStore.replaceForUser(userStateResults[2], userId);
+      return await request;
     } catch (_) {
-      // Auth already succeeded; interaction hydration should never block login.
+      // A failed refresh must not erase a valid local snapshot.
+      return null;
     }
+  }
+
+  Future<void> _hydrateStudentState(
+    String userId,
+    int hydrationGeneration,
+  ) async {
+    final followedClubRevision = clubFollowService.followedClubRevisionFor(
+      userId,
+    );
+    final followedClubFuture = _tryHydrateSet(
+      clubFollowService.fetchFollowedClubIds(userId),
+    );
+    final likedPostFuture = _tryHydrateSet(
+      supabaseInteractionService.fetchLikedPostIds(userId),
+    );
+    final rsvpEventFuture = _tryHydrateSet(
+      supabaseInteractionService.fetchRsvpEventIds(userId),
+    );
+
+    try {
+      // Apply followed clubs as soon as their own request finishes. They
+      // must not wait for unrelated likes or RSVP hydration.
+      final followedClubIds = await followedClubFuture;
+      if (_isCurrentStudentHydration(
+        userId,
+        hydrationGeneration,
+        followedClubRevision,
+      )) {
+        if (followedClubIds != null) {
+          userState.replaceFollowedClubs(followedClubIds);
+          for (final clubId in followedClubIds) {
+            final current = supabaseClubMemberCounts[clubId] ?? 0;
+            if (current < 1) supabaseClubMemberCounts[clubId] = 1;
+          }
+        }
+        userState.setFollowedClubsLoading(false);
+      }
+
+      final userStateResults = await Future.wait<Set<String>?>([
+        likedPostFuture,
+        rsvpEventFuture,
+      ]);
+      if (!_isCurrentStudentHydration(
+        userId,
+        hydrationGeneration,
+        followedClubRevision,
+      )) {
+        return;
+      }
+
+      final likedPostIds = userStateResults[0];
+      if (likedPostIds != null) userState.replaceLikedPosts(likedPostIds);
+
+      final rsvpEventIds = userStateResults[1];
+      if (rsvpEventIds != null) rsvpStore.replaceForUser(rsvpEventIds, userId);
+    } finally {
+      if (_isCurrentStudentHydration(
+        userId,
+        hydrationGeneration,
+        followedClubRevision,
+      )) {
+        userState.setFollowedClubsLoading(false);
+      }
+    }
+  }
+
+  bool _isCurrentStudentHydration(
+    String userId,
+    int hydrationGeneration,
+    int followedClubRevision,
+  ) {
+    return hydrationGeneration == _studentHydrationGeneration &&
+        _currentUser?.id == userId &&
+        clubFollowService.followedClubRevisionFor(userId) ==
+            followedClubRevision;
   }
 
   bool signUp(String name, String email, String password) {
@@ -654,6 +731,8 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    _studentHydrationGeneration++;
+    userState.setFollowedClubsLoading(false);
     _invalidateChatAuthBoundary();
     final wasClubUpMockSession = isClubUpMockAdmin(_currentAdmin);
     lazyContentLoader.invalidate();

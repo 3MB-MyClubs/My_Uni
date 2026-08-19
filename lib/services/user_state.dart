@@ -25,6 +25,16 @@ class UserState extends ChangeNotifier {
   final Set<String> followedClubIds = {};
   final Set<String> savedPostIds = {};
   final Set<String> followedUserIds = {};
+  bool _followedClubsLoading = false;
+
+  bool get followedClubsLoading => _followedClubsLoading;
+
+  void setFollowedClubsLoading(bool loading) {
+    if (_followedClubsLoading == loading) return;
+    _followedClubsLoading = loading;
+    notifyListeners();
+  }
+
   @Deprecated('Use unreadNotificationCountFor instead.')
   int unreadNotifications = 0;
 
